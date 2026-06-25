@@ -125,6 +125,19 @@ def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
         {k: v for k, v in r.items() if k not in _TRANSIENT_SCENE_FIELDS}
         for r in config.get("scenes", [])
     ]
+    # Normalise each condition predicate into its stored form. A condition may
+    # expose an optional `normalize_predicate` (only `state` does today) to strip
+    # redundant editor wrappers (e.g. the group "( )" wrap's single-child / same-op
+    # nesting). Runs once here at save, so live editing keeps the wrappers visible.
+    for scene in scenes:
+        when = scene.get("when")
+        if not isinstance(when, dict):
+            continue
+        normalised: dict[str, Any] = {}
+        for key, predicate in when.items():
+            normalizer = getattr(conditions_registry.get(key), "normalize_predicate", None)
+            normalised[key] = normalizer(predicate) if normalizer else predicate
+        scene["when"] = normalised
     out["scenes"] = resolve_order(scenes, conditions_registry)
     return out
 

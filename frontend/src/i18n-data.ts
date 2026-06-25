@@ -413,6 +413,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       state_value_label: "Value",
       state_where: "Where",
       state_wrap: "Wrap in group",
+      state_wrap_group: "Wrap these clauses in parentheses",
       // trace-detail: cause labels, outcome badges, and outcome summaries
       show_more_info: "Show more info",
       cause_has_time: "Periodic time check",
@@ -953,6 +954,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       state_value_label: "Valor",
       state_where: "Donde",
       state_wrap: "Envolver en grupo",
+      state_wrap_group: "Envolver estas cláusulas entre paréntesis",
       show_more_info: "Mostrar más información",
       cause_has_time: "Comprobación periódica de hora",
       cause_switch: "Interruptor activado",

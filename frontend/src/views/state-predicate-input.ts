@@ -210,20 +210,30 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._emit(next);
   }
 
-  /** Wrap the node at `path` in a new single-child group whose op is the
-   *  OPPOSITE of the parent's op (AND inside OR → wrap in OR; OR inside
-   *  AND → wrap in AND). Wrapping in the same op as the parent would be a
-   *  no-op semantically, so flipping is the only useful choice. At the
-   *  root there is no parent — default to AND. */
+  /** Wrap the node at `path` in a new single-child group ("(…)"), choosing
+   *  the wrapper's op so the new parens are MEANINGFUL (a same-op wrap is a
+   *  semantic no-op the moment a sibling is added):
+   *   - Wrapping a whole group: flip the group's OWN op (AND group → OR
+   *     wrapper), so "(a AND b)" is ready to become "(a AND b) OR c".
+   *   - Wrapping an atom: flip the PARENT's op (atom in AND → OR wrapper),
+   *     defaulting to AND at the root where there's no parent.
+   *  `_nodeAt` walks transparently through a NOT, so a NOT-wrapped group is
+   *  recognised as a group; the NOT envelope is preserved inside the parens
+   *  because `_patch` hands `fn` the raw (still-wrapped) node. */
   _wrapAt(path: number[]) {
-    let parentKind: "and" | "or" | null = null;
-    if (path.length > 0) {
+    // Pick the wrapper op so the new parens are MEANINGFUL: a group flips its
+    // OWN op, an atom flips its PARENT's op, and there's nothing to flip
+    // against at the root — so default to AND.
+    const target = this._nodeAt(path);
+    let op: "and" | "or" = "and";
+    if (target && (target.kind === "and" || target.kind === "or")) {
+      op = target.kind === "and" ? "or" : "and";
+    } else if (path.length > 0) {
       const parent = this._nodeAt(path.slice(0, -1));
       if (parent && (parent.kind === "and" || parent.kind === "or")) {
-        parentKind = parent.kind;
+        op = parent.kind === "and" ? "or" : "and";
       }
     }
-    const op: "and" | "or" = parentKind === "and" ? "or" : "and";
     const next = this._patch(this.value, path, (node) => {
       if (!node) return node;
       return { kind: op, items: [node] } as StateGroup;
@@ -483,10 +493,18 @@ export class AmbienceStatePredicateInput extends LitElement {
     // Capture the new child's path so we can open it after the patch lands.
     let newChildPath: number[] | null = null;
     const next = this._patch(this.value, path, (node) => {
-      if (node && (node.kind === "and" || node.kind === "or")) {
-        const items = [...node.items, this._emptyAtom()];
+      if (!node) return node;
+      // The target group may be NOT-wrapped — paths treat NOT as transparent,
+      // so "Add clause" on a negated group lands here with the {kind:'not'}
+      // envelope. Peel it, append to the inner group, then re-wrap so the
+      // negation survives (mirrors _setGroupOpAt / _unwrapAt).
+      const isNot = node.kind === "not";
+      const group = _unwrapNot(node);
+      if (group.kind === "and" || group.kind === "or") {
+        const items = [...group.items, this._emptyAtom()];
         newChildPath = [...path, items.length - 1];
-        return { ...node, items };
+        const grown: StateExpr = { ...group, items };
+        return isNot ? ({ kind: "not", item: grown } as StateNot) : grown;
       }
       return node;
     });

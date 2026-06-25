@@ -183,6 +183,129 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[0].entity_id).toBe("x");
   });
 
+  test("_wrapAt on an AND group wraps it in an OR parent (flip the group's OWN op)", async () => {
+    // Group-level "()": wrap the whole group in parens so it can be combined
+    // with new siblings under the opposite operator — "(a AND b)" ready to
+    // become "(a AND b) OR c". A same-op wrapper would be a semantic no-op.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._wrapAt([]);
+    expect(captured.kind).toBe("or");
+    expect(captured.items).toHaveLength(1);
+    expect(captured.items[0].kind).toBe("and");
+    expect(captured.items[0].items).toHaveLength(2);
+    expect(captured.items[0].items.map((i: any) => i.entity_id)).toEqual(["a", "b"]);
+  });
+
+  test("_wrapAt on an OR group wraps it in an AND parent (flip the group's OWN op)", async () => {
+    el = await mount({
+      kind: "or",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._wrapAt([]);
+    expect(captured.kind).toBe("and");
+    expect(captured.items[0].kind).toBe("or");
+  });
+
+  test("_wrapAt on a NESTED group flips its OWN op (documents the nested-wrap shape)", async () => {
+    // Wrapping the inner AND of OR[AND[a,b], c] flips the AND's own op → a new
+    // OR wrapper. A same-op wrap would be a no-op, so flipping is the deliberate,
+    // root-consistent choice; the resulting OR-in-OR nesting is harmless and
+    // undoable via the group header's ✕ (unwrap).
+    el = await mount({
+      kind: "or",
+      items: [
+        {
+          kind: "and",
+          items: [
+            { kind: "is", entity_id: "a", states: ["on"] },
+            { kind: "is", entity_id: "b", states: ["off"] },
+          ],
+        },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._wrapAt([0]);
+    expect(captured.kind).toBe("or"); // outer parent unchanged
+    expect(captured.items[0].kind).toBe("or"); // new wrapper: flipped AND → OR
+    expect(captured.items[0].items[0].kind).toBe("and"); // original AND preserved
+    expect(captured.items[0].items[0].items).toHaveLength(2);
+    expect(captured.items[1].entity_id).toBe("c");
+  });
+
+  test("_wrapAt on a NOT-wrapped group keeps the NOT inside the new parens", async () => {
+    // "NOT (a AND b)" → "( NOT (a AND b) )" under the flipped (OR) parent.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._wrapAt([]);
+    expect(captured.kind).toBe("or");
+    expect(captured.items).toHaveLength(1);
+    expect(captured.items[0].kind).toBe("not");
+    expect(captured.items[0].item.kind).toBe("and");
+  });
+
+  test("group header has a '(…)' wrap button on the right, next to the ✕", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    await flush(el);
+    const node = el.shadowRoot.querySelector("ambience-state-expr-node") as any;
+    const wrapBtn = node.shadowRoot.querySelector(".group-header button.wrap") as HTMLButtonElement;
+    expect(wrapBtn).toBeTruthy();
+    // Matches the atom clause buttons' glyph, not "()".
+    expect(wrapBtn.textContent).toContain("(…)");
+    // Sits immediately before the ✕ (unwrap) on the right of the header.
+    expect(wrapBtn.nextElementSibling).toBe(
+      node.shadowRoot.querySelector(".group-header button.unwrap"),
+    );
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    wrapBtn.click();
+    await flush(el);
+    // AND group wrapped in a new OR parent.
+    expect(captured.kind).toBe("or");
+    expect(captured.items[0].kind).toBe("and");
+    expect(captured.items[0].items).toHaveLength(2);
+  });
+
   test("_addChildAt appends an empty atom to a group", async () => {
     el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] });
     let captured: any;
@@ -193,6 +316,83 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items).toHaveLength(2);
     expect(captured.items[1].kind).toBe("is");
     expect(captured.items[1].entity_id).toBe("");
+  });
+
+  test("_addChildAt appends to a NOT-wrapped root group, preserving the NOT (regression)", async () => {
+    // Bug: "Add clause" silently did nothing on a negated group. Paths treat
+    // the NOT wrapper as transparent, so the patch callback received the
+    // {kind:'not'} envelope and fell through its and/or check, adding nothing.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+          { kind: "is", entity_id: "c", states: ["open"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._addChildAt([], "is");
+    // NOT survives; the inner AND gains a 4th (empty) child.
+    expect(captured.kind).toBe("not");
+    expect(captured.item.kind).toBe("and");
+    expect(captured.item.items).toHaveLength(4);
+    expect(captured.item.items[3].kind).toBe("is");
+    expect(captured.item.items[3].entity_id).toBe("");
+    // The new child is opened (path is transparent through NOT).
+    expect(el._openPath).toEqual([3]);
+  });
+
+  test("_addChildAt appends to a NOT-wrapped NESTED group, preserving the NOT", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "not",
+          item: { kind: "or", items: [{ kind: "is", entity_id: "b", states: ["off"] }] },
+        },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._addChildAt([1], "is");
+    expect(captured.items[1].kind).toBe("not");
+    expect(captured.items[1].item.kind).toBe("or");
+    expect(captured.items[1].item.items).toHaveLength(2);
+    expect(captured.items[1].item.items[1].entity_id).toBe("");
+    expect(el._openPath).toEqual([1, 1]);
+  });
+
+  test("clicking '+ Add clause' on a negated group adds a clause (regression, full UI path)", async () => {
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    await flush(el);
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const node = el.shadowRoot.querySelector("ambience-state-expr-node") as any;
+    const addBtn = node.shadowRoot.querySelector(".actions button") as HTMLButtonElement;
+    addBtn.click();
+    await flush(el);
+    expect(captured.kind).toBe("not");
+    expect(captured.item.items).toHaveLength(3);
   });
 
   test("_removeAt at root returns null (no predicate)", async () => {

@@ -524,6 +524,47 @@ class TestCanonicalise:
         out = canonicalise(hass, config)
         assert out["scenes"][0]["description"] == "Living room evening."
 
+    def test_normalises_state_predicate_redundant_nesting(self) -> None:
+        # canonicalise runs each scene's `when` predicate through the condition's
+        # optional normalize_predicate, so editor-produced redundant nesting
+        # (here OR[ OR[AND[a,b]], c ]) is flattened in the stored form.
+        from custom_components.ambience.conditions.state import StateCondition
+
+        def atom(eid: str) -> dict:
+            return {"kind": "is", "entity_id": eid, "states": ["on"]}
+
+        inner_and = {"kind": "and", "items": [atom("a"), atom("b")]}
+        hass = _make_hass(conditions={"state": StateCondition()})
+        config = {
+            "scenes": [
+                {
+                    "name": "r1",
+                    "when": {
+                        "state": {
+                            "kind": "or",
+                            "items": [{"kind": "or", "items": [inner_and]}, atom("c")],
+                        }
+                    },
+                    "actions": [],
+                }
+            ]
+        }
+        out = canonicalise(hass, config)
+        assert out["scenes"][0]["when"]["state"] == {
+            "kind": "or",
+            "items": [inner_and, atom("c")],
+        }
+        # The original config is left untouched (canonicalise is pure).
+        assert config["scenes"][0]["when"]["state"]["items"][0]["kind"] == "or"
+
+    def test_leaves_predicate_without_normaliser_unchanged(self) -> None:
+        # A condition with no normalize_predicate method: the predicate passes
+        # through unchanged (canonicalise must not assume the method exists).
+        hass = _make_hass(conditions={"some_condition": object()})
+        config = {"scenes": [{"name": "r1", "when": {"some_condition": {"x": 1}}, "actions": []}]}
+        out = canonicalise(hass, config)
+        assert out["scenes"][0]["when"]["some_condition"] == {"x": 1}
+
 
 # ---------------------------------------------------------------------------
 # annotate_scenes  (merge unit — shadowed_by + scene_annotations; the heavy

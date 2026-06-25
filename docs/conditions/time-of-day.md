@@ -4,8 +4,6 @@ Checks whether the current time falls within a specified window, expressed as a
 named period, a clock range, or a range anchored to sun events such as sunrise
 or dusk.
 
-## How you set it up
-
 When you add a Time of day condition to a scene, you see a dropdown with three
 kinds of entry:
 
@@ -15,7 +13,7 @@ kinds of entry:
     defined in Settings.
 - **Custom range** — you define the start and end yourself.
 
-### Using a named period
+## Using a named period
 
 Ambience ships six built-in periods that track the sun automatically, so they
 adjust throughout the year without any configuration:
@@ -37,10 +35,10 @@ specific one.
 
 You can also define your own periods — for example a "Wind down" period from
 21:00 to 23:00 — via **Settings → Conditions**. Once saved, custom periods
-appear in the same dropdown alongside the built-ins. See the
-[Settings reference](../settings-reference.md) for how to create and edit them.
+appear in the same dropdown alongside the built-ins. See [Settings](#settings)
+below for how to create and edit them.
 
-### Using a custom range
+## Using a custom range
 
 Select **Custom range** from the dropdown and the editor expands to show a
 **From** row and a **To** row. Each end of the range has two controls:
@@ -61,7 +59,7 @@ Ranges can wrap midnight. If your "From" time is later in the day than your "To"
 time (for example, 22:00 to 06:00), the condition matches from 22:00 through to
 06:00 the following morning.
 
-### Adding multiple time windows
+## Adding multiple time windows
 
 Once a custom range is set, an **+ add another time range** button appears below
 it. Clicking it adds a second entry to the condition. The condition then matches
@@ -69,6 +67,41 @@ if the current time falls within *any* of the listed windows, which lets you
 express things like "between 07:00–09:00 or 17:00–19:00" in a single condition.
 Each added entry collapses to a summary chip when you move to another; click a
 chip to expand and edit it.
+
+## Settings
+
+The **Conditions** tab of the Settings modal lets you view the built-in periods
+and adjust their boundaries, or add your own custom periods. Open it from the
+cogwheel (⚙) in the Ambience panel header.
+
+Each period row shows:
+
+- its **name**
+- its **time range**, expressed as either clock times (`06:00 → 09:00`) or solar
+    anchors with optional offsets (`Sunrise-30m → Sunrise+1h`)
+- a **badge** — `builtin` for the six standard periods, `custom` for periods you
+    have added or overridden
+
+**Overriding a built-in period** Click the pencil icon (✎) on a built-in row.
+The editor opens with the current definition pre-filled. Adjust the start and
+end endpoints (each can be a clock time or a solar anchor, with an optional
+minute offset), give the period an optional display label, and save. The
+built-in row will appear struck through and your custom version will appear
+beneath it.
+
+To revert an override, click the ✕ icon on the custom row. This restores the
+original built-in definition.
+
+**Adding a custom period** Click **+ Add custom period**. Enter a name (used as
+the period's identifier — it must start with a letter and contain only letters,
+digits, and underscores once normalised), set the start and end endpoints, and
+save.
+
+**Resetting all periods** A "Reset all to defaults" button clears all custom
+periods and restores any hidden built-ins. Ambience will warn you before
+proceeding and tell you how many custom periods and hidden built-ins will be
+affected. If any scenes reference a period that is about to disappear, a warning
+banner names them so you can update those scenes first.
 
 ______________________________________________________________________
 

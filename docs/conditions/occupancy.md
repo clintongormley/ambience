@@ -10,8 +10,6 @@ Occupied/Vacant toggle, and (importantly) the right **precedence** relative to
 your other rules. See
 [Precedence](#precedence-why-occupancy-sits-below-entity-state) below.
 
-## How you set it up
-
 When you add an Occupancy condition to a scene, the editor shows:
 
 - **Sensors** — a picker listing your `binary_sensor` entities whose device
@@ -26,7 +24,7 @@ When you add an Occupancy condition to a scene, the editor shows:
     tracks the combined test, so it keeps running through a handover from one
     sensor to another as long as *some* chosen sensor stays in the wanted state.
 
-### Examples
+## Examples
 
 | Setup                           | Meaning                                              |
 | ------------------------------- | ---------------------------------------------------- |

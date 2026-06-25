@@ -52,107 +52,24 @@ ______________________________________________________________________
 
 ## Conditions tab
 
-The Conditions tab lists the conditions that have configurable settings.
-Currently that means **Time of day**, **Day**, **Weather**, and **Lux** — other
-conditions (Entity state, Occupancy, People, Sun, Script, Template) are
-configured per-scene and have no global settings here.
+The Conditions tab is where you configure the global settings for the few
+conditions that have them — the named periods for **Time of day**, the workday
+source for **Day**, the weather entity and groups for **Weather**, and the named
+ranges for **Lux**. Other conditions (Entity state, Occupancy, People, Sun,
+Script, Template) are configured per-scene and have no global settings here.
 
 !!! info "📷 Screenshot"
 
-### Time of day
+Each condition's settings are documented on its own reference page:
 
-Scenes can match a named time-of-day period (Dawn, Morning, Afternoon, Evening,
-Nighttime, Daytime) rather than a raw time range. The Conditions tab lets you
-view those built-in periods and adjust their boundaries, or add your own custom
-periods.
-
-See [Time of day](conditions/time-of-day.md) for a description of how periods
-work inside a scene condition.
-
-Each period row shows:
-
-- its **name**
-- its **time range**, expressed as either clock times (`06:00 → 09:00`) or solar
-    anchors with optional offsets (`Sunrise-30m → Sunrise+1h`)
-- a **badge** — `builtin` for the five standard periods, `custom` for periods
-    you have added or overridden
-
-**Overriding a built-in period** Click the pencil icon (✎) on a built-in row.
-The editor opens with the current definition pre-filled. Adjust the start and
-end endpoints (each can be a clock time or a solar anchor, with an optional
-minute offset), give the period an optional display label, and save. The
-built-in row will appear struck through and your custom version will appear
-beneath it.
-
-To revert an override, click the ✕ icon on the custom row. This restores the
-original built-in definition.
-
-**Adding a custom period** Click **+ Add custom period**. Enter a name (used as
-the period's identifier — it must start with a letter and contain only letters,
-digits, and underscores once normalised), set the start and end endpoints, and
-save.
-
-**Resetting all periods** A "Reset all to defaults" button clears all custom
-periods and restores any hidden built-ins. Ambience will warn you before
-proceeding and tell you how many custom periods and hidden built-ins will be
-affected. If any scenes reference a period that is about to disappear, a warning
-banner names them so you can update those scenes first.
-
-### Day
-
-The Day condition lets a scene match workdays, holidays, and specific days of
-the calendar. To use the `Workday` and `Holiday` day types you must point
-Ambience at a source of workday information.
-
-See [Day](conditions/day.md) for the full set of day types.
-
-**Workday sensor** Select a `binary_sensor` entity provided by the HA
-[Workday integration](https://www.home-assistant.io/integrations/workday/). The
-picker is filtered to show only entities from that integration. When set, scenes
-using the `Workday` or `Holiday` day type read their state from this sensor.
-
-**Workday calendar** Select a `calendar` entity provided by the Workday
-integration. This is an alternative source — configure one or the other
-depending on which the Workday integration exposes in your setup.
-
-If you remove either entity from HA after scenes have referenced it, Ambience
-shows a warning listing the affected scenes by name.
-
-### Weather
-
-The Weather condition lets a scene react to current weather. It needs to know
-which weather entity to read, and optionally how to translate HA's weather
-condition codes into friendlier group labels you can use in scenes.
-
-See [Weather](conditions/weather.md) for how the condition works inside a scene.
-
-**Weather entity** Select the `weather` entity to use as the source. Ambience
-reads its `state` (the current condition code, such as `sunny` or `rainy`) and
-attributes (temperature, humidity, wind speed, etc.) when evaluating scenes.
-
-**Groups** Groups map one or more HA weather condition codes to a single label.
-For example, you might create a group called "Overcast" that includes `cloudy`,
-`fog`, and `partlycloudy`. Scenes can then match against the group label rather
-than listing individual codes.
-
-To add a group, click **+ Add group**. A collapsed row appears. Click it to
-expand, enter a label, and select one or more condition codes from the dropdown.
-Changes are saved automatically.
-
-To remove a group, click the ✕ on the collapsed row. If any scenes reference a
-group or entity that is no longer configured, Ambience shows a warning listing
-the affected scenes.
-
-### Lux ranges
-
-Scenes can match a **named lux range** (Dark, Dim, Normal, Bright, Very bright)
-instead of a raw min/max band. The Conditions tab lets you adjust the built-in
-ranges' boundaries, hide them, or add your own custom ranges — the same model as
-time-of-day periods. See [Lux](conditions/lux.md) for how the condition itself
-works.
-
-If you remove a range that a scene still references, the save warns you and that
-scene stops matching until it is repointed.
+- [Time of day](conditions/time-of-day.md#settings) — view and adjust the
+    built-in periods, or add custom ones.
+- [Day](conditions/day.md#settings) — point Ambience at a workday sensor and/or
+    calendar.
+- [Weather](conditions/weather.md#settings) — choose the weather entity and
+    define weather groups.
+- [Lux](conditions/lux.md#named-lux-ranges) — adjust the built-in lux ranges,
+    hide them, or add your own.
 
 ______________________________________________________________________
 

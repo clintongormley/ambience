@@ -9,8 +9,6 @@ measure. Only `sensor` entities whose device class is `illuminance` count.
 
 ______________________________________________________________________
 
-## How you set it up
-
 When you add a Lux condition to a scene, the editor shows:
 
 - **Sensors** — a picker listing your illuminance sensors. Pick one or more.
@@ -27,7 +25,7 @@ A sensor reporting `unavailable`, `unknown`, or a non-numeric value never counts
 as inside a range — it is treated as unobservable, so the condition does not
 pass on it.
 
-### Examples
+## Examples
 
 | Setup                               | Meaning                                 |
 | ----------------------------------- | --------------------------------------- |
@@ -49,10 +47,10 @@ Ambience ships five built-in ranges:
 | Bright      | 300 – 1000 lx     |
 | Very bright | 1000 lx and above |
 
-You can adjust these, hide them, or add your own under
-[Settings](../settings-reference.md) → **Conditions** tab → **Lux ranges** — the
-same override-the-built-ins model as time-of-day periods. Scenes that reference
-a named range pick up any later edits to it automatically.
+You can adjust these, hide them, or add your own in the panel's **Settings** →
+**Conditions** tab → **Lux ranges** — the same override-the-built-ins model as
+[time-of-day periods](time-of-day.md#settings). Scenes that reference a named
+range pick up any later edits to it automatically.
 
 If you delete or hide a named range that a scene still references, the save
 warns you, and that scene simply stops matching until you point it at an

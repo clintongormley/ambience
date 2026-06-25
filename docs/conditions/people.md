@@ -2,13 +2,11 @@
 
 Checks who is, or is not, at home or in a named zone.
 
-## How you set it up
-
 When you add a People condition to a scene, the editor shows three controls in
 sequence: a **scope** dropdown, an **is at / is not at** toggle, and a
 **location** dropdown. An optional **for** duration sits below them.
 
-### Choosing a scope
+## Choosing a scope
 
 The first dropdown sets whose presence is checked. It has six options:
 
@@ -26,7 +24,7 @@ tracks as a `person` entity. The last three reveal a checklist of your tracked
 people so you can limit the test to specific individuals. When you switch to one
 of those modes, all people start ticked; untick anyone you want to exclude.
 
-### Choosing a direction and location
+## Choosing a direction and location
 
 Beneath the scope dropdown, two controls form a single sentence:
 
@@ -45,7 +43,7 @@ Combining scope and direction gives you expressions such as:
 - *Nobody / (is at) / Home* — the house is empty.
 - *Any of: Alice, Bob / Is at / Work* — Alice or Bob (or both) are at work.
 
-### Requiring it to have been true for a duration
+## Requiring it to have been true for a duration
 
 Below the location row is a **for** duration field (hours, minutes, seconds).
 When set, the condition only matches if the location *test* has been

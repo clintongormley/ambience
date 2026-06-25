@@ -10,8 +10,6 @@ is the exact fact it reports. That lets you build a safe fallback that takes
 over when, say, your presence sensor drops offline, rather than letting a
 presence-based rule misfire on stale or missing data.
 
-## How you set it up
-
 When you add an Unavailable condition to a scene, the editor shows a single
 control:
 
@@ -23,7 +21,7 @@ duration — the condition is deliberately simple. It matches as soon as **any
 one** of the entities you picked is unavailable, unknown, or absent (deleted or
 not yet loaded). You must pick at least one entity.
 
-### Examples
+## Examples
 
 | Setup                       | Meaning                                                     |
 | --------------------------- | ----------------------------------------------------------- |

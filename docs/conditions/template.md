@@ -11,8 +11,6 @@ Assistant's templating language.
 
 ______________________________________________________________________
 
-## How you set it up
-
 Open the condition editor and choose **Template**. A text area appears where you
 write your Jinja template. The template can be as simple as a single expression
 wrapped in `{{ }}` or a multi-line block using `{% %}` control structures, as

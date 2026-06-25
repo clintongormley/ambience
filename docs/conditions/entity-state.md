@@ -3,8 +3,6 @@
 Checks the state (or an attribute) of one or more entities, and evaluates to
 true or false based on a test you build in the UI.
 
-## How you set it up
-
 The condition is built from one or more individual *tests*. You start by picking
 an entity, then choosing **where to look** — either the entity's own state (the
 default) or one of its attributes — and then setting a **comparison** and a

@@ -8,12 +8,10 @@ has risen above the roofline.
 
 ______________________________________________________________________
 
-## How you set it up
-
 The condition has two independent parts: **elevation** and **azimuth**. You must
 set at least one of them.
 
-### Elevation
+## Elevation
 
 Elevation measures how high the sun sits above (or below) the horizon, expressed
 in degrees. 0° is the horizon, 90° is directly overhead, and negative values
@@ -31,7 +29,7 @@ Use the **Elevation** dropdown to choose one of four modes:
 Type the degree value (or values) into the number field that appears next to the
 dropdown. The valid range is −90 to 90.
 
-### Azimuth
+## Azimuth
 
 Azimuth is the compass bearing of the sun: 0°/360° is north, 90° is east, 180°
 is south, 270° is west.

@@ -34,6 +34,7 @@ from .engine import evaluate_explained, resolve
 from .errors import service_validation_error
 from .scope_triggers import referenced_entities
 from .service_logbook import log_apply, log_run_actions
+from .target_resolve import action_target, resolve_action_entities
 from .trace import (
     CauseKind,
     Outcome,
@@ -49,6 +50,11 @@ _LOGGER = logging.getLogger(__name__)
 # Sentinel distinguishing "key absent" from a stored None in the live-state maps,
 # so the first set of a None value still dispatches.
 _UNSET: object = object()
+
+# Target keys that identify entities indirectly (via area/device/label/floor).
+# These are scope-constrained at apply time; direct entity_id keys bypass clipping
+# because the scene author has already chosen the specific entities.
+_INDIRECT_TARGET_KEYS: frozenset[str] = frozenset({"area_id", "device_id", "label_id", "floor_id"})
 
 
 def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
@@ -514,11 +520,28 @@ async def async_execute_actions(
             continue
         domain, name = service_id.split(".", 1)
         params = {**exposed.get("defaults", {}), **action_spec.get("params", {})}
-        entity_ids = action_spec.get("entity_ids") or []
-        target = {"entity_id": entity_ids} if entity_ids else None
+        tgt = action_target(action_spec)
+        if tgt and tgt.keys() & _INDIRECT_TARGET_KEYS:
+            resolved = resolve_action_entities(hass, scope_kind, scope_id, tgt)
+            if not resolved:
+                _LOGGER.warning(
+                    "ambience: action target resolved to no in-scope entities; "
+                    "skipping (scene %s, scope=%s/%s, service=%s)",
+                    scene_index,
+                    scope_kind,
+                    scope_id,
+                    service_id,
+                )
+                continue
+            call_target: dict[str, Any] | None = {"entity_id": resolved}
+        elif tgt:
+            # Direct entity_id target: forward unchanged (no scope clip).
+            call_target = tgt
+        else:
+            call_target = None
         coros.append(
             hass.services.async_call(
-                domain, name, params, target=target, blocking=True, context=context
+                domain, name, params, target=call_target, blocking=True, context=context
             )
         )
 

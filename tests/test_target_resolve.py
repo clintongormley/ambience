@@ -142,3 +142,12 @@ async def test_indirect_only_out_of_scope_returns_empty(hass: HomeAssistant) -> 
     _entity_in_area(hass, "o", office.id)
     got = resolve_action_entities(hass, "area", kitchen.id, {"area_id": [office.id]})
     assert got == []
+
+
+async def test_resolve_unknown_scope_kind_returns_empty(hass: HomeAssistant) -> None:
+    """An unknown scope_kind falls back to an empty in-scope set → no entities."""
+    office = ar.async_get(hass).async_create("Office")
+    _entity_in_area(hass, "o", office.id)
+    # "zone" is not a known scope kind; the resolver treats it as an empty scope.
+    got = resolve_action_entities(hass, "zone", None, {"area_id": [office.id]})
+    assert got == []

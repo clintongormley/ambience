@@ -570,7 +570,13 @@ function _renderReleaseGroup(expr: StateExpr, ctx: ConditionContext): string {
  *  "<positives joined OR> OR until <releases joined AND>". Negated disjuncts are
  *  de-negated (via `_asStateRelease`) and collapsed under one "until" (de Morgan);
  *  positive disjuncts render as-is. `paren` wraps the whole term when it is
- *  embedded beside sibling terms and has more than one part. */
+ *  embedded beside sibling terms and has more than one part.
+ *
+ *  Precondition: `expr` is an OR group. Every caller guards `kind === "or"`
+ *  first; the param can't be tightened to `{ kind: "or" }` because narrowing
+ *  `StateExpr` by `kind === "or"` yields `StateGroup` (whose `kind` stays
+ *  "and" | "or"), so passing an `and` group would render its items joined by
+ *  OR — don't. */
 function _renderDisjHold(expr: StateGroup, ctx: ConditionContext, paren: boolean): string {
   const positives: StateExpr[] = [];
   const releaseExprs: StateExpr[] = [];
@@ -653,15 +659,21 @@ function _holdStateParts(
       if (rel) releaseExprs.push(rel);
       else guardItems.push(it);
     }
-    const guards =
-      guardItems.length === 0
-        ? []
-        : [
-            _renderHoldTerm(
-              guardItems.length === 1 ? guardItems[0] : { kind: "and" as const, items: guardItems },
-              ctx,
-            ),
-          ];
+    let guards: string[] = [];
+    if (guardItems.length > 0) {
+      const guardItem: StateExpr =
+        guardItems.length === 1 ? guardItems[0] : { kind: "and", items: guardItems };
+      // A lone OR guard must be parenthesised when it sits beside other
+      // conditions (sole=false), so "While (A OR B) and Daytime, …" can't be
+      // misread — the same !sole rule the top-level OR branch uses. A re-grouped
+      // multi-item AND guard renders its OR children parenthesised already (via
+      // _wrapHoldIfGroup), so only the single-OR case needs this.
+      guards = [
+        guardItem.kind === "or"
+          ? _renderDisjHold(guardItem, ctx, !sole)
+          : _renderHoldTerm(guardItem, ctx),
+      ];
+    }
     const releases = releaseExprs.map((r) => _blockerConditionText("state", r, ctx));
     return { guards, releases };
   }

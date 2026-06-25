@@ -1871,6 +1871,31 @@ describe("summariseBlocker", () => {
     );
   });
 
+  test("lone OR guard beside another condition is parenthesised: '(A OR B) and Daytime'", () => {
+    const a = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const b = { kind: "is", entity_id: "light.b", states: ["on"] };
+    const xPos = { kind: "is", entity_id: "binary_sensor.x", states: ["on"] };
+    // and( or(A, B), is_not X ): the OR is the lone guard after the release is
+    // pulled out. With another condition present (not sole), the guard OR must be
+    // parenthesised so "While (A OR B) and Daytime, …" can't be misread.
+    const when = {
+      state: {
+        kind: "and",
+        items: [
+          { kind: "or", items: [a, b] },
+          { kind: "is_not", entity_id: "binary_sensor.x", states: ["on"] },
+        ],
+      } as StatePredicate,
+      time_of_day: { period: "daytime" },
+    };
+    const aStr = summariseCondition("state", a, ctx);
+    const bStr = summariseCondition("state", b, ctx);
+    const xStr = summariseCondition("state", xPos, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While (${aStr} OR ${bStr}) and Daytime, block until ${xStr}`,
+    );
+  });
+
   test("zero-condition blocker reads 'Block always'", () => {
     expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
   });

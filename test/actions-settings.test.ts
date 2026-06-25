@@ -64,19 +64,7 @@ describe("ambience-actions-settings", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => el?.remove());
 
-  async function mount() {
-    el = document.createElement("ambience-actions-settings");
-    el.hass = { localize: () => "" };
-    document.body.appendChild(el);
-    await el.updateComplete;
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    return el;
-  }
-
-  async function mountWithHass(hass: any) {
+  async function mount(hass: any = { localize: () => "" }) {
     el = document.createElement("ambience-actions-settings");
     el.hass = hass;
     document.body.appendChild(el);
@@ -91,7 +79,7 @@ describe("ambience-actions-settings", () => {
     beforeEach(() => window.localStorage.clear());
 
     test("shows when fado is not loaded and not dismissed", async () => {
-      el = await mountWithHass({ localize: () => "", config: { components: ["cover", "light"] } });
+      el = await mount({ localize: () => "", config: { components: ["cover", "light"] } });
       const notice = el.shadowRoot.querySelector('[data-test="fado-notice"]');
       expect(notice).not.toBeNull();
       const cta = el.shadowRoot.querySelector('[data-test="fado-notice-cta"]') as HTMLAnchorElement;
@@ -102,12 +90,12 @@ describe("ambience-actions-settings", () => {
     });
 
     test("hidden when fado is loaded", async () => {
-      el = await mountWithHass({ localize: () => "", config: { components: ["fado", "light"] } });
+      el = await mount({ localize: () => "", config: { components: ["fado", "light"] } });
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
     });
 
     test("dismiss hides it and persists", async () => {
-      el = await mountWithHass({ localize: () => "", config: { components: ["light"] } });
+      el = await mount({ localize: () => "", config: { components: ["light"] } });
       const dismiss = el.shadowRoot.querySelector(
         '[data-test="dismiss-fado-notice"]',
       ) as HTMLButtonElement;
@@ -119,7 +107,7 @@ describe("ambience-actions-settings", () => {
 
     test("hidden when already dismissed", async () => {
       window.localStorage.setItem("ambience-fado-notice-dismissed", "1");
-      el = await mountWithHass({ localize: () => "", config: { components: ["light"] } });
+      el = await mount({ localize: () => "", config: { components: ["light"] } });
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
     });
   });

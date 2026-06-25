@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { isComponentLoaded } from "../ha-config.js";
 import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
 import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
+import { bannerStyles } from "./banner-styles.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -21,9 +22,18 @@ import type { HaFormSchemaEntry } from "../ha-form.js";
 import { selectorUnit } from "../summary.js";
 import type { ExposedAction, ServiceField, ServiceInfo, ServiceSchema } from "../types.js";
 
+// The Fado Light Fader integration: its HA domain (present in
+// `hass.config.components` once set up) and the My-Home-Assistant deep link
+// that opens its repository in the user's HACS for one-click install.
+const FADO_DOMAIN = "fado";
+const FADO_HACS_URL =
+  "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado";
+
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
-  static override styles = css`
+  static override styles = [
+    bannerStyles,
+    css`
     :host { display: block; }
     .card {
       border: 1px solid var(--divider-color, #e0e0e0);
@@ -292,47 +302,8 @@ export class AmbienceActionsSettings extends LitElement {
       font-weight: 600;
       margin-bottom: 0.6rem;
     }
-    .banner {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      padding: 0.85rem 1rem;
-      margin: 0 0 1rem 0;
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 8px;
-      background: var(--card-background-color, #fff);
-    }
-    .banner-icon { flex: 0 0 auto; margin-top: 0.1rem; --mdc-icon-size: 22px; color: var(--primary-color, #03a9f4); }
-    .banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
-    .banner-text strong { font-weight: 600; }
-    .banner-text span { font-size: 0.9rem; color: var(--secondary-text-color, #888); }
-    .banner-cta {
-      flex: 0 0 auto;
-      align-self: center;
-      background: var(--primary-color, #03a9f4);
-      border: 1px solid var(--primary-color, #03a9f4);
-      color: var(--text-primary-color, #fff);
-      border-radius: 4px;
-      padding: 0.45rem 0.9rem;
-      font: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-      white-space: nowrap;
-      text-decoration: none;
-    }
-    .banner-dismiss {
-      flex: 0 0 auto;
-      align-self: flex-start;
-      background: transparent;
-      border: none;
-      color: var(--secondary-text-color, #888);
-      cursor: pointer;
-      font-size: 1rem;
-      line-height: 1;
-      padding: 0.15rem 0.3rem;
-    }
-    .banner-dismiss:hover { color: var(--primary-text-color, inherit); }
-  `;
+  `,
+  ];
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _actions: ExposedAction[] = [];
@@ -661,9 +632,9 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _renderFadoNotice() {
-    if (this._fadoNoticeDismissed || isComponentLoaded(this.hass, "fado")) return "";
+    if (this._fadoNoticeDismissed || isComponentLoaded(this.hass, FADO_DOMAIN)) return "";
     return html`
-      <div class="banner" data-test="fado-notice">
+      <div class="banner banner-hint" data-test="fado-notice">
         <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
         <div class="banner-text">
           <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
@@ -672,7 +643,7 @@ export class AmbienceActionsSettings extends LitElement {
         <a
           class="banner-cta"
           data-test="fado-notice-cta"
-          href="https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado"
+          href=${FADO_HACS_URL}
           target="_blank"
           rel="noopener noreferrer"
         >${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}</a>

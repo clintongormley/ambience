@@ -1,12 +1,12 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
+import { actionTarget, resolveTargetInScope, targetIsEmpty } from "../action-target.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import type { HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { humanizeId, localize, localizeWsError } from "../i18n.js";
 import { formatArgValue, formatParamValue, selectorUnit } from "../summary.js";
-import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
+import type { ActionTargetValue, ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
 
@@ -24,7 +24,7 @@ import type { HaFormSchemaEntry } from "../ha-form.js";
  *      Suppressed when the intersection is empty.
  *
  * Events:
- *   - `entity-ids-changed` { entityIds: string[] }
+ *   - `target-changed`     { target: ActionTargetValue }
  *   - `params-changed`     { params: Record<string, unknown> }
  */
 @customElement("ambience-action-slot")
@@ -129,6 +129,15 @@ export class AmbienceActionSlot extends LitElement {
       font: inherit;
       color: inherit;
     }
+    .count-preview {
+      font-size: 0.85rem;
+      color: var(--secondary-text-color, #888);
+      margin-top: 0.25rem;
+      padding: 0.1rem 0;
+    }
+    .count-preview.warn {
+      color: var(--warning-color, #e65100);
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -138,11 +147,8 @@ export class AmbienceActionSlot extends LitElement {
    *  when the service is no longer exposed (`exposed` undefined) and we still
    *  want to show the stored config. */
   @property({ attribute: false }) service?: string;
-  @property({ attribute: false }) entityIds: string[] = [];
+  @property({ attribute: false }) target: ActionTargetValue = {};
   @property({ attribute: false }) params: Record<string, unknown> = {};
-  /** Entities already targeted by other actions in the scene; hidden from this
-   *  slot's target picker so the same entity can't be driven by two actions. */
-  @property({ attribute: false }) excludeEntities: string[] = [];
 
   @state() private _schema: ServiceSchema | null | undefined = undefined;
   @state() private _schemaError: string | null = null;
@@ -281,17 +287,34 @@ export class AmbienceActionSlot extends LitElement {
     return this._hasTarget();
   }
 
-  // TODO(Task 7): carry full target — replace bridge with ActionTargetValue propagation;
-  // restore _scopeEntities() + entitiesForScope import for the scope-filtered entity list
-  private _onTargetChanged = (e: CustomEvent<{ value: { entity_id?: string[] } }>) => {
+  private _onTargetChanged = (e: CustomEvent<{ value: ActionTargetValue }>) => {
     e.stopPropagation();
-    this._emit("entity-ids-changed", { entityIds: e.detail.value.entity_id ?? [] });
+    this._emit("target-changed", { target: e.detail.value });
   };
+
+  private _resolvedCount(): number {
+    if (!this.hass || !this.scope) return 0;
+    return resolveTargetInScope(this.hass as any, this.scope, this.target ?? {}).length;
+  }
+
+  private _renderCountPreview() {
+    if (targetIsEmpty(this.target ?? {})) return "";
+    const n = this._resolvedCount();
+    const scope = this.scope;
+    const scopeName =
+      !scope || scope.kind === "house" ? localize(this.hass, "ui.house", "House") : scope.id;
+    const text = localize(
+      this.hass,
+      "ui.target_resolves_count",
+      "→ resolves to {n} entities in {scope}",
+      { n: String(n), scope: scopeName },
+    );
+    return html`<div class="count-preview ${n === 0 ? "warn" : ""}" data-count-preview>${text}</div>`;
+  }
 
   private _renderTargetPicker() {
     if (!this._hasTarget()) return "";
-    // TODO(Task 7): pass excludeEntities and scope-filtered entity list to the new target picker
-    const target = (this._schema?.target ?? null) as HaTarget;
+    const haTarget = (this._schema?.target ?? null) as HaTarget;
     const label = localize(this.hass, "ui.target", "Target");
     return html`
       <div class="target-picker field-row">
@@ -300,11 +323,12 @@ export class AmbienceActionSlot extends LitElement {
         </div>
         <ambience-target-picker
           .hass=${this.hass}
-          .target=${target}
-          .value=${{ entity_id: this.entityIds }}
+          .target=${haTarget}
+          .value=${this.target ?? {}}
           .label=${" "}
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
+        ${this._renderCountPreview()}
       </div>
     `;
   }
@@ -523,6 +547,14 @@ export class AmbienceActionSlot extends LitElement {
     const serviceId = this.service ?? this.exposed?.id;
     if (!serviceId) return "";
     const params = Object.entries(this.params ?? {});
+    // Build target display from the target object (normalizing legacy entity_ids).
+    const resolvedTarget = actionTarget({
+      service: serviceId,
+      target: this.target,
+      params: this.params,
+    });
+    const targetEntityIds = resolvedTarget.entity_id ?? [];
+    const hasTarget = !targetIsEmpty(resolvedTarget);
     return html`
       <dl class="raw-config" data-raw-config>
         <div class="raw-row">
@@ -530,10 +562,10 @@ export class AmbienceActionSlot extends LitElement {
           <dd>${serviceId}</dd>
         </div>
         ${
-          this.entityIds.length
+          hasTarget
             ? html`<div class="raw-row">
                 <dt>${localize(this.hass, "ui.raw_config_targets", "Targets")}:</dt>
-                <dd>${this.entityIds.join(", ")}</dd>
+                <dd>${targetEntityIds.length ? targetEntityIds.join(", ") : JSON.stringify(resolvedTarget)}</dd>
               </div>`
             : ""
         }

@@ -36,9 +36,8 @@ async function mount(
     scope?: { kind: "area"; id: string } | { kind: "floor"; id: string } | { kind: "house" };
     exposed?: ExposedAction;
     schema?: ServiceSchema | null;
-    entityIds?: string[];
+    target?: import("../frontend/src/types").ActionTargetValue;
     params?: Record<string, unknown>;
-    excludeEntities?: string[];
   } = {},
 ): Promise<any> {
   if (opts.schema !== undefined) {
@@ -48,9 +47,8 @@ async function mount(
   el.hass = opts.hass ?? makeHass();
   el.scope = opts.scope ?? { kind: "area", id: "living_room" };
   if (opts.exposed) el.exposed = opts.exposed;
-  el.entityIds = opts.entityIds ?? [];
+  el.target = opts.target ?? {};
   el.params = opts.params ?? {};
-  if (opts.excludeEntities) el.excludeEntities = opts.excludeEntities;
   document.body.appendChild(el);
   await el.updateComplete;
   await new Promise((r) => setTimeout(r, 0));
@@ -89,7 +87,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = exposed;
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -210,7 +208,7 @@ describe("ambience-action-slot", () => {
     expect(get()?.params).toEqual({ msg: "hello" });
   });
 
-  test("target picker value-changed re-emits as entity-ids-changed", async () => {
+  test("target picker value-changed re-emits as target-changed", async () => {
     const schema: ServiceSchema = {
       target: { entity: { domain: "light" } },
       fields: {},
@@ -224,9 +222,8 @@ describe("ambience-action-slot", () => {
       },
       schema,
     });
-    const get = captureEvent(el, "entity-ids-changed");
+    const get = captureEvent(el, "target-changed");
     const picker = el.shadowRoot.querySelector("ambience-target-picker") as HTMLElement;
-    // Bridge: picker now emits ActionTargetValue; action-slot reads entity_id.
     picker.dispatchEvent(
       new CustomEvent("value-changed", {
         detail: { value: { entity_id: ["light.lamp_a"] } },
@@ -235,7 +232,7 @@ describe("ambience-action-slot", () => {
       }),
     );
     await el.updateComplete;
-    expect(get()?.entityIds).toEqual(["light.lamp_a"]);
+    expect(get()?.target).toEqual({ entity_id: ["light.lamp_a"] });
   });
 
   test("target picker receives the HA target metadata for domain filtering", async () => {
@@ -258,11 +255,7 @@ describe("ambience-action-slot", () => {
     // TODO(Task 7): check scope-filtered entity list once the bridge is replaced
   });
 
-  // TODO(Task 7): restore full excludeEntities filtering tests once action-slot is rewritten
-  // with ActionTargetValue propagation. The bridge passes entityIds as value.entity_id
-  // to the new target picker; per-picker entity filtering via the native HA target
-  // selector replaces the old pre-filtered entities list.
-  test("picker receives entityIds as value.entity_id (bridge)", async () => {
+  test("picker receives target value directly", async () => {
     const schema: ServiceSchema = {
       target: { entity: { domain: "light" } },
       fields: {},
@@ -270,25 +263,10 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
       schema,
-      entityIds: ["light.lamp_a"],
+      target: { entity_id: ["light.lamp_a"] },
     });
     const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
-    // Bridge: entityIds are passed as value.entity_id (not as an entities list).
     expect(picker.value).toEqual({ entity_id: ["light.lamp_a"] });
-  });
-
-  test("excludeEntities prop accepted without error (bridge — filtering deferred to Task 7)", async () => {
-    const schema: ServiceSchema = {
-      target: { entity: { domain: "light" } },
-      fields: {},
-    };
-    el = await mount({
-      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
-      schema,
-      excludeEntities: ["light.lamp_a"],
-    });
-    // Picker is rendered; excludeEntities filtering is restored in Task 7.
-    expect(el.shadowRoot.querySelector("ambience-target-picker")).toBeTruthy();
   });
 
   test("required visible field renders an asterisk in the fallback label", async () => {
@@ -320,7 +298,7 @@ describe("ambience-action-slot", () => {
       visible_fields: [],
       defaults: {},
     };
-    el2.entityIds = [];
+    el2.target = {};
     el2.params = {};
     document.body.appendChild(el2);
     await el2.updateComplete;
@@ -357,7 +335,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     // exposed stays undefined
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -383,7 +361,7 @@ describe("ambience-action-slot", () => {
     // exposed stays undefined → service no longer in the exposed-action list.
     // The service id still travels with the action spec.
     el.service = "input_boolean.turn_on";
-    el.entityIds = ["input_boolean.power_shower"];
+    el.target = { entity_id: ["input_boolean.power_shower"] };
     el.params = { brightness: 50 };
     document.body.appendChild(el);
     await el.updateComplete;
@@ -411,7 +389,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.service = "input_boolean.turn_on";
-    el.entityIds = ["input_boolean.power_shower"];
+    el.target = { entity_id: ["input_boolean.power_shower"] };
     el.params = { brightness: 50 };
     document.body.appendChild(el);
     await el.updateComplete;
@@ -431,7 +409,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.service = "ambience.turn_on";
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -453,7 +431,7 @@ describe("ambience-action-slot", () => {
     el.scope = { kind: "area", id: "living_room" };
     // Service IS still exposed, but unavailable in this HA instance.
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = ["light.lamp_a"];
+    el.target = { entity_id: ["light.lamp_a"] };
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -473,7 +451,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.service = "light.turn_on";
-    el.entityIds = [];
+    el.target = {};
     el.params = { brightness: null };
     document.body.appendChild(el);
     await el.updateComplete;
@@ -490,7 +468,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.service = "light.turn_on";
-    el.entityIds = [];
+    el.target = {};
     el.params = { rgb_color: [255, 0, 0] };
     document.body.appendChild(el);
     await el.updateComplete;
@@ -513,7 +491,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "notify.send_message", label: "", visible_fields: ["msg"], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
     document.body.appendChild(el);
@@ -540,7 +518,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
     document.body.appendChild(el);
@@ -790,7 +768,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -1334,7 +1312,7 @@ describe("ambience-action-slot", () => {
     // hass deliberately left unset
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -1382,7 +1360,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -1400,7 +1378,7 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
     el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
-    el.entityIds = [];
+    el.target = {};
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -1538,5 +1516,85 @@ describe("ambience-action-slot", () => {
     el.hass = makeHass();
     await el.updateComplete;
     expect(vi.mocked(api.getServiceSchema)).toHaveBeenCalledTimes(1);
+  });
+
+  // --- Task 7: target object + count preview ---
+
+  test("re-emits target-changed from the picker via _onTargetChanged", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    el = await mount({
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      target: { area_id: ["kitchen"] },
+    });
+    let detail: any;
+    el.addEventListener("target-changed", (e: CustomEvent) => {
+      detail = e.detail;
+    });
+    el._onTargetChanged(
+      new CustomEvent("value-changed", { detail: { value: { label_id: ["reading"] } } }),
+    );
+    expect(detail.target).toEqual({ label_id: ["reading"] });
+  });
+
+  test("count preview reports in-scope entity count", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    const hass = {
+      ...makeHass(),
+      states: {},
+      entities: { "light.k": { entity_id: "light.k", area_id: "kitchen" } },
+      devices: {},
+      areas: { kitchen: { area_id: "kitchen" } },
+    };
+    el = await mount({
+      hass,
+      scope: { kind: "area", id: "kitchen" },
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      target: { area_id: ["kitchen"] },
+    });
+    expect(el._resolvedCount()).toBe(1);
+  });
+
+  test("count preview element renders when target is not empty", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    const hass = {
+      ...makeHass(),
+      states: {},
+      entities: { "light.k": { entity_id: "light.k", area_id: "living_room" } },
+      devices: {},
+      areas: { living_room: { area_id: "living_room" } },
+    };
+    el = await mount({
+      hass,
+      scope: { kind: "area", id: "living_room" },
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      target: { area_id: ["living_room"] },
+    });
+    const preview = el.shadowRoot.querySelector("[data-count-preview]");
+    expect(preview).toBeTruthy();
+  });
+
+  test("count preview element is absent when target is empty", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    el = await mount({
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      target: {},
+    });
+    expect(el.shadowRoot.querySelector("[data-count-preview]")).toBeNull();
   });
 });

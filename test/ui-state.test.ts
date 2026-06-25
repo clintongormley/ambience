@@ -4,10 +4,12 @@ import {
   getCollapsedCategories,
   getConditionsHintDismissed,
   getExpandedScopes,
+  getFadoNoticeDismissed,
   getFilterCategory,
   setCollapsedCategories,
   setConditionsHintDismissed,
   setExpandedScopes,
+  setFadoNoticeDismissed,
   setFilterCategory,
 } from "../frontend/src/ui-state";
 
@@ -171,6 +173,31 @@ describe("ui-state persistence", () => {
         throw new Error("storage disabled");
       });
       expect(() => setConditionsHintDismissed()).not.toThrow();
+    });
+  });
+
+  describe("fado notice dismissed", () => {
+    test("defaults to false when nothing stored", () => {
+      expect(getFadoNoticeDismissed()).toBe(false);
+    });
+
+    test("set then get returns true", () => {
+      setFadoNoticeDismissed();
+      expect(getFadoNoticeDismissed()).toBe(true);
+    });
+
+    test("returns false when reading throws (storage disabled)", () => {
+      vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+      expect(getFadoNoticeDismissed()).toBe(false);
+    });
+
+    test("swallows errors when writing throws (storage disabled)", () => {
+      vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+      expect(() => setFadoNoticeDismissed()).not.toThrow();
     });
   });
 });

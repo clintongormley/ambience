@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -1274,3 +1275,98 @@ def test_describe_atom_for_mode_renders_comparator() -> None:
     assert StateCondition().describe(snap, less) == "Front Door: on 2m ✓ (is on, for <5m)"
     at_least = {**less, "for_mode": "at_least"}
     assert StateCondition().describe(snap, at_least) == "Front Door: on 2m ✗ (is on, for ≥5m)"
+
+
+# --- normalize_predicate: save-time flattening of redundant nesting -----------
+#
+# The editor's group "( )" wrap can leave redundant structure (a single-child
+# group, or a same-op group nested in its parent). It is semantically a no-op
+# — kleene_all/any over the flattened form is identical — so normalize_predicate
+# strips it for storage. Applied once at save (via canonicalise), never during
+# live editing.
+
+
+def _atom(eid: str) -> dict:
+    return {"kind": "is", "entity_id": eid, "states": ["on"]}
+
+
+def test_normalize_none_is_none() -> None:
+    assert StateCondition().normalize_predicate(None) is None
+
+
+def test_normalize_leaves_a_plain_atom_unchanged() -> None:
+    atom = _atom("light.a")
+    assert StateCondition().normalize_predicate(atom) == atom
+
+
+def test_normalize_collapses_a_single_child_group_to_its_item() -> None:
+    pred = {"kind": "or", "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}]}
+    out = StateCondition().normalize_predicate(pred)
+    assert out == {"kind": "and", "items": [_atom("a"), _atom("b")]}
+
+
+def test_normalize_collapses_redundant_same_op_nesting() -> None:
+    # OR[ OR[AND[a,b]], c ] -> OR[ AND[a,b], c ] (the editor's nested "( )" wrap).
+    pred = {
+        "kind": "or",
+        "items": [
+            {"kind": "or", "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}]},
+            _atom("c"),
+        ],
+    }
+    out = StateCondition().normalize_predicate(pred)
+    assert out == {
+        "kind": "or",
+        "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}, _atom("c")],
+    }
+
+
+def test_normalize_merges_same_op_child_into_parent() -> None:
+    # AND[ AND[a,b], c ] -> AND[ a, b, c ].
+    pred = {
+        "kind": "and",
+        "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}, _atom("c")],
+    }
+    out = StateCondition().normalize_predicate(pred)
+    assert out == {"kind": "and", "items": [_atom("a"), _atom("b"), _atom("c")]}
+
+
+def test_normalize_preserves_not_inside_a_collapsed_group() -> None:
+    # OR[ NOT(AND[a,b]) ] -> NOT(AND[a,b]) (single-child collapse keeps the NOT).
+    inner = {"kind": "not", "item": {"kind": "and", "items": [_atom("a"), _atom("b")]}}
+    pred = {"kind": "or", "items": [inner]}
+    out = StateCondition().normalize_predicate(pred)
+    assert out == inner
+
+
+def test_normalize_recurses_under_a_not_wrapper() -> None:
+    # NOT( AND[ AND[a,b], c ] ) -> NOT( AND[a,b,c] ).
+    pred = {
+        "kind": "not",
+        "item": {
+            "kind": "and",
+            "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}, _atom("c")],
+        },
+    }
+    out = StateCondition().normalize_predicate(pred)
+    assert out == {
+        "kind": "not",
+        "item": {"kind": "and", "items": [_atom("a"), _atom("b"), _atom("c")]},
+    }
+
+
+def test_normalize_is_idempotent_on_a_clean_predicate() -> None:
+    clean = {
+        "kind": "or",
+        "items": [{"kind": "and", "items": [_atom("a"), _atom("b")]}, _atom("c")],
+    }
+    once = StateCondition().normalize_predicate(clean)
+    assert once == clean
+    assert StateCondition().normalize_predicate(once) == clean
+
+
+def test_normalize_does_not_mutate_the_input() -> None:
+    pred = {"kind": "or", "items": [{"kind": "or", "items": [_atom("a")]}]}
+    before = copy.deepcopy(pred)
+    StateCondition().normalize_predicate(pred)
+    assert pred == before

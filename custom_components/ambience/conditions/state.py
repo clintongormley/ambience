@@ -355,6 +355,44 @@ class StateCondition:
             return
         self._validate_expr(predicate)
 
+    # --- normalisation (save-time) --------------------------------------
+
+    def normalize_predicate(self, predicate: Any) -> Any:
+        """Flatten redundant nesting into the canonical stored form: collapse a
+        single-child ``and``/``or`` group to its sole item, and merge a same-op
+        nested group into its parent. Semantically a no-op — ``kleene_all`` /
+        ``kleene_any`` over the flattened tree give the same result — so this
+        only strips the wrappers the editor's group "( )" wrap can leave behind,
+        keeping persisted predicates and trace descriptions clean. Called once at
+        save (``canonicalise``), never during live editing. Pure: returns a new
+        tree, never mutates the input."""
+        if predicate is None:
+            return None
+        return self._normalize_expr(predicate)
+
+    @staticmethod
+    def _normalize_expr(expr: Any) -> Any:
+        # Runs only on validated predicates (canonicalise is gated by
+        # validate_predicate), so groups always carry a non-empty `items` list,
+        # `not` a non-None `item`, and every node is a dict — no defensive guards.
+        kind = expr.get("kind")
+        if kind in ("and", "or"):
+            flat: list[Any] = []
+            for item in expr["items"]:
+                norm = StateCondition._normalize_expr(item)
+                # A same-op child is redundant nesting — splice its items up so
+                # AND[AND[a,b], c] becomes AND[a,b,c]. (A normalized group always
+                # has >= 2 items; a single-child one already collapsed below.)
+                if norm.get("kind") == kind:
+                    flat.extend(norm["items"])
+                else:
+                    flat.append(norm)
+            # A one-element AND/OR group *is* that element.
+            return flat[0] if len(flat) == 1 else {**expr, "items": flat}
+        if kind == "not":
+            return {**expr, "item": StateCondition._normalize_expr(expr["item"])}
+        return expr  # atom — nothing to flatten
+
     def _validate_expr(self, expr: Any) -> None:
         # Messages here surface verbatim to the user in the scene editor, so they
         # read as plain guidance rather than internal jargon (no "atom"/"list").

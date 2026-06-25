@@ -53,8 +53,14 @@ export class AmbienceAmbienceSettings extends LitElement {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 6px;
       background: var(--card-background-color, #fff);
-      margin-bottom: 1rem;
+      /* White cards on a white dialog: a larger gap plus a faint lift make the
+         two top-level sections read as clearly separate. */
+      margin-bottom: 1.5rem;
       padding: 1rem;
+      box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0, 0, 0, 0.08));
+    }
+    .card:last-child {
+      margin-bottom: 0;
     }
     .row {
       display: flex;
@@ -67,17 +73,49 @@ export class AmbienceAmbienceSettings extends LitElement {
       display: flex;
       align-items: center;
       gap: 0.25rem;
-      font-weight: 600;
+      /* Field labels sit a notch lighter than the section headings so they
+         stop competing with them. */
+      font-weight: 500;
       /* Label column is a fixed half-width so the fields beside it line up. */
       flex: 0 0 50%;
     }
+    /* A section header: the master toggle that gates the whole card. Larger and
+       bold, with a divider beneath it. */
     .toggle-row {
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       padding-bottom: 0.75rem;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.9rem;
     }
     .toggle-row label {
       font-weight: 700;
+      font-size: 1.05rem;
+    }
+    /* The voice-assistant controls form a sub-section nested under the pause
+       switch: a quiet sub-heading above the toggle rows, whose label text is
+       indented so the rows read as nested — while the switches stay on the same
+       column as the controls in the rows above. */
+    .expose-group {
+      margin-top: 1rem;
+    }
+    .expose-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #8b919b);
+      margin-bottom: 0.5rem;
+    }
+    .expose-rows .row:last-child {
+      margin-bottom: 0;
+    }
+    .expose-rows label {
+      /* Indent only the label text; keep the fixed 50% column so the switch
+         lines up with the fields' control column above, not flush right. */
+      box-sizing: border-box;
+      padding-left: 1rem;
     }
     input[type="text"],
     input[type="number"] {
@@ -302,8 +340,8 @@ export class AmbienceAmbienceSettings extends LitElement {
             >${localize(this.hass, "ui.unit_minutes", "minutes")}</span
           >
         </div>
-        <div class="row toggle-row" style="margin-top:1.5rem">
-          <label style="flex:1 1 auto">
+        <div class="expose-group" data-test="expose-group">
+          <div class="expose-heading">
             ${localize(this.hass, "ui.settings_expose_group", "Expose to voice assistants")}
             <ambience-help
               .hass=${this.hass}
@@ -313,21 +351,23 @@ export class AmbienceAmbienceSettings extends LitElement {
                 "Expose the per-scope pause switches to the selected voice assistants so you can pause/resume Ambience by voice. Google Assistant and Alexa require Home Assistant Cloud or a manual setup.",
               )}
             ></ambience-help>
-          </label>
+          </div>
+          <div class="expose-rows">
+            ${EXPOSE_ROWS.map(
+              (row) => html`
+                <div class="row">
+                  <label>${localize(this.hass, row.labelKey, row.label)}</label>
+                  ${this._renderToggle(
+                    this._exposed[row.field],
+                    row.dataTest,
+                    (e) => this._onExpose(row.field, e),
+                    !this._defaults.create_switches,
+                  )}
+                </div>
+              `,
+            )}
+          </div>
         </div>
-        ${EXPOSE_ROWS.map(
-          (row) => html`
-            <div class="row">
-              <label>${localize(this.hass, row.labelKey, row.label)}</label>
-              ${this._renderToggle(
-                this._exposed[row.field],
-                row.dataTest,
-                (e) => this._onExpose(row.field, e),
-                !this._defaults.create_switches,
-              )}
-            </div>
-          `,
-        )}
       </div>
 
       <div class="card">

@@ -8,6 +8,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- The Advanced settings tab now has a clearer visual hierarchy. Section titles
+  stand out from their fields, the two setting groups are more obviously
+  separated, and the voice-assistant toggles are presented as a nested
+  sub-section of the scope-level pause switch (their switches still line up with
+  the fields above).
+
 ## [0.28.0] - 2026-06-25
 
 ### Added

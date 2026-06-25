@@ -28,6 +28,7 @@ from .const import (
 )
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
+from .target_resolve import action_target
 
 ScopeTriple = tuple[str, str | None, dict[str, Any]]
 
@@ -177,7 +178,7 @@ def entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
 
 def _action_entities(scene: dict[str, Any]) -> Iterator[str]:
     for action in scene.get("actions", []) or []:
-        for eid in action.get("entity_ids", []) or []:
+        for eid in action_target(action).get("entity_id") or []:
             if isinstance(eid, str) and eid:
                 yield eid
 

@@ -71,6 +71,24 @@ async def test_scan_flags_missing_action_entity(hass: HomeAssistant, installed) 
     assert p.locations[0].scene_name == "go"
 
 
+async def test_scan_flags_missing_entity_in_new_target_format(
+    hass: HomeAssistant, installed
+) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"entity_id": ["light.ghost"]}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    p = next(p for p in problems if p.kind == "missing_entity")
+    assert p.ref == "light.ghost"
+
+
 async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installed) -> None:
     cfg = _cfg(
         [

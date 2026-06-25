@@ -8,11 +8,24 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- In the Entity State condition, each AND/OR group now has a "( )" button that
+  wraps all of that group's clauses in parentheses, so you can combine them with
+  another clause under a different operator — for example turning "a AND b" into
+  "(a AND b) OR c".
+
 ### Changed
 
 - In the Entity State condition, the buttons that add another comparison within
   the same condition now read "Add clause" instead of "Add condition", to avoid
   confusion with the main "Add condition" button that adds a new condition.
+
+### Fixed
+
+- In the Entity State condition, "Add clause" now works on a negated (NOT)
+  group. Previously, clicking it while NOT was enabled did nothing until you
+  turned NOT off.
 
 ## [0.27.0] - 2026-06-24
 

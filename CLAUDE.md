@@ -9,7 +9,7 @@
 
 ## Code Quality
 
-- Run `sh bin/install-hooks.sh` once per clone/worktree. The committed `.githooks/pre-push` mirrors CI: fast lint/format first, then tests for the changed language, plus coverage/translation/docs-drift gates. Bypass in an emergency with `git push --no-verify`. See `CONTRIBUTING.md`.
+- Run `sh bin/install-hooks.sh` once per clone/worktree. The committed `.githooks/pre-push` mirrors CI: fast lint/format first, then tests for the changed language, plus coverage/translation/docs-drift and changelog-entry gates. Bypass in an emergency with `git push --no-verify`. See `CONTRIBUTING.md`.
 - Before creating a PR, run `ruff check .` and `ruff format .` (Python) and `npm run ci` (frontend Biome lint+format) to fix any issues — or just let the pre-push hook run them.
 - New user-facing strings must be translatable: backend errors via `AmbienceError` / `service_validation_error` (translation_key in strings.json `exceptions`); frontend text via `localize(hass, "ui.<key>", …)` with the key added to `frontend/src/i18n-data.ts` (both `en` and `es`). `make i18n` (run by the pre-push hook and CI) enforces this — hardcoded user-facing strings fail the build.
 - Before creating a release, update docs, translations, and tests.

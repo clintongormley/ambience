@@ -1,4 +1,5 @@
 import type { HassConnection } from "./api.js";
+import { effectiveAreaId } from "./entity-registry.js";
 import type { Scope } from "./types.js";
 
 /** Stable identity string for a scope: "house", or "<kind>:<id>". The single
@@ -138,7 +139,6 @@ export function entitiesForScope(
   if (!reg?.entities) return [];
 
   const entities = reg.entities;
-  const devices = reg.devices ?? {};
   const areas = reg.areas ?? {};
 
   // Resolve scope to a predicate over an entity's effective area_id (own or via device).
@@ -153,8 +153,8 @@ export function entitiesForScope(
           )
         : null; // house: any non-empty effective area
 
-  const inScope = (e: { area_id?: string | null; device_id?: string | null }): boolean => {
-    const effAreaId = e.area_id ?? (e.device_id ? (devices[e.device_id]?.area_id ?? null) : null);
+  const inScope = (e: { entity_id: string }): boolean => {
+    const effAreaId = effectiveAreaId(reg, e.entity_id);
     if (effAreaId == null) return false;
     if (targetAreaIds === null) return true; // house
     return targetAreaIds.has(effAreaId);

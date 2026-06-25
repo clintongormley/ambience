@@ -9,7 +9,7 @@ import {
   stateValueLabel,
   weatherConditionLabel,
 } from "./i18n.js";
-import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
+import { formatArgValue, paramLabel } from "./summary.js";
 import type {
   BufferedUnit,
   ExposedAction,
@@ -20,7 +20,7 @@ import type {
   TraceOutcome,
   TraceSceneEval,
 } from "./types.js";
-import type { HassWithStates } from "./views/entity-row.js";
+import { entityName, type HassWithStates } from "./views/entity-row.js";
 
 type HassLike = { localize?: (key: string) => string | undefined; [key: string]: unknown };
 
@@ -119,9 +119,11 @@ function entityLink(hass: HassLike | undefined, entityId: string, label: string)
   >`;
 }
 
-// An entity's friendly display name as a more-info button.
+// An entity's friendly display name as a more-info button. Uses the bare
+// friendly name (not the area-prefixed summary form) so trace detail stays
+// consistent with the names the backend bakes into detail strings.
 function clickableEntity(hass: HassLike | undefined, entityId: string): TemplateResult {
-  return entityLink(hass, entityId, entityDisplayName(hass, entityId));
+  return entityLink(hass, entityId, entityName(hass as HassWithStates | undefined, entityId));
 }
 
 // Conditions whose `describe()` renders each referenced entity's friendly name
@@ -157,10 +159,11 @@ function renderDetailWithLinks(
   if (!entityIds?.length || !LINKABLE_DETAIL_CONDITIONS.has(conditionKey)) return text;
 
   const hits: Array<{ start: number; end: number; id: string; name: string }> = [];
-  // entityDisplayName falls back to the (non-empty) entity_id, so a name is
-  // never blank — a blank one would match (and wrap) everywhere.
+  // entityName falls back to the (non-empty) entity_id, so a name is never blank
+  // — a blank one would match (and wrap) everywhere. The bare name (no area
+  // prefix) is what the backend baked into the detail, so it matches.
   const named = entityIds
-    .map((id) => ({ id, name: entityDisplayName(hass, id) }))
+    .map((id) => ({ id, name: entityName(hass as HassWithStates | undefined, id) }))
     .sort((a, b) => b.name.length - a.name.length);
   for (const { id, name } of named) {
     for (let from = 0; from <= text.length; ) {
@@ -265,7 +268,7 @@ function causeStateValues(c: TraceCause, hass?: HassLike): { old: string; new: s
 
 export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
   if (!causeHasRawValues(c)) return formatCause(hass, c);
-  const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
+  const name = c.entity_id ? entityName(hass as HassWithStates | undefined, c.entity_id) : "?";
   const v = causeStateValues(c, hass);
   if (c.kind === "duration")
     return `${name}: ${v.new} ${localize(hass, "ui.cause_duration_for", "for")} ${c.detail ?? "?"}`;

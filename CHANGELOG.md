@@ -17,6 +17,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- Condition summaries now prefix each entity with its area (e.g. "Kitchen ·
+  Water pump Flow"), so clauses that reference similarly-named entities in
+  different areas are no longer ambiguous. The area is omitted when the entity's
+  name already contains it (e.g. an entity called "Zone Shower" in the "Shower"
+  area stays "Zone Shower").
 - In the Entity State condition, the buttons that add another comparison within
   the same condition now read "Add clause" instead of "Add condition", to avoid
   confusion with the main "Add condition" button that adds a new condition.

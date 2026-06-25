@@ -505,15 +505,16 @@ function _collapseSingleChild(expr: StateExpr): StateExpr {
   return expr;
 }
 
-/** If this expression reads as a single NEGATED atom, return its positive
- *  ("until" release) form; otherwise null. This is the only `state` shape that
- *  decomposes cleanly into a positive release: a non-durational `is_not` atom
- *  (flipped back to `is`) or a `not` wrapping one non-group atom (`is`/numeric,
- *  unwrapped). A `not` wrapping a GROUP, an `or`, or a nested group returns null
- *  — its complement is not a single positive atom (de Morgan). Returning null
- *  only means "not a single-atom release"; `_holdStateParts` decides the rest
- *  — a top-level `not(group)` is unwrapped to a whole-predicate release, while
- *  the same node sitting inside an AND-group stays a guard.
+/** If this expression has a clean positive complement, return that complement
+ *  (its "until" release form); otherwise null. The shapes that decompose to a
+ *  positive release are: a non-durational `is_not` atom (flipped back to `is`);
+ *  a `not` wrapping an atom or a group (the inner expression is the release —
+ *  ¬(A∧B) releases when A∧B, ¬(A∨B) when A∨B); and an all-negated `or` (de
+ *  Morgan: ¬A ∨ ¬B = ¬(A∧B), returning a synthetic `and` of the de-negated
+ *  disjuncts). A double negation (a `not`/`is_not` directly inside the `not`),
+ *  a mixed or all-positive `or`, and a durational `is_not` all return null and
+ *  stay guards. Returning null only means "not a clean release"; the caller
+ *  (`_holdStateParts`) then renders the node as a guard.
  *
  *  Duration asymmetry: a `not` wrapping an `is X for D` carries `D` through
  *  correctly — the engine gates `for` on the positive `is`, so the release is
@@ -523,12 +524,7 @@ function _collapseSingleChild(expr: StateExpr): StateExpr {
  *  X returns, so the dwell does NOT transfer to "until X for D". Rather than drop
  *  the user's `D` silently and overstate the release, a durational `is_not` atom
  *  returns null and stays a truthful guard; only a bare `is_not` (clean
- *  instantaneous complement) becomes a release.
- *
- *  Extended cases: a `not` wrapping a group (`and`/`or`) returns the inner group
- *  directly as the release (¬(A∧B) ⇒ until (A∧B)). An all-negated `or` applies
- *  de Morgan (¬A ∨ ¬B = ¬(A∧B)) and returns a synthetic `and` of the de-negated
- *  disjuncts; a mixed or all-positive `or` still returns null. */
+ *  instantaneous complement) becomes a release. */
 function _asStateRelease(expr: StateExpr): StateExpr | null {
   if (expr.kind === "is_not") {
     if (expr.for && _hasStateDuration(expr.for)) return null;
@@ -867,6 +863,10 @@ function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boole
   return head;
 }
 
+// Raw state-expression renderer (used by `summariseState`, the non-blocker path).
+// `_renderHoldTerm` is the blocker-mode twin: it must stay in sync with this for
+// every non-`or` node, so changes to the atom/`and`/`not` arms below belong in
+// both functions.
 function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
   if (
     expr.kind === "is" ||

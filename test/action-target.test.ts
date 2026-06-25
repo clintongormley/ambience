@@ -26,6 +26,30 @@ describe("actionTarget", () => {
     ).toEqual({ entity_id: ["light.a"] });
     expect(targetIsEmpty(actionTarget({ service: "x.y", params: {} } as any))).toBe(true);
   });
+
+  // HA's ha-target-picker emits a SINGLE selection as a bare string (e.g.
+  // area_id: "living_room") and multiple as an array. The frontend must coerce
+  // scalars to arrays, mirroring the backend action_target — otherwise a
+  // single-area/label/device pick is silently dropped and nothing displays.
+  test("coerces a scalar selector value to a one-item array", () => {
+    expect(
+      actionTarget({
+        service: "light.turn_on",
+        target: { area_id: "living_room" },
+        params: {},
+      } as any),
+    ).toEqual({ area_id: ["living_room"] });
+  });
+
+  test("coerces scalars in a mixed array/scalar target", () => {
+    expect(
+      actionTarget({
+        service: "light.turn_on",
+        target: { entity_id: ["light.lounge"], area_id: "living_room" },
+        params: {},
+      } as any),
+    ).toEqual({ entity_id: ["light.lounge"], area_id: ["living_room"] });
+  });
 });
 
 describe("resolveTargetInScope", () => {

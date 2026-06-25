@@ -17,7 +17,15 @@ export function actionTarget(action: ActionSpec): ActionTarget {
   const out: ActionTarget = {};
   for (const key of KEYS) {
     const v = raw[key];
-    const ids = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    // HA's ha-target-picker emits a single selection as a bare string and
+    // multiple as an array; coerce scalars to a one-item array (mirrors the
+    // backend action_target) so a single area/label/device pick isn't dropped.
+    const ids =
+      typeof v === "string"
+        ? [v]
+        : Array.isArray(v)
+          ? v.filter((x): x is string => typeof x === "string")
+          : [];
     if (ids.length) out[key] = ids;
   }
   return out;

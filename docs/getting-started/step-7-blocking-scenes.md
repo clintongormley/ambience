@@ -10,16 +10,18 @@ be **Unknown** before switching to **Clear**. For the next 60 seconds, the
 lights in the Lounge will come on until the **Vacant** scene matches again.
 
 We can prevent this by checking that the room is actually occupied, but we don't
-want to have to add the check to all threee **Nighttime**, **Daytime Sunny**,
-and **Daytime Cloudy** scenes, all of which currently benefit from the single
-occupancy check in the **Vacant** scene.
+want to have to add the check to all four **Movie**, **Nighttime**, **Daytime
+Sunny**, and **Daytime Cloudy** scenes, all of which currently benefit from the
+single occupancy check in the **Vacant** scene.
+
+## Adding a blocking scene
 
 Instead, we can add a **blocking scene** — a scene with conditions but no
 actions:
 
 - Click **+ Add scene**.
 - Change the name to **Block until room occupied**.
-- Add the **Occupancy** condition with entity **Lounge presence**, and change
+- Add the **Occupancy** condition with entity **Lounge Presence**, and change
     **is** to **is not** (and the default **Detected**).
 - Click **Save scene**.
 
@@ -31,7 +33,7 @@ except **Vacant** are gated on actual occupancy.
 
 ![Blocking order.](../images/getting-started/step-7/blocking_order.png "Blocking order.")
 
-## Blocking scene execution
+## Execution of blocking scenes
 
 When a blocking scene is the current best matching scene, then it is marked with
 the winning scene **green dot**. However, it has no actions to apply, so the

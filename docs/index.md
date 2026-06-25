@@ -58,9 +58,10 @@ should be in, and how they should reach that state:
 | The room is occupied during the evening or nighttime   | Fade lights to 25%                               |
 
 These conditions are automatically sorted by **priority** and **specificity**,
-and they are used to **auto-derive triggers**. When one of these triggers fires,
-the conditions are reassessed, the highest priority matching scene wins, and the
-winning scene is applied by calling the specified **actions**.
+and they are used to **automatically derive triggers**. When one of these
+triggers fires, the conditions are reassessed, the highest priority matching
+scene wins, and the winning scene is applied by calling the specified
+**actions**.
 
 ![Scenes to control the lights in the lounge.](images/index/lounge_lights.png "Scenes to control the lights in the lounge.")
 
@@ -83,9 +84,9 @@ overlap:
 | Between sunrise (but not before 8:00) and dusk | Blinds open   |
 
 A **single winning scene** is chosen only from the scenes belonging to the
-**same scope and category**. Because exactly one scene wins per scope and
-category, there is no way for two rules to clash over the same device; the
-winner is always well defined.
+**same scope and category**, known as a **scene group**. Because exactly one
+scene wins per scene group, there is no way for two rules to clash over the same
+device; the winner is always well defined.
 
 ![Scenes to control the blinds in the lounge.](images/index/lounge_blinds.png "Scenes to control the blinds in the lounge.")
 
@@ -109,8 +110,9 @@ with just the fields that matter to you.
 ### Triggers
 
 Ambience examines all of the conditions in a scope/category group and
-auto-generates a list of triggers to install. When any of those triggers fires,
-all of the scenes in that group are reassessed.
+automatically generates a list of triggers to install. When any of those
+triggers fires, all of the scenes in that group are reassessed and the winning
+scene is applied.
 
 ![Generated auto-triggers.](images/index/triggers.png "Generated auto-triggers.")
 

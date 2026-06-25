@@ -21,7 +21,7 @@ clicking the **Run** option.
 ## View traces
 
 The last 5 scene evaluations are recorded in memory and can be viewed by
-clicking **View traces**. They are displayed in summmary form, explaining what
+clicking **View traces**. They are displayed in summary form, explaining what
 triggered the evaluation, which scene won, and what action was taken.
 
 ![Summary traces view.](../images/getting-started/step-8/traces.png "Summary traces view.")

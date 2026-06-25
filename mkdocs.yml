@@ -58,9 +58,6 @@ nav:
       - "6. Scene priority": getting-started/step-6-scene-priority.md
       - "7. Blocking scenes": getting-started/step-7-blocking-scenes.md
       - "8. Debugging scenes": getting-started/step-8-debugging-scenes.md
-  - Concepts:
-      - Scopes & switches: concepts/scopes-and-switches.md
-      - Scenes & resolution: concepts/scenes-and-resolution.md
   - Conditions:
       - Overview: conditions/index.md
       - Time of day: conditions/time-of-day.md

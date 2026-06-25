@@ -11,7 +11,6 @@ This example depends on the following entities being available in Home
 Assistant:
 
 - lights, including a light group called **Lounge Lights**
-- blinds
 - an occupancy or presence sensor called **Lounge Presence**
 - a weather integration
 - a remote control to turn on the projector called **Cine**
@@ -22,7 +21,7 @@ We want the lights in the lounge to support the following scenes:
 
 | Conditions                                             | Device state                                |
 | ------------------------------------------------------ | ------------------------------------------- |
-| The room is vacant for more than 1 minute.             | Lights off                                  |
+| The room is vacant for at least 1 minute.              | Lights off                                  |
 | The room is occupied during the nighttime              | Lights to 25%                               |
 | The room is occupied during the day, when it is sunny  | Lights to 40%                               |
 | The room is occupied during the day, when it is cloudy | Lights to 60%                               |

@@ -218,7 +218,6 @@ you can use to pause automatic scene application from outside the panel.
 **Scope-level pause switch** (toggle) Enables or disables per-scope switch
 entities. Off by default. When turned on, each scope (House, each Floor, each
 Area) gets a switch entity that pauses Ambience for that scope when turned off.
-See [Scopes & switches](concepts/scopes-and-switches.md) for a full explanation.
 
 **Switch name** The name used for the per-scope switch entities. The default is
 `Ambience`. Changing this renames all of the Ambience switch entities. Only
@@ -238,7 +237,7 @@ Assistant's built-in agent) is on by default; **Google Assistant** and **Alexa**
 are off and require Home Assistant Cloud (or a manual setup) to take effect.
 Changing a toggle re-applies the exposure to every Ambience switch, overwriting
 any per-switch exposure you set manually under **Settings → Voice assistants →
-Expose**. See [Voice assistants](concepts/scopes-and-switches.md#voice-assistants) for more.
+Expose**.
 
 Changes take effect immediately — Ambience creates or removes switch entities
 live without requiring an integration reload.

@@ -32,7 +32,7 @@ minute. So, under **When**:
 ![Setup occupancy condition.](../images/getting-started/step-2/add_vacant_2.png "Setup occupancy condition.")
 
 As soon as you click away from the condition you've just added, the form gets
-replaced by an easy-to-read summary of the condition you have specified :
+replaced by an easy-to-read summary of the condition you have specified:
 
 ![Occupancy condition summary.](../images/getting-started/step-2/add_vacant_3.png "Occupancy condition summary.")
 
@@ -53,7 +53,12 @@ This takes you back to the scene manager and shows you a summary of the scene:
 
 ![Scene summary](../images/getting-started/step-2/add_vacant_5.png "Scene summary")
 
-Click on the scene name to see the defailts:
+!!! tip "Disabling scenes"
+
+    Use the blue toggle to the right of the scene name to temporarily disable a
+    scene.
+
+Click on the scene name to see the full details:
 
 ![Scene details](../images/getting-started/step-2/add_vacant_6.png "Scene summary")
 

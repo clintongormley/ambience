@@ -8,6 +8,11 @@ like **Time of day: Daytime**.
 
 The **Time of day** condition will also compare time ranges, sorting a more
 specific **Evening** time range above a less specific **Nighttime** time range.
+A time range of **18:00-20:00** would sort before **12:00-24:00** so that the
+first time range has a chance of matching, even though it is entirely covered by
+the second time range.
+
+## Reordering scenes manually
 
 While the heuristics used to sort scenes by priority and specificity usually
 work, sometimes they will get it wrong and you will want to change the order of

@@ -155,8 +155,7 @@ changes — because a condition changes state, the time crosses a boundary, or
 something else shifts — it applies the new winner's actions immediately.
 
 Which scopes Ambience evaluates is controlled by a toggle switch on each scope
-row. If you switch a scope off, Ambience stops applying scenes there. See
-[Scopes & switches](concepts/scopes-and-switches.md) for details.
+row. If you switch a scope off, Ambience stops applying scenes there.
 
 If you want to test a scene's actions without waiting for its conditions to
 match, use the **Run actions** option in the scene's action menu. This runs that

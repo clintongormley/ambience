@@ -10,7 +10,7 @@ prefer. If you don't already have a Weather integration set up, you can just use
 the built-in **Meteorologisk institutt**:
 
 - Click: **Settings > Devices & services > + Add integration**.
-- Search for and select **"meteorologisk instititutt"**.
+- Search for and select **"Meteorologisk institutt"**.
 - You probably don't need to change any of the configuration, maybe
     **Elevation**.
 - Click **Submit**
@@ -20,8 +20,6 @@ the built-in **Meteorologisk institutt**:
     For more info about the various weather integrations available in Home
     Assistant, see the
     [Definitive guide to Weather integrations](https://community.home-assistant.io/t/definitive-guide-to-weather-integrations/736419).
-
-![Nighttime scene added.](../images/getting-started/step-3/nighttime_scene.png "Nighttime scene added.")
 
 ## Configure the Weather condition
 
@@ -41,22 +39,22 @@ For instance the **Dim** group includes **Cloudy, Partly cloudy, and Rainy**.
 You can add your own groups and even override the built in groups to suit your
 needs.
 
-## Adding the Daytime Sunny scene
+## Using the Weather condition
 
 Now that the **Weather** condition is set up, we can use it in our **Daytime
 Sunny** scene — set the lights to 40% when it is sunny:
 
-- Click **+ Add a scene**.
+- Click **+ Add scene**.
 - Change the name to **Daytime Sunny**.
 - Add condition **Time of day** and select **Daytime**.
 - Add condition **Weather** and check **Sunny**.
 - Add action **Turn on light**, select target **Lounge Lights**, and set the
     **Brightness pct** to **40%**.
-- Click **Save**.
+- Click **Save scene**.
 
 ![Daytime Sunny scene.](../images/getting-started/step-4/daytime_sunny.png "Daytime Sunny scene.")
 
-## Adding the Daytime Cloudy scene
+## Duplicating a scene
 
 The **Daytime Cloudy** scene is almost identical to **Daytime Sunny** so we can
 just duplicate that one and edit it:
@@ -68,7 +66,7 @@ just duplicate that one and edit it:
 
 Then:
 
-- Change the name to **Daylight Cloudy**.
+- Change the name to **Daytime Cloudy**.
 - Click on the **Weather** condition to edit it and check **Dim** and **Dark**
     instead of **Sunny**.
 - Click on the **Turn on light** action and change the **Brightness pct** to

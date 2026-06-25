@@ -14,18 +14,18 @@ default) or one of its attributes — and then setting a **comparison** and a
 
 | Operator | Meaning                                       |
 | -------- | --------------------------------------------- |
-| is       | the value matches one of the states you list  |
-| is not   | the value matches none of the states you list |
+| `is`     | the value matches one of the states you list  |
+| `is not` | the value matches none of the states you list |
 
 For numeric states and numeric attributes, the UI switches automatically to
 numeric operators:
 
 | Operator | Meaning                          |
 | -------- | -------------------------------- |
-| >        | greater than                     |
-| ≥        | at least (greater than or equal) |
-| \<       | less than                        |
-| ≤        | at most (less than or equal)     |
+| `>`      | greater than                     |
+| `≥`      | at least (greater than or equal) |
+| `<`      | less than                        |
+| `≤`      | at most (less than or equal)     |
 
 For an **is** or **is not** test you can list several values — the condition
 matches if any one of them applies (so "is on, is playing" behaves like "is on

@@ -1622,7 +1622,7 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
   });
 
-  test("state OR-group of negated atoms stays a guard (de Morgan / duration boundary)", () => {
+  test("state OR-group of all-negated atoms becomes a single de Morgan release", () => {
     const group = {
       kind: "or",
       items: [
@@ -1643,10 +1643,38 @@ describe("summariseBlocker", () => {
       ],
     };
     const when = { state: group as StatePredicate };
-    // Untouched — an OR of negated atoms does not factor into a single positive
-    // release, so it renders verbatim as one guard.
+    // ¬A ∨ ¬B = ¬(A ∧ B): the block releases when BOTH de-negated atoms hold.
+    const release = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "binary_sensor.entrances", states: ["Detected"] },
+        {
+          kind: "is",
+          entity_id: "binary_sensor.presence",
+          states: ["Detected"],
+          for: { h: 0, m: 0, s: 10 },
+          for_mode: "less_than",
+        },
+      ],
+    };
     expect(summariseBlocker(blocker(when), ctx)).toBe(
-      `Block while ${summariseCondition("state", group, ctx)}`,
+      `Block until ${summariseCondition("state", release, ctx)}`,
+    );
+  });
+
+  test("a not(group) sibling inside an AND-group is a whole-group release", () => {
+    const inner = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.a", states: ["on"] },
+        { kind: "is", entity_id: "light.b", states: ["on"] },
+      ],
+    };
+    const cOff = { kind: "is", entity_id: "light.c", states: ["off"] };
+    const when = { state: { kind: "and", items: [{ kind: "not", item: inner }, cOff] } as StatePredicate };
+    // block = c_off ∧ ¬(a ∧ b): c_off is the guard, (a ∧ b) the release.
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While ${summariseCondition("state", cOff, ctx)}, block until ${summariseCondition("state", inner, ctx)}`,
     );
   });
 

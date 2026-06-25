@@ -522,15 +522,38 @@ function _collapseSingleChild(expr: StateExpr): StateExpr {
  *  X returns, so the dwell does NOT transfer to "until X for D". Rather than drop
  *  the user's `D` silently and overstate the release, a durational `is_not` atom
  *  returns null and stays a truthful guard; only a bare `is_not` (clean
- *  instantaneous complement) becomes a release. */
+ *  instantaneous complement) becomes a release.
+ *
+ *  Extended cases: a `not` wrapping a group (`and`/`or`) returns the inner group
+ *  directly as the release (¬(A∧B) ⇒ until (A∧B)). An all-negated `or` applies
+ *  de Morgan (¬A ∨ ¬B = ¬(A∧B)) and returns a synthetic `and` of the de-negated
+ *  disjuncts; a mixed or all-positive `or` still returns null. */
 function _asStateRelease(expr: StateExpr): StateExpr | null {
   if (expr.kind === "is_not") {
     if (expr.for && _hasStateDuration(expr.for)) return null;
     return { ...(expr as StateAtom), kind: "is" };
   }
   if (expr.kind === "not") {
+    // not(atom) → the atom; not(group) → the inner group. The complement of a
+    // negated group is a single positive release: ¬(A∧B) ⇒ until (A∧B),
+    // ¬(A∨B) ⇒ until (A∨B).
     const k = expr.item.kind;
     if (k === "is" || k === ">" || k === ">=" || k === "<" || k === "<=") return expr.item;
+    if (k === "and" || k === "or") return expr.item;
+    return null;
+  }
+  if (expr.kind === "or") {
+    // All-negated OR ⇒ a single AND release (de Morgan): ¬A ∨ ¬B = ¬(A ∧ B), so
+    // the block releases when A AND B both hold. Only when EVERY disjunct is a
+    // clean release — a durational `is_not` disjunct fails this, keeping the OR a
+    // guard (its dwell would not transfer to a positive "until").
+    const inner: StateExpr[] = [];
+    for (const it of expr.items) {
+      const rel = _asStateRelease(it);
+      if (!rel) return null;
+      inner.push(rel);
+    }
+    return inner.length === 1 ? inner[0] : { kind: "and" as const, items: inner };
   }
   return null;
 }

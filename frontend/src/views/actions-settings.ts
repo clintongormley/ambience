@@ -1,7 +1,9 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
+import { isComponentLoaded } from "../ha-config.js";
 import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
+import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
+import { bannerStyles } from "./banner-styles.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -20,9 +22,18 @@ import type { HaFormSchemaEntry } from "../ha-form.js";
 import { selectorUnit } from "../summary.js";
 import type { ExposedAction, ServiceField, ServiceInfo, ServiceSchema } from "../types.js";
 
+// The Fado Light Fader integration: its HA domain (present in
+// `hass.config.components` once set up) and the My-Home-Assistant deep link
+// that opens its repository in the user's HACS for one-click install.
+const FADO_DOMAIN = "fado";
+const FADO_HACS_URL =
+  "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado";
+
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
-  static override styles = css`
+  static override styles = [
+    bannerStyles,
+    css`
     :host { display: block; }
     .card {
       border: 1px solid var(--divider-color, #e0e0e0);
@@ -291,7 +302,8 @@ export class AmbienceActionsSettings extends LitElement {
       font-weight: 600;
       margin-bottom: 0.6rem;
     }
-  `;
+  `,
+  ];
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _actions: ExposedAction[] = [];
@@ -309,6 +321,7 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _loadError: string | null = null;
   @state() private _saveError: string | null = null;
   @state() private _loaded = false;
+  @state() private _fadoNoticeDismissed = false;
   /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
   @state() private _editingDefault: string | null = null;
   /** Value the field had before entering edit mode (for Cancel). */
@@ -370,6 +383,7 @@ export class AmbienceActionsSettings extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    this._fadoNoticeDismissed = getFadoNoticeDismissed();
     document.addEventListener("pointerdown", this._onDocPointerDown);
     // If HA registers its rich service picker lazily, re-render to pick it up.
     /* v8 ignore next 3 -- real-HA registry timing, not jsdom */
@@ -609,11 +623,44 @@ export class AmbienceActionsSettings extends LitElement {
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
           <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
         </div>
+        ${this._renderFadoNotice()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
         ${this._actions.map((a, i) => this._renderCard(a, i))}
         ${this._renderAdd()}
       </section>
     `;
+  }
+
+  private _renderFadoNotice() {
+    if (this._fadoNoticeDismissed || isComponentLoaded(this.hass, FADO_DOMAIN)) return "";
+    return html`
+      <div class="banner banner-hint" data-test="fado-notice">
+        <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
+        <div class="banner-text">
+          <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
+          <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
+        </div>
+        <a
+          class="banner-cta"
+          data-test="fado-notice-cta"
+          href=${FADO_HACS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}</a>
+        <button
+          class="banner-dismiss"
+          data-test="dismiss-fado-notice"
+          title=${localize(this.hass, "ui.dismiss", "Dismiss")}
+          aria-label=${localize(this.hass, "ui.dismiss", "Dismiss")}
+          @click=${() => this._dismissFadoNotice()}
+        >✕</button>
+      </div>
+    `;
+  }
+
+  private _dismissFadoNotice() {
+    this._fadoNoticeDismissed = true;
+    setFadoNoticeDismissed();
   }
 
   private _renderCard(action: ExposedAction, index: number) {

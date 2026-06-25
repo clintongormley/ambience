@@ -51,7 +51,9 @@ booleans, and more) and skips any entity that is already in the target state, so
 scenes don't fire redundant commands. If you don't want them, delete them in
 Settings → Actions — they won't come back.
 
-**Safe cover actions** — opt-in; add them from the picker when you need them:
+**Safe cover actions** — added for you by default on new installs. (If you set
+Ambience up before these became defaults, add them from the picker when you need
+them; like Turn on / Turn off, any you delete won't come back.)
 
 - **Open cover (safe)** / **Close cover (safe)** — open or close the targeted
   covers, but skip any that are already fully open / fully closed.

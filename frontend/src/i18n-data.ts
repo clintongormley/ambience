@@ -354,6 +354,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       conditions_hint_title_weather: "Optional: set up Weather",
       conditions_hint_title_workday: "Optional: set up Workday",
       dismiss: "Dismiss",
+      fado_notice_title: "Recommended: install Fado Light Fader",
+      fado_notice_body:
+        "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.",
+      fado_notice_cta: "Install via HACS",
       for_prefix: "for",
       name_duplicate: "A scene with this name already exists in this category.",
       no_actions_body:
@@ -895,6 +899,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       conditions_hint_title_weather: "Opcional: configurar Tiempo",
       conditions_hint_title_workday: "Opcional: configurar Días laborables",
       dismiss: "Descartar",
+      fado_notice_title: "Recomendado: instalar Fado Light Fader",
+      fado_notice_body:
+        "Fado añade atenuación suave de luces para brillo, color y temperatura de color, con restauración automática del brillo, autoconfiguración por interfaz y transiciones nativas. Es una integración HACS predeterminada de Home Assistant.",
+      fado_notice_cta: "Instalar con HACS",
       for_prefix: "durante",
       name_duplicate: "Ya existe una escena con este nombre en esta categoría.",
       no_actions_body:

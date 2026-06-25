@@ -14,6 +14,46 @@ def _ids(store: AmbienceStore) -> set[str]:
     return {e["id"] for e in store.get_exposed_actions()}
 
 
+async def test_fresh_install_seeds_cover_actions(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    ids = _ids(store)
+    assert {
+        "ambience.cover_safe_open",
+        "ambience.cover_safe_close",
+        "ambience.cover_safe_set_position",
+        "ambience.cover_safe_set_tilt_position",
+    } <= ids
+    # Required fields must be visible so the scene editor can set them.
+    assert _entry(store, "ambience.cover_safe_open")["visible_fields"] == []
+    assert _entry(store, "ambience.cover_safe_close")["visible_fields"] == []
+    assert _entry(store, "ambience.cover_safe_set_position")["visible_fields"] == ["position"]
+    assert _entry(store, "ambience.cover_safe_set_tilt_position")["visible_fields"] == [
+        "tilt_position"
+    ]
+
+
+async def test_existing_install_not_reseeded_with_covers(hass: HomeAssistant) -> None:
+    # Fresh-install-only: an install past the one-time seed gate gets no covers.
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": [
+                {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            ],
+            "builtins_seeded": True,
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    ids = _ids(store)
+    assert not any(i.startswith("ambience.cover_safe_") for i in ids)
+
+
 async def test_fresh_install_seeds_onoff(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
@@ -91,6 +131,10 @@ async def test_seed_skips_id_already_present(hass: HomeAssistant) -> None:
     assert "ambience.turn_off" in ids  # the other one still seeded
     # existing entry preserved, not overwritten by the blank seed template
     assert next(e for e in entries if e["id"] == "ambience.turn_on")["label"] == "mine"
+
+
+def _entry(store: AmbienceStore, sid: str) -> dict:
+    return next(e for e in store.get_exposed_actions() if e["id"] == sid)
 
 
 def _labels(store: AmbienceStore) -> dict[str, str]:

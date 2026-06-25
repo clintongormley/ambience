@@ -49,6 +49,20 @@ DEFAULT_EXPOSED_ASSISTANTS = {
 DEFAULT_SEEDED_BUILTINS: list[dict[str, Any]] = [
     {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
     {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},
+    {"id": "ambience.cover_safe_open", "label": "", "visible_fields": [], "defaults": {}},
+    {"id": "ambience.cover_safe_close", "label": "", "visible_fields": [], "defaults": {}},
+    {
+        "id": "ambience.cover_safe_set_position",
+        "label": "",
+        "visible_fields": ["position"],
+        "defaults": {},
+    },
+    {
+        "id": "ambience.cover_safe_set_tilt_position",
+        "label": "",
+        "visible_fields": ["tilt_position"],
+        "defaults": {},
+    },
 ]
 
 # Service ids of the seeded built-ins, in seed order. Used by setup to resolve
@@ -174,7 +188,10 @@ class AmbienceStore:
         have = {e.get("id") for e in existing if isinstance(e, dict)}
         for entry in DEFAULT_SEEDED_BUILTINS:
             if entry["id"] not in have:
-                existing.append(dict(entry))
+                # deepcopy, not dict(): some seed templates carry non-empty
+                # nested values (e.g. visible_fields=["position"]); a shallow
+                # copy would alias those lists back to the module constant.
+                existing.append(copy.deepcopy(entry))
         self._data["builtins_seeded"] = True
         await self._store.async_save(self._data)
 

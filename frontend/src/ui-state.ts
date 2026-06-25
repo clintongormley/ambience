@@ -18,6 +18,7 @@ const FILTER_CATEGORY_KEY = "ambience-filter-category";
 const EXPANDED_SCOPES_KEY = "ambience-expanded-scopes";
 const COLLAPSED_CATEGORIES_KEY = "ambience-collapsed-categories";
 const CONDITIONS_HINT_DISMISSED_KEY = "ambience-conditions-hint-dismissed";
+const FADO_NOTICE_DISMISSED_KEY = "ambience-fado-notice-dismissed";
 
 /** The remembered category filter ("" = All), or "" when none is stored. */
 export function getFilterCategory(): string {
@@ -107,6 +108,25 @@ export function getConditionsHintDismissed(): boolean {
 export function setConditionsHintDismissed(): void {
   try {
     window.localStorage.setItem(CONDITIONS_HINT_DISMISSED_KEY, "1");
+  } catch {
+    // Storage disabled — the dismissal just won't persist.
+  }
+}
+
+/** Whether the user dismissed the "install Fado Light Fader" notice. */
+export function getFadoNoticeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(FADO_NOTICE_DISMISSED_KEY) === "1";
+  } catch {
+    // Storage disabled — treat as not dismissed.
+    return false;
+  }
+}
+
+/** Persist that the user dismissed the Fado notice. */
+export function setFadoNoticeDismissed(): void {
+  try {
+    window.localStorage.setItem(FADO_NOTICE_DISMISSED_KEY, "1");
   } catch {
     // Storage disabled — the dismissal just won't persist.
   }

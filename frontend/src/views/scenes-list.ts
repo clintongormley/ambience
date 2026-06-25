@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./ambience-help.js";
 import "./kebab-menu";
 import "./live-dot.js";
+import { actionTarget, targetIsEmpty } from "../action-target.js";
 import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
@@ -580,6 +581,41 @@ export class AmbienceScenesList extends LitElement {
     );
   }
 
+  /** Render the target list for an action in the expanded detail panel.
+   *  Handles entity_id (friendly names), area_id, label_id, device_id.
+   *  Falls back to "(no targets)" when the target is empty. */
+  private _renderActionTargets(action: ActionSpec) {
+    const target = actionTarget(action);
+    if (targetIsEmpty(target)) {
+      return html`<div class="no-targets">
+        ${localize(this.hass, "ui.no_targets", "(no targets)")}
+      </div>`;
+    }
+    const hass = this.hass as Record<string, unknown> | undefined;
+    const areas = hass?.areas as Record<string, { name?: string | null }> | undefined;
+    const labels = hass?.labels as Record<string, { name?: string | null }> | undefined;
+    const devices = hass?.devices as Record<string, { name?: string | null }> | undefined;
+    const items: unknown[] = [];
+    for (const eid of target.entity_id ?? []) {
+      items.push(html`<li>${this._entityName(eid)}</li>`);
+    }
+    for (const id of target.area_id ?? []) {
+      const name = areas?.[id]?.name ?? id;
+      items.push(html`<li>${name} ${localize(this.hass, "ui.target_type_area", "(area)")}</li>`);
+    }
+    for (const id of target.label_id ?? []) {
+      const name = labels?.[id]?.name ?? id;
+      items.push(html`<li>${name} ${localize(this.hass, "ui.target_type_label", "(label)")}</li>`);
+    }
+    for (const id of target.device_id ?? []) {
+      const name = devices?.[id]?.name ?? id;
+      items.push(
+        html`<li>${name} ${localize(this.hass, "ui.target_type_device", "(device)")}</li>`,
+      );
+    }
+    return html`<ul class="entity-list">${items}</ul>`;
+  }
+
   private _onCategoryMenu(category: SceneCategory, id: string) {
     if (id === "run") this._emit("apply-category", { categoryId: category.id });
     else if (id === "traces") this._emit("show-traces", { category: category.id });
@@ -765,17 +801,7 @@ export class AmbienceScenesList extends LitElement {
                           return html`
                             <div class="actions-detail-item">
                               <div class="action-header">${header}</div>
-                              ${
-                                (a.entity_ids ?? []).length === 0
-                                  ? html`<div class="no-targets">
-                                    ${localize(this.hass, "ui.no_targets", "(no targets)")}
-                                  </div>`
-                                  : html`<ul class="entity-list">
-                                    ${(a.entity_ids ?? []).map(
-                                      (eid) => html`<li>${this._entityName(eid)}</li>`,
-                                    )}
-                                  </ul>`
-                              }
+                              ${this._renderActionTargets(a)}
                             </div>
                           `;
                         })}

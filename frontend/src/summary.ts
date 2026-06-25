@@ -1,3 +1,4 @@
+import { actionTarget } from "./action-target.js";
 import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
 import {
   actionLabel,
@@ -987,9 +988,9 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
  * Falls back to a generic noun when targets span multiple domains or carry no
  * domain prefix.
  */
-function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
+function _targetNoun(entityIds: string[], ctx: ActionContext): string {
   const domains = new Set<string>();
-  for (const id of action.entity_ids ?? []) {
+  for (const id of entityIds) {
     const dot = id.indexOf(".");
     if (dot > 0) domains.add(id.slice(0, dot));
   }
@@ -997,14 +998,60 @@ function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
   return localize(ctx.hass, "ui.target_noun", "target");
 }
 
+/** Look up an area name from hass.areas, falling back to the raw id. */
+function _areaName(hass: { [key: string]: unknown } | undefined, areaId: string): string {
+  const areas = hass?.areas as Record<string, { name?: string | null }> | undefined;
+  return areas?.[areaId]?.name ?? areaId;
+}
+
+/** Look up a label name from hass.labels, falling back to the raw id. */
+function _labelName(hass: { [key: string]: unknown } | undefined, labelId: string): string {
+  const labels = hass?.labels as Record<string, { name?: string | null }> | undefined;
+  return labels?.[labelId]?.name ?? labelId;
+}
+
+/** Look up a device name from hass.devices, falling back to the raw id. */
+function _deviceName(hass: { [key: string]: unknown } | undefined, deviceId: string): string {
+  const devices = hass?.devices as Record<string, { name?: string | null }> | undefined;
+  return devices?.[deviceId]?.name ?? deviceId;
+}
+
 export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
-  const noun = _targetNoun(action, ctx);
-  const n = (action.entity_ids ?? []).length;
+  const target = actionTarget(action);
+  const entityIds = target.entity_id ?? [];
+  const areaIds = target.area_id ?? [];
+  const labelIds = target.label_id ?? [];
+  const deviceIds = target.device_id ?? [];
+  const hasAny =
+    entityIds.length > 0 || areaIds.length > 0 || labelIds.length > 0 || deviceIds.length > 0;
+
   let targets: string;
-  if (n === 0) targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
-  else if (n === 1) targets = `1 ${noun}`;
-  else targets = `${n} ${noun}s`;
+  if (!hasAny) {
+    targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
+  } else {
+    const parts: string[] = [];
+    if (entityIds.length > 0) {
+      const noun = _targetNoun(entityIds, ctx);
+      if (entityIds.length === 1) parts.push(`1 ${noun}`);
+      else parts.push(`${entityIds.length} ${noun}s`);
+    }
+    const hass = ctx.hass as { [key: string]: unknown } | undefined;
+    for (const id of areaIds) {
+      parts.push(`${_areaName(hass, id)} ${localize(ctx.hass, "ui.target_type_area", "(area)")}`);
+    }
+    for (const id of labelIds) {
+      parts.push(
+        `${_labelName(hass, id)} ${localize(ctx.hass, "ui.target_type_label", "(label)")}`,
+      );
+    }
+    for (const id of deviceIds) {
+      parts.push(
+        `${_deviceName(hass, id)} ${localize(ctx.hass, "ui.target_type_device", "(device)")}`,
+      );
+    }
+    targets = parts.join(", ");
+  }
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(

@@ -971,6 +971,72 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
+  test("expanded target-only area_id action renders area name with '(area)' suffix", async () => {
+    const scene: Scene = {
+      name: "area target",
+      when: {},
+      actions: [{ service: "light.turn_on", target: { area_id: ["kitchen"] }, params: {} }],
+    };
+    const el2: any = document.createElement("ambience-scenes-list");
+    el2.scenes = [scene];
+    el2.periods = periods;
+    el2.conditions = conditions;
+    el2.availableActions = [];
+    el2.hass = {
+      ...testHass,
+      areas: { kitchen: { name: "Kitchen" } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    el = el2;
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items.length).toBe(1);
+    expect(items[0].textContent).toContain("Kitchen");
+    expect(items[0].textContent).toContain("(area)");
+  });
+
+  test("expanded target-only label_id action renders label name with '(label)' suffix", async () => {
+    const scene: Scene = {
+      name: "label target",
+      when: {},
+      actions: [{ service: "light.turn_on", target: { label_id: ["reading"] }, params: {} }],
+    };
+    const el2: any = document.createElement("ambience-scenes-list");
+    el2.scenes = [scene];
+    el2.periods = periods;
+    el2.conditions = conditions;
+    el2.availableActions = [];
+    el2.hass = {
+      ...testHass,
+      labels: { reading: { name: "Reading" } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    el = el2;
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items.length).toBe(1);
+    expect(items[0].textContent).toContain("Reading");
+    expect(items[0].textContent).toContain("(label)");
+  });
+
+  test("legacy entity_ids action still shows entity names in expanded detail", async () => {
+    const scene: Scene = {
+      name: "legacy",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
+    };
+    el = await mount([scene]);
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items.length).toBe(1);
+    expect(items[0].textContent).toContain("light.lamp");
+  });
+
   test("expanded blocker shows the 'Block …' summary in the detail", async () => {
     const r: Scene = { name: "x", when: {}, actions: [] };
     el = await mount([r]);

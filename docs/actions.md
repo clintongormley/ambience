@@ -118,7 +118,7 @@ Two actions in the same scene can target the same entity. When they do, both ser
 
 ### Config-health warnings for targets
 
-The [Config health](concepts/scopes-and-switches.md) Repairs page flags two target-related problems:
+The [Config health](concepts/config-health.md) Repairs page flags two target-related problems:
 
 - **Action overlap** — an entity is acted on by more than one scene in different *(scope, category)* combinations. Last-write-wins applies, but the conflict is flagged so you can decide whether it is intentional.
 - **Target resolves to nothing** (`target_empty`) — an action has a non-empty target that resolves to zero entities in the scene's scope at check time. The action will be silently skipped when the scene applies. Common causes: the label is empty, the area has no entities of the right domain, or the target refers to a device that has been removed.

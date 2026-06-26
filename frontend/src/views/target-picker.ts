@@ -1,112 +1,138 @@
-import { html, LitElement } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { css, html, LitElement } from "lit";
+import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
-import type { HaTarget } from "../entities-for-scope.js";
-import { targetSelectorSupported } from "../ha-version.js";
-import type { ActionTargetValue } from "../types.js";
+import { emitValueChanged } from "../dom.js";
+import { filterEntities, type HaTarget } from "../entities-for-scope.js";
+import { watchHaComponents } from "../ha-components.js";
+import { localize } from "../i18n.js";
 
 /**
- * Target picker: renders HA's native `target` selector via ha-form on
- * HA >= 2026.1, or an entity-id picker (ha-form with entity selector) on
- * older HA where ``homeassistant.helpers.target`` is unavailable. Falls back
- * to a minimal marker div in jsdom/headless test environments.
+ * Target picker: ha-form's entity selector when ha-form is registered,
+ * Lit checkbox-list fallback otherwise.
  *
- * Emits `value-changed` with `{ value: ActionTargetValue }`.
- *
- * On HA < 2026.1 only direct ``entity_id`` targeting is available; the data
- * model stays the same ``{ entity_id: [...] }`` shape.
+ * Emits `value-changed` with `{ value: string[] }`.
  */
 @customElement("ambience-target-picker")
 export class AmbienceTargetPicker extends LitElement {
-  @property({ attribute: false }) hass?: HassConnection;
-  @property({ attribute: false }) target: HaTarget = null;
-  @property({ attribute: false }) value: ActionTargetValue = {};
-  @property() label = "";
-  /** Scope-filtered entity list used as ``include_entities`` in the fallback
-   *  entity picker (HA < 2026.1). On modern HA this is unused. */
-  @property({ attribute: false }) entities: string[] = [];
-
-  /** Memoized schema; rebuilt in willUpdate only when `target` or `entities` changes. */
-  @state() private _schema: Array<{ name: string; selector: Record<string, unknown> }> = [];
-
-  override willUpdate(changed: Map<string, unknown>) {
-    if (changed.has("target") || changed.has("entities") || changed.has("hass")) {
-      this._schema = this._useEntityFallback() ? this._entitySchema() : this._targetSchema();
+  static override styles = css`
+    :host { display: block; }
+    .empty {
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+      padding: 0.5rem 0;
     }
+    .checkboxes {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      padding: 0.5rem;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px;
+      background: var(--card-background-color, #fff);
+    }
+    label {
+      display: flex; align-items: center; gap: 0.5rem;
+      cursor: pointer;
+      padding: 0.25rem;
+    }
+    label:hover { background: var(--secondary-background-color, #f5f5f5); }
+  `;
+
+  @property({ attribute: false }) hass?: HassConnection;
+  // Pre-scoped list of candidate entity_ids (already filtered by floor / area
+  // / house). The picker intersects this with the HA service `target`
+  // metadata via filterEntities, so the displayed list never offers an
+  // entity that the service couldn't accept.
+  @property({ attribute: false }) entities: string[] = [];
+  @property({ attribute: false }) value: string[] = [];
+  // HA target metadata, as returned by `ambience/services/get_schema`.
+  // `null`/`undefined` → no service-level filtering (display all in-scope
+  // entities).
+  @property({ attribute: false }) target: HaTarget = null;
+  // When set, used as the inner ha-form field label. Default " " (a single
+  // space) is truthy but visually empty — without it, ha-form's entity
+  // selector falls back to rendering the schema name ("entity_ids").
+  @property() label = " ";
+
+  /** Entities after intersecting the pre-scoped list with the HA target. */
+  private _filteredEntities(): string[] {
+    return filterEntities(this.entities, this.target);
   }
 
-  /** True when the connected HA version is too old for the rich target helper. */
-  private _useEntityFallback(): boolean {
-    return this.hass != null && !targetSelectorSupported(this.hass);
+  override connectedCallback(): void {
+    super.connectedCallback();
+    watchHaComponents(this);
   }
 
-  /** Build the HA `target` selector schema, forwarding the service's entity
-   *  domain constraint so suggestions stay domain-correct. */
-  _targetSchema(): Array<{ name: string; selector: Record<string, unknown> }> {
-    const entry = Array.isArray((this.target as any)?.entity)
-      ? (this.target as any).entity[0]
-      : (this.target as any)?.entity;
-    const domain = entry?.domain;
-    const targetSelector: Record<string, unknown> = {};
-    if (domain) targetSelector.entity = [{ domain }];
-    return [{ name: "target", selector: { target: targetSelector } }];
+  private _emit(value: string[]) {
+    emitValueChanged(this, value);
   }
 
-  /** Build the entity-only fallback schema (HA < 2026.1). */
-  _entitySchema(): Array<{ name: string; selector: Record<string, unknown> }> {
-    const sel: Record<string, unknown> = { multiple: true };
-    if (this.entities.length > 0) sel.include_entities = this.entities;
-    return [{ name: "entities", selector: { entity: sel } }];
-  }
-
-  _onTargetFormChange = (e: CustomEvent<{ value: { target?: ActionTargetValue } }>) => {
+  /* v8 ignore start -- ha-form not registered in jsdom */
+  private _onHaFormChange(e: CustomEvent<{ value: { entity_ids: string[] } }>) {
     e.stopPropagation();
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: e.detail.value.target ?? {} },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  };
+    this._emit(e.detail.value.entity_ids ?? []);
+  }
 
-  _onEntityFormChange = (e: CustomEvent<{ value: { entities?: string[] } }>) => {
-    e.stopPropagation();
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: { entity_id: e.detail.value.entities ?? [] } },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  };
+  private _renderHaForm() {
+    const entities = this._filteredEntities();
+    const schema = [
+      {
+        name: "entity_ids",
+        selector: {
+          entity: {
+            multiple: true,
+            include_entities: entities,
+          },
+        },
+      },
+    ];
+    const label = this.label;
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .schema=${schema}
+        .data=${{ entity_ids: this.value }}
+        .computeLabel=${() => label}
+        @value-changed=${this._onHaFormChange}
+      ></ha-form>
+    `;
+  }
+  /* v8 ignore stop */
+
+  private _toggle(entity_id: string, checked: boolean) {
+    const set = new Set(this.value);
+    if (checked) set.add(entity_id);
+    else set.delete(entity_id);
+    // Preserve the canonical sorted order of `entities` in the emitted value.
+    this._emit(this._filteredEntities().filter((e) => set.has(e)));
+  }
+
+  private _renderFallback() {
+    const entities = this._filteredEntities();
+    if (entities.length === 0) {
+      return html`<p class="empty">${localize(this.hass, "ui.no_matching_entities", "No matching entities in this area.")}</p>`;
+    }
+    return html`
+      <div class="checkboxes">
+        ${entities.map(
+          (entity_id) => html`
+            <label>
+              <input
+                type="checkbox"
+                .checked=${this.value.includes(entity_id)}
+                @change=${(e: Event) =>
+                  this._toggle(entity_id, (e.target as HTMLInputElement).checked)}
+              />
+              ${entity_id}
+            </label>
+          `,
+        )}
+      </div>
+    `;
+  }
 
   override render() {
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      if (this._useEntityFallback()) {
-        return html`
-          <ha-form
-            .hass=${this.hass}
-            .schema=${this._schema}
-            .data=${{ entities: this.value.entity_id ?? [] }}
-            .computeLabel=${() => this.label}
-            @value-changed=${this._onEntityFormChange}
-          ></ha-form>
-        `;
-      }
-      return html`
-        <ha-form
-          .hass=${this.hass}
-          .schema=${this._schema}
-          .data=${{ target: this.value }}
-          .computeLabel=${() => this.label}
-          @value-changed=${this._onTargetFormChange}
-        ></ha-form>
-      `;
-    }
-    /* v8 ignore stop */
-    // jsdom fallback: no native chip widget; render a marker so tests can mount.
-    return html`<div data-target-fallback></div>`;
+    /* v8 ignore next -- ha-form not registered in jsdom; coverage branch */
+    if (customElements.get("ha-form")) return this._renderHaForm();
+    return this._renderFallback();
   }
 }

@@ -48,19 +48,9 @@ export type Scene = {
 // `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a CATEGORY_COLORS id.
 export type SceneCategory = { id: string; name: string; icon?: string; color?: string };
 
-export type ActionTargetValue = {
-  entity_id?: string[];
-  device_id?: string[];
-  area_id?: string[];
-  label_id?: string[];
-  floor_id?: string[];
-};
-
 export type ActionSpec = {
   service: string; // "domain.service"
-  /** Legacy flat entity list. Read-only fallback; new code writes `target`. */
-  entity_ids?: string[];
-  target?: ActionTargetValue;
+  entity_ids: string[];
   params: Record<string, unknown>;
 };
 
@@ -397,9 +387,6 @@ export type TraceCause = {
 export type TraceAction = {
   service: string;
   entity_ids?: string[];
-  // New-format target object (area_id/device_id/label_id/entity_id). Preferred
-  // over entity_ids for actions created/edited with the target picker.
-  target?: ActionTargetValue;
   params?: Record<string, unknown>;
   // Transient (response-only): true when the action's service was not exposed at
   // apply time, so the engine skipped it. The trace renders it as skipped.

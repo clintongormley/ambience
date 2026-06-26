@@ -10,6 +10,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- Scene actions are once again targeted by picking specific entities, scoped to
+  the scene's area or floor. The entity/device/area/floor/label target picker
+  added in 0.29.0 has been removed — Home Assistant's native target picker could
+  not be limited to the scene's scope, which made it confusing to know what an
+  action would actually affect. Any action saved with the newer target format is
+  converted back to a plain entity list automatically the next time the
+  integration loads.
 - The Unavailable condition now has the highest precedence of all conditions —
   above Script and Template. When two scenes are otherwise equally specific, the
   one that guards on an entity being unavailable, unknown, or missing now sorts
@@ -27,13 +34,6 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- Scene actions can now target by entity, device, area, floor, or label (like
-  Home Assistant automations). The target resolves live at apply time and is
-  constrained to the scene's scope, with a live count in the editor showing how
-  many entities the target will act on. A directly-named entity is forwarded
-  unchanged — it is the author's deliberate choice and is never scope-clipped.
-  The device/area/floor/label picker needs Home Assistant 2026.1 or newer; on
-  older versions the action editor falls back to entity-only targeting.
 - The safe cover actions — Open cover, Close cover, Set cover position, and Set
   cover tilt — are now seeded as default actions on new installs, so covers work
   in scenes out of the box.
@@ -46,12 +46,6 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- The action editor no longer prevents two actions in the same scene from
-  targeting the same entity (Home Assistant's native target picker cannot hide
-  individual entities); contradictory actions apply in order, last-write-wins.
-  The config-health overlap warning still flags entities controlled by more than
-  one scope/category group. A new `target_empty` Repairs warning flags an action
-  whose target resolves to no entities in its scope.
 - In the Lux and Occupancy conditions, the "Any of / All of" selector now sits
   above the sensor list (and only appears when more than one sensor is chosen),
   and their summaries read more naturally — e.g. "Any of (Lounge, Hall) is

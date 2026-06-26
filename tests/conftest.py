@@ -13,17 +13,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-import custom_components.ambience.target_resolve as _target_resolve_mod
 from custom_components.ambience.builtin_services import async_register_builtin_services
 from custom_components.ambience.const import DOMAIN
-
-# Skip marker for tests that assert indirect target resolution (area/device/label/floor →
-# entities). These tests need homeassistant.helpers.target which is absent in HA < 2026.1;
-# the CI "test (3.13, min)" job runs on HA 2025.2.0 where _HAS_TARGET_HELPER is False.
-requires_target_helper = pytest.mark.skipif(
-    not _target_resolve_mod._HAS_TARGET_HELPER,
-    reason="needs homeassistant.helpers.target (HA 2026.1+)",
-)
 
 
 @pytest.fixture

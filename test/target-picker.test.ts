@@ -1,113 +1,124 @@
 import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/target-picker";
 
-function makeHass(version: string) {
-  return { states: {}, entities: {}, devices: {}, areas: {}, config: { version } };
-}
-
 async function mount(opts: {
-  value?: any;
-  target?: unknown;
-  hass?: any;
   entities?: string[];
+  value?: string[];
+  target?: unknown;
 }): Promise<any> {
   const el: any = document.createElement("ambience-target-picker");
-  el.hass = opts.hass ?? {
-    states: {},
-    entities: {},
-    devices: {},
-    areas: {},
-    config: { version: "2026.5.0" },
-  };
-  el.value = opts.value ?? {};
+  el.entities = opts.entities ?? [];
+  el.value = opts.value ?? [];
   if (opts.target !== undefined) el.target = opts.target;
-  if (opts.entities !== undefined) el.entities = opts.entities;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
 }
 
-let el: any;
-afterEach(() => el?.remove());
-
-test("emits the target object on internal change", async () => {
-  el = await mount({ value: { area_id: ["kitchen"] }, target: { entity: { domain: "light" } } });
-  let detail: any;
-  el.addEventListener("value-changed", (e: CustomEvent) => {
+function captureEmit(el: HTMLElement): () => string[] | undefined {
+  let detail: { value: string[] } | undefined;
+  el.addEventListener("value-changed", ((e: CustomEvent) => {
     detail = e.detail;
+  }) as any);
+  return () => detail?.value;
+}
+
+describe("ambience-target-picker (Lit fallback)", () => {
+  let el: any;
+  afterEach(() => {
+    el?.remove();
   });
-  // Simulate the ha-form/native selector firing with a new target value.
-  el._onTargetFormChange(
-    new CustomEvent("value-changed", {
-      detail: { value: { target: { label_id: ["reading"] } } },
-    }),
-  );
-  expect(detail.value).toEqual({ label_id: ["reading"] });
-});
 
-test("domain filter is derived from service target metadata", async () => {
-  el = await mount({ value: {}, target: { entity: { domain: "light" } } });
-  const schema = el._targetSchema();
-  expect(JSON.stringify(schema)).toContain("light");
-});
+  test("renders a checkbox for each available entity", async () => {
+    el = await mount({ entities: ["light.a", "light.b", "light.c"] });
+    expect(el.shadowRoot.querySelectorAll('input[type="checkbox"]').length).toBe(3);
+  });
 
-describe("HA version gating", () => {
-  test("on HA >= 2026.1 builds the target-selector schema", async () => {
+  test("entities in value are checked", async () => {
     el = await mount({
-      hass: makeHass("2026.5.1"),
-      value: {},
+      entities: ["light.a", "light.b", "light.c"],
+      value: ["light.a", "light.c"],
+    });
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
+    expect(boxes[0].checked).toBe(true);
+    expect(boxes[1].checked).toBe(false);
+    expect(boxes[2].checked).toBe(true);
+  });
+
+  test("checking a box emits the new array", async () => {
+    el = await mount({
+      entities: ["light.a", "light.b"],
+      value: ["light.a"],
+    });
+    const get = captureEmit(el);
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event("change"));
+    expect(get()).toEqual(["light.a", "light.b"]);
+  });
+
+  test("unchecking a box emits without that entity", async () => {
+    el = await mount({
+      entities: ["light.a", "light.b"],
+      value: ["light.a", "light.b"],
+    });
+    const get = captureEmit(el);
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
+    boxes[0].checked = false;
+    boxes[0].dispatchEvent(new Event("change"));
+    expect(get()).toEqual(["light.b"]);
+  });
+
+  test("empty entity list renders an empty-state hint", async () => {
+    el = await mount({ entities: [] });
+    expect(el.shadowRoot.textContent).toContain("No matching entities");
+  });
+
+  test("HA target metadata filters the displayed entity list by domain", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan", "light.b"],
       target: { entity: { domain: "light" } },
     });
-    // _targetSchema() is used on new HA; _entitySchema() is the fallback
-    const schema = el._targetSchema();
-    expect(schema[0].selector).toHaveProperty("target");
-  });
-
-  test("on HA < 2026.1 builds the entity-selector schema", async () => {
-    el = await mount({
-      hass: makeHass("2025.2.0"),
-      value: { entity_id: ["light.lamp"] },
-      entities: ["light.lamp", "light.bulb"],
-    });
-    const schema = el._entitySchema();
-    expect(schema[0].name).toBe("entities");
-    expect(schema[0].selector).toHaveProperty("entity");
-    expect(schema[0].selector.entity.multiple).toBe(true);
-    expect(schema[0].selector.entity.include_entities).toEqual(["light.lamp", "light.bulb"]);
-  });
-
-  test("entity schema change handler emits {entity_id:[...]} target shape", async () => {
-    el = await mount({
-      hass: makeHass("2025.2.0"),
-      value: {},
-      entities: ["light.a"],
-    });
-    let detail: any;
-    el.addEventListener("value-changed", (e: CustomEvent) => {
-      detail = e.detail;
-    });
-    el._onEntityFormChange(
-      new CustomEvent("value-changed", {
-        detail: { value: { entities: ["light.a", "light.b"] } },
-      }),
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
+    // switch.fan filtered out by HA target metadata
+    expect(boxes.length).toBe(2);
+    const labels = Array.from(el.shadowRoot.querySelectorAll("label")).map((l: any) =>
+      l.textContent.trim(),
     );
-    expect(detail.value).toEqual({ entity_id: ["light.a", "light.b"] });
+    expect(labels).toContain("light.a");
+    expect(labels).toContain("light.b");
+    expect(labels).not.toContain("switch.fan");
   });
 
-  test("entity change handler calls stopPropagation on the incoming event", async () => {
-    el = await mount({ hass: makeHass("2025.2.0"), value: {} });
-    let stopped = false;
-    const evt = new CustomEvent("value-changed", {
-      detail: { value: { entities: [] } },
-      bubbles: true,
-      composed: true,
+  test("HA target with no entity stanza does not filter", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan"],
+      target: { device: {} },
     });
-    const orig = evt.stopPropagation.bind(evt);
-    evt.stopPropagation = () => {
-      stopped = true;
-      orig();
-    };
-    el._onEntityFormChange(evt);
-    expect(stopped).toBe(true);
+    expect(el.shadowRoot.querySelectorAll('input[type="checkbox"]').length).toBe(2);
+  });
+
+  test("checked emission preserves the filtered-list order", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan", "light.b"],
+      target: { entity: { domain: "light" } },
+      value: ["light.a"],
+    });
+    const get = captureEmit(el);
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
+    // Second box (light.b) — switch.fan was filtered out
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event("change"));
+    expect(get()).toEqual(["light.a", "light.b"]);
   });
 });

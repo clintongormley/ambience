@@ -8,6 +8,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- The Unavailable condition now has the highest precedence of all conditions —
+  above Script and Template. When two scenes are otherwise equally specific, the
+  one that guards on an entity being unavailable, unknown, or missing now sorts
+  first and wins, because whether an entity is observable at all is the most
+  fundamental fact a scene can match on.
+
 ## [0.29.0] - 2026-06-26
 
 ### Added

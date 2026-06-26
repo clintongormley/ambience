@@ -130,6 +130,22 @@ async def test_script_condition_is_registered(
     assert conditions["script"].priority == 975
 
 
+async def test_unavailable_condition_has_highest_priority(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Unavailable outranks every other condition — including script and
+    template — because whether an entity is observable at all is the most
+    fundamental world-fact, so it leads the linearisation tiebreaker."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    priorities = {name: cond.priority for name, cond in conditions.items()}
+    assert priorities["unavailable"] > priorities["script"]
+    assert priorities["unavailable"] > priorities["template"]
+    assert priorities["unavailable"] == max(priorities.values())
+
+
 async def test_panel_is_registered(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

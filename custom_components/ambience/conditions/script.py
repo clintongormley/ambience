@@ -57,8 +57,9 @@ class ScriptCondition:
         "entities to re-evaluate on, since the script itself is opaque."
     )
     input = "script_predicate"
-    # The highest priority (sorts earliest): a named script + named args is a
-    # deliberate, opaque user constraint — semantically very specific.
+    # Below unavailable (980), but above the world-fact conditions: a named
+    # script + named args is a deliberate, opaque user constraint — semantically
+    # very specific, so it sorts ahead of everything except entity observability.
     priority = 975
 
     _ttl_seconds: float = 2.0

@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-06-26
+
 ### Added
 
 - Scene actions can now target by entity, device, area, floor, or label (like

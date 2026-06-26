@@ -10,7 +10,8 @@ lounge.
 This example depends on the following entities being available in Home
 Assistant:
 
-- lights, including a light group called **Lounge Lights**
+- lights in an area called **Lounge**, including a light group called **Lounge
+    Lights**
 - an occupancy or presence sensor called **Lounge Presence**
 - a weather integration
 - a remote control to turn on the projector called **Cine**

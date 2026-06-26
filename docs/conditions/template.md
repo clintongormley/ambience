@@ -48,7 +48,7 @@ outside temperature is below 10 °C — a combination that no single built-in
 condition covers.
 
 ```jinja
-{{ is_state('binary_sensor.living_room_occupancy', 'on')
+{{ is_state('binary_sensor.lounge_presence_occupancy', 'on')
    and states('sensor.outside_temperature') | float(0) < 10 }}
 ```
 
@@ -56,10 +56,10 @@ This produces `True` or `False`. `True` is truthy, so the scene matches when
 both tests pass. If either entity is unavailable the template returns `False`
 and the condition does not match.
 
-!!! info "📷 Screenshot"
+![Example of Template condition.](../images/conditions/template/template.png "Example of Template condition.")
 
-    The Template condition editor with the two-sensor template typed into the text
-    area and the live preview showing "true — matches".
+The Template condition extracts a list of entities from the template to use as
+**Auto-triggers**.
 
 ______________________________________________________________________
 

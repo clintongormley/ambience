@@ -3,8 +3,6 @@
 Next we'll add the **Nighttime** scene — turn the lights to 25% as soon as
 anybody enters the room.
 
-## Add a new action type
-
 In order to do this we will need to add an action that understands how to set
 lights to a particular brightness:
 
@@ -13,9 +11,26 @@ lights to a particular brightness:
 
 ![Default actions.](../images/getting-started/step-3/default_actions.png "Default actions.")
 
-You can see that Ambience ships with just the **Turn on** and **Turn off**
-actions built in. You need to add any other actions that you want to use, and
-specify which fields are of interest to you:
+## Built-in actions
+
+You can see that Ambience ships with six built-in actions by default:
+
+- **Turn on** and **Turn off** will turn on or off any entity that supports that
+    action, but it will check the current state of the entity before acting, so
+    if a light is already `on` the **Turn on** will not try to turn it on again.
+- **Close cover (safe)**, **Open cover (safe)**, **Set cover position (safe)**,
+    and **Set cover tilt (safe)** control covers like blinds, awnings, and
+    curtains. They check the current state or position of the cover (or its tilt
+    value) before acting, and so avoid activating the motor on a cover that is
+    already in the correct position.
+
+You are welcome to delete or rename the built-in actions.
+
+## Add a new action type
+
+Besides the built in action, you will need to add any other actions that you
+want to use, and specify which fields belonging to the action are of interest to
+you. We will do this for the **Turn light on** (`light.turn_on`) action:
 
 - Click **+ Add action** and click on the **Action** drop down.
 - Search for and select **Turn on light**.

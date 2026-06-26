@@ -1,14 +1,13 @@
-# Actions
+# Actions reference
 
-An **action** is something Ambience does when a scene applies: turn on a light,
-set a cover position, send a notification, run a script. Each action calls a
-Home Assistant service, passing it a target (which entities to act on) and any
-field values the service needs (brightness, colour temperature, and so on).
+An **action** is something Ambience does when a scene is applied, for example:
+turn on a light, set a cover position, send a notification, or run a script.
+Each action calls a Home Assistant service, passing it a target (which entities
+to act on) and any field values the service needs (brightness, colour
+temperature, and so on).
 
 You can put as many actions in a scene as you like. When the scene wins,
 Ambience runs all of them.
-
-______________________________________________________________________
 
 ## Exposed actions
 
@@ -28,28 +27,25 @@ of per-field setting:
     a sensible starting value) or it can apply to a hidden field (so the service
     always receives that value but the per-scene editor never shows it).
 
-The combination is flexible. For example, a `light.turn_on` exposed action
-might:
+The combination is flexible. For example, a
+[`fado.fade_lights`](https://github.com/clintongormley/ha-fado/#fado-light-fader)
+exposed action might:
 
-- show **brightness** and **colour temperature** as visible fields, so each
-    scene can set its own levels;
-- send `transition: 2` as a hidden default, so every scene using this action
-    gets a two-second fade — without needing to configure it each time.
+- show **brightness** and **transition** as visible fields, so each scene can
+    set its own levels;
+- but set `transition: 3` as a default, so every scene using this action gets a
+    three-second fade — without needing to configure it each time.
 
-!!! info "📷 Screenshot"
+![Configuring the Fade Lights action.](images/actions/fado.png "Configuring the Fade Lights action.")
 
-    *The Settings → Actions list, showing several exposed actions with their service
-    ids and configured fields.*
+!!! note "Hidden defaults"
 
-Exposed actions are created and configured on the **Actions** tab of the
-Settings modal: pick a service, tick the fields to make visible, set any
-defaults, and give it an optional label (handy for telling apart two actions
-that wrap the same service). See the
-[Settings reference](settings-reference.md#actions-tab) for the field-by-field
-detail, and [Step 3 of Getting started](getting-started/step-3-exposing-actions.md)
-for a worked example.
+    A field doesn't need to be visible to set a default. You can set a default but
+    leave the field unchecked. The default parameter will always be passed, but you
+    won't be able to override it in the scene's action list.
 
-______________________________________________________________________
+See [Step 3 of Getting started](getting-started/step-3-exposing-actions.md) for
+a worked example.
 
 ## Built-in actions
 
@@ -77,22 +73,19 @@ that is already where you want it never receives a command — avoiding the rela
 *click* some covers make when told to open while already open. A cover that is
 mid-travel, or whose state can't be read, is always commanded.
 
-______________________________________________________________________
-
 ## Using an exposed action in a scene
 
 In a scene's **Actions** section, click **+ Add action…** and pick one of your
 exposed actions. Fill in its **visible fields** (each shows the right input
-control, plus a *Default: …* hint where one is set) and choose a **target** — the
-entities to act on (see [Action targets](#action-targets)). When the scene
+control, plus a *Default: …* hint where one is set) and choose a **target** —
+the entities to act on (see [Action targets](#action-targets)). When the scene
 applies, Ambience sends the service call with your values plus any defaults; a
 visible field left blank falls back to its default.
 
-______________________________________________________________________
-
 ## Action targets
 
-The **target** of an action tells Ambience which entities to act on when the scene applies. You can target by:
+The **target** of an action tells Ambience which entities to act on when the
+scene applies. You can target by:
 
 - **Entity** — pick one or more specific entities directly.
 - **Device** — target all entities belonging to one or more devices.
@@ -100,28 +93,66 @@ The **target** of an action tells Ambience which entities to act on when the sce
 - **Floor** — target all entities on one or more floors.
 - **Label** — target all entities that carry one or more HA labels.
 
-These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect. The picker itself is not limited to the scene's scope; scope-constraining happens at apply time (see below), and the live count under the picker shows the effect.
+These work exactly like HA automation targets: you can mix and match selectors
+in a single target (for example, two areas plus one specific entity), using HA's
+native chip picker with its autocomplete.
 
-> **Home Assistant 2026.1+** is required for the device / area / floor / label picker (it relies on HA's `helpers.target` resolution). On older Home Assistant, the action editor falls back to entity-only targeting and the rest of the feature behaves as before.
+The picker **filters what it offers by the action's domain**, not by the scene's
+scope — HA's standard behaviour. For a `light` action, for instance, it lists
+only entities, devices, areas, and labels that contain at least one `light`. So
+if your lounge scene's lights all live in the lounge, the area list may collapse
+to just **Lounge** and look scope-limited — but that is the domain filter, not
+the scope. You can still pick an area, label, or entity **anywhere in the house**
+as long as it has a matching entity; nothing restricts you to the scene's scope
+here. Scope-constraining happens later, at apply time (see below), and the live
+count under the picker shows the real effect.
+
+> **Home Assistant 2026.1+** is required for the device / area / floor / label
+> picker (it relies on HA's `helpers.target` resolution). On older Home
+> Assistant, the action editor falls back to entity-only targeting and the rest
+> of the feature behaves as before.
 
 ### Scope-constrained resolution
 
-Ambience resolves the target **live, at apply time**, using the entities currently registered in Home Assistant. The resolution is also **scope-constrained**: indirect selectors (device, area, floor, label) are intersected with the entities that belong to the scene's scope (House, Floor, or Area), so an area-targeted action in a living-room scene only acts on the living-room's entities even if the label spans the whole house. (A floor target picked in an area-scoped scene therefore clips to that area — the live count shows the real effect.)
+Ambience resolves the target **live, at apply time**, using the entities
+currently registered in Home Assistant. The resolution is also
+**scope-constrained**: indirect selectors (device, area, floor, label) are
+intersected with the entities that belong to the scene's scope (House, Floor, or
+Area), so an area-targeted action in a living-room scene only acts on the
+living-room's entities even if the label spans the whole house. (A floor target
+picked in an area-scoped scene therefore clips to that area — the live count
+shows the real effect.)
 
-**Directly-named entity targets are forwarded unchanged.** If you name a specific entity by entity id, it is sent to the service as-is — Ambience does not clip it to the scene's scope. This is a deliberate choice: if you pick an entity directly, you mean exactly that entity.
+**Directly-named entity targets are forwarded unchanged.** If you name a
+specific entity by entity id, it is sent to the service as-is — Ambience does
+not clip it to the scene's scope. This is a deliberate choice: if you pick an
+entity directly, you mean exactly that entity.
 
-The scene editor shows a live count below the target picker — for example, **→ resolves to 3 entities in Living Room** — so you can see immediately how many entities a target will act on. A warning is shown when the count is zero.
+The scene editor shows a live count below the target picker — for example, **→
+resolves to 3 entities in Living Room** — so you can see immediately how many
+entities a target will act on. A warning is shown when the count is zero.
 
 ### Same entity in two actions (last-write-wins)
 
-Two actions in the same scene can target the same entity. When they do, both service calls are sent; whichever arrives last wins. The config-health overlap warning still flags entities that are controlled by more than one *(scope, category)* group, as contradictory commands across groups can still cause flickering.
+Two actions in the same scene can target the same entity. When they do, both
+service calls are sent; whichever arrives last wins. The config-health overlap
+warning still flags entities that are controlled by more than one *(scope,
+category)* group, as contradictory commands across groups can still cause
+flickering.
 
 ### Config-health warnings for targets
 
-The [Config health](concepts/config-health.md) Repairs page flags two target-related problems:
+The [Config health](concepts/config-health.md) Repairs page flags two
+target-related problems:
 
-- **Action overlap** — an entity is acted on by more than one scene in different *(scope, category)* combinations. Last-write-wins applies, but the conflict is flagged so you can decide whether it is intentional.
-- **Target resolves to nothing** (`target_empty`) — an action has a non-empty target that resolves to zero entities in the scene's scope at check time. The action will be silently skipped when the scene applies. Common causes: the label is empty, the area has no entities of the right domain, or the target refers to a device that has been removed.
+- **Action overlap** — an entity is acted on by more than one scene in different
+    *(scope, category)* combinations. Last-write-wins applies, but the conflict
+    is flagged so you can decide whether it is intentional.
+- **Target resolves to nothing** (`target_empty`) — an action has a non-empty
+    target that resolves to zero entities in the scene's scope at check time.
+    The action will be silently skipped when the scene applies. Common causes:
+    the label is empty, the area has no entities of the right domain, or the
+    target refers to a device that has been removed.
 
 !!! info "📷 Screenshot"
 
@@ -160,3 +191,22 @@ row. If you switch a scope off, Ambience stops applying scenes there.
 If you want to test a scene's actions without waiting for its conditions to
 match, use the **Run actions** option in the scene's action menu. This runs that
 scene's actions once, independently of the normal evaluation cycle.
+
+## Action execution model
+
+The actions of the winning scene are applied as follows:
+
+- **In parallel**, not sequentially — every action is turned into a coroutine
+    and they're all launched together via `asyncio.gather`. There's no
+    per-action `await` in the loop, so action #2 doesn't wait for action #1.
+- **Not fire-and-forget** — each call is `blocking=True`, and the whole batch is
+    `await`ed. Ambience waits for all the service calls to finish before the
+    apply completes (it then records last-applied, traces, etc.). It does not
+    just dispatch and move on.
+- **Fault-isolated** — `return_exceptions=True` means one action raising an
+    exception is logged (`"ambience: action raised: …"`) but doesn't abort the
+    others. Malformed, unexposed, or empty-target actions are skipped with a
+    warning before the gather (so they never become coros).
+- **No ordering guarantee between actions** — because they run concurrently,
+    completion order is nondeterministic. If the same entity exists in two
+    actions, whichever arrives last wins.

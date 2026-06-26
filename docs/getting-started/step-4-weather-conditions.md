@@ -64,6 +64,12 @@ just duplicate that one and edit it:
 
 ![Duplicate Daytime Sunny scene.](../images/getting-started/step-4/duplicate.png "Duplicate Daytime Sunny scene.")
 
+!!! info "Duplicating to other scene groups"
+
+    The **Duplicate** function is also useful for copying a scene into other scopes
+    or categories, for instance if you need to replicate a lifecycle from one
+    bedroom to another.
+
 Then:
 
 - Change the name to **Daytime Cloudy**.

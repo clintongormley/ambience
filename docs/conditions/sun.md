@@ -11,6 +11,8 @@ ______________________________________________________________________
 The condition has two independent parts: **elevation** and **azimuth**. You must
 set at least one of them.
 
+![Example of the Sun condition.](../images/conditions/sun/sun.png "Example of the Sun condition.")
+
 ## Elevation
 
 Elevation measures how high the sun sits above (or below) the horizon, expressed

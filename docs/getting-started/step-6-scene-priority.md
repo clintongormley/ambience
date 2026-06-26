@@ -6,11 +6,13 @@ like **Time of day: Daytime**.
 
 ![Scene order matters.](../images/getting-started/step-6/scene_order.png "Scene order matters.")
 
-The **Time of day** condition will also compare time ranges, sorting a more
-specific **Evening** time range above a less specific **Nighttime** time range.
-A time range of **18:00-20:00** would sort before **12:00-24:00** so that the
-first time range has a chance of matching, even though it is entirely covered by
-the second time range.
+!!! info "Sorting by range specificity"
+
+    The **Time of day** condition will also compare time ranges, sorting a more
+    specific **Evening** time range above a less specific **Nighttime** time range.
+    A time range of **18:00-20:00** would sort before **12:00-24:00** so that the
+    first time range has a chance of matching, even though it is entirely covered by
+    the second time range. The same applies to the **Lux** and **Sun** conditions.
 
 ## Reordering scenes manually
 

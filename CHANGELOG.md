@@ -15,6 +15,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   constrained to the scene's scope, with a live count in the editor showing how
   many entities the target will act on. A directly-named entity is forwarded
   unchanged — it is the author's deliberate choice and is never scope-clipped.
+  The device/area/floor/label picker needs Home Assistant 2026.1 or newer; on
+  older versions the action editor falls back to entity-only targeting.
 - The safe cover actions — Open cover, Close cover, Set cover position, and Set
   cover tilt — are now seeded as default actions on new installs, so covers work
   in scenes out of the box.

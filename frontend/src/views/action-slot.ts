@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { resolveTargetInScope, targetIsEmpty } from "../action-target.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
-import type { HaTarget } from "../entities-for-scope.js";
+import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { areaName, floorName } from "../hass-names.js";
 import { humanizeId, localize, localizeWsError } from "../i18n.js";
@@ -277,6 +277,13 @@ export class AmbienceActionSlot extends LitElement {
     return Object.keys(t).length > 0;
   }
 
+  /** Scope-filtered entity list for the fallback entity picker (HA < 2026.1).
+   *  On modern HA this is passed but unused by the target picker. */
+  private _scopeEntities(): string[] {
+    if (!this.hass || !this.scope) return [];
+    return entitiesForScope(this.hass, this.scope, []);
+  }
+
   /**
    * Public accessor for the parent to query whether this slot's service
    * requires a target. Returns:
@@ -332,6 +339,7 @@ export class AmbienceActionSlot extends LitElement {
           .target=${haTarget}
           .value=${this.target ?? {}}
           .label=${" "}
+          .entities=${this._scopeEntities()}
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
         ${this._renderCountPreview()}

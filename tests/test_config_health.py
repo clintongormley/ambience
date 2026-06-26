@@ -26,6 +26,7 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
+from tests.conftest import requires_target_helper
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -858,6 +859,7 @@ def _light_in_area(hass: HomeAssistant, suffix: str, area_id: str) -> str:
     return e.entity_id
 
 
+@requires_target_helper
 async def test_overlap_detected_via_resolved_area_targets(hass: HomeAssistant, installed) -> None:
     kitchen = ar.async_get(hass).async_create("Kitchen")
     shared = _light_in_area(hass, "shared", kitchen.id)

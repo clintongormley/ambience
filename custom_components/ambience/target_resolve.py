@@ -3,6 +3,11 @@ entity_ids it should act on.
 
 Expansion reuses HA's own target helper; this module adds only the scene-scope
 intersection. See docs/superpowers/specs/2026-06-25-action-target-selector-design.md.
+
+When ``_HAS_TARGET_HELPER`` is False (HA < 2026.1 where
+``homeassistant.helpers.target`` does not exist), only direct ``entity_id``
+targets can be resolved. Area/device/label/floor expansion is simply not
+available on those versions.
 """
 
 from __future__ import annotations
@@ -11,10 +16,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.target import (
-    TargetSelection,
-    async_extract_referenced_entity_ids,
-)
+
+try:
+    from homeassistant.helpers.target import (
+        TargetSelection,
+        async_extract_referenced_entity_ids,
+    )
+
+    _HAS_TARGET_HELPER = True
+except ImportError:  # pragma: no cover - exercised only on HA < 2026.1 (CI min job)
+    _HAS_TARGET_HELPER = False
 
 _TARGET_KEYS = ("entity_id", "device_id", "area_id", "label_id", "floor_id")
 
@@ -49,9 +60,15 @@ def action_target(action_spec: Mapping[str, Any]) -> dict[str, list[str]]:
 
 
 def _expand(hass: HomeAssistant, selector: Mapping[str, Any]) -> set[str]:
-    """All entity_ids HA resolves the given target selector to (global)."""
-    selected = async_extract_referenced_entity_ids(hass, TargetSelection(dict(selector)))
-    return set(selected.referenced) | set(selected.indirectly_referenced)
+    """All entity_ids HA resolves the given target selector to (global).
+
+    Returns an empty set when ``_HAS_TARGET_HELPER`` is False (HA < 2026.1);
+    only direct ``entity_id`` values in the target will survive resolution.
+    """
+    if not _HAS_TARGET_HELPER:
+        return set()
+    sel = async_extract_referenced_entity_ids(hass, TargetSelection(dict(selector)))
+    return set(sel.referenced) | set(sel.indirectly_referenced)
 
 
 def _scope_entity_set(

@@ -1,3 +1,4 @@
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
@@ -6,11 +7,13 @@ from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import label_registry as lr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components.ambience.target_resolve as target_resolve_mod
 from custom_components.ambience.const import DOMAIN
 from custom_components.ambience.target_resolve import (
     action_target,
     resolve_action_entities,
 )
+from tests.conftest import requires_target_helper
 
 
 def test_action_target_prefers_explicit_target() -> None:
@@ -44,6 +47,7 @@ def _entity_in_area(hass: HomeAssistant, suffix: str, area_id: str) -> str:
     return e.entity_id
 
 
+@requires_target_helper
 async def test_resolve_area_target_intersected_to_area_scope(hass: HomeAssistant) -> None:
     kitchen = ar.async_get(hass).async_create("Kitchen")
     office = ar.async_get(hass).async_create("Office")
@@ -60,6 +64,7 @@ async def test_resolve_area_target_intersected_to_area_scope(hass: HomeAssistant
     assert got == [k_light]
 
 
+@requires_target_helper
 async def test_resolve_device_indirection(hass: HomeAssistant) -> None:
     kitchen = ar.async_get(hass).async_create("Kitchen")
     entry = MockConfigEntry(domain=DOMAIN)
@@ -74,6 +79,7 @@ async def test_resolve_device_indirection(hass: HomeAssistant) -> None:
     assert got == [e.entity_id]
 
 
+@requires_target_helper
 async def test_resolve_house_scope_has_no_intersection(hass: HomeAssistant) -> None:
     office = ar.async_get(hass).async_create("Office")
     o_light = _entity_in_area(hass, "o", office.id)
@@ -82,6 +88,7 @@ async def test_resolve_house_scope_has_no_intersection(hass: HomeAssistant) -> N
     assert got == [o_light]
 
 
+@requires_target_helper
 async def test_resolve_floor_scope(hass: HomeAssistant) -> None:
     floor = fr.async_get(hass).async_create("Ground")
     area = ar.async_get(hass).async_create("Den")
@@ -185,6 +192,7 @@ def test_action_target_coerces_scalar_floor_id() -> None:
     }
 
 
+@requires_target_helper
 async def test_resolve_floor_id_target_in_area_scope(hass: HomeAssistant) -> None:
     """resolve_action_entities with {floor_id:[F]}: resolves to floor entities,
     clipped to the area scope (entity on floor F in area A; area-A-scoped scene
@@ -203,6 +211,7 @@ async def test_resolve_floor_id_target_in_area_scope(hass: HomeAssistant) -> Non
     assert got == [k_light]
 
 
+@requires_target_helper
 async def test_resolve_floor_id_target_in_house_scope(hass: HomeAssistant) -> None:
     """House scope: floor_id target is NOT clipped (no scope constraint)."""
     floor = fr.async_get(hass).async_create("Upper")
@@ -212,3 +221,44 @@ async def test_resolve_floor_id_target_in_house_scope(hass: HomeAssistant) -> No
 
     got = resolve_action_entities(hass, "house", None, {"floor_id": [floor.floor_id]})
     assert got == [b_light]
+
+
+# ── _HAS_TARGET_HELPER = False: graceful degradation on HA < 2026.1 ──────────
+
+
+def test_resolve_entity_id_survives_without_target_helper(hass: HomeAssistant) -> None:
+    """Direct entity_id targets still resolve when helpers.target is unavailable."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(target_resolve_mod, "_HAS_TARGET_HELPER", False)
+    try:
+        got = resolve_action_entities(hass, "area", "kitchen", {"entity_id": ["light.a"]})
+        assert got == ["light.a"]
+    finally:
+        monkeypatch.undo()
+
+
+def test_resolve_area_id_returns_empty_without_target_helper(hass: HomeAssistant) -> None:
+    """area_id targets return [] when helpers.target is unavailable (can't expand)."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(target_resolve_mod, "_HAS_TARGET_HELPER", False)
+    try:
+        got = resolve_action_entities(hass, "area", "kitchen", {"area_id": ["kitchen"]})
+        assert got == []
+    finally:
+        monkeypatch.undo()
+
+
+def test_resolve_mixed_target_without_target_helper(hass: HomeAssistant) -> None:
+    """Mixed target: direct entity_id survives, area_id is dropped (can't expand)."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(target_resolve_mod, "_HAS_TARGET_HELPER", False)
+    try:
+        got = resolve_action_entities(
+            hass,
+            "area",
+            "kitchen",
+            {"entity_id": ["light.a"], "area_id": ["kitchen"]},
+        )
+        assert got == ["light.a"]
+    finally:
+        monkeypatch.undo()

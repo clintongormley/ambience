@@ -36,6 +36,7 @@ from custom_components.ambience.service import (
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
+from tests.conftest import requires_target_helper
 
 
 def test_category_ids_returns_scene_order_deduplicated():
@@ -1721,6 +1722,7 @@ def _light_in_area(hass, suffix, area_id):
     return e.entity_id
 
 
+@requires_target_helper
 async def test_area_target_resolves_to_in_scope_entities(hass) -> None:
     calls = async_mock_service(hass, "light", "turn_on")
     kitchen = ar.async_get(hass).async_create("Kitchen")

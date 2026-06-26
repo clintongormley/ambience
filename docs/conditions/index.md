@@ -39,6 +39,11 @@ hours" rule that was already an hour in still fires an hour after the restart
 rather than starting a fresh two hours. It never counts time during a window
 Home Assistant did not observe.
 
+Not every entity remembers its history across a restart, though: some restore
+their previous state and keep their original change time, while others come back
+fresh and report their last change as the moment Home Assistant started. For
+those, the *for* clock simply starts over from the restart.
+
 Leave the duration at zero (the default) to match immediately as soon as the
 test becomes true.
 

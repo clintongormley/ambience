@@ -74,7 +74,7 @@
     },
     "target_empty": {
       "title": "Ambience: una acción no apunta a ninguna entidad dentro de su ámbito",
-      "description": "La acción `{ref}` es utilizada por estas escenas de Ambience, pero su objetivo de área/etiqueta/dispositivo no resuelve ninguna entidad dentro del ámbito de la escena:\n{scenes}\n\nLa acción se omite cuando se aplica la escena. Comprueba el objetivo, o que el área/etiqueta/dispositivo siga teniendo entidades coincidentes. Este mensaje se borra automáticamente una vez que se resuelva."
+      "description": "La acción `{ref}` es utilizada por estas escenas de Ambience, pero su objetivo de área/planta/etiqueta/dispositivo no resuelve ninguna entidad dentro del ámbito de la escena:\n{scenes}\n\nLa acción se omite cuando se aplica la escena. Comprueba el objetivo, o que el área/planta/etiqueta/dispositivo siga teniendo entidades coincidentes. Este mensaje se borra automáticamente una vez que se resuelva."
     }
   },
   "exceptions": {

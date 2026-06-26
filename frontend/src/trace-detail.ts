@@ -507,6 +507,7 @@ function entityCount(actions: TraceAction[]): number {
       (t.entity_id?.length ?? 0) +
       (t.area_id?.length ?? 0) +
       (t.device_id?.length ?? 0) +
+      (t.floor_id?.length ?? 0) +
       (t.label_id?.length ?? 0)
     );
   }, 0);

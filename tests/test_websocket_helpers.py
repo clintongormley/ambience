@@ -428,6 +428,67 @@ class TestValidateScopeConfig:
         }
         validate_scope_config(hass, config)  # must not raise
 
+    def test_rejects_target_with_empty_scalar_string(self) -> None:
+        """A scalar target value that is an empty string must raise (Fix 2)."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": ""},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_value_invalid"
+
+    def test_rejects_target_with_whitespace_only_scalar(self) -> None:
+        """A scalar target value that is whitespace-only must also raise (Fix 2)."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": "   "},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_value_invalid"
+
+    def test_accepts_target_with_list_of_non_empty_strings(self) -> None:
+        """A target value that is a list of non-empty strings must be accepted."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"entity_id": ["light.a"]},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        validate_scope_config(hass, config)  # must not raise
+
 
 # ---------------------------------------------------------------------------
 # validate_weather_groups

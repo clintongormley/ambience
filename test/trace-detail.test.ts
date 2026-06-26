@@ -1447,4 +1447,22 @@ describe("review fixes", () => {
     expect(texts).toContain("Lamp");
     expect(texts).toContain("Hall (area)");
   });
+
+  test("collapsed summary entity count includes floor_id selector entries", () => {
+    // A target with 1 floor_id entry must count as 1 in the badge so floor
+    // targets are not undercounted (Fix 1).
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { floor_id: ["ground_floor", "first_floor"] },
+            params: {},
+          },
+        ],
+      },
+      false,
+    );
+    expect(host.textContent).toContain("2 entities");
+  });
 });

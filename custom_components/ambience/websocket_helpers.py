@@ -117,7 +117,13 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                         )
                     # HA targets allow a bare string or a list of strings.
                     if isinstance(val, str):
-                        pass  # scalar string — valid
+                        if not val.strip():
+                            raise AmbienceError(
+                                "scene_action_target_value_invalid",
+                                scene_idx=scene_idx,
+                                action_idx=action_idx,
+                                key=key,
+                            )
                     elif isinstance(val, list):
                         if not all(isinstance(v, str) and v for v in val):
                             raise AmbienceError(

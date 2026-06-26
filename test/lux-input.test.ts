@@ -103,4 +103,31 @@ describe("ambience-lux-input", () => {
     expect(got()).toEqual({ sensors: ["sensor.a"], range: "bright" });
     el.remove();
   });
+
+  test("'is not' (negate) is kept, 'is' is dropped", async () => {
+    const el = await mount({ sensors: ["sensor.a"], range: "dark" });
+    const got = capture(el);
+    el._setNegate(true);
+    expect(got()).toEqual({ sensors: ["sensor.a"], range: "dark", negate: true });
+    el._setNegate(false);
+    expect(got().negate).toBeUndefined();
+    el.remove();
+  });
+
+  test("renders an is / is-not dropdown", async () => {
+    const el = await mount({ sensors: ["sensor.a"], range: "dark" });
+    expect(el.shadowRoot.querySelector("select.negate")).toBeTruthy();
+    el.remove();
+  });
+
+  test("quant dropdown renders before the sensor picker", async () => {
+    const el = await mount({ sensors: ["sensor.a", "sensor.b"], range: "dark" });
+    const quant = el.shadowRoot.querySelector("select.quant");
+    const sensors = el.shadowRoot.querySelector("[data-field='sensors']");
+    expect(quant).toBeTruthy();
+    expect(sensors).toBeTruthy();
+    // quant precedes the sensor picker in document order
+    expect(quant.compareDocumentPosition(sensors) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    el.remove();
+  });
 });

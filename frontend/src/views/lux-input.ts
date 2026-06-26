@@ -114,6 +114,7 @@ export class AmbienceLuxInput extends LitElement {
       out.range = merged.range ?? this._defaultRangeId();
     }
     if (merged.quant === "all") out.quant = "all";
+    if (merged.negate === true) out.negate = true;
     return out;
   }
 
@@ -128,6 +129,10 @@ export class AmbienceLuxInput extends LitElement {
 
   _setQuant(quant: LuxQuant) {
     this._emit(this._build({ quant }));
+  }
+
+  _setNegate(negate: boolean) {
+    this._emit(this._build({ negate }));
   }
 
   /** Band dropdown changed: a named range id, or CUSTOM to switch to min/max.
@@ -230,13 +235,32 @@ export class AmbienceLuxInput extends LitElement {
     );
   }
 
+  private _renderNegate(negate: boolean) {
+    return renderSelect(
+      this.hass,
+      "negate",
+      "negate",
+      negate ? "is_not" : "is",
+      [
+        { value: "is", label: localize(this.hass, "ui.lux_is", "is") },
+        { value: "is_not", label: localize(this.hass, "ui.lux_is_not", "is not") },
+      ],
+      (v) => this._setNegate(v === "is_not"),
+    );
+  }
+
   override render() {
     const cur = this._cur();
     const quant: LuxQuant = cur.quant === "all" ? "all" : "any";
+    const negate = cur.negate === true;
+    // Quant goes above the (full-width) sensor picker so the controls read
+    // top-to-bottom as "Any of <these sensors> is <band>". It only shows with
+    // 2+ sensors (where any/all actually differ).
     return html`
+      ${this._showQuant() ? html`<div class="row">${this._renderQuant(quant)}</div>` : ""}
       <div class="row">${this._renderSensors()}</div>
       <div class="row">
-        ${this._showQuant() ? this._renderQuant(quant) : ""}
+        ${this._renderNegate(negate)}
         ${this._renderBand(cur)}
       </div>
     `;

@@ -200,12 +200,15 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     const occupied = cur.occupied !== false;
     const negate = cur.negate === true;
     const quant: OccupancyQuant = cur.quant === "all" ? "all" : "any";
+    // Quant goes above the (full-width) sensor picker so the controls read
+    // top-to-bottom as "Any of <these sensors> is Detected". It only shows with
+    // 2+ sensors (where any/all actually differ).
     return html`
+      ${this._showQuant() ? html`<div class="row">${this._renderQuant(quant)}</div>` : ""}
       <div class="row">${this._renderSensors()}</div>
       <div class="row">
         ${this._renderNegate(negate)}
         ${this._renderOccupied(occupied)}
-        ${this._showQuant() ? this._renderQuant(quant) : ""}
       </div>
       <div class="row">
         <span class="label">${localize(this.hass, "ui.occupancy_for", "for")}</span>

@@ -429,8 +429,37 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
 }
 
 /**
+ * Build the "<quantifier> (names) <verb> [not ]<word>" head shared by the
+ * sensor-backed condition summaries (lux/occupancy/unavailable). `ns` is the
+ * localize namespace ("lux_summary"/"occupancy_summary"/"unavailable_summary");
+ * `word` is the trailing predicate word (a lux band, "detected"/"clear",
+ * "unavailable"). One name reads "<name> is [not ]<word>"; several read
+ * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. Negation
+ * sits inline before the word, matching the state condition. Unavailable passes
+ * neither flag (any-only, never negated).
+ */
+function _quantifiedClause(
+  ctx: ConditionContext,
+  ns: string,
+  names: string[],
+  word: string,
+  opts: { all?: boolean; negate?: boolean } = {},
+): string {
+  const not = opts.negate ? `${localize(ctx.hass, `${ns}.not`, "not")} ` : "";
+  if (names.length === 1) {
+    return `${names[0]} ${localize(ctx.hass, `${ns}.is`, "is")} ${not}${word}`;
+  }
+  const all = opts.all === true;
+  const q = all
+    ? localize(ctx.hass, `${ns}.all_of`, "All of")
+    : localize(ctx.hass, `${ns}.any_of`, "Any of");
+  const verb = all ? localize(ctx.hass, `${ns}.are`, "are") : localize(ctx.hass, `${ns}.is`, "is");
+  return `${q} (${names.join(", ")}) ${verb} ${not}${word}`;
+}
+
+/**
  * "<Sensor> is detected/clear" for one sensor, or
- * "any of (A, B) detected" / "all of (A, B) clear" for several, with an
+ * "Any of (A, B) is detected" / "All of (A, B) are clear" for several, with an
  * optional "for ≥20m" / "for <20m" suffix (the comparator follows
  * `for_mode`). Sensor names use friendly_name when set.
  */
@@ -443,17 +472,10 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
       : localize(ctx.hass, "occupancy_summary.detected", "detected");
   // `negate` wraps the whole predicate; phrase it like the state condition's
   // inline negation ("Lounge is not clear for ≥20m"), not a flipped polarity.
-  const not = pred.negate ? `${localize(ctx.hass, "occupancy_summary.not", "not")} ` : "";
-  let head: string;
-  if (names.length === 1) {
-    head = `${names[0]} is ${not}${verb}`;
-  } else {
-    const q =
-      pred.quant === "all"
-        ? localize(ctx.hass, "occupancy_summary.all_of", "all of")
-        : localize(ctx.hass, "occupancy_summary.any_of", "any of");
-    head = `${q} (${names.join(", ")}) ${not}${verb}`;
-  }
+  const head = _quantifiedClause(ctx, "occupancy_summary", names, verb, {
+    all: pred.quant === "all",
+    negate: pred.negate,
+  });
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
   }
@@ -470,11 +492,13 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
  *  `everyone`/`any` predicate needs a de Morgan quantifier swap, not a flag
  *  drop. So only a SINGLE-person negated people predicate is a release (the
  *  quantifier is moot with one person); multi-person / all-persons stay guards,
- *  where `summarisePeople` renders the negated form truthfully. `state` is not
- *  handled here — its richer boolean shape is split by `_holdStateParts`. */
+ *  where `summarisePeople` renders the negated form truthfully. `lux` matches
+ *  occupancy — its `negate` is `kleene_not` outside the quantifier, so a flag
+ *  drop yields the correct complement. `state` is not handled here — its richer
+ *  boolean shape is split by `_holdStateParts`. */
 function isReleaseCondition(name: string, predicate: unknown): boolean {
   if (predicate == null || typeof predicate !== "object") return false;
-  if (name === "occupancy") {
+  if (name === "occupancy" || name === "lux") {
     return Boolean((predicate as { negate?: unknown }).negate);
   }
   if (name === "people") {
@@ -789,9 +813,9 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
 }
 
 /**
- * "<Entity> unavailable" for one entity, or "any of (A, B) unavailable" for
- * several — matching the condition's "any of these is down" semantics. Names use
- * friendly_name when set, else the raw entity_id.
+ * "<Entity> is unavailable" for one entity, or "Any of (A, B) is unavailable"
+ * for several — matching the condition's "any of these is down" semantics. Names
+ * use friendly_name when set, else the raw entity_id.
  */
 export function summariseUnavailable(
   pred: UnavailablePredicate,
@@ -799,12 +823,10 @@ export function summariseUnavailable(
 ): string {
   if (pred == null || !pred.entities?.length) return localize(ctx.hass, "ui.summary_any", "any");
   const names = pred.entities.map((id) => _entityDisplayName(ctx, id));
+  // No quantifier/negate control on this condition: always "any of these is
+  // down" (any-only, never negated), so pass neither flag.
   const word = localize(ctx.hass, "unavailable_summary.unavailable", "unavailable");
-  if (names.length === 1) {
-    return `${names[0]} ${word}`;
-  }
-  const anyOf = localize(ctx.hass, "unavailable_summary.any_of", "any of");
-  return `${anyOf} (${names.join(", ")}) ${word}`;
+  return _quantifiedClause(ctx, "unavailable_summary", names, word);
 }
 
 /** Render an inline lux band: "<10 lx", "≥1000 lx", "50–300 lx". `empty` is the
@@ -821,8 +843,10 @@ export function fmtLuxBand(
 }
 
 /**
- * "<Sensor> dark" / "<Sensor> 50–300 lx" for one sensor, or
- * "any of (A, B) bright" for several. Named ranges resolve via luxLabel.
+ * "<Sensor> is dark" / "<Sensor> is 50–300 lx" for one sensor, or
+ * "Any of (A, B) is bright" / "All of (A, B) are bright" for several. `negate`
+ * reads inline ("is not bright" / "are not bright"). Named ranges resolve via
+ * luxLabel.
  */
 export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
@@ -831,14 +855,12 @@ export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): st
     pred.range != null
       ? luxLabel(ctx.hass, pred.range, ctx.luxRanges?.custom ?? {})
       : fmtLuxBand(pred.min, pred.max);
-  if (names.length === 1) {
-    return `${names[0]} ${band}`;
-  }
-  const q =
-    pred.quant === "all"
-      ? localize(ctx.hass, "lux_summary.all_of", "all of")
-      : localize(ctx.hass, "lux_summary.any_of", "any of");
-  return `${q} (${names.join(", ")}) ${band}`;
+  // `negate` reads inline ("is not Dark" / "are not Dark"), mirroring the
+  // state/occupancy summaries.
+  return _quantifiedClause(ctx, "lux_summary", names, band, {
+    all: pred.quant === "all",
+    negate: pred.negate,
+  });
 }
 
 export function summariseState(pred: StatePredicate, ctx: ConditionContext = {}): string {

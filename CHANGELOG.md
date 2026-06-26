@@ -23,6 +23,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - The Actions settings page now shows a dismissible recommendation to install
   the Fado Light Fader integration (smooth light fading with automatic
   brightness restoration) when it isn't already installed.
+- The Lux condition now has an "is / is not" choice, so a scene can match when
+  your light sensors are *not* in a chosen range — for example, blocking a scene
+  until the room is no longer bright.
 
 ### Changed
 
@@ -32,6 +35,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   The config-health overlap warning still flags entities controlled by more than
   one scope/category group. A new `target_empty` Repairs warning flags an action
   whose target resolves to no entities in its scope.
+- In the Lux and Occupancy conditions, the "Any of / All of" selector now sits
+  above the sensor list (and only appears when more than one sensor is chosen),
+  and their summaries read more naturally — e.g. "Any of (Lounge, Hall) is
+  bright", "All of (Lounge, Hall) are detected", "Lounge is unavailable".
 - The Advanced settings tab now has a clearer visual hierarchy. Section titles
   stand out from their fields, the two setting groups are more obviously
   separated, and the voice-assistant toggles are presented as a nested

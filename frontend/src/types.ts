@@ -193,6 +193,7 @@ export interface LuxPredicate {
   min?: number; // inline band lower bound (inclusive)
   max?: number; // inline band upper bound (exclusive)
   quant?: LuxQuant; // default "any"
+  negate?: boolean; // default false; inverts the whole match ("is not")
 }
 
 export type DayConfig = {

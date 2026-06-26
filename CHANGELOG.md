@@ -10,6 +10,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- Scene actions are once again targeted by picking specific entities, scoped to
+  the scene's area or floor. The entity/device/area/floor/label target picker
+  added in 0.29.0 has been removed — Home Assistant's native target picker could
+  not be limited to the scene's scope, which made it confusing to know what an
+  action would actually affect. Any action saved with the newer target format is
+  converted back to a plain entity list automatically the next time the
+  integration loads.
 - The Unavailable condition now has the highest precedence of all conditions —
   above Script and Template. When two scenes are otherwise equally specific, the
   one that guards on an entity being unavailable, unknown, or missing now sorts

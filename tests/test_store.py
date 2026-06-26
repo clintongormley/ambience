@@ -771,3 +771,306 @@ def test_known_assistants_match_default_map_and_fields() -> None:
 
     assert set(KNOWN_ASSISTANTS) == set(DEFAULT_EXPOSED_ASSISTANTS)
     assert set(ASSISTANT_FIELDS) == set(DEFAULT_EXPOSED_ASSISTANTS)
+
+
+# --- TEMPORARY: migrate action `target` (v0.29.0 / #156) back to entity_ids ---
+
+
+def _seed_store(hass_storage, *, areas=None, floors=None, house=None) -> None:
+    """Seed the underlying HA Store payload for an AmbienceStore load."""
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {
+            "version": STORAGE_VERSION,
+            "categories": [{"id": GENERAL_CATEGORY_ID, "name": "General"}],
+            "areas": areas or {},
+            "floors": floors or {},
+            "house": house or {"scenes": []},
+        },
+    }
+
+
+async def test_migrate_target_list_to_entity_ids(hass: HomeAssistant, hass_storage) -> None:
+    """A target with an entity_id list becomes entity_ids; the target key is dropped."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": ["light.a", "light.b"]},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    action = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert action["entity_ids"] == ["light.a", "light.b"]
+    assert "target" not in action
+
+
+async def test_migrate_target_scalar_to_entity_ids(hass: HomeAssistant, hass_storage) -> None:
+    """A scalar string entity_id becomes a one-element entity_ids list."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": "light.a"},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    action = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert action["entity_ids"] == ["light.a"]
+    assert "target" not in action
+
+
+async def test_migrate_drops_blank_entity_ids(hass: HomeAssistant, hass_storage) -> None:
+    """Empty / whitespace-only entity ids are filtered out (a blank id violates
+    the save-time invariant and would produce an invalid service-call target)."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": ["light.a", "", "  "]},
+                                "params": {},
+                            },
+                            {
+                                "service": "light.turn_off",
+                                "target": {"entity_id": "   "},
+                                "params": {},
+                            },
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    actions = store.get_area("lr")["scenes"][0]["actions"]
+    assert actions[0]["entity_ids"] == ["light.a"]
+    assert actions[1]["entity_ids"] == []
+
+
+async def test_migrate_indirect_only_target_drops_to_empty(
+    hass: HomeAssistant, hass_storage, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An indirect-only target (area_id) yields entity_ids=[] and a logged warning."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"area_id": ["kitchen"]},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    action = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert action["entity_ids"] == []
+    assert "target" not in action
+    assert "indirect" in caplog.text.lower()
+
+
+async def test_migrate_leaves_legacy_entity_ids_action_untouched(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    """An action already in entity_ids form (no target) is left completely unchanged."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "entity_ids": ["light.x"],
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    action = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert action == {
+        "service": "light.turn_on",
+        "entity_ids": ["light.x"],
+        "params": {},
+    }
+
+
+async def test_migrate_is_idempotent(hass: HomeAssistant, hass_storage) -> None:
+    """Running the migration twice yields the same result."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": ["light.a", "light.b"]},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    first = store.get_area("lr")["scenes"][0]["actions"][0].copy()
+    store._migrate_action_targets_to_entity_ids()
+    second = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert (
+        first
+        == second
+        == {
+            "service": "light.turn_on",
+            "entity_ids": ["light.a", "light.b"],
+            "params": {},
+        }
+    )
+
+
+async def test_migrate_covers_floors_and_house(hass: HomeAssistant, hass_storage) -> None:
+    """Targets in floor and house scenes are migrated too, not just areas."""
+    _seed_store(
+        hass_storage,
+        floors={
+            "up": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": ["light.f"]},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+        house={
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"entity_id": "light.h"},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    floor_action = store.get_floor("up")["scenes"][0]["actions"][0]
+    house_action = store.get_house()["scenes"][0]["actions"][0]
+    assert floor_action["entity_ids"] == ["light.f"]
+    assert "target" not in floor_action
+    assert house_action["entity_ids"] == ["light.h"]
+    assert "target" not in house_action
+
+
+async def test_migrate_tolerates_malformed_data(hass: HomeAssistant, hass_storage) -> None:
+    """Non-dict scenes/actions and missing keys don't raise during migration."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "lr": {
+                "scenes": [
+                    "not-a-dict",
+                    {"when": {}},  # missing "actions"
+                    {"when": {}, "actions": ["not-a-dict", 42]},
+                ]
+            },
+            "empty": {},  # missing "scenes"
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()  # must not raise
+    assert store.get_area("lr")["scenes"][0] == "not-a-dict"
+
+
+async def test_migrate_tolerates_non_dict_scope_config(hass: HomeAssistant, hass_storage) -> None:
+    """A non-dict scope config value must not crash the load, and valid scopes
+    alongside it still migrate."""
+    _seed_store(
+        hass_storage,
+        areas={
+            "broken": "not-a-dict",
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "target": {"entity_id": ["light.a"]},
+                                "params": {},
+                            }
+                        ],
+                    }
+                ]
+            },
+        },
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()  # must not raise
+    action = store.get_area("lr")["scenes"][0]["actions"][0]
+    assert action["entity_ids"] == ["light.a"]
+    assert "target" not in action

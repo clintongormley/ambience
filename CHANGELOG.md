@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-06-26
+
 ### Changed
 
 - Scene actions are once again targeted by picking specific entities, scoped to

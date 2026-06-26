@@ -5,6 +5,8 @@ from __future__ import annotations
 import itertools
 from typing import Any
 
+from custom_components.ambience.conditions.script import ScriptCondition
+from custom_components.ambience.conditions.unavailable import UnavailableCondition
 from custom_components.ambience.sorting import (
     GAP,
     _slot,
@@ -180,6 +182,25 @@ def test_two_order_keyless_conditions_constraint_beats_wildcard_by_priority() ->
         _scene("ppl", {"people": "nobody"}),
     ]
     assert _names(sort_scenes(scenes, conditions)) == ["ppl", "occ"]
+
+
+def test_unavailable_rule_outranks_script_rule() -> None:
+    # End-to-end with the REAL conditions and their registered priorities:
+    # `unavailable` (980) now outranks `script` (975), so a scene constraining
+    # unavailable sorts before — and so wins first-match over — a scene that
+    # constrains only script. This locks the user-facing consequence of
+    # unavailable's top precedence: not just the priority number, but that the
+    # sort actually consumes it. Input order is script-first to prove the sort
+    # actively reorders rather than preserving it.
+    conditions = {
+        "unavailable": UnavailableCondition(),
+        "script": ScriptCondition(),
+    }
+    scenes = [
+        _scene("scripted", {"script": {"script": "script.foo"}}),
+        _scene("down", {"unavailable": {"entities": ["light.x"]}}),
+    ]
+    assert _names(sort_scenes(scenes, conditions)) == ["down", "scripted"]
 
 
 def test_vacuous_predicate_sorts_as_wildcard_not_as_a_constraint() -> None:

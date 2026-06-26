@@ -47,9 +47,10 @@ class UnavailableCondition:
         "unavailable, unknown, or absent. None = match-anything."
     )
     input = "unavailable_predicate"
-    # Above state (950): whether an entity is observable at all is the most
+    # The highest priority (sorts earliest), above even script (975) and
+    # template (970): whether an entity is observable at all is the most
     # fundamental world-fact, so it leads the linearisation tiebreaker.
-    priority = 960
+    priority = 980
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

@@ -26,7 +26,7 @@ def test_protocol_fields() -> None:
     m = UnavailableCondition()
     assert m.name == "unavailable"
     assert m.input == "unavailable_predicate"
-    assert m.priority == 960
+    assert m.priority == 980
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

@@ -71,6 +71,10 @@
     "unexposed_action": {
       "title": "Ambience: las escenas usan una acción que ya no está expuesta",
       "description": "La acción `{ref}` ya no está expuesta (Ajustes → Ambience → Acciones), pero la utilizan estas escenas de Ambience:\n{scenes}\n\nLa acción se omitirá cuando se aplique la escena. Vuelve a exponer la acción o elimínala de las escenas. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "target_empty": {
+      "title": "Ambience: una acción no apunta a ninguna entidad dentro de su ámbito",
+      "description": "La acción `{ref}` es utilizada por estas escenas de Ambience, pero su objetivo de área/planta/etiqueta/dispositivo no resuelve ninguna entidad dentro del ámbito de la escena:\n{scenes}\n\nLa acción se omite cuando se aplica la escena. Comprueba el objetivo, o que el área/planta/etiqueta/dispositivo siga teniendo entidades coincidentes. Este mensaje se borra automáticamente una vez que se resuelva."
     }
   },
   "exceptions": {
@@ -131,6 +135,9 @@
     "scene_action_service_invalid": { "message": "Escena {scene_idx} acción {action_idx}: `service` faltante o malformado." },
     "scene_action_entity_ids_not_list": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids debe ser una lista." },
     "scene_action_entity_ids_not_strings": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids deben ser cadenas no vacías." },
+    "scene_action_target_not_object": { "message": "Escena {scene_idx} acción {action_idx}: target debe ser un objeto." },
+    "scene_action_target_invalid_key": { "message": "Escena {scene_idx} acción {action_idx}: target contiene una clave desconocida {key}." },
+    "scene_action_target_value_invalid": { "message": "Escena {scene_idx} acción {action_idx}: target {key} debe ser una cadena no vacía o una lista de cadenas no vacías." },
     "scene_action_params_not_object": { "message": "Escena {scene_idx} acción {action_idx}: params debe ser un objeto." },
     "scene_apply_invalid": { "message": "Escena {scene_idx}: `apply` debe ser \"once\" o \"always\": {value}" },
     "weather_groups_not_list": { "message": "Los grupos deben ser una lista." },

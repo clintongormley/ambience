@@ -96,6 +96,49 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                     scene_idx=scene_idx,
                     action_idx=action_idx,
                 )
+            target = action_spec.get("target")
+            if target is not None:
+                if not isinstance(target, dict):
+                    raise AmbienceError(
+                        "scene_action_target_not_object",
+                        scene_idx=scene_idx,
+                        action_idx=action_idx,
+                    )
+                _VALID_TARGET_KEYS = frozenset(
+                    {"entity_id", "device_id", "area_id", "label_id", "floor_id"}
+                )
+                for key, val in target.items():
+                    if key not in _VALID_TARGET_KEYS:
+                        raise AmbienceError(
+                            "scene_action_target_invalid_key",
+                            scene_idx=scene_idx,
+                            action_idx=action_idx,
+                            key=key,
+                        )
+                    # HA targets allow a bare string or a list of strings.
+                    if isinstance(val, str):
+                        if not val.strip():
+                            raise AmbienceError(
+                                "scene_action_target_value_invalid",
+                                scene_idx=scene_idx,
+                                action_idx=action_idx,
+                                key=key,
+                            )
+                    elif isinstance(val, list):
+                        if not all(isinstance(v, str) and v for v in val):
+                            raise AmbienceError(
+                                "scene_action_target_value_invalid",
+                                scene_idx=scene_idx,
+                                action_idx=action_idx,
+                                key=key,
+                            )
+                    else:
+                        raise AmbienceError(
+                            "scene_action_target_value_invalid",
+                            scene_idx=scene_idx,
+                            action_idx=action_idx,
+                            key=key,
+                        )
             params = action_spec.get("params", {})
             if not isinstance(params, dict):
                 raise AmbienceError(

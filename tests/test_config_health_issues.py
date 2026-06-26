@@ -308,6 +308,35 @@ async def test_reconcile_clears_workday_sensor_issue_when_fixed(
     )
 
 
+async def test_reconcile_creates_target_empty_issue(hass: HomeAssistant, installed) -> None:
+    """An action whose target resolves to empty-in-scope produces a Repairs issue
+    with id `target_empty:<service>` and the correct translation placeholders."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    # Scene scoped to Kitchen but targeting Office → resolves to zero entities in scope.
+    await store.async_save_area(
+        kitchen.id,
+        {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "c1",
+                    "when": {},
+                    "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    reg = ir.async_get(hass)
+    issue = reg.async_get_issue(DOMAIN, "target_empty:light.turn_on")
+    assert issue is not None
+    assert issue.translation_key == "target_empty"
+    assert issue.translation_placeholders["ref"] == "light.turn_on"
+    assert "morning" in issue.translation_placeholders["scenes"]
+
+
 async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_condition_config(

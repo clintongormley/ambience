@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.ambience.config_health import (
     _build_ref_context,
@@ -25,6 +26,7 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
+from tests.conftest import requires_target_helper
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -69,6 +71,24 @@ async def test_scan_flags_missing_action_entity(hass: HomeAssistant, installed) 
     assert p.ref == "light.ghost"
     assert p.locations[0].scope_kind == "area"
     assert p.locations[0].scene_name == "go"
+
+
+async def test_scan_flags_missing_entity_in_new_target_format(
+    hass: HomeAssistant, installed
+) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"entity_id": ["light.ghost"]}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    p = next(p for p in problems if p.kind == "missing_entity")
+    assert p.ref == "light.ghost"
 
 
 async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installed) -> None:
@@ -825,3 +845,142 @@ async def test_scene_config_issues_tolerates_non_dict_day_slot(
     scene = {"when": {"day": {"include": ["garbage", {"kind": "workday"}]}}, "actions": []}
     # The non-dict slot is skipped; the workday slot still flags (no sensor configured).
     assert scene_config_issues(ctx, scene) == [("missing_workday_sensor", "workday_sensor")]
+
+
+# ---------------------------------------------------------------------------
+# Task 4: resolve action targets for overlap + flag empty targets
+# ---------------------------------------------------------------------------
+
+
+def _light_in_area(hass: HomeAssistant, suffix: str, area_id: str) -> str:
+    reg = er.async_get(hass)
+    e = reg.async_get_or_create("light", "demo", suffix)
+    reg.async_update_entity(e.entity_id, area_id=area_id)
+    return e.entity_id
+
+
+@requires_target_helper
+async def test_overlap_detected_via_resolved_area_targets(hass: HomeAssistant, installed) -> None:
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    shared = _light_in_area(hass, "shared", kitchen.id)
+    hass.states.async_set(shared, "on")
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [kitchen.id]}}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "c2",
+                "actions": [{"service": "light.turn_off", "target": {"entity_id": [shared]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    overlap = [p for p in problems if p.kind == "action_overlap"]
+    assert len(overlap) == 1
+    assert overlap[0].ref == shared
+
+
+async def test_target_resolving_to_empty_is_flagged(hass: HomeAssistant, installed) -> None:
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert len(empties) == 1
+    assert empties[0].ref == "light.turn_on"
+    assert empties[0].locations[0].scene_name == "go"
+
+
+async def test_target_empty_aggregated_by_service_across_scenes(
+    hass: HomeAssistant, installed
+) -> None:
+    """Two scenes in different categories using the same service with an out-of-scope
+    target produce exactly ONE target_empty problem with TWO locations."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    # Both scenes target 'office' area but config is scoped to 'kitchen' → empty resolve.
+    cfg = _cfg(
+        [
+            {
+                "name": "morning",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+            {
+                "name": "evening",
+                "when": {},
+                "category": "c2",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert len(empties) == 1, f"expected 1 problem, got {len(empties)}"
+    assert empties[0].ref == "light.turn_on"
+    scene_names = {loc.scene_name for loc in empties[0].locations}
+    assert scene_names == {"morning", "evening"}
+
+
+async def test_target_empty_not_raised_for_serviceless_action(
+    hass: HomeAssistant, installed
+) -> None:
+    """Fix 3: an action with no/blank service must never produce a target_empty problem.
+
+    A serviceless action has no sensible `service` to bucket the problem under,
+    and the action can't execute anyway (it's already invalid). Emitting a
+    target_empty problem with service="" (or the absent service) is confusing
+    and unhelpful."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "broken",
+                "when": {},
+                "category": "c1",
+                # No service key at all, but has an area target pointing outside scope.
+                "actions": [{"target": {"area_id": [office.id]}, "params": {}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert empties == [], f"expected no target_empty for a serviceless action, got {empties}"
+
+
+async def test_target_empty_not_raised_for_blank_service_action(
+    hass: HomeAssistant, installed
+) -> None:
+    """Fix 3: an action with an empty-string service must also skip target_empty."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "broken2",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "", "target": {"area_id": [office.id]}, "params": {}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert empties == [], f"expected no target_empty for blank service, got {empties}"

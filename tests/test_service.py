@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.const import (
@@ -34,6 +36,7 @@ from custom_components.ambience.service import (
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
+from tests.conftest import requires_target_helper
 
 
 def test_category_ids_returns_scene_order_deduplicated():
@@ -1705,3 +1708,97 @@ async def test_execute_plan_no_signal_for_pure_blocker(hass):
     await async_execute_plan(hass, "area", "k", plan, "g")
     await hass.async_block_till_done()  # ensure no late signal sneaks in
     assert seen == []
+
+
+# ---------------------------------------------------------------------------
+# Target resolver integration tests (Task 3)
+# ---------------------------------------------------------------------------
+
+
+def _light_in_area(hass, suffix, area_id):
+    reg = er.async_get(hass)
+    e = reg.async_get_or_create("light", "demo", suffix)
+    reg.async_update_entity(e.entity_id, area_id=area_id)
+    return e.entity_id
+
+
+@requires_target_helper
+async def test_area_target_resolves_to_in_scope_entities(hass) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    k_light = _light_in_area(hass, "k", kitchen.id)
+    _light_in_area(hass, "o", office.id)
+    areas = {
+        kitchen.id: {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": [kitchen.id]},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
+
+    await async_apply_scene(hass, "area", kitchen.id)
+
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == [k_light]
+
+
+async def test_target_resolving_to_empty_in_scope_is_skipped(hass) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    _light_in_area(hass, "o", office.id)
+    areas = {
+        kitchen.id: {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": [office.id]},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
+
+    await async_apply_scene(hass, "area", kitchen.id)
+
+    assert calls == []  # office target has nothing in the kitchen scope → skipped
+
+
+async def test_legacy_entity_ids_still_dispatched(hass) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "lr": {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
+    await async_apply_scene(hass, "area", "lr")
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.a"]

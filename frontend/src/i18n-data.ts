@@ -182,6 +182,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       summary_always: "Always",
       no_targets: "(no targets)",
       target_noun: "target",
+      target_type_area: "(area)",
+      target_type_label: "(label)",
+      target_type_device: "(device)",
+      target_type_floor: "(floor)",
       action_singular: "action",
       action_plural: "actions",
       scene_n: "Scene {n}",
@@ -468,6 +472,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       scene_live: "Live now — this scene currently matches and is applied",
       scene_applied_stale:
         "Still applied — this scene's actions are in effect but it no longer matches",
+      house: "House",
+      target_resolves_count: "→ resolves to {n} entities in {scope}",
     },
     blocker_summary: {
       block: "Block",
@@ -725,6 +731,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       summary_always: "Siempre",
       no_targets: "(sin objetivos)",
       target_noun: "objetivo",
+      target_type_area: "(área)",
+      target_type_label: "(etiqueta)",
+      target_type_device: "(dispositivo)",
+      target_type_floor: "(planta)",
       action_singular: "acción",
       action_plural: "acciones",
       scene_n: "Escena {n}",
@@ -1010,6 +1020,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       scene_live: "Activa ahora — esta escena coincide y está aplicada",
       scene_applied_stale:
         "Sigue aplicada — las acciones de esta escena están en efecto pero ya no coincide",
+      house: "Casa",
+      target_resolves_count: "→ se resuelve en {n} entidades en {scope}",
     },
     blocker_summary: {
       block: "Bloquear",

@@ -1,6 +1,4 @@
 import { css, html, nothing, type TemplateResult } from "lit";
-import { actionTarget, targetIsEmpty } from "./action-target.js";
-import { areaName, deviceName, floorName, labelName } from "./hass-names.js";
 import {
   conditionLabel,
   deriveActionLabel,
@@ -126,40 +124,6 @@ function entityLink(hass: HassLike | undefined, entityId: string, label: string)
 // consistent with the names the backend bakes into detail strings.
 function clickableEntity(hass: HassLike | undefined, entityId: string): TemplateResult {
   return entityLink(hass, entityId, entityName(hass as HassWithStates | undefined, entityId));
-}
-
-// Render one line per target entry for an action in the expanded "Actions taken"
-// section. Handles entity_id (clickable more-info links), plus area/device/label/floor
-// selectors with friendly-name lookup and type suffixes — mirroring scenes-list.ts.
-function renderActionTargetLines(a: TraceAction, hass: HassLike | undefined): TemplateResult[] {
-  const target = actionTarget(a);
-  if (targetIsEmpty(target)) return [];
-  const hassMap = hass as Record<string, unknown> | undefined;
-  const lines: TemplateResult[] = [];
-  for (const eid of target.entity_id ?? []) {
-    lines.push(html`<div class="entity">${clickableEntity(hass, eid)}</div>`);
-  }
-  for (const id of target.area_id ?? []) {
-    lines.push(
-      html`<div class="entity">${areaName(hassMap, id)} ${localize(hass, "ui.target_type_area", "(area)")}</div>`,
-    );
-  }
-  for (const id of target.label_id ?? []) {
-    lines.push(
-      html`<div class="entity">${labelName(hassMap, id)} ${localize(hass, "ui.target_type_label", "(label)")}</div>`,
-    );
-  }
-  for (const id of target.device_id ?? []) {
-    lines.push(
-      html`<div class="entity">${deviceName(hassMap, id)} ${localize(hass, "ui.target_type_device", "(device)")}</div>`,
-    );
-  }
-  for (const id of target.floor_id ?? []) {
-    lines.push(
-      html`<div class="entity">${floorName(hassMap, id)} ${localize(hass, "ui.target_type_floor", "(floor)")}</div>`,
-    );
-  }
-  return lines;
 }
 
 // Conditions whose `describe()` renders each referenced entity's friendly name
@@ -497,20 +461,7 @@ export function formatActionHeader(
 }
 
 function entityCount(actions: TraceAction[]): number {
-  return actions.reduce((n, a) => {
-    const t = actionTarget(a);
-    if (targetIsEmpty(t)) return n;
-    // entity_id: direct count; indirect selectors (area/device/label): count by
-    // selector entry (since we don't have the resolved list in the frontend).
-    return (
-      n +
-      (t.entity_id?.length ?? 0) +
-      (t.area_id?.length ?? 0) +
-      (t.device_id?.length ?? 0) +
-      (t.floor_id?.length ?? 0) +
-      (t.label_id?.length ?? 0)
-    );
-  }, 0);
+  return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
 // Outcomes where the whole unit's evaluation was skipped (switch off / scope
@@ -656,7 +607,9 @@ function renderExpansion(
                       : nothing
                   }
                 </div>
-                ${renderActionTargetLines(a, hass)}
+                ${(a.entity_ids ?? []).map(
+                  (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,
+                )}
               </div>`,
             )}
           </div>`

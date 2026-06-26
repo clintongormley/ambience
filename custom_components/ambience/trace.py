@@ -20,7 +20,6 @@ from homeassistant.util import dt as dt_util
 from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN, TRACE_BUFFER_SIZE
 from .engine import Explanation
 from .naming import category_names, scope_display_name
-from .target_resolve import action_target
 
 # "changes" stream — on whenever the integration's debug logging is on.
 _LOGGER = logging.getLogger(f"{__package__}.trace")
@@ -261,19 +260,9 @@ def _scope_label(unit: UnitTrace) -> str:
 def _format_action(action: dict[str, Any]) -> str:
     """One dispatched action as `service [target, …] {params}`."""
     parts = [str(action.get("service", "?"))]
-    tgt = action_target(action)
-    target_parts: list[str] = []
-    target_parts.extend(tgt.get("entity_id") or [])
-    for area_id in tgt.get("area_id") or []:
-        target_parts.append(f"area:{area_id}")
-    for device_id in tgt.get("device_id") or []:
-        target_parts.append(f"device:{device_id}")
-    for label_id in tgt.get("label_id") or []:
-        target_parts.append(f"label:{label_id}")
-    for floor_id in tgt.get("floor_id") or []:
-        target_parts.append(f"floor:{floor_id}")
-    if target_parts:
-        parts.append(f"[{', '.join(target_parts)}]")
+    targets = action.get("entity_ids") or []
+    if targets:
+        parts.append(f"[{', '.join(targets)}]")
     params = action.get("params") or {}
     if params:
         parts.append(str(params))

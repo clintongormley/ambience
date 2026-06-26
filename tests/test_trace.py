@@ -53,32 +53,6 @@ def test_format_action_marks_unexposed():
     assert "not exposed" in text
 
 
-def test_format_action_renders_new_format_target():
-    # An action with a `target` dict (new picker format) must show area/device/label
-    # selectors in the log line — not blank — so traces remain readable.
-    unit = UnitTrace(
-        "area",
-        "kitchen",
-        "g",
-        "on",
-        "acted",
-        None,
-        winner_name="r",
-        actions=[
-            {
-                "service": "light.turn_on",
-                "target": {"area_id": ["kitchen_area"], "label_id": ["bright"]},
-                "params": {"brightness_pct": 80},
-            }
-        ],
-    )
-    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
-    assert "light.turn_on" in text
-    assert "area:kitchen_area" in text
-    assert "label:bright" in text
-    assert "brightness_pct" in text
-
-
 async def test_emit_trace_resolves_scope_name_for_log(hass, caplog):
     from homeassistant.helpers import area_registry as ar
 

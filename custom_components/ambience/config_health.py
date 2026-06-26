@@ -28,7 +28,6 @@ from .const import (
 )
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
-from .target_resolve import action_target, resolve_action_entities
 
 ScopeTriple = tuple[str, str | None, dict[str, Any]]
 
@@ -177,13 +176,8 @@ def entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
 
 
 def _action_entities(scene: dict[str, Any]) -> Iterator[str]:
-    # Intentionally yields only DIRECT entity_id targets (via action_target). Used by
-    # referenced_entities_by_scene (missing-entity flag) and scene_annotations (per-scene
-    # overlap badge) — so the badge is direct-entity-only by design, while the global
-    # action_overlap Repairs issue resolves indirect targets (area/device/label) via
-    # resolve_action_entities.
     for action in scene.get("actions", []) or []:
-        for eid in action_target(action).get("entity_id") or []:
+        for eid in action.get("entity_ids", []) or []:
             if isinstance(eid, str) and eid:
                 yield eid
 
@@ -242,42 +236,24 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
                 note_missing(scope_kind, scope_id, eid, scene)
 
     # 2. Action overlap, per acted entity across distinct (scope, category) groups.
-    # Also detect target_empty: a non-empty target that resolves to zero in-scope entities,
-    # aggregated by service id across all locations (mirrors section 3's config_refs pattern).
     groups: dict[str, dict[tuple[str, str | None, str | None], Location]] = {}
-    target_empty_locs: dict[str, list[Location]] = {}
     for scope_kind, scope_id, cfg in configs:
         for scene in cfg.get("scenes", []) or []:
             if not scene_enabled(scene):
                 continue
             category = scene.get("category")
             group_key = (scope_kind, scope_id, category)
-            for action in scene.get("actions", []) or []:
-                tgt = action_target(action)
-                entity_ids = resolve_action_entities(hass, scope_kind, scope_id, tgt)
-                if tgt and not entity_ids:
-                    service = action.get("service", "")
-                    # Skip target_empty when the action has no/blank service —
-                    # a serviceless action is already invalid and can't execute,
-                    # so a target_empty problem against "" would be confusing.
-                    if not service:
-                        pass
-                    else:
-                        loc = Location(scope_kind, scope_id, category, scene.get("name") or "")
-                        bucket = target_empty_locs.setdefault(service, [])
-                        if loc not in bucket:
-                            bucket.append(loc)
-                for eid in entity_ids:
-                    # Overlap on a non-existent entity is moot — the missing_entity
-                    # problem already covers it, and warning about a control conflict
-                    # for an entity the user can't find is just confusing.
-                    if not entity_exists(hass, eid):
-                        continue
-                    per_entity = groups.setdefault(eid, {})
-                    per_entity.setdefault(
-                        group_key,
-                        Location(scope_kind, scope_id, category, scene.get("name") or ""),
-                    )
+            for eid in _action_entities(scene):
+                # Overlap on a non-existent entity is moot — the missing_entity
+                # problem already covers it, and warning about a control conflict
+                # for an entity the user can't find is just confusing.
+                if not entity_exists(hass, eid):
+                    continue
+                per_entity = groups.setdefault(eid, {})
+                per_entity.setdefault(
+                    group_key,
+                    Location(scope_kind, scope_id, category, scene.get("name") or ""),
+                )
 
     problems: list[Problem] = []
     for (_scope_kind, _scope_id, eid), locs in missing.items():
@@ -285,8 +261,6 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     for eid, per_entity in groups.items():
         if len(per_entity) > 1:
             problems.append(Problem("action_overlap", eid, tuple(per_entity.values())))
-    for service, locs in target_empty_locs.items():
-        problems.append(Problem("target_empty", service, tuple(locs)))
 
     # 3. Dangling config references (per-scene), aggregated globally per (kind, ref).
     ctx = _build_ref_context(hass)
@@ -342,9 +316,6 @@ def scene_annotations(
     for idx, scene in enumerate(cfg.get("scenes", []) or []):
         refs = referenced.get(idx, set())
         missing = sorted(eid for eid in refs if not entity_exists(hass, eid))
-        # Overlap badge reflects direct-entity targets only by design — the global
-        # action_overlap Repairs issue already resolves indirect targets, so nothing
-        # is silently lost here.
         acted = set(_action_entities(scene)) if scene_enabled(scene) else set()
         overlaps = sorted(eid for eid in acted if eid in overlap_set)
         config_issues = [{"kind": k, "ref": r} for k, r in scene_config_issues(ctx, scene)]

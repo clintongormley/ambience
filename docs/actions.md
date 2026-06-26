@@ -74,45 +74,10 @@ When you edit a scene, the **Actions** section is where you add what Ambience sh
 1. Click **+ Add action…** in the scene editor.
 2. Choose an exposed action from the picker. Only actions you have set up in Settings → Actions appear here.
 3. Fill in the **visible fields** — the ones you ticked as visible when you set up the action. Each field shows its name, the appropriate input control (colour picker, number slider, entity selector, and so on), and a hint alongside the label if a default has been set (for example, *Default: 2 seconds*), so you can see what will be sent if you leave the field blank.
-4. Set a **target** — the entities this action should act on — if the service requires one. See [Action targets](#action-targets) for the full details on entity/device/area/label selection and how targets are resolved.
+4. Set a **target** — the entities this action should act on — if the service requires one. The target picker lists only entities relevant to the current scope (House, Floor, or Area).
 5. Save the scene.
 
 When the scene applies, Ambience sends the service call with the values you filled in plus any defaults from the exposed action configuration. If a visible field is left blank in the scene editor, the default (if one was set) is used; the service still receives it.
-
----
-
-## Action targets
-
-The **target** of an action tells Ambience which entities to act on when the scene applies. You can target by:
-
-- **Entity** — pick one or more specific entities directly.
-- **Device** — target all entities belonging to one or more devices.
-- **Area** — target all entities in one or more areas.
-- **Floor** — target all entities on one or more floors.
-- **Label** — target all entities that carry one or more HA labels.
-
-These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect. The picker itself is not limited to the scene's scope; scope-constraining happens at apply time (see below), and the live count under the picker shows the effect.
-
-> **Home Assistant 2026.1+** is required for the device / area / floor / label picker (it relies on HA's `helpers.target` resolution). On older Home Assistant, the action editor falls back to entity-only targeting and the rest of the feature behaves as before.
-
-### Scope-constrained resolution
-
-Ambience resolves the target **live, at apply time**, using the entities currently registered in Home Assistant. The resolution is also **scope-constrained**: indirect selectors (device, area, floor, label) are intersected with the entities that belong to the scene's scope (House, Floor, or Area), so an area-targeted action in a living-room scene only acts on the living-room's entities even if the label spans the whole house. (A floor target picked in an area-scoped scene therefore clips to that area — the live count shows the real effect.)
-
-**Directly-named entity targets are forwarded unchanged.** If you name a specific entity by entity id, it is sent to the service as-is — Ambience does not clip it to the scene's scope. This is a deliberate choice: if you pick an entity directly, you mean exactly that entity.
-
-The scene editor shows a live count below the target picker — for example, **→ resolves to 3 entities in Living Room** — so you can see immediately how many entities a target will act on. A warning is shown when the count is zero.
-
-### Same entity in two actions (last-write-wins)
-
-Two actions in the same scene can target the same entity. When they do, both service calls are sent; whichever arrives last wins. The config-health overlap warning still flags entities that are controlled by more than one *(scope, category)* group, as contradictory commands across groups can still cause flickering.
-
-### Config-health warnings for targets
-
-The [Config health](concepts/scopes-and-switches.md) Repairs page flags two target-related problems:
-
-- **Action overlap** — an entity is acted on by more than one scene in different *(scope, category)* combinations. Last-write-wins applies, but the conflict is flagged so you can decide whether it is intentional.
-- **Target resolves to nothing** (`target_empty`) — an action has a non-empty target that resolves to zero entities in the scene's scope at check time. The action will be silently skipped when the scene applies. Common causes: the label is empty, the area has no entities of the right domain, or the target refers to a device that has been removed.
 
 !!! info "📷 Screenshot"
     *The scene editor's action section, showing a "Main lights on" action with Brightness and Colour temperature fields filled in, and a target set to the living-room lights.*

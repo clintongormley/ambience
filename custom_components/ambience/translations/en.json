@@ -71,10 +71,6 @@
     "unexposed_action": {
       "title": "Ambience: scenes use an action that is no longer exposed",
       "description": "The action `{ref}` is no longer exposed (Settings → Ambience → Actions), but is used by these Ambience scenes:\n{scenes}\n\nThe action will be skipped when the scene applies. Re-expose the action or remove it from the scenes. This message clears automatically once it's resolved."
-    },
-    "target_empty": {
-      "title": "Ambience: an action targets nothing within its scope",
-      "description": "The action `{ref}` is used by these Ambience scenes, but its area/floor/label/device target resolves to no entities within the scene's scope:\n{scenes}\n\nThe action is skipped when the scene applies. Check the target, or that the area/floor/label/device still has matching entities. This message clears automatically once it's resolved."
     }
   },
   "exceptions": {
@@ -135,9 +131,6 @@
     "scene_action_service_invalid": { "message": "Scene {scene_idx} action {action_idx}: missing or malformed `service`." },
     "scene_action_entity_ids_not_list": { "message": "Scene {scene_idx} action {action_idx}: entity_ids must be a list." },
     "scene_action_entity_ids_not_strings": { "message": "Scene {scene_idx} action {action_idx}: entity_ids must be non-empty strings." },
-    "scene_action_target_not_object": { "message": "Scene {scene_idx} action {action_idx}: target must be an object." },
-    "scene_action_target_invalid_key": { "message": "Scene {scene_idx} action {action_idx}: target contains unknown key {key}." },
-    "scene_action_target_value_invalid": { "message": "Scene {scene_idx} action {action_idx}: target {key} must be a non-empty string or list of non-empty strings." },
     "scene_action_params_not_object": { "message": "Scene {scene_idx} action {action_idx}: params must be an object." },
     "scene_apply_invalid": { "message": "Scene {scene_idx}: `apply` must be \"once\" or \"always\": {value}" },
     "weather_groups_not_list": { "message": "Groups must be a list." },

@@ -32,6 +32,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   (as conditions change) and the panel's Run / apply controls are unaffected;
   only the standalone service is gone.
 
+### Fixed
+
+- When overriding a built-in time-of-day period (e.g. "Dawn") or lux range, the
+  name field now defaults to the range's current name instead of starting blank
+  with only the "e.g. Wind down" placeholder. You can still rename it or clear
+  it.
+
 ## [0.28.0] - 2026-06-25
 
 ### Added

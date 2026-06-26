@@ -1,6 +1,6 @@
 import { css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { localize } from "../i18n.js";
+import { localize, luxLabel } from "../i18n.js";
 import type { LuxRangeDef } from "../types.js";
 import { AmbienceNamedDefEditModal, MODAL_STYLES } from "./named-def-edit-modal.js";
 
@@ -47,7 +47,12 @@ export class AmbienceLuxEditModal extends AmbienceNamedDefEditModal<LuxRangeDef>
     return localize(this.hass, "ui.lux_name_placeholder", "e.g. Gloomy");
   }
   protected _initialLabel() {
-    return this.initial.label;
+    // Overriding a built-in: its name lives in i18n, not the def's `label`, so
+    // default the field/heading to the resolved display name (e.g. "dim" →
+    // "Dim") instead of leaving it empty.
+    return (
+      this.initial.label ?? (this.existingId ? luxLabel(this.hass, this.existingId, {}) : null)
+    );
   }
 
   private _onMinInput(e: Event) {

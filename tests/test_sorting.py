@@ -1,4 +1,7 @@
-"""Pure scene sort: containment-aware topological sort. No HA, no I/O."""
+"""Pure scene sort: containment-aware topological sort. The sort itself does no
+I/O and needs no running HA; most tests drive it with lightweight condition
+doubles, and a few import the real condition classes (instantiated with no hass)
+to lock end-to-end precedence against their actual registered priorities."""
 
 from __future__ import annotations
 

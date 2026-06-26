@@ -5,7 +5,8 @@ time_of_day):
   {sensors: [sensor.*]? (empty/absent = match-anything),
    range: str  (a named lux range)         # XOR the inline band below
    min?: int, max?: int,                    # inline half-open band [min, max)
-   quant: 'any'|'all' (default 'any')}
+   quant: 'any'|'all' (default 'any'),
+   negate: bool? (default false; inverts the whole match)}
 None = vacuous true (no constraint).
 
 Sits low in the priority order (775): ambient light is an environmental signal,
@@ -23,7 +24,14 @@ from homeassistant.core import HomeAssistant
 
 from ..lux_ranges import validate_int_bound
 from ..triggers import TriggerSpec
-from ._common import as_float, predicate_has_any, state_sources
+from ._common import (
+    as_float,
+    kleene_all,
+    kleene_any,
+    kleene_not,
+    predicate_has_any,
+    state_sources,
+)
 
 _QUANTS = ("any", "all")
 
@@ -45,7 +53,8 @@ class LuxCondition:
     predicate_help = (
         "{sensors: [sensor.*] (empty = match-anything), range: str (a named lux "
         "range) | min?: int, max?: int (inline band [min,max)), "
-        "quant: 'any'|'all'}. None = match-anything."
+        "quant: 'any'|'all', negate: bool (default false, inverts the whole "
+        "match)}. None = match-anything."
     )
     input = "lux"
     # Environmental band: above weather (700) / sun (750), below time_of_day
@@ -99,13 +108,16 @@ class LuxCondition:
             # evaluated, so fail this scene rather than aborting the whole scope.
             return False
         quant = predicate.get("quant") or "any"
-
-        def holds(eid: str) -> bool:
-            return self._in_band(snapshot.sensors.get(eid), lo, hi) is True
-
-        if quant == "all":
-            return all(holds(e) for e in sensors)
-        return any(holds(e) for e in sensors)
+        # Keep per-sensor verdicts tri-state (None = unobservable) through the
+        # quantifier and negate, so an unavailable sensor can never be inverted
+        # into a spurious match — "is not dark" must not fire on `unavailable`.
+        verdicts = (self._in_band(snapshot.sensors.get(e), lo, hi) for e in sensors)
+        result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
+        # `negate` wraps the whole match (band + quant). An unobservable result
+        # (None) stays a miss even under negate.
+        if predicate.get("negate"):
+            result = kleene_not(result)
+        return result is True
 
     @staticmethod
     def _in_band(val: float | None, lo: float | None, hi: float | None) -> bool | None:
@@ -167,6 +179,9 @@ class LuxCondition:
         body = ", ".join(parts)
         if len(sensors) > 1:
             body = f"{'all' if quant == 'all' else 'any'} of: {body}"
+        # `negate` inverts the whole match — show it wrapping the per-sensor read.
+        if predicate.get("negate"):
+            body = f"not({body})"
         band = self._fmt_band(lo, hi)
         # A bare reading is meaningless without the target band, so state it once.
         return f"want {band}; {body}" if band else body
@@ -219,6 +234,9 @@ class LuxCondition:
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
             raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+        negate = predicate.get("negate")
+        if negate is not None and not isinstance(negate, bool):
+            raise ValueError(f"`negate` must be a bool, got {negate!r}")
 
     # --- trigger dependencies -------------------------------------------
 
@@ -239,6 +257,11 @@ class LuxCondition:
         """True iff every world-state matching `inner` also matches `outer`.
         Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
+            return False
+        # A negated predicate's match-set is a complement, which does not nest
+        # under this (band / sensor-subset / quant) lattice. Be conservative:
+        # unprovable -> False.
+        if outer.get("negate") or inner.get("negate"):
             return False
         # Empty/absent `sensors` is a wildcard (matches every world-state).
         if not outer.get("sensors"):

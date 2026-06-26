@@ -34,6 +34,17 @@ describe("ambience-occupancy-predicate-input", () => {
     el.remove();
   });
 
+  test("quant dropdown renders before the sensor picker", async () => {
+    const el = await mount({ sensors: ["binary_sensor.a", "binary_sensor.b"], quant: "all" });
+    const quant = el.shadowRoot.querySelector("select.quant");
+    const sensors = el.shadowRoot.querySelector("[data-field='sensors']");
+    expect(quant).toBeTruthy();
+    expect(sensors).toBeTruthy();
+    // quant precedes the sensor picker in document order
+    expect(quant.compareDocumentPosition(sensors) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    el.remove();
+  });
+
   test("the occupied/vacant toggle uses Detected/Clear labels (matching the entity-state condition)", async () => {
     const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
     const select = el.shadowRoot.querySelector("select.state");

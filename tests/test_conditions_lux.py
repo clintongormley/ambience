@@ -426,3 +426,54 @@ def test_unconfigured_reason_non_dict_predicate_returns_none() -> None:
     """Non-dict predicate → None (no 'range' key possible)."""
     m = LuxCondition(range_lookup=lambda: {})
     assert m.unconfigured_reason("not-a-dict", _snap()) is None
+
+
+# ---------------------------------------------------------------------------
+# negate — "is not" inverts the whole match (mirrors occupancy)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_accepts_negate_bool() -> None:
+    _cond().validate_predicate({"sensors": ["sensor.a"], "range": "dark", "negate": True})
+
+
+def test_validate_rejects_non_bool_negate() -> None:
+    with pytest.raises(ValueError, match="negate"):
+        _cond().validate_predicate({"sensors": ["sensor.a"], "range": "dark", "negate": "yes"})
+
+
+def test_matches_negate_inverts_single_sensor() -> None:
+    m = _cond()
+    pred = {"sensors": ["sensor.a"], "range": "dark", "negate": True}
+    # 5 lx IS dark -> "is not dark" is False
+    assert m.matches(pred, _snap({"sensor.a": 5.0})) is False
+    # 500 lx is NOT dark -> "is not dark" is True
+    assert m.matches(pred, _snap({"sensor.a": 500.0})) is True
+
+
+def test_matches_negate_keeps_unobservable_a_miss() -> None:
+    # An unobservable sensor must not be flipped into a spurious "is not" match.
+    pred = {"sensors": ["sensor.a"], "range": "dark", "negate": True}
+    assert _cond().matches(pred, _snap({"sensor.a": None})) is False
+
+
+def test_matches_negate_with_quant_all() -> None:
+    # a dark, b bright -> "all dark" is False -> "not all dark" is True
+    snap = _snap({"sensor.a": 5.0, "sensor.b": 500.0})
+    pred = {"sensors": ["sensor.a", "sensor.b"], "range": "dark", "quant": "all", "negate": True}
+    assert _cond().matches(pred, snap) is True
+
+
+def test_contains_negated_predicate_never_nests() -> None:
+    m = _cond()
+    outer = {"sensors": ["sensor.a"], "min": 0, "max": 1000, "negate": True}
+    inner = {"sensors": ["sensor.a"], "min": 100, "max": 500}
+    assert m.contains(outer, inner) is False
+    # inner negated: a complement does not nest under the band/sensor lattice.
+    assert m.contains(inner, {**inner, "negate": True}) is False
+
+
+def test_describe_predicate_negate_wraps_in_not() -> None:
+    snap = _snap({"sensor.a": 500.0}, names={"sensor.a": "Lounge"})
+    pred = {"sensors": ["sensor.a"], "min": 0, "max": 10, "negate": True}
+    assert _cond().describe(snap, pred) == "want 0-10 lx; not(Lounge: 500 lx ✗)"

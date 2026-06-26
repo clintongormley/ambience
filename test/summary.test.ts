@@ -105,17 +105,17 @@ describe("summariseCondition", () => {
   test("unavailable predicate delegates to summariseUnavailable (not [object Object])", () => {
     expect(
       summariseCondition("unavailable", { entities: ["binary_sensor.a"] }, { hass: noLocalize }),
-    ).toBe("binary_sensor.a unavailable");
+    ).toBe("binary_sensor.a is unavailable");
   });
 
-  test("unavailable with multiple entities reads 'any of (...) unavailable'", () => {
+  test("unavailable with multiple entities reads 'Any of (...) is unavailable'", () => {
     expect(
       summariseCondition(
         "unavailable",
         { entities: ["binary_sensor.a", "light.b"] },
         { hass: noLocalize },
       ),
-    ).toBe("any of (binary_sensor.a, light.b) unavailable");
+    ).toBe("Any of (binary_sensor.a, light.b) is unavailable");
   });
 
   test("unavailable with no entities renders as 'any'", () => {
@@ -831,7 +831,7 @@ test("summariseOccupancy: multiple sensors with quant", () => {
       { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: true, quant: "all" },
       { hass },
     ),
-  ).toBe("all of (Lounge, Hall) detected");
+  ).toBe("All of (Lounge, Hall) are detected");
 });
 
 test("summariseOccupancy: negated single sensor with for", () => {
@@ -870,7 +870,7 @@ test("summariseOccupancy: negated multiple sensors with quant", () => {
       },
       { hass },
     ),
-  ).toBe("any of (Lounge, Hall) not detected");
+  ).toBe("Any of (Lounge, Hall) is not detected");
 });
 
 test("summariseOccupancy: null is 'any'", () => {
@@ -882,7 +882,7 @@ test("summariseLux: single sensor named range", () => {
     states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
   } as any;
   expect(summariseCondition("lux", { sensors: ["sensor.lounge"], range: "dark" }, { hass })).toBe(
-    "Lounge Dark",
+    "Lounge is Dark",
   );
 });
 
@@ -892,7 +892,7 @@ test("summariseLux: single sensor inline band", () => {
   } as any;
   expect(
     summariseCondition("lux", { sensors: ["sensor.lounge"], min: 50, max: 300 }, { hass }),
-  ).toBe("Lounge 50–300 lx");
+  ).toBe("Lounge is 50–300 lx");
 });
 
 test("summariseLux: open-ended bands", () => {
@@ -900,10 +900,10 @@ test("summariseLux: open-ended bands", () => {
     states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
   } as any;
   expect(summariseCondition("lux", { sensors: ["sensor.lounge"], min: 1000 }, { hass })).toBe(
-    "Lounge ≥1000 lx",
+    "Lounge is ≥1000 lx",
   );
   expect(summariseCondition("lux", { sensors: ["sensor.lounge"], max: 10 }, { hass })).toBe(
-    "Lounge <10 lx",
+    "Lounge is <10 lx",
   );
 });
 
@@ -925,7 +925,59 @@ test("summariseLux: multiple sensors with quant and custom label", () => {
       { sensors: ["sensor.a", "sensor.b"], range: "gloomy", quant: "all" },
       { hass, luxRanges },
     ),
-  ).toBe("all of (Lounge, Hall) Gloomy");
+  ).toBe("All of (Lounge, Hall) are Gloomy");
+});
+
+test("summariseLux: multiple sensors with 'any' quant reads 'Any of (...) is ...'", () => {
+  const hass = {
+    states: {
+      "sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  expect(
+    summariseCondition(
+      "lux",
+      { sensors: ["sensor.a", "sensor.b"], range: "dark", quant: "any" },
+      { hass },
+    ),
+  ).toBe("Any of (Lounge, Hall) is Dark");
+});
+
+test("summariseLux: negated single sensor reads 'is not'", () => {
+  const hass = {
+    states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "lux",
+      { sensors: ["sensor.lounge"], range: "dark", negate: true },
+      { hass },
+    ),
+  ).toBe("Lounge is not Dark");
+});
+
+test("summariseLux: negated multiple sensors read 'is not' / 'are not'", () => {
+  const hass = {
+    states: {
+      "sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  expect(
+    summariseCondition(
+      "lux",
+      { sensors: ["sensor.a", "sensor.b"], range: "dark", quant: "any", negate: true },
+      { hass },
+    ),
+  ).toBe("Any of (Lounge, Hall) is not Dark");
+  expect(
+    summariseCondition(
+      "lux",
+      { sensors: ["sensor.a", "sensor.b"], range: "dark", quant: "all", negate: true },
+      { hass },
+    ),
+  ).toBe("All of (Lounge, Hall) are not Dark");
 });
 
 test("summariseLux: null is 'any'", () => {
@@ -1518,6 +1570,21 @@ describe("summariseBlocker", () => {
       } as OccupancyPredicate,
     };
     expect(summariseBlocker(blocker(when), ctx)).toBe("Block until Island is clear for ≥3m");
+  });
+
+  test("pure blocker: negated lux renders as a positive 'until' release", () => {
+    // lux `negate` wraps the whole match (kleene_not outside the quantifier),
+    // exactly like occupancy, so de-negation by flag-drop is a valid release.
+    const luxCtx = {
+      hass: {
+        localize: () => undefined,
+        states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+      },
+    };
+    const when = {
+      lux: { sensors: ["sensor.lounge"], range: "bright", negate: true },
+    };
+    expect(summariseBlocker(blocker(when), luxCtx)).toBe("Block until Lounge is Bright");
   });
 
   test("release + guard: lead with the guard — 'While <guard>, block until <release>'", () => {
@@ -2115,7 +2182,7 @@ describe("summary prose — area-prefixed entity names", () => {
 
   test("unavailable clause prefixes the area", () => {
     expect(summariseUnavailable({ entities: ["sensor.flow"] }, { hass: hassArea })).toBe(
-      "Kitchen · Water pump Flow unavailable",
+      "Kitchen · Water pump Flow is unavailable",
     );
   });
 

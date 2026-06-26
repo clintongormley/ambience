@@ -151,3 +151,20 @@ async def test_resolve_unknown_scope_kind_returns_empty(hass: HomeAssistant) -> 
     # "zone" is not a known scope kind; the resolver treats it as an empty scope.
     got = resolve_action_entities(hass, "zone", None, {"area_id": [office.id]})
     assert got == []
+
+
+# Fix B: action_target() must not crash when a target key holds a non-iterable value
+def test_action_target_non_iterable_value_returns_empty() -> None:
+    """action_target() must return {} when a target key holds a non-string non-iterable."""
+    # int value — was: TypeError: 'int' object is not iterable
+    assert action_target({"service": "x.y", "target": {"area_id": 42}}) == {}
+    # bool value
+    assert action_target({"service": "x.y", "target": {"label_id": True}}) == {}
+
+
+def test_action_target_mixed_non_iterable_keeps_valid_keys() -> None:
+    """A mixed target with a valid key and a non-iterable key keeps only the valid key."""
+    result = action_target(
+        {"service": "x.y", "target": {"entity_id": ["light.a"], "area_id": 42}}
+    )
+    assert result == {"entity_id": ["light.a"]}

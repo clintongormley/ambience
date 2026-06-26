@@ -5,6 +5,7 @@ import { resolveTargetInScope, targetIsEmpty } from "../action-target.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import type { HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
+import { areaName, floorName } from "../hass-names.js";
 import { humanizeId, localize, localizeWsError } from "../i18n.js";
 import { formatArgValue, formatParamValue, selectorUnit } from "../summary.js";
 import type { ActionTargetValue, ExposedAction, Scope, ServiceSchema } from "../types.js";
@@ -303,7 +304,11 @@ export class AmbienceActionSlot extends LitElement {
     const n = this._resolvedCount();
     const scope = this.scope;
     const scopeName =
-      !scope || scope.kind === "house" ? localize(this.hass, "ui.house", "House") : scope.id;
+      !scope || scope.kind === "house"
+        ? localize(this.hass, "ui.house", "House")
+        : scope.kind === "area"
+          ? areaName(this.hass as any, scope.id)
+          : floorName(this.hass as any, scope.id);
     const text = localize(
       this.hass,
       "ui.target_resolves_count",

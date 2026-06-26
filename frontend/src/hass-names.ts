@@ -21,3 +21,9 @@ export function deviceName(hass: HassLike, deviceId: string): string {
   const devices = hass?.devices as Record<string, { name?: string | null }> | undefined;
   return devices?.[deviceId]?.name ?? deviceId;
 }
+
+/** Look up a floor name from hass.floors, falling back to the raw id. */
+export function floorName(hass: HassLike, floorId: string): string {
+  const floors = hass?.floors as Record<string, { name?: string | null }> | undefined;
+  return floors?.[floorId]?.name ?? floorId;
+}

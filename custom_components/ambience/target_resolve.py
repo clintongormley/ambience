@@ -35,7 +35,14 @@ def action_target(action_spec: Mapping[str, Any]) -> dict[str, list[str]]:
         val = raw.get(key)
         if val is None:
             continue
-        ids = [val] if isinstance(val, str) else [v for v in val if isinstance(v, str)]
+        # HA's ha-target-picker may emit a scalar string or a list; a non-string
+        # non-iterable (e.g. int/bool from malformed YAML) is silently dropped.
+        if isinstance(val, str):
+            ids = [val]
+        elif isinstance(val, (list, tuple)):
+            ids = [v for v in val if isinstance(v, str)]
+        else:
+            ids = []
         if ids:
             out[key] = ids
     return out
@@ -69,8 +76,13 @@ def resolve_action_entities(
     """Expand ``target`` to the sorted in-scope entity_ids it should act on.
 
     A directly-named ``entity_id`` is the scene author's deliberate choice and
-    is forwarded unchanged (never scope-clipped). Indirect selectors
-    (``area_id``, ``device_id``, ``label_id``, ``floor_id``) ARE scope-clipped.
+    is forwarded unchanged (never scope-clipped). Indirect *action-target*
+    selectors (``area_id``, ``device_id``, ``label_id``) ARE scope-clipped.
+
+    ``floor_id`` is NOT an action-target key — it is used only as the scene's
+    scope kind (handled by ``_scope_entity_set``). The indirect clipping above
+    refers strictly to area/device/label.
+
     Empty ``target`` (or one that resolves to nothing in scope) yields ``[]``.
     """
     if not target:

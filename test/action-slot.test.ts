@@ -1628,4 +1628,31 @@ describe("ambience-action-slot", () => {
     expect(preview!.classList.contains("warn")).toBe(true);
     expect(el._resolvedCount()).toBe(0);
   });
+
+  // Fix A: count preview shows the FRIENDLY area/floor name, not the raw slug
+  test("count preview shows friendly area name, not raw area slug", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    const hass = {
+      ...makeHass(),
+      states: {},
+      entities: { "light.k": { entity_id: "light.k", area_id: "kitchen" } },
+      devices: {},
+      areas: { kitchen: { area_id: "kitchen", name: "Kitchen" } },
+    };
+    el = await mount({
+      hass,
+      scope: { kind: "area", id: "kitchen" },
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      target: { area_id: ["kitchen"] },
+    });
+    const preview = el.shadowRoot.querySelector("[data-count-preview]");
+    expect(preview).toBeTruthy();
+    // Must show the friendly name "Kitchen", not the raw slug "kitchen"
+    expect(preview!.textContent).toContain("Kitchen");
+    expect(preview!.textContent).not.toContain(" kitchen ");
+  });
 });

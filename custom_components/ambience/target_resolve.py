@@ -16,7 +16,7 @@ from homeassistant.helpers.target import (
     async_extract_referenced_entity_ids,
 )
 
-_TARGET_KEYS = ("entity_id", "device_id", "area_id", "label_id")
+_TARGET_KEYS = ("entity_id", "device_id", "area_id", "label_id", "floor_id")
 
 
 def action_target(action_spec: Mapping[str, Any]) -> dict[str, list[str]]:
@@ -77,11 +77,11 @@ def resolve_action_entities(
 
     A directly-named ``entity_id`` is the scene author's deliberate choice and
     is forwarded unchanged (never scope-clipped). Indirect *action-target*
-    selectors (``area_id``, ``device_id``, ``label_id``) ARE scope-clipped.
-
-    ``floor_id`` is NOT an action-target key — it is used only as the scene's
-    scope kind (handled by ``_scope_entity_set``). The indirect clipping above
-    refers strictly to area/device/label.
+    selectors (``area_id``, ``device_id``, ``label_id``, ``floor_id``) ARE
+    scope-clipped: HA's native target picker offers a Floor chip at all scope
+    levels, and at area/floor scope it harmlessly clips to that scope. The
+    expansion is handled by HA's ``async_extract_referenced_entity_ids``
+    (via ``_expand``); no additional logic is needed here for floor_id.
 
     Empty ``target`` (or one that resolves to nothing in scope) yields ``[]``.
     """
@@ -89,7 +89,7 @@ def resolve_action_entities(
         return []
     # Direct entity_id is the scene author's deliberate choice → never clipped.
     direct = set(target.get("entity_id") or [])
-    # Indirect selectors (area/device/label/floor) ARE scope-clipped.
+    # Indirect selectors (area/device/label/floor_id) ARE scope-clipped.
     indirect = {k: v for k, v in target.items() if k != "entity_id"}
     expanded = _expand(hass, indirect) if indirect else set()
     scoped = _scope_entity_set(hass, scope_kind, scope_id)

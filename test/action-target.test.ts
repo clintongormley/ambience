@@ -50,6 +50,19 @@ describe("actionTarget", () => {
       } as any),
     ).toEqual({ entity_id: ["light.lounge"], area_id: ["living_room"] });
   });
+
+  // Fix 1: floor_id is now a supported indirect action-target selector.
+  test("keeps floor_id", () => {
+    expect(
+      actionTarget({ service: "x.y", target: { floor_id: ["ground"] }, params: {} } as any),
+    ).toEqual({ floor_id: ["ground"] });
+  });
+
+  test("coerces scalar floor_id to array", () => {
+    expect(
+      actionTarget({ service: "x.y", target: { floor_id: "ground" }, params: {} } as any),
+    ).toEqual({ floor_id: ["ground"] });
+  });
 });
 
 describe("resolveTargetInScope", () => {
@@ -59,7 +72,10 @@ describe("resolveTargetInScope", () => {
       "light.o": { entity_id: "light.o", area_id: "office", labels: ["reading"] },
     },
     devices: {},
-    areas: { kitchen: { area_id: "kitchen" }, office: { area_id: "office" } },
+    areas: {
+      kitchen: { area_id: "kitchen", floor_id: "ground" },
+      office: { area_id: "office", floor_id: "upper" },
+    },
   };
   test("area scope clips a label target", () => {
     const got = resolveTargetInScope(hass, { kind: "area", id: "kitchen" } as any, {
@@ -81,5 +97,43 @@ describe("resolveTargetInScope", () => {
       entity_id: ["light.o"],
     });
     expect(got).toEqual(["light.o"]);
+  });
+
+  // Fix 1: floor_id target resolution in scope.
+  test("floor_id target clips to area scope", () => {
+    // kitchen is on "ground" floor; scene is area-scoped to kitchen.
+    // floor_id target "ground" covers both kitchen and office lights, but
+    // the area scope clips it to kitchen only.
+    const got = resolveTargetInScope(hass, { kind: "area", id: "kitchen" } as any, {
+      floor_id: ["ground"],
+    });
+    expect(got).toEqual(["light.k"]);
+  });
+
+  test("floor_id target on non-matching floor returns empty", () => {
+    // kitchen-scoped scene, floor "upper" target → kitchen light is on "ground", no match.
+    const got = resolveTargetInScope(hass, { kind: "area", id: "kitchen" } as any, {
+      floor_id: ["upper"],
+    });
+    expect(got).toEqual([]);
+  });
+
+  test("floor_id target at house scope includes all matching entities", () => {
+    // House scope: both lights are on "ground", both should be returned.
+    const hassHouse: any = {
+      entities: {
+        "light.k": { entity_id: "light.k", area_id: "kitchen", labels: [] },
+        "light.o": { entity_id: "light.o", area_id: "office", labels: [] },
+      },
+      devices: {},
+      areas: {
+        kitchen: { area_id: "kitchen", floor_id: "ground" },
+        office: { area_id: "office", floor_id: "ground" },
+      },
+    };
+    const got = resolveTargetInScope(hassHouse, { kind: "house" } as any, {
+      floor_id: ["ground"],
+    });
+    expect(got).toEqual(["light.k", "light.o"]);
   });
 });

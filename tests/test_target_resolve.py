@@ -164,7 +164,51 @@ def test_action_target_non_iterable_value_returns_empty() -> None:
 
 def test_action_target_mixed_non_iterable_keeps_valid_keys() -> None:
     """A mixed target with a valid key and a non-iterable key keeps only the valid key."""
-    result = action_target(
-        {"service": "x.y", "target": {"entity_id": ["light.a"], "area_id": 42}}
-    )
+    result = action_target({"service": "x.y", "target": {"entity_id": ["light.a"], "area_id": 42}})
     assert result == {"entity_id": ["light.a"]}
+
+
+# Fix 1: floor_id is now a supported indirect action-target selector.
+
+
+def test_action_target_keeps_floor_id() -> None:
+    """action_target() must preserve floor_id in the output dict."""
+    assert action_target({"service": "x.y", "target": {"floor_id": ["ground"]}}) == {
+        "floor_id": ["ground"]
+    }
+
+
+def test_action_target_coerces_scalar_floor_id() -> None:
+    """A scalar floor_id is coerced to a one-item list."""
+    assert action_target({"service": "x.y", "target": {"floor_id": "ground"}}) == {
+        "floor_id": ["ground"]
+    }
+
+
+async def test_resolve_floor_id_target_in_area_scope(hass: HomeAssistant) -> None:
+    """resolve_action_entities with {floor_id:[F]}: resolves to floor entities,
+    clipped to the area scope (entity on floor F in area A; area-A-scoped scene
+    with floor_id F target → only area A's entities survive)."""
+    floor = fr.async_get(hass).async_create("Ground")
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    # Both areas on the same floor.
+    ar.async_get(hass).async_update(kitchen.id, floor_id=floor.floor_id)
+    ar.async_get(hass).async_update(office.id, floor_id=floor.floor_id)
+    k_light = _entity_in_area(hass, "kf", kitchen.id)
+    _entity_in_area(hass, "of", office.id)  # office light — must be clipped out
+
+    # Kitchen-scoped scene, floor target → only kitchen light survives.
+    got = resolve_action_entities(hass, "area", kitchen.id, {"floor_id": [floor.floor_id]})
+    assert got == [k_light]
+
+
+async def test_resolve_floor_id_target_in_house_scope(hass: HomeAssistant) -> None:
+    """House scope: floor_id target is NOT clipped (no scope constraint)."""
+    floor = fr.async_get(hass).async_create("Upper")
+    area = ar.async_get(hass).async_create("Bedroom")
+    ar.async_get(hass).async_update(area.id, floor_id=floor.floor_id)
+    b_light = _entity_in_area(hass, "bed", area.id)
+
+    got = resolve_action_entities(hass, "house", None, {"floor_id": [floor.floor_id]})
+    assert got == [b_light]

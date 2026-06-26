@@ -257,10 +257,16 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
                 entity_ids = resolve_action_entities(hass, scope_kind, scope_id, tgt)
                 if tgt and not entity_ids:
                     service = action.get("service", "")
-                    loc = Location(scope_kind, scope_id, category, scene.get("name") or "")
-                    bucket = target_empty_locs.setdefault(service, [])
-                    if loc not in bucket:
-                        bucket.append(loc)
+                    # Skip target_empty when the action has no/blank service —
+                    # a serviceless action is already invalid and can't execute,
+                    # so a target_empty problem against "" would be confusing.
+                    if not service:
+                        pass
+                    else:
+                        loc = Location(scope_kind, scope_id, category, scene.get("name") or "")
+                        bucket = target_empty_locs.setdefault(service, [])
+                        if loc not in bucket:
+                            bucket.append(loc)
                 for eid in entity_ids:
                     # Overlap on a non-existent entity is moot — the missing_entity
                     # problem already covers it, and warning about a control conflict

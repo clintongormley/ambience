@@ -934,3 +934,51 @@ async def test_target_empty_aggregated_by_service_across_scenes(
     assert empties[0].ref == "light.turn_on"
     scene_names = {loc.scene_name for loc in empties[0].locations}
     assert scene_names == {"morning", "evening"}
+
+
+async def test_target_empty_not_raised_for_serviceless_action(
+    hass: HomeAssistant, installed
+) -> None:
+    """Fix 3: an action with no/blank service must never produce a target_empty problem.
+
+    A serviceless action has no sensible `service` to bucket the problem under,
+    and the action can't execute anyway (it's already invalid). Emitting a
+    target_empty problem with service="" (or the absent service) is confusing
+    and unhelpful."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "broken",
+                "when": {},
+                "category": "c1",
+                # No service key at all, but has an area target pointing outside scope.
+                "actions": [{"target": {"area_id": [office.id]}, "params": {}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert empties == [], f"expected no target_empty for a serviceless action, got {empties}"
+
+
+async def test_target_empty_not_raised_for_blank_service_action(
+    hass: HomeAssistant, installed
+) -> None:
+    """Fix 3: an action with an empty-string service must also skip target_empty."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "broken2",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "", "target": {"area_id": [office.id]}, "params": {}}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert empties == [], f"expected no target_empty for blank service, got {empties}"

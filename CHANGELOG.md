@@ -10,8 +10,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- Scene actions can now target by entity, device, area, or label (like Home
-  Assistant automations). The target resolves live at apply time and is
+- Scene actions can now target by entity, device, area, floor, or label (like
+  Home Assistant automations). The target resolves live at apply time and is
   constrained to the scene's scope, with a live count in the editor showing how
   many entities the target will act on. A directly-named entity is forwarded
   unchanged — it is the author's deliberate choice and is never scope-clipped.

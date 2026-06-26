@@ -310,6 +310,124 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         assert exc.value.translation_key == "scene_apply_invalid"
 
+    # --- Fix 2: target validation ---
+
+    def test_rejects_non_dict_target(self) -> None:
+        """A target that is not a dict must raise a translatable error."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [{"service": "light.turn_on", "target": "bad", "params": {}}],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_not_object"
+
+    def test_rejects_target_with_unknown_key(self) -> None:
+        """A target key that is not one of the five valid keys must raise."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"entity_id": ["light.a"], "zone_id": ["z1"]},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_invalid_key"
+
+    def test_rejects_target_value_that_is_int(self) -> None:
+        """A target value that is an int (not a string or list) must raise."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "target": {"area_id": 42}, "params": {}}
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_value_invalid"
+
+    def test_rejects_target_list_with_non_string_element(self) -> None:
+        """A target list containing a non-string element must raise."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": [123]},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_target_value_invalid"
+
+    def test_accepts_valid_target_with_floor_id(self) -> None:
+        """A valid target including floor_id must not raise."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {
+                                "entity_id": ["light.a"],
+                                "area_id": ["kitchen"],
+                                "floor_id": "ground",
+                            },
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        validate_scope_config(hass, config)  # must not raise
+
+    def test_accepts_target_with_scalar_string_value(self) -> None:
+        """A target value that is a bare string (scalar) must be accepted."""
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "target": {"area_id": "kitchen"},
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+        validate_scope_config(hass, config)  # must not raise
+
 
 # ---------------------------------------------------------------------------
 # validate_weather_groups

@@ -53,6 +53,7 @@ export type ActionTargetValue = {
   device_id?: string[];
   area_id?: string[];
   label_id?: string[];
+  floor_id?: string[];
 };
 
 export type ActionSpec = {

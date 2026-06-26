@@ -270,6 +270,8 @@ def _format_action(action: dict[str, Any]) -> str:
         target_parts.append(f"device:{device_id}")
     for label_id in tgt.get("label_id") or []:
         target_parts.append(f"label:{label_id}")
+    for floor_id in tgt.get("floor_id") or []:
+        target_parts.append(f"floor:{floor_id}")
     if target_parts:
         parts.append(f"[{', '.join(target_parts)}]")
     params = action.get("params") or {}

@@ -1,6 +1,6 @@
 import { css, html, nothing, type TemplateResult } from "lit";
 import { actionTarget, targetIsEmpty } from "./action-target.js";
-import { areaName, deviceName, labelName } from "./hass-names.js";
+import { areaName, deviceName, floorName, labelName } from "./hass-names.js";
 import {
   conditionLabel,
   deriveActionLabel,
@@ -129,7 +129,7 @@ function clickableEntity(hass: HassLike | undefined, entityId: string): Template
 }
 
 // Render one line per target entry for an action in the expanded "Actions taken"
-// section. Handles entity_id (clickable more-info links), plus area/device/label
+// section. Handles entity_id (clickable more-info links), plus area/device/label/floor
 // selectors with friendly-name lookup and type suffixes — mirroring scenes-list.ts.
 function renderActionTargetLines(a: TraceAction, hass: HassLike | undefined): TemplateResult[] {
   const target = actionTarget(a);
@@ -152,6 +152,11 @@ function renderActionTargetLines(a: TraceAction, hass: HassLike | undefined): Te
   for (const id of target.device_id ?? []) {
     lines.push(
       html`<div class="entity">${deviceName(hassMap, id)} ${localize(hass, "ui.target_type_device", "(device)")}</div>`,
+    );
+  }
+  for (const id of target.floor_id ?? []) {
+    lines.push(
+      html`<div class="entity">${floorName(hassMap, id)} ${localize(hass, "ui.target_type_floor", "(floor)")}</div>`,
     );
   }
   return lines;

@@ -9,7 +9,7 @@ import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { scopeCategoryKey } from "../entities-for-scope.js";
-import { areaName, deviceName, labelName } from "../hass-names.js";
+import { areaName, deviceName, floorName, labelName } from "../hass-names.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import {
@@ -583,7 +583,7 @@ export class AmbienceScenesList extends LitElement {
   }
 
   /** Render the target list for an action in the expanded detail panel.
-   *  Handles entity_id (friendly names), area_id, label_id, device_id.
+   *  Handles entity_id (friendly names), area_id, label_id, device_id, floor_id.
    *  Falls back to "(no targets)" when the target is empty. */
   private _renderActionTargets(action: ActionSpec) {
     const target = actionTarget(action);
@@ -610,6 +610,11 @@ export class AmbienceScenesList extends LitElement {
     for (const id of target.device_id ?? []) {
       items.push(
         html`<li>${deviceName(hass, id)} ${localize(this.hass, "ui.target_type_device", "(device)")}</li>`,
+      );
+    }
+    for (const id of target.floor_id ?? []) {
+      items.push(
+        html`<li>${floorName(hass, id)} ${localize(this.hass, "ui.target_type_floor", "(floor)")}</li>`,
       );
     }
     return html`<ul class="entity-list">${items}</ul>`;

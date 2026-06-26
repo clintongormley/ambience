@@ -1,6 +1,6 @@
 import { actionTarget } from "./action-target.js";
 import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
-import { areaName, deviceName, labelName } from "./hass-names.js";
+import { areaName, deviceName, floorName, labelName } from "./hass-names.js";
 import {
   actionLabel,
   anchorLabel,
@@ -1006,8 +1006,13 @@ export function summariseAction(action: ActionSpec, ctx: ActionContext): string 
   const areaIds = target.area_id ?? [];
   const labelIds = target.label_id ?? [];
   const deviceIds = target.device_id ?? [];
+  const floorIds = target.floor_id ?? [];
   const hasAny =
-    entityIds.length > 0 || areaIds.length > 0 || labelIds.length > 0 || deviceIds.length > 0;
+    entityIds.length > 0 ||
+    areaIds.length > 0 ||
+    labelIds.length > 0 ||
+    deviceIds.length > 0 ||
+    floorIds.length > 0;
 
   let targets: string;
   if (!hasAny) {
@@ -1030,6 +1035,9 @@ export function summariseAction(action: ActionSpec, ctx: ActionContext): string 
       parts.push(
         `${deviceName(hass, id)} ${localize(ctx.hass, "ui.target_type_device", "(device)")}`,
       );
+    }
+    for (const id of floorIds) {
+      parts.push(`${floorName(hass, id)} ${localize(ctx.hass, "ui.target_type_floor", "(floor)")}`);
     }
     targets = parts.join(", ");
   }

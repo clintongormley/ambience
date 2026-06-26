@@ -88,13 +88,14 @@ The **target** of an action tells Ambience which entities to act on when the sce
 - **Entity** — pick one or more specific entities directly.
 - **Device** — target all entities belonging to one or more devices.
 - **Area** — target all entities in one or more areas.
+- **Floor** — target all entities on one or more floors.
 - **Label** — target all entities that carry one or more HA labels.
 
 These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect. The picker itself is not limited to the scene's scope; scope-constraining happens at apply time (see below), and the live count under the picker shows the effect.
 
 ### Scope-constrained resolution
 
-Ambience resolves the target **live, at apply time**, using the entities currently registered in Home Assistant. The resolution is also **scope-constrained**: indirect selectors (device, area, label) are intersected with the entities that belong to the scene's scope (House, Floor, or Area), so an area-targeted action in a living-room scene only acts on the living-room's entities even if the label spans the whole house.
+Ambience resolves the target **live, at apply time**, using the entities currently registered in Home Assistant. The resolution is also **scope-constrained**: indirect selectors (device, area, floor, label) are intersected with the entities that belong to the scene's scope (House, Floor, or Area), so an area-targeted action in a living-room scene only acts on the living-room's entities even if the label spans the whole house. (A floor target picked in an area-scoped scene therefore clips to that area — the live count shows the real effect.)
 
 **Directly-named entity targets are forwarded unchanged.** If you name a specific entity by entity id, it is sent to the service as-is — Ambience does not clip it to the scene's scope. This is a deliberate choice: if you pick an entity directly, you mean exactly that entity.
 

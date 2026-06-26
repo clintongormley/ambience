@@ -1,5 +1,6 @@
 import { css, html, nothing, type TemplateResult } from "lit";
 import { actionTarget, targetIsEmpty } from "./action-target.js";
+import { areaName, deviceName, labelName } from "./hass-names.js";
 import {
   conditionLabel,
   deriveActionLabel,
@@ -12,7 +13,6 @@ import {
 } from "./i18n.js";
 import { formatArgValue, paramLabel } from "./summary.js";
 import type {
-  ActionSpec,
   BufferedUnit,
   ExposedAction,
   PeriodDef,
@@ -132,37 +132,26 @@ function clickableEntity(hass: HassLike | undefined, entityId: string): Template
 // section. Handles entity_id (clickable more-info links), plus area/device/label
 // selectors with friendly-name lookup and type suffixes — mirroring scenes-list.ts.
 function renderActionTargetLines(a: TraceAction, hass: HassLike | undefined): TemplateResult[] {
-  const target = traceActionTarget(a);
+  const target = actionTarget(a);
   if (targetIsEmpty(target)) return [];
-  const areas = (hass as Record<string, unknown> | undefined)?.areas as
-    | Record<string, { name?: string | null }>
-    | undefined;
-  const labels = (hass as Record<string, unknown> | undefined)?.labels as
-    | Record<string, { name?: string | null }>
-    | undefined;
-  const devices = (hass as Record<string, unknown> | undefined)?.devices as
-    | Record<string, { name?: string | null }>
-    | undefined;
+  const hassMap = hass as Record<string, unknown> | undefined;
   const lines: TemplateResult[] = [];
   for (const eid of target.entity_id ?? []) {
     lines.push(html`<div class="entity">${clickableEntity(hass, eid)}</div>`);
   }
   for (const id of target.area_id ?? []) {
-    const name = areas?.[id]?.name ?? id;
     lines.push(
-      html`<div class="entity">${name} ${localize(hass, "ui.target_type_area", "(area)")}</div>`,
+      html`<div class="entity">${areaName(hassMap, id)} ${localize(hass, "ui.target_type_area", "(area)")}</div>`,
     );
   }
   for (const id of target.label_id ?? []) {
-    const name = labels?.[id]?.name ?? id;
     lines.push(
-      html`<div class="entity">${name} ${localize(hass, "ui.target_type_label", "(label)")}</div>`,
+      html`<div class="entity">${labelName(hassMap, id)} ${localize(hass, "ui.target_type_label", "(label)")}</div>`,
     );
   }
   for (const id of target.device_id ?? []) {
-    const name = devices?.[id]?.name ?? id;
     lines.push(
-      html`<div class="entity">${name} ${localize(hass, "ui.target_type_device", "(device)")}</div>`,
+      html`<div class="entity">${deviceName(hassMap, id)} ${localize(hass, "ui.target_type_device", "(device)")}</div>`,
     );
   }
   return lines;
@@ -502,14 +491,9 @@ export function formatActionHeader(
   return params ? `${label} · ${params}` : label;
 }
 
-function traceActionTarget(a: TraceAction): ReturnType<typeof actionTarget> {
-  // TraceAction and ActionSpec share the same target/entity_ids fields; cast is safe.
-  return actionTarget(a as unknown as ActionSpec);
-}
-
 function entityCount(actions: TraceAction[]): number {
   return actions.reduce((n, a) => {
-    const t = traceActionTarget(a);
+    const t = actionTarget(a);
     if (targetIsEmpty(t)) return n;
     // entity_id: direct count; indirect selectors (area/device/label): count by
     // selector entry (since we don't have the resolved list in the frontend).

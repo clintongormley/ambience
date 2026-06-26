@@ -9,6 +9,7 @@ import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { scopeCategoryKey } from "../entities-for-scope.js";
+import { areaName, deviceName, labelName } from "../hass-names.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import {
@@ -592,25 +593,23 @@ export class AmbienceScenesList extends LitElement {
       </div>`;
     }
     const hass = this.hass as Record<string, unknown> | undefined;
-    const areas = hass?.areas as Record<string, { name?: string | null }> | undefined;
-    const labels = hass?.labels as Record<string, { name?: string | null }> | undefined;
-    const devices = hass?.devices as Record<string, { name?: string | null }> | undefined;
     const items: unknown[] = [];
     for (const eid of target.entity_id ?? []) {
       items.push(html`<li>${this._entityName(eid)}</li>`);
     }
     for (const id of target.area_id ?? []) {
-      const name = areas?.[id]?.name ?? id;
-      items.push(html`<li>${name} ${localize(this.hass, "ui.target_type_area", "(area)")}</li>`);
+      items.push(
+        html`<li>${areaName(hass, id)} ${localize(this.hass, "ui.target_type_area", "(area)")}</li>`,
+      );
     }
     for (const id of target.label_id ?? []) {
-      const name = labels?.[id]?.name ?? id;
-      items.push(html`<li>${name} ${localize(this.hass, "ui.target_type_label", "(label)")}</li>`);
+      items.push(
+        html`<li>${labelName(hass, id)} ${localize(this.hass, "ui.target_type_label", "(label)")}</li>`,
+      );
     }
     for (const id of target.device_id ?? []) {
-      const name = devices?.[id]?.name ?? id;
       items.push(
-        html`<li>${name} ${localize(this.hass, "ui.target_type_device", "(device)")}</li>`,
+        html`<li>${deviceName(hass, id)} ${localize(this.hass, "ui.target_type_device", "(device)")}</li>`,
       );
     }
     return html`<ul class="entity-list">${items}</ul>`;

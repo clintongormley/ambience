@@ -177,6 +177,11 @@ def entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
 
 
 def _action_entities(scene: dict[str, Any]) -> Iterator[str]:
+    # Intentionally yields only DIRECT entity_id targets (via action_target). Used by
+    # referenced_entities_by_scene (missing-entity flag) and scene_annotations (per-scene
+    # overlap badge) — so the badge is direct-entity-only by design, while the global
+    # action_overlap Repairs issue resolves indirect targets (area/device/label) via
+    # resolve_action_entities.
     for action in scene.get("actions", []) or []:
         for eid in action_target(action).get("entity_id") or []:
             if isinstance(eid, str) and eid:

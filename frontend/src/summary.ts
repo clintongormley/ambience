@@ -1,5 +1,6 @@
 import { actionTarget } from "./action-target.js";
 import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
+import { areaName, deviceName, labelName } from "./hass-names.js";
 import {
   actionLabel,
   anchorLabel,
@@ -998,24 +999,6 @@ function _targetNoun(entityIds: string[], ctx: ActionContext): string {
   return localize(ctx.hass, "ui.target_noun", "target");
 }
 
-/** Look up an area name from hass.areas, falling back to the raw id. */
-function _areaName(hass: { [key: string]: unknown } | undefined, areaId: string): string {
-  const areas = hass?.areas as Record<string, { name?: string | null }> | undefined;
-  return areas?.[areaId]?.name ?? areaId;
-}
-
-/** Look up a label name from hass.labels, falling back to the raw id. */
-function _labelName(hass: { [key: string]: unknown } | undefined, labelId: string): string {
-  const labels = hass?.labels as Record<string, { name?: string | null }> | undefined;
-  return labels?.[labelId]?.name ?? labelId;
-}
-
-/** Look up a device name from hass.devices, falling back to the raw id. */
-function _deviceName(hass: { [key: string]: unknown } | undefined, deviceId: string): string {
-  const devices = hass?.devices as Record<string, { name?: string | null }> | undefined;
-  return devices?.[deviceId]?.name ?? deviceId;
-}
-
 export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
   const target = actionTarget(action);
@@ -1038,16 +1021,14 @@ export function summariseAction(action: ActionSpec, ctx: ActionContext): string 
     }
     const hass = ctx.hass as { [key: string]: unknown } | undefined;
     for (const id of areaIds) {
-      parts.push(`${_areaName(hass, id)} ${localize(ctx.hass, "ui.target_type_area", "(area)")}`);
+      parts.push(`${areaName(hass, id)} ${localize(ctx.hass, "ui.target_type_area", "(area)")}`);
     }
     for (const id of labelIds) {
-      parts.push(
-        `${_labelName(hass, id)} ${localize(ctx.hass, "ui.target_type_label", "(label)")}`,
-      );
+      parts.push(`${labelName(hass, id)} ${localize(ctx.hass, "ui.target_type_label", "(label)")}`);
     }
     for (const id of deviceIds) {
       parts.push(
-        `${_deviceName(hass, id)} ${localize(ctx.hass, "ui.target_type_device", "(device)")}`,
+        `${deviceName(hass, id)} ${localize(ctx.hass, "ui.target_type_device", "(device)")}`,
       );
     }
     targets = parts.join(", ");

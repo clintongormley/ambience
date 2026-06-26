@@ -1,13 +1,17 @@
 import { entitiesForScope } from "./entities-for-scope.js";
 import { effectiveAreaId } from "./entity-registry.js";
-import type { ActionSpec, ActionTargetValue, Scope } from "./types.js";
+import type { ActionTargetValue, Scope } from "./types.js";
 
 export type ActionTarget = ActionTargetValue;
+
+/** Minimal contract for actionTarget(): any object with an optional target and
+ *  optional legacy entity_ids array. Both ActionSpec and TraceAction satisfy this. */
+export type TargetCarrier = { target?: ActionTargetValue; entity_ids?: string[] };
 
 const KEYS = ["entity_id", "device_id", "area_id", "label_id"] as const;
 
 /** The action's target, normalizing legacy `entity_ids` and dropping empties. */
-export function actionTarget(action: ActionSpec): ActionTarget {
+export function actionTarget(action: TargetCarrier): ActionTarget {
   const raw: Record<string, unknown> =
     action.target && typeof action.target === "object"
       ? (action.target as Record<string, unknown>)

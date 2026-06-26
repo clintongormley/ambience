@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
-import { actionTarget, resolveTargetInScope, targetIsEmpty } from "../action-target.js";
+import { resolveTargetInScope, targetIsEmpty } from "../action-target.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import type { HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
@@ -548,14 +548,9 @@ export class AmbienceActionSlot extends LitElement {
     const serviceId = this.service ?? this.exposed?.id;
     if (!serviceId) return "";
     const params = Object.entries(this.params ?? {});
-    // Build target display from the target object (normalizing legacy entity_ids).
-    const resolvedTarget = actionTarget({
-      service: serviceId,
-      target: this.target,
-      params: this.params,
-    });
-    const targetEntityIds = resolvedTarget.entity_id ?? [];
-    const hasTarget = !targetIsEmpty(resolvedTarget);
+    // this.target is already the normalized ActionTargetValue bound from the editor.
+    const targetEntityIds = this.target?.entity_id ?? [];
+    const hasTarget = !targetIsEmpty(this.target ?? {});
     return html`
       <dl class="raw-config" data-raw-config>
         <div class="raw-row">
@@ -566,7 +561,7 @@ export class AmbienceActionSlot extends LitElement {
           hasTarget
             ? html`<div class="raw-row">
                 <dt>${localize(this.hass, "ui.raw_config_targets", "Targets")}:</dt>
-                <dd>${targetEntityIds.length ? targetEntityIds.join(", ") : JSON.stringify(resolvedTarget)}</dd>
+                <dd>${targetEntityIds.length ? targetEntityIds.join(", ") : JSON.stringify(this.target)}</dd>
               </div>`
             : ""
         }

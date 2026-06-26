@@ -9,10 +9,11 @@ const defaultDef: PeriodDef = {
 };
 
 async function mount(
-  opts: { existingId?: string; initial?: PeriodDef; takenIds?: Set<string> } = {},
+  opts: { existingId?: string; initial?: PeriodDef; takenIds?: Set<string>; hass?: unknown } = {},
 ): Promise<any> {
   const el: any = document.createElement("ambience-period-edit-modal");
   if (opts.existingId !== undefined) el.existingId = opts.existingId;
+  if (opts.hass !== undefined) el.hass = opts.hass;
   el.initial = opts.initial ?? defaultDef;
   el.takenIds = opts.takenIds ?? new Set<string>();
   document.body.appendChild(el);
@@ -117,6 +118,27 @@ describe("ambience-period-edit-modal", () => {
     clickSave(el);
     expect(get()?.id).toBe("afternoon");
     expect(get()?.definition.label).toBe("Something completely different");
+  });
+
+  test("Override builtin pre-fills the name field with the builtin's display name", async () => {
+    // Overriding a built-in: existingId is set but the def carries no label
+    // (a built-in's name lives in i18n, not its `label` field).
+    el = await mount({ existingId: "dawn", initial: defaultDef });
+    const input = el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement;
+    expect(input.value).toBe("Dawn");
+  });
+
+  test("Override builtin heading shows the display name, not the raw id", async () => {
+    el = await mount({ existingId: "dawn", initial: defaultDef });
+    expect(el.shadowRoot.querySelector("h3").textContent).toContain("Dawn");
+  });
+
+  test("Override builtin resolves the localized name via i18n (not the humanized id)", async () => {
+    // Pins the i18n resolution path: in Spanish "dawn" → "Amanecer", which the
+    // humanized-id fallback ("Dawn") would never produce.
+    el = await mount({ existingId: "dawn", initial: defaultDef, hass: { language: "es" } });
+    const input = el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement;
+    expect(input.value).toBe("Amanecer");
   });
 
   test("Edit mode allows clearing label back to null", async () => {

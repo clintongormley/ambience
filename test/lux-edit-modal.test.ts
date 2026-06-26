@@ -3,10 +3,11 @@ import "../frontend/src/views/lux-edit-modal";
 import type { LuxRangeDef } from "../frontend/src/types";
 
 async function mount(
-  opts: { existingId?: string; initial?: LuxRangeDef; takenIds?: Set<string> } = {},
+  opts: { existingId?: string; initial?: LuxRangeDef; takenIds?: Set<string>; hass?: unknown } = {},
 ): Promise<any> {
   const el: any = document.createElement("ambience-lux-edit-modal");
   if (opts.existingId !== undefined) el.existingId = opts.existingId;
+  if (opts.hass !== undefined) el.hass = opts.hass;
   if (opts.initial !== undefined) el.initial = opts.initial;
   el.takenIds = opts.takenIds ?? new Set<string>();
   document.body.appendChild(el);
@@ -98,6 +99,25 @@ describe("ambience-lux-edit-modal", () => {
     clickSave(el);
     expect(get()?.id).toBe("dim");
     expect(get()?.definition).toEqual({ label: "Dim", min: 10, max: 60 });
+  });
+
+  test("override builtin pre-fills the name field with the builtin's display name", async () => {
+    // Overriding a built-in lux range: existingId set, def has no label.
+    el = await mount({ existingId: "dim", initial: { min: 10, max: 50, label: null } });
+    const input = el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement;
+    expect(input.value).toBe("Dim");
+  });
+
+  test("override builtin resolves the localized name via i18n (not the humanized id)", async () => {
+    // Pins the i18n resolution path: in Spanish "dim" → "Tenue", which the
+    // humanized-id fallback ("Dim") would never produce.
+    el = await mount({
+      existingId: "dim",
+      initial: { min: 10, max: 50, label: null },
+      hass: { language: "es" },
+    });
+    const input = el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement;
+    expect(input.value).toBe("Tenue");
   });
 
   test("Cancel emits lux-range-cancel", async () => {

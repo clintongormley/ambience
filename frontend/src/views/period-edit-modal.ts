@@ -1,6 +1,6 @@
 import { css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { localize } from "../i18n.js";
+import { localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, TimeEndpoint } from "../types.js";
 import { AmbienceNamedDefEditModal, MODAL_STYLES } from "./named-def-edit-modal.js";
 import "./time-endpoint.js";
@@ -49,7 +49,12 @@ export class AmbiencePeriodEditModal extends AmbienceNamedDefEditModal<PeriodDef
     return localize(this.hass, "ui.name_placeholder", "e.g. Wind down");
   }
   protected _initialLabel() {
-    return this.initial.label;
+    // Overriding a built-in: its name lives in i18n, not the def's `label`, so
+    // default the field/heading to the resolved display name (e.g. "dawn" →
+    // "Dawn") instead of leaving it empty.
+    return (
+      this.initial.label ?? (this.existingId ? periodLabel(this.hass, this.existingId, {}) : null)
+    );
   }
 
   private _onFromChange(e: CustomEvent<{ value: TimeEndpoint }>) {

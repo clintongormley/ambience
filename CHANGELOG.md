@@ -16,6 +16,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   first and wins, because whether an entity is observable at all is the most
   fundamental fact a scene can match on.
 
+### Fixed
+
+- Ambience's built-in turn-on/turn-off and safe-cover services no longer log a
+  Home Assistant deprecation warning ("The deprecated argument hass was passed
+  to async_extract_entity_ids"). This also keeps those services working on Home
+  Assistant 2026.10, which removes the deprecated call.
+
 ## [0.29.0] - 2026-06-26
 
 ### Added

@@ -16,15 +16,34 @@ so HA's service catalog drives the scene-editor UI unchanged.
 
 from __future__ import annotations
 
+import inspect
 from functools import partial
 
 import voluptuous as vol
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.service import async_extract_entity_ids
+from homeassistant.helpers.service import (
+    async_extract_entity_ids as _ha_extract_entity_ids,
+)
 
 from .const import DOMAIN
+
+# HA 2026.x deprecated passing ``hass`` to ``async_extract_entity_ids`` (removed
+# in 2026.10) and now derives it from ``call.hass``; our minimum supported HA
+# (2025.2) still requires ``hass`` as the first positional arg. The helper exists
+# on both, so this is a signature change, not a missing symbol — hence signature
+# inspection here rather than the try/except-import probe used in target_resolve.
+# Detect which signature is in effect once, at import, so we work on both.
+_EXTRACT_WANTS_HASS = "hass" in inspect.signature(_ha_extract_entity_ids).parameters
+
+
+async def _extract_entity_ids(hass: HomeAssistant, call: ServiceCall) -> set[str]:
+    """Extract a service call's entity ids, bridging HA's signature change."""
+    if _EXTRACT_WANTS_HASS:
+        return await _ha_extract_entity_ids(hass, call)
+    return await _ha_extract_entity_ids(call)
+
 
 _INDETERMINATE = (STATE_UNKNOWN, STATE_UNAVAILABLE)
 _COVER_MOVING = ("opening", "closing")
@@ -50,7 +69,7 @@ _TILT_SCHEMA = _int_0_100_schema("tilt_position")
 
 
 async def _async_turn_on(hass: HomeAssistant, call: ServiceCall) -> None:
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(e for e in eids if (s := hass.states.get(e)) is None or s.state != STATE_ON)
     if to_send:
         await hass.services.async_call(
@@ -64,7 +83,7 @@ async def _async_turn_on(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 async def _async_turn_off(hass: HomeAssistant, call: ServiceCall) -> None:
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(e for e in eids if (s := hass.states.get(e)) is None or s.state != STATE_OFF)
     if to_send:
         await hass.services.async_call(
@@ -112,7 +131,7 @@ def _needs_position(state, target: int, attr: str) -> bool:
 
 
 async def _async_cover_open(hass: HomeAssistant, call: ServiceCall) -> None:
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(e for e in eids if _needs_open(hass.states.get(e)))
     if to_send:
         await hass.services.async_call(
@@ -126,7 +145,7 @@ async def _async_cover_open(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 async def _async_cover_close(hass: HomeAssistant, call: ServiceCall) -> None:
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(e for e in eids if _needs_close(hass.states.get(e)))
     if to_send:
         await hass.services.async_call(
@@ -141,7 +160,7 @@ async def _async_cover_close(hass: HomeAssistant, call: ServiceCall) -> None:
 
 async def _async_cover_set_position(hass: HomeAssistant, call: ServiceCall) -> None:
     target = call.data["position"]
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(
         e for e in eids if _needs_position(hass.states.get(e), target, "current_position")
     )
@@ -158,7 +177,7 @@ async def _async_cover_set_position(hass: HomeAssistant, call: ServiceCall) -> N
 
 async def _async_cover_set_tilt(hass: HomeAssistant, call: ServiceCall) -> None:
     target = call.data["tilt_position"]
-    eids = await async_extract_entity_ids(hass, call)
+    eids = await _extract_entity_ids(hass, call)
     to_send = sorted(
         e for e in eids if _needs_position(hass.states.get(e), target, "current_tilt_position")
     )

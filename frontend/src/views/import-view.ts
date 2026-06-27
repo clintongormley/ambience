@@ -77,6 +77,8 @@ export class AmbienceImportConfig extends LitElement {
     this.text = (e.target as HTMLTextAreaElement).value;
     this.error = null;
     this.done = null;
+    // Drop any stale preview so Import can't save a block the text no longer shows.
+    this.preview = null;
   }
 
   private async _doPreview(): Promise<void> {

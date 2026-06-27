@@ -1,7 +1,7 @@
 # Conditions cookbook
 
 This is the most important file for **authoring**. It maps plain-English intent
-to the exact predicate JSON, for every one of the 14 conditions. Read this when
+to the exact predicate JSON, for every built-in condition. Read this when
 you turn a user's words into a scene's `when` map.
 
 How to use it:

@@ -83,6 +83,19 @@ describe("ambience-import-config", () => {
     expect(el.shadowRoot.querySelector(".preview-panel")).toBeFalsy();
   });
 
+  test("editing the text after a preview clears the stale preview", async () => {
+    el = await mount();
+    await pasteAndPreview(MERGE_BLOCK);
+    expect(el.shadowRoot.querySelector(".preview-panel")).toBeTruthy();
+    // Edit the textarea — the now-stale preview (and its Import button) must go.
+    const ta = el.shadowRoot.querySelector("textarea") as HTMLTextAreaElement;
+    ta.value = `${MERGE_BLOCK}\n# edited`;
+    ta.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".preview-panel")).toBeFalsy();
+    expect(el.shadowRoot.querySelector("button.confirm")).toBeFalsy();
+  });
+
   test("confirming creates the new category, validates and saves the merged config", async () => {
     el = await mount();
     await pasteAndPreview(MERGE_BLOCK);

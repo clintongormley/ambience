@@ -141,8 +141,9 @@ makes a good catch-all default.
 - **A scene matches only when every listed condition matches** (logical AND
   across conditions). A missing key, or a `null` value, is a **wildcard** for that
   condition.
-- The key must be one of the 14 condition names below. Unknown keys are rejected
-  at save time.
+- The key must be one of the built-in condition names below (see
+  `condition-reference.generated.md` for the authoritative list). Unknown keys are
+  rejected at save time.
 - The value is that condition's **predicate**; `null` always means "no
   constraint".
 
@@ -558,7 +559,7 @@ Every built-in condition usable under a scene's `when`. Each `when` key is one o
 # Conditions cookbook
 
 This is the most important file for **authoring**. It maps plain-English intent
-to the exact predicate JSON, for every one of the 14 conditions. Read this when
+to the exact predicate JSON, for every built-in condition. Read this when
 you turn a user's words into a scene's `when` map.
 
 How to use it:

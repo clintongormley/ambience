@@ -133,8 +133,9 @@ makes a good catch-all default.
 - **A scene matches only when every listed condition matches** (logical AND
   across conditions). A missing key, or a `null` value, is a **wildcard** for that
   condition.
-- The key must be one of the 14 condition names below. Unknown keys are rejected
-  at save time.
+- The key must be one of the built-in condition names below (see
+  `condition-reference.generated.md` for the authoritative list). Unknown keys are
+  rejected at save time.
 - The value is that condition's **predicate**; `null` always means "no
   constraint".
 

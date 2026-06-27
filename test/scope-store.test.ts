@@ -26,6 +26,7 @@ vi.mock("../frontend/src/api", async (importActual) => {
     listSwitches: vi.fn(async () => []),
     listConditions: vi.fn(),
     listExposedActions: vi.fn(),
+    getInstallId: vi.fn(async () => "test-install"),
     listCategories: vi.fn(async () => []),
     getServiceSchema: vi.fn(async () => ({})),
     listPeriods: vi.fn(),
@@ -178,6 +179,13 @@ describe("ScopeStore", () => {
       expect(store.weatherConfig).toEqual({ entity: null, groups: [] });
       expect(store.staticLoaded).toBe(true);
       expect(store.error).toBe("");
+    });
+
+    test("fetches and exposes the install id (for per-install hint dismissal)", async () => {
+      const { store } = makeStore();
+      await store.loadStatic();
+      expect(api.getInstallId).toHaveBeenCalled();
+      expect(store.installId).toBe("test-install");
     });
 
     test("loads a schema per exposed action", async () => {

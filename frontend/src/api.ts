@@ -132,6 +132,14 @@ export async function listConditions(hass: HassConnection): Promise<ConditionInf
   return hass.callWS({ type: "ambience/conditions/list" });
 }
 
+/** The install identity (the single config entry's id), or null mid-teardown.
+ *  The frontend keys its per-browser hint-dismissal state by this so a delete +
+ *  recreate (which yields a new entry_id) re-shows the optional setup hints. */
+export async function getInstallId(hass: HassConnection): Promise<string | null> {
+  const res = await hass.callWS<{ install_id: string | null }>({ type: "ambience/install_id" });
+  return res.install_id;
+}
+
 /** Read-only list of the watches the engine derives from a scope's scenes,
  *  for the Auto-triggers display. `scope_id` is omitted for the house scope. */
 export async function listAutoTriggers(

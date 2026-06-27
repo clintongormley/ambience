@@ -94,40 +94,48 @@ export function setCollapsedCategories(keys: string[]): void {
   }
 }
 
-/** Whether the user dismissed the optional "configure Workday & Weather" hint. */
-export function getConditionsHintDismissed(): boolean {
+/** Shared read/write for a per-install "dismissed" flag. The dismissal stores
+ *  the install id (the config entry_id) it was made against, so deleting and
+ *  recreating the integration — which yields a new entry_id — re-shows whatever
+ *  was dismissed. An unknown install id (null/empty, e.g. mid-load) is never
+ *  "dismissed", and a dismissal against one is never persisted — there's
+ *  nothing to key it to. */
+function getInstallDismissed(key: string, installId: string | null): boolean {
+  if (!installId) return false;
   try {
-    return window.localStorage.getItem(CONDITIONS_HINT_DISMISSED_KEY) === "1";
+    return window.localStorage.getItem(key) === installId;
   } catch {
     // Storage disabled — treat as not dismissed.
     return false;
   }
 }
 
-/** Persist that the user dismissed the optional conditions hint. */
-export function setConditionsHintDismissed(): void {
+function setInstallDismissed(key: string, installId: string | null): void {
+  if (!installId) return;
   try {
-    window.localStorage.setItem(CONDITIONS_HINT_DISMISSED_KEY, "1");
+    window.localStorage.setItem(key, installId);
   } catch {
     // Storage disabled — the dismissal just won't persist.
   }
 }
 
-/** Whether the user dismissed the "install Fado Light Fader" notice. */
-export function getFadoNoticeDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(FADO_NOTICE_DISMISSED_KEY) === "1";
-  } catch {
-    // Storage disabled — treat as not dismissed.
-    return false;
-  }
+/** Whether the user dismissed the optional "configure Workday & Weather" hint
+ *  for this install. */
+export function getConditionsHintDismissed(installId: string | null): boolean {
+  return getInstallDismissed(CONDITIONS_HINT_DISMISSED_KEY, installId);
 }
 
-/** Persist that the user dismissed the Fado notice. */
-export function setFadoNoticeDismissed(): void {
-  try {
-    window.localStorage.setItem(FADO_NOTICE_DISMISSED_KEY, "1");
-  } catch {
-    // Storage disabled — the dismissal just won't persist.
-  }
+/** Persist that the user dismissed the conditions hint for this install. */
+export function setConditionsHintDismissed(installId: string | null): void {
+  setInstallDismissed(CONDITIONS_HINT_DISMISSED_KEY, installId);
+}
+
+/** Whether the user dismissed the "install Fado Light Fader" notice for this install. */
+export function getFadoNoticeDismissed(installId: string | null): boolean {
+  return getInstallDismissed(FADO_NOTICE_DISMISSED_KEY, installId);
+}
+
+/** Persist that the user dismissed the Fado notice for this install. */
+export function setFadoNoticeDismissed(installId: string | null): void {
+  setInstallDismissed(FADO_NOTICE_DISMISSED_KEY, installId);
 }

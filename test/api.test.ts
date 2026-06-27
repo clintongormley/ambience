@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { listPeriods, resetPeriods, savePeriods } from "../frontend/src/api";
+import { getInstallId, listPeriods, resetPeriods, savePeriods } from "../frontend/src/api";
 import type { PeriodDef } from "../frontend/src/types";
 
 function makeFakeHass(): { callWS: ReturnType<typeof vi.fn>; sent: any[] } {
@@ -53,5 +53,19 @@ describe("Ambience API period methods", () => {
     const res = await resetPeriods(fakeHass);
     expect(sent[0]).toEqual({ type: "ambience/time_of_day_periods/reset" });
     expect(res.ok).toBe(true);
+  });
+});
+
+describe("getInstallId", () => {
+  test("sends the WS message and returns the install id", async () => {
+    const callWS = vi.fn(async () => ({ install_id: "abc123" }));
+    const res = await getInstallId({ callWS } as any);
+    expect(callWS).toHaveBeenCalledWith({ type: "ambience/install_id" });
+    expect(res).toBe("abc123");
+  });
+
+  test("returns null when the backend reports no install (mid-teardown)", async () => {
+    const callWS = vi.fn(async () => ({ install_id: null }));
+    expect(await getInstallId({ callWS } as any)).toBeNull();
   });
 });

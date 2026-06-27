@@ -8,6 +8,20 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- Removed the "Set up an action to get started" banner. New installs now seed
+  default actions, so the prompt no longer applied.
+
+### Fixed
+
+- The optional "set up Workday & Weather" hint and the "install Fado Light
+  Fader" notice now reappear after you delete and recreate the Ambience
+  integration. Previously, dismissing either one hid it for good in that browser
+  — even on a brand-new install — because the dismissal wasn't tied to the
+  install. Each dismissal is now remembered per install, so a fresh setup starts
+  with a clean slate.
+
 ## [0.30.0] - 2026-06-26
 
 ### Changed

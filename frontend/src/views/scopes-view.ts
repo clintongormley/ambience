@@ -338,8 +338,11 @@ export class AmbienceScopesView extends LitElement {
   override async connectedCallback() {
     super.connectedCallback();
     window.addEventListener("keydown", this._onKeyDown);
-    this._conditionsHintDismissed = getConditionsHintDismissed();
     await this._store.loadStatic();
+    // Evaluate the (per-install) dismissal after loadStatic so the install id
+    // is known. The hint only renders once staticLoaded is true, so reading it
+    // here — not before the fetch — means it never flashes in then out.
+    this._conditionsHintDismissed = getConditionsHintDismissed(this._store.installId);
     await Promise.all([
       this._store.refreshAreas(),
       this._store.refreshFloors(),
@@ -901,41 +904,13 @@ export class AmbienceScopesView extends LitElement {
 
   private _dismissConditionsHint() {
     this._conditionsHintDismissed = true;
-    setConditionsHintDismissed();
+    setConditionsHintDismissed(this._store.installId);
   }
 
-  /** The empty-state nudges shown above the scope list:
-   *  - a required, non-dismissible banner when no action is exposed yet;
-   *  - else an optional, dismissible hint to configure Workday/Weather.
-   *  Sequenced: the optional hint only appears once at least one action exists. */
+  /** The optional, dismissible hint above the scope list, nudging the user to
+   *  configure Workday/Weather while either is still unset. */
   private _renderBanners() {
     if (!this._store.staticLoaded) return "";
-    if (this._store.actions.length === 0) {
-      return html`
-        <div class="banner banner-required" data-test="no-actions-banner" role="alert">
-          <ha-icon class="banner-icon" icon="mdi:alert-circle-outline"></ha-icon>
-          <div class="banner-text">
-            <strong
-              >${localize(this.hass, "ui.no_actions_title", "Set up an action to get started")}</strong
-            >
-            <span
-              >${localize(
-                this.hass,
-                "ui.no_actions_body",
-                "Ambience can't apply anything until you expose at least one action — scenes need actions to run.",
-              )}</span
-            >
-          </div>
-          <button
-            class="banner-cta"
-            data-test="setup-actions-btn"
-            @click=${() => this._openSettings("actions")}
-          >
-            ${localize(this.hass, "ui.no_actions_cta", "Set up actions")}
-          </button>
-        </div>
-      `;
-    }
     if (!this._conditionsHintDismissed && this._conditionsUnconfigured) {
       const { title, body } = this._conditionsHintText();
       return html`

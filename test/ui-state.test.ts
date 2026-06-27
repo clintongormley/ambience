@@ -151,53 +151,78 @@ describe("ui-state persistence", () => {
     });
   });
 
-  describe("conditions hint dismissed", () => {
-    test("defaults to false when nothing stored", () => {
-      expect(getConditionsHintDismissed()).toBe(false);
+  describe("conditions hint dismissed (per install)", () => {
+    test("not dismissed by default", () => {
+      expect(getConditionsHintDismissed("entry-1")).toBe(false);
     });
 
-    test("round-trips the dismissed flag", () => {
-      setConditionsHintDismissed();
-      expect(getConditionsHintDismissed()).toBe(true);
+    test("dismissed only for the install id it was dismissed against", () => {
+      setConditionsHintDismissed("entry-1");
+      expect(getConditionsHintDismissed("entry-1")).toBe(true);
+      // A different install (delete + recreate ⇒ new entry_id) re-shows it.
+      expect(getConditionsHintDismissed("entry-2")).toBe(false);
+    });
+
+    test("not dismissed when the current install id is unknown (null)", () => {
+      setConditionsHintDismissed("entry-1");
+      expect(getConditionsHintDismissed(null)).toBe(false);
+    });
+
+    test("a null install id is never persisted", () => {
+      setConditionsHintDismissed(null);
+      expect(window.localStorage.getItem("ambience-conditions-hint-dismissed")).toBeNull();
+      expect(getConditionsHintDismissed("entry-1")).toBe(false);
     });
 
     test("returns false when reading throws (storage disabled)", () => {
       vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
         throw new Error("storage disabled");
       });
-      expect(getConditionsHintDismissed()).toBe(false);
+      expect(getConditionsHintDismissed("entry-1")).toBe(false);
     });
 
     test("swallows errors when writing throws (storage disabled)", () => {
       vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
         throw new Error("storage disabled");
       });
-      expect(() => setConditionsHintDismissed()).not.toThrow();
+      expect(() => setConditionsHintDismissed("entry-1")).not.toThrow();
     });
   });
 
-  describe("fado notice dismissed", () => {
-    test("defaults to false when nothing stored", () => {
-      expect(getFadoNoticeDismissed()).toBe(false);
+  describe("fado notice dismissed (per install)", () => {
+    test("not dismissed by default", () => {
+      expect(getFadoNoticeDismissed("entry-1")).toBe(false);
     });
 
-    test("set then get returns true", () => {
-      setFadoNoticeDismissed();
-      expect(getFadoNoticeDismissed()).toBe(true);
+    test("dismissed only for the install id it was dismissed against", () => {
+      setFadoNoticeDismissed("entry-1");
+      expect(getFadoNoticeDismissed("entry-1")).toBe(true);
+      expect(getFadoNoticeDismissed("entry-2")).toBe(false);
+    });
+
+    test("not dismissed when the current install id is unknown (null)", () => {
+      setFadoNoticeDismissed("entry-1");
+      expect(getFadoNoticeDismissed(null)).toBe(false);
+    });
+
+    test("a null install id is never persisted", () => {
+      setFadoNoticeDismissed(null);
+      expect(window.localStorage.getItem("ambience-fado-notice-dismissed")).toBeNull();
+      expect(getFadoNoticeDismissed("entry-1")).toBe(false);
     });
 
     test("returns false when reading throws (storage disabled)", () => {
       vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
         throw new Error("storage disabled");
       });
-      expect(getFadoNoticeDismissed()).toBe(false);
+      expect(getFadoNoticeDismissed("entry-1")).toBe(false);
     });
 
     test("swallows errors when writing throws (storage disabled)", () => {
       vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
         throw new Error("storage disabled");
       });
-      expect(() => setFadoNoticeDismissed()).not.toThrow();
+      expect(() => setFadoNoticeDismissed("entry-1")).not.toThrow();
     });
   });
 });

@@ -2,9 +2,8 @@ import { css } from "lit";
 
 /** Shared notice/hint banner styles (icon + text block + CTA + dismiss ✕).
  *  Hosts add `bannerStyles` to their `static styles` array and render a
- *  `<div class="banner …">`. Modifier classes tint the icon:
- *    - `.banner-required` — warning colour + tinted background (blocking notice)
- *    - `.banner-hint`     — primary colour (optional suggestion)
+ *  `<div class="banner …">`. The `.banner-hint` modifier tints the icon with
+ *  the primary colour (optional suggestion).
  *  The CTA is styled for both `<button>` and `<a>` (text-decoration removed). */
 export const bannerStyles = css`
   .banner {
@@ -21,13 +20,6 @@ export const bannerStyles = css`
     flex: 0 0 auto;
     margin-top: 0.1rem;
     --mdc-icon-size: 22px;
-  }
-  .banner-required {
-    border-color: var(--warning-color, #ffa600);
-    background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff));
-  }
-  .banner-required .banner-icon {
-    color: var(--warning-color, #ffa600);
   }
   .banner-hint .banner-icon {
     color: var(--primary-color, #03a9f4);

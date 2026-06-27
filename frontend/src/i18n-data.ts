@@ -362,10 +362,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_cta: "Install via HACS",
       for_prefix: "for",
       name_duplicate: "A scene with this name already exists in this category.",
-      no_actions_body:
-        "Ambience can't apply anything until you expose at least one action — scenes need actions to run.",
-      no_actions_cta: "Set up actions",
-      no_actions_title: "Set up an action to get started",
       no_exposed_actions: "Add services in Settings → Actions.",
       people_for: "for",
       people_is_at: "Is at",
@@ -909,10 +905,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_cta: "Instalar con HACS",
       for_prefix: "durante",
       name_duplicate: "Ya existe una escena con este nombre en esta categoría.",
-      no_actions_body:
-        "Ambience no puede aplicar nada hasta que expongas al menos una acción — las escenas necesitan acciones para ejecutarse.",
-      no_actions_cta: "Configurar acciones",
-      no_actions_title: "Configura una acción para empezar",
       no_exposed_actions: "Añade servicios en Ajustes → Acciones.",
       people_for: "durante",
       people_is_at: "Está en",

@@ -33,6 +33,7 @@ vi.mock("../frontend/src/api", async (importActual) => {
     listSwitches: vi.fn(async () => []),
     listConditions: vi.fn(),
     listExposedActions: vi.fn(),
+    getInstallId: vi.fn(async () => "test-install"),
     listCategories: vi.fn(async () => []),
     getServiceSchema: vi.fn(async () => ({})),
     listPeriods: vi.fn(),
@@ -651,26 +652,12 @@ describe("ambience-scopes-view", () => {
 
   // --- empty-state banners -------------------------------------------------
 
-  test("shows the no-actions banner when no actions are configured", async () => {
+  test("no longer shows a required 'set up an action' banner (default actions are seeded)", async () => {
     el = await mount({ actions: [] });
-    expect(el.shadowRoot.querySelector('[data-test="no-actions-banner"]')).not.toBeNull();
-    // The optional conditions hint is sequenced AFTER an action exists.
-    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
-  });
-
-  test("the no-actions banner button opens settings on the actions tab", async () => {
-    el = await mount({ actions: [] });
-    let detail: any = null;
-    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
-      detail = e.detail;
-    });
-    (el.shadowRoot.querySelector('[data-test="setup-actions-btn"]') as HTMLElement).click();
-    expect(detail).toEqual({ tab: "actions" });
-  });
-
-  test("hides the no-actions banner once at least one action exists", async () => {
-    el = await mount(); // default mock has one action
     expect(el.shadowRoot.querySelector('[data-test="no-actions-banner"]')).toBeNull();
+    // With no actions gating it, the optional conditions hint shows when
+    // weather/workday are unconfigured.
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
   test("shows the conditions hint when actions exist but weather/workday are unconfigured", async () => {
@@ -737,10 +724,26 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
 
-    // Persisted via localStorage: a fresh mount stays dismissed.
+    // Persisted via localStorage: a fresh mount of the SAME install stays dismissed.
     el.remove();
     el = await mount();
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("re-shows the conditions hint after a reinstall (new install id)", async () => {
+    // Dismiss against install "entry-1".
+    vi.mocked(api.getInstallId).mockResolvedValue("entry-1");
+    el = await mount();
+    (el.shadowRoot.querySelector('[data-test="dismiss-conditions-hint"]') as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+
+    // Delete + recreate the integration ⇒ a new entry_id. The dismissal was
+    // stamped with the old id, so the hint must come back.
+    el.remove();
+    vi.mocked(api.getInstallId).mockResolvedValue("entry-2");
+    el = await mount();
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
   test("hides the conditions hint live when weather + workday get configured", async () => {

@@ -17,6 +17,7 @@ import {
   getDayConfig,
   getFloor,
   getHouse,
+  getInstallId,
   getServiceSchema,
   getWeatherConfig,
   listAreas,
@@ -124,6 +125,10 @@ export class ScopeStore implements ReactiveController {
   @tracked() luxRanges?: LuxRangeStoreView;
   @tracked() dayConfig?: DayConfig;
   @tracked() weatherConfig?: WeatherConfig;
+  // The install identity (the config entry_id), used to key per-browser hint
+  // dismissals so a delete + recreate (new entry_id) re-shows the optional
+  // setup hints. null until loadStatic resolves, or if no entry is registered.
+  @tracked() installId: string | null = null;
   // True once the initial static load (actions, weather, workday, …) finishes,
   // so the empty-state banners don't flash during loading.
   @tracked() staticLoaded = false;
@@ -321,17 +326,27 @@ export class ScopeStore implements ReactiveController {
 
   async loadStatic(): Promise<void> {
     try {
-      const [conditions, actions, periods, luxRanges, dayConfig, weatherConfig, categories] =
-        await Promise.all([
-          listConditions(this._hass),
-          listExposedActions(this._hass),
-          listPeriods(this._hass),
-          listLuxRanges(this._hass),
-          getDayConfig(this._hass),
-          getWeatherConfig(this._hass),
-          listCategories(this._hass),
-        ]);
+      const [
+        conditions,
+        actions,
+        periods,
+        luxRanges,
+        dayConfig,
+        weatherConfig,
+        categories,
+        installId,
+      ] = await Promise.all([
+        listConditions(this._hass),
+        listExposedActions(this._hass),
+        listPeriods(this._hass),
+        listLuxRanges(this._hass),
+        getDayConfig(this._hass),
+        getWeatherConfig(this._hass),
+        listCategories(this._hass),
+        getInstallId(this._hass),
+      ]);
       if (!this._host.isConnected) return;
+      this.installId = installId;
       this.conditions = conditions;
       this.actions = actions;
       this.periods = periods;

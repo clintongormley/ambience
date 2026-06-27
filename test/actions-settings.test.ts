@@ -26,10 +26,16 @@ vi.mock("../frontend/src/api.js", () => ({
     return { fields: {}, target: null };
   }),
   saveExposedActions: vi.fn(async () => ({ ok: true })),
+  getInstallId: vi.fn(async () => "test-install"),
 }));
 
 import "../frontend/src/views/actions-settings";
-import { getServiceSchema, listExposedActions, saveExposedActions } from "../frontend/src/api.js";
+import {
+  getInstallId,
+  getServiceSchema,
+  listExposedActions,
+  saveExposedActions,
+} from "../frontend/src/api.js";
 import { deriveActionLabel } from "../frontend/src/views/actions-settings";
 
 describe("deriveActionLabel", () => {
@@ -95,7 +101,7 @@ describe("ambience-actions-settings", () => {
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
     });
 
-    test("dismiss hides it and persists", async () => {
+    test("dismiss hides it and persists (stamped with the install id)", async () => {
       el = await mount({ localize: () => "", config: { components: ["light"] } });
       const dismiss = el.shadowRoot.querySelector(
         '[data-test="dismiss-fado-notice"]',
@@ -103,13 +109,20 @@ describe("ambience-actions-settings", () => {
       dismiss.click();
       await el.updateComplete;
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
-      expect(window.localStorage.getItem("ambience-fado-notice-dismissed")).toBe("1");
+      expect(window.localStorage.getItem("ambience-fado-notice-dismissed")).toBe("test-install");
     });
 
-    test("hidden when already dismissed", async () => {
-      window.localStorage.setItem("ambience-fado-notice-dismissed", "1");
+    test("hidden when already dismissed for this install", async () => {
+      window.localStorage.setItem("ambience-fado-notice-dismissed", "test-install");
       el = await mount({ localize: () => "", config: { components: ["light"] } });
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
+    });
+
+    test("re-shows after a reinstall (dismissal stamped with a different install id)", async () => {
+      window.localStorage.setItem("ambience-fado-notice-dismissed", "old-install");
+      vi.mocked(getInstallId).mockResolvedValue("test-install");
+      el = await mount({ localize: () => "", config: { components: ["light"] } });
+      expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).not.toBeNull();
     });
   });
 

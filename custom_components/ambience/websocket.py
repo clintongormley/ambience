@@ -188,6 +188,31 @@ async def _ws_conditions_list(
     connection.send_result(msg["id"], result)
 
 
+def _resolve_install_id(hass: HomeAssistant) -> str | None:
+    """The single Ambience config entry's id, or None when none is registered.
+
+    Single-instance, so there is at most one entry; its id is the install
+    identity the frontend stamps dismissible-hint state with. None is a
+    teardown-race guard — the ws command is unregistered once the entry is
+    gone, so the empty-list path isn't reachable through it."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    return entries[0].entry_id if entries else None
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/install_id"})
+@websocket_api.async_response
+async def _ws_install_id(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the install identity (the config entry id). The frontend keys its
+    per-browser hint-dismissal state by this, so deleting and recreating the
+    integration (a new entry_id) re-shows the optional setup hints."""
+    connection.send_result(msg["id"], {"install_id": _resolve_install_id(hass)})
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/services/list"})
 @websocket_api.async_response
@@ -1467,6 +1492,7 @@ _WS_HANDLERS = (
     _ws_areas_list,
     _ws_floors_list,
     _ws_conditions_list,
+    _ws_install_id,
     _ws_services_list,
     _ws_services_get_schema,
     _ws_exposed_actions_list,

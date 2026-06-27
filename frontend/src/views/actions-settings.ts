@@ -11,6 +11,7 @@ import "./ambience-help.js";
 export { deriveActionLabel };
 
 import {
+  getInstallId,
   getServiceSchema,
   type HassConnection,
   listExposedActions,
@@ -322,6 +323,10 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _saveError: string | null = null;
   @state() private _loaded = false;
   @state() private _fadoNoticeDismissed = false;
+  // The install identity (config entry_id), used to key the Fado-notice
+  // dismissal so a delete + recreate (new entry_id) re-shows it. Resolved in
+  // _reload before _loaded flips, so the notice never renders against a stale id.
+  private _installId: string | null = null;
   /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
   @state() private _editingDefault: string | null = null;
   /** Value the field had before entering edit mode (for Cancel). */
@@ -383,7 +388,6 @@ export class AmbienceActionsSettings extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._fadoNoticeDismissed = getFadoNoticeDismissed();
     document.addEventListener("pointerdown", this._onDocPointerDown);
     // If HA registers its rich service picker lazily, re-render to pick it up.
     /* v8 ignore next 3 -- real-HA registry timing, not jsdom */
@@ -491,12 +495,17 @@ export class AmbienceActionsSettings extends LitElement {
   private async _reload() {
     this._loadError = null;
     try {
-      const [actions, services] = await Promise.all([
+      const [actions, services, installId] = await Promise.all([
         listExposedActions(this.hass),
         listServices(this.hass),
+        getInstallId(this.hass),
       ]);
       this._actions = actions;
       this._services = services;
+      // Resolve the per-install Fado-notice dismissal here (before _loaded
+      // flips) so the notice never flashes against an unknown install id.
+      this._installId = installId;
+      this._fadoNoticeDismissed = getFadoNoticeDismissed(installId);
     } catch (e: unknown) {
       this._loadError = localizeWsError(this.hass, e);
       return; // do NOT mark as loaded
@@ -660,7 +669,7 @@ export class AmbienceActionsSettings extends LitElement {
 
   private _dismissFadoNotice() {
     this._fadoNoticeDismissed = true;
-    setFadoNoticeDismissed();
+    setFadoNoticeDismissed(this._installId);
   }
 
   private _renderCard(action: ExposedAction, index: number) {

@@ -143,6 +143,24 @@ async def test_areas_list_returns_all_ha_areas(
     ]
 
 
+async def test_install_id_returns_entry_id(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    """install_id returns the single config entry's id so the frontend can stamp
+    its dismissible-hint state per install (delete + recreate ⇒ new id ⇒ the
+    hint re-shows)."""
+    resp = await _ws_send(hass_ws_client, type="ambience/install_id")
+    assert resp["success"] is True
+    assert resp["result"] == {"install_id": installed.entry_id}
+
+
+async def test_resolve_install_id_is_none_without_entry(hass: HomeAssistant) -> None:
+    """The helper returns None when no Ambience entry exists. The ws command
+    can't reach this (it's unregistered without an entry), so it's covered here
+    directly — a teardown-race guard against IndexError on an empty entry list."""
+    from custom_components.ambience.websocket import _resolve_install_id
+
+    assert _resolve_install_id(hass) is None
+
+
 async def test_conditions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/conditions/list")
     assert resp["success"] is True

@@ -28,6 +28,12 @@ vi.mock("../frontend/src/api.js", () => ({
   getArea: vi.fn(async () => ({ scenes: [] })),
   getFloor: vi.fn(async () => ({ scenes: [] })),
   getHouse: vi.fn(async () => ({ scenes: [] })),
+  // The Actions sub-tab mounts <ambience-actions-settings>, whose _reload()
+  // fetches these three; stub them so it loads cleanly instead of silently
+  // erroring (it only ever checked element presence before).
+  listExposedActions: vi.fn(async () => []),
+  listServices: vi.fn(async () => []),
+  getInstallId: vi.fn(async () => "test-install"),
 }));
 
 import "../frontend/src/views/settings-view";

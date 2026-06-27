@@ -33,6 +33,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   — even on a brand-new install — because the dismissal wasn't tied to the
   install. Each dismissal is now remembered per install, so a fresh setup starts
   with a clean slate.
+- When a scene is skipped because its scope's pause switch is off, the trace
+  timeline now says *"Skipped — the scope's pause switch is off."* It previously
+  referred to a non-existent "category switch".
 
 ### Removed
 

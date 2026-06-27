@@ -445,7 +445,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       outcome_summary_debounced:
         "{winner} matched, but it's already applied — nothing was re-sent.",
       outcome_summary_no_match: "No scene matched — nothing applied.",
-      outcome_summary_skipped_switch_off: "Skipped — the category switch is off.",
+      outcome_summary_skipped_switch_off: "Skipped — the scope's pause switch is off.",
       outcome_summary_skipped_scope_disabled: "Skipped — the scope is disabled.",
       outcome_summary_skipped_unavailable:
         "Skipped — the triggering entity went unavailable; devices left as they are.",
@@ -983,7 +983,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
         "{winner} coincidió pero no tiene acciones — bloquea que se apliquen escenas inferiores. Nada cambió.",
       outcome_summary_debounced: "{winner} coincidió, pero ya está aplicado — no se reenvió nada.",
       outcome_summary_no_match: "Ninguna escena coincidió — nada aplicado.",
-      outcome_summary_skipped_switch_off: "Omitido — el interruptor de categoría está apagado.",
+      outcome_summary_skipped_switch_off:
+        "Omitido — el interruptor de pausa del ámbito está apagado.",
       outcome_summary_skipped_scope_disabled: "Omitido — el ámbito está desactivado.",
       outcome_summary_skipped_unavailable:
         "Omitido — la entidad que disparó quedó no disponible; los dispositivos se dejaron como estaban.",

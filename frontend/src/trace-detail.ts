@@ -404,7 +404,7 @@ export function outcomeSummary(hass: HassLike | undefined, u: BufferedUnit): str
       return localize(
         hass,
         "ui.outcome_summary_skipped_switch_off",
-        "Skipped — the category switch is off.",
+        "Skipped — the scope's pause switch is off.",
       );
     case "skipped_scope_disabled":
       return localize(

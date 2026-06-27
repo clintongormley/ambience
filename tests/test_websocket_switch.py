@@ -82,7 +82,6 @@ async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
             type="ambience/switch_defaults/save",
             name="Master",
             auto_on_delay_seconds=600,
-            create_switches=False,
         )
         assert resp["success"]
         assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults() == {
@@ -100,7 +99,6 @@ async def test_switch_defaults_save_validation_error(hass, installed, hass_ws_cl
         type="ambience/switch_defaults/save",
         name="",
         auto_on_delay_seconds=0,
-        create_switches=False,
     )
     assert not resp["success"]
     assert resp["error"]["code"] == "validation_error"

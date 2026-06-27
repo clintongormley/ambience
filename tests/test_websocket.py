@@ -2474,3 +2474,23 @@ async def test_exposed_actions_save_reconciles_repairs_live(
     assert resp["success"] is True
     # The save reconciled Repairs live — the issue now exists without a reload.
     assert reg.async_get_issue(DOMAIN, "unexposed_action:light.turn_on") is not None
+
+
+async def test_switch_defaults_save_without_create_switches(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, hass_ws_client
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "ambience/switch_defaults/save",
+            "name": "Master",
+            "auto_on_delay_seconds": 600,
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_switch_defaults() == {"name": "Master", "auto_on_delay_seconds": 600}

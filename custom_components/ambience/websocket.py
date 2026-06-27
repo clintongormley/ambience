@@ -873,7 +873,6 @@ async def _ws_switch_defaults_list(
         vol.Required("type"): "ambience/switch_defaults/save",
         vol.Required("name"): str,
         vol.Required("auto_on_delay_seconds"): int,
-        vol.Required("create_switches"): bool,
     }
 )
 @websocket_api.async_response
@@ -888,7 +887,6 @@ async def _ws_switch_defaults_save(
             {
                 "name": msg["name"],
                 "auto_on_delay_seconds": msg["auto_on_delay_seconds"],
-                "create_switches": msg["create_switches"],
             }
         )
     except (HomeAssistantError, ValueError) as exc:
@@ -1044,7 +1042,7 @@ async def _ws_set_scope_enabled(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
 
-    # A scope's switch follows its enabled-ness (when create_switches is on):
+    # A scope's switch follows its enabled-ness:
     # enabling (re)creates it, disabling deletes it and its device. Fire the
     # switch-config signal so the switch platform's reconcile — the single source
     # of truth for which switches exist — applies the change, rather than

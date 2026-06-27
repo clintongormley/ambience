@@ -86,6 +86,14 @@ SIGNAL_UNIT_LIVE = "ambience_unit_live"
 # panel's undo/redo toolbar via ambience/history/subscribe.
 SIGNAL_HISTORY_CHANGED = "ambience_history_changed"
 
+# Bus event fired on each apply/run (see service_logbook + logbook.py). It is a
+# *described* logbook event (not a bare logbook entry): describing it makes
+# Ambience a recognised logbook context source, so the device changes dispatched
+# under the same Context render as "triggered by '<category>/<scene>' (<switch>)",
+# while the entry stays attached to the scope switch (area-filterable). Event
+# data: {"message", "entity_id"}.
+EVENT_AMBIENCE_ACTIVITY = "ambience_activity"
+
 # How many scene-list changes the in-memory undo/redo stack retains.
 HISTORY_LIMIT = 30
 

@@ -1,26 +1,23 @@
 """Activity attribution for Ambience applies.
 
-Composes the human-readable "'<scene>' in <scope>" activity lines and records
-each apply/run as a Home Assistant *logbook entry* against the scope's switch
-entity. An area switch's device sits in its HA area, so the entry is filterable
-by area in the logbook. Each apply gets a fresh Context, shared between the
-logbook entry and the dispatched device service calls so the logbook groups the
-device changes under the activity. Kept separate from service.py so the resolve /
-execute logic doesn't carry the message formatting, and so message composition
-can be unit-tested without a running integration.
+Composes the terse "'<category>/<scene>'" activity lines and fires a described
+Home Assistant logbook event (EVENT_AMBIENCE_ACTIVITY, see logbook.py) against
+the scope's switch entity. An area switch's device sits in its HA area, so the
+entry is filterable by area in the logbook. Each apply gets a fresh Context,
+shared between the activity event and the dispatched device service calls so the
+logbook renders the device changes as "triggered by '<category>/<scene>'
+(<switch>)". Kept separate from service.py so the resolve / execute logic doesn't
+carry the message formatting, and so message composition can be unit-tested
+without a running integration.
 """
 
 from __future__ import annotations
 
-from homeassistant.components import logbook
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context, HomeAssistant
 
-from .const import DATA_SWITCHES, DOMAIN
-from .naming import category_names, scope_display_name
-
-# Brand subject for every logbook entry: "Ambience '<scene>' in <scope>".
-# Constant — independent of the configurable switch-default name.
-ACTIVITY_NAME = "Ambience"
+from .const import DATA_SWITCHES, DOMAIN, EVENT_AMBIENCE_ACTIVITY
+from .naming import category_names
 
 
 def resolved_scene_name(scene_name: str | None, scene_index: int) -> str:
@@ -32,22 +29,22 @@ def compose_apply_message(
     *,
     scene_name: str | None,
     scene_index: int,
-    scope_label: str,
     category_label: str | None,
     category_count: int,
 ) -> str:
-    """Compose the activity line for an apply: "'<scene>' in <scope>".
+    """Compose the activity line: "'<category>/<scene>'" (or "'<scene>'").
 
-    Shown in the logbook as "Ambience '<scene>' in <scope>". Names the matched
-    scene and scope, appending the category name only when more than one category
-    exists and a label is known (an unknown category id yields no suffix). Unnamed
-    scenes fall back to "scene <N>" (1-based).
+    Deliberately terse and scope-free: the entry is attached to the scope switch,
+    whose entity name already supplies the scope and brand ("Lounge Ambience"), so
+    repeating them here would read as "… in Lounge (Lounge Ambience)" in the
+    logbook's "triggered by" attribution. The category is prefixed only when more
+    than one category exists and a label is known. Unnamed scenes fall back to
+    "scene <N>" (1-based).
     """
     scene = resolved_scene_name(scene_name, scene_index)
-    message = f"'{scene}' in {scope_label}"
     if category_count > 1 and category_label:
-        message += f" ({category_label})"
-    return message
+        return f"'{category_label}/{scene}'"
+    return f"'{scene}'"
 
 
 def _switch_entity_id(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:
@@ -77,14 +74,15 @@ def _record(hass: HomeAssistant, scope_kind: str, scope_id: str | None, message:
     context = Context()
     entity_id = _switch_entity_id(hass, scope_kind, scope_id)
     if entity_id is not None:
-        # No "logbook" loaded check needed: async_log_entry only fires a bus event
-        # (a no-op if logbook isn't listening), and logbook is in manifest after_dependencies.
-        logbook.async_log_entry(
-            hass,
-            name=ACTIVITY_NAME,
-            message=message,
-            domain=DOMAIN,
-            entity_id=entity_id,
+        # Fire a *described* event (see logbook.py) rather than a bare logbook
+        # entry, so the device changes sharing this Context render as "triggered
+        # by '<category>/<scene>' (<switch>)". The event carries no "name": the
+        # switch entity name supplies the brand, so a name would double it in the
+        # attribution. No "logbook loaded" guard needed: async_fire is a no-op if
+        # nothing listens, and logbook is in the manifest after_dependencies.
+        hass.bus.async_fire(
+            EVENT_AMBIENCE_ACTIVITY,
+            {"message": message, ATTR_ENTITY_ID: entity_id},
             context=context,
         )
     return context
@@ -100,11 +98,9 @@ def log_apply(
 ) -> Context:
     """Record an apply as a logbook entry on the scope switch; return its Context."""
     categories = category_names(hass)
-    scope_label = scope_display_name(hass, scope_kind, scope_id)
     message = compose_apply_message(
         scene_name=scene_name,
         scene_index=scene_index,
-        scope_label=scope_label,
         category_label=categories.get(category_id),
         category_count=len(categories),
     )
@@ -121,5 +117,4 @@ def log_run_actions(
     """Record a manual run-actions as a logbook entry on the scope switch; return
     its Context."""
     scene = resolved_scene_name(scene_name, scene_index)
-    scope_label = scope_display_name(hass, scope_kind, scope_id)
-    return _record(hass, scope_kind, scope_id, f"'{scene}' in {scope_label}")
+    return _record(hass, scope_kind, scope_id, f"'{scene}'")

@@ -159,6 +159,34 @@ async def test_bundle_does_not_mutate_store(
     assert seeded_store.get_condition_config("day")["workday_sensor"] == "binary_sensor.workday"
 
 
+async def test_catalog_redacts_presence_entity_state(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """A person/device_tracker entity's id stays visible (the AI needs it to author
+    people conditions), but its live state is its current location — that must be
+    redacted, like the diagnostics path scrubs presence PII."""
+    ent_reg = er.async_get(hass)
+    person = ent_reg.async_get_or_create("person", "demo", "alice", suggested_object_id="alice")
+    tracker = ent_reg.async_get_or_create(
+        "device_tracker", "demo", "phone", suggested_object_id="alice_phone"
+    )
+    hass.states.async_set(person.entity_id, "home")
+    hass.states.async_set(tracker.entity_id, "Secret Work Zone")
+    light = ent_reg.async_get_or_create("light", "demo", "l", suggested_object_id="lamp")
+    hass.states.async_set(light.entity_id, "on")
+
+    bundle = await build_ai_bundle(hass)
+    by_id = {e["entity_id"]: e for e in bundle["catalog"]["entities"]}
+
+    # The ids survive (needed for authoring), the location state does not.
+    assert person.entity_id in by_id
+    assert by_id[person.entity_id]["state"] == REDACTED
+    assert by_id[tracker.entity_id]["state"] == REDACTED
+    # A non-presence entity keeps its state.
+    assert by_id[light.entity_id]["state"] == "on"
+    assert "Secret Work Zone" not in str(bundle["catalog"])
+
+
 async def test_entities_skip_disabled_and_report_null_area(
     hass: HomeAssistant, seeded_store: AmbienceStore
 ) -> None:

@@ -23,7 +23,8 @@
         "area_id": "living_room", "state": "playing" },
       { "entity_id": "light.kitchen", "domain": "light",
         "area_id": "kitchen", "state": "on" },
-      { "entity_id": "person.alice", "domain": "person", "area_id": null, "state": "home" }
+      // person/device_tracker ids stay visible for authoring; their state (location) is redacted.
+      { "entity_id": "person.alice", "domain": "person", "area_id": null, "state": "REDACTED" }
     ]
   },
   "actions": {

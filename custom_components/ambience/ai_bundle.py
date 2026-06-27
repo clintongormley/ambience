@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from homeassistant.components.diagnostics import REDACTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
@@ -26,7 +27,7 @@ from homeassistant.helpers import floor_registry as fr
 from .const import DATA_STORE, DOMAIN
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .redact import redact, redacted_traces
+from .redact import PRESENCE_PREFIXES, redact, redacted_traces
 from .services_meta import get_service_schema
 
 BUNDLE_VERSION = 1
@@ -72,6 +73,13 @@ def _entities(hass: HomeAssistant) -> list[dict[str, Any]]:
         if entry.disabled or entry.hidden:
             continue
         state = hass.states.get(entry.entity_id)
+        # A person/device_tracker entity's id is kept (the AI needs it to author
+        # people conditions) but its state IS its current location — redact it,
+        # mirroring how diagnostics scrubs presence PII.
+        if entry.entity_id.startswith(PRESENCE_PREFIXES):
+            state_value: str | None = REDACTED
+        else:
+            state_value = state.state if state is not None else None
         out.append(
             {
                 "entity_id": entry.entity_id,
@@ -79,7 +87,7 @@ def _entities(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "domain": entry.domain,
                 "device_class": entry.device_class or entry.original_device_class,
                 "area_id": _entity_area_id(entry, dev_reg),
-                "state": state.state if state is not None else None,
+                "state": state_value,
             }
         )
     return sorted(out, key=lambda e: e["entity_id"])

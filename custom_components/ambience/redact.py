@@ -33,7 +33,7 @@ TO_REDACT = {
 # a person/device_tracker cause carries zone names in old/new, and the people/
 # template predicate `detail` strings render each person's location / the
 # rendered template. Scrubbed by redact_trace below.
-_PRESENCE_PREFIXES = ("person.", "device_tracker.")
+PRESENCE_PREFIXES = ("person.", "device_tracker.")
 _DETAIL_REDACTED_CONDITIONS = {"people", "template"}
 
 
@@ -52,10 +52,10 @@ def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
     if out.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and out.get("detail"):
         out = {**out, "detail": REDACTED}
     eids = out.get("entity_ids")
-    if eids and any(e.startswith(_PRESENCE_PREFIXES) for e in eids):
+    if eids and any(e.startswith(PRESENCE_PREFIXES) for e in eids):
         out = {
             **out,
-            "entity_ids": [REDACTED if e.startswith(_PRESENCE_PREFIXES) else e for e in eids],
+            "entity_ids": [REDACTED if e.startswith(PRESENCE_PREFIXES) else e for e in eids],
         }
     return out
 
@@ -65,7 +65,7 @@ def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
     out = dict(trace)
     cause = dict(trace.get("cause") or {})
     entity_id = cause.get("entity_id")
-    if isinstance(entity_id, str) and entity_id.startswith(_PRESENCE_PREFIXES):
+    if isinstance(entity_id, str) and entity_id.startswith(PRESENCE_PREFIXES):
         for key in ("entity_id", "old", "new"):
             if cause.get(key) is not None:
                 cause[key] = REDACTED

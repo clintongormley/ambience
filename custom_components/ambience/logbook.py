@@ -40,13 +40,16 @@ def async_describe_events(
 
     @callback
     def async_describe_activity(event: LazyEventPartialState) -> dict[str, Any]:
+        # .get with defaults rather than indexing: Ambience always populates both
+        # keys, but a malformed/foreign ambience_activity event (e.g. fired by an
+        # automation) must not raise — HA would otherwise log the describe error.
         data = event.data
         return {
             # No LOGBOOK_ENTRY_NAME: the switch entity name ("Lounge Ambience") is
             # the entry's subject and is appended to the "triggered by" line, so a
             # name here would double the brand.
-            LOGBOOK_ENTRY_MESSAGE: data["message"],
-            LOGBOOK_ENTRY_ENTITY_ID: data[ATTR_ENTITY_ID],
+            LOGBOOK_ENTRY_MESSAGE: data.get("message", ""),
+            LOGBOOK_ENTRY_ENTITY_ID: data.get(ATTR_ENTITY_ID),
         }
 
     async_describe_event(DOMAIN, EVENT_AMBIENCE_ACTIVITY, async_describe_activity)

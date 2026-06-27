@@ -143,6 +143,12 @@ def test_describe_activity_event_maps_to_logbook_entry() -> None:
     # the "triggered by" attribution).
     assert LOGBOOK_ENTRY_NAME not in entry
 
+    # A malformed/foreign ambience_activity event must not raise (HA would log it).
+    event.data = {}
+    safe = captured["cb"](event)
+    assert safe[LOGBOOK_ENTRY_MESSAGE] == ""
+    assert safe[LOGBOOK_ENTRY_ENTITY_ID] is None
+
 
 # --- Context propagation through async_execute_actions ------------------------
 

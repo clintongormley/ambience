@@ -53,7 +53,6 @@ async def test_exposure_follows_store_map(hass):
             "switch_defaults": {
                 "name": "Ambience",
                 "auto_on_delay_seconds": 0,
-                "create_switches": True,
             },
             "exposed_assistants": {
                 "conversation": False,
@@ -87,7 +86,6 @@ async def test_partial_store_map_defaults_to_unexposed(hass):
             "switch_defaults": {
                 "name": "Ambience",
                 "auto_on_delay_seconds": 0,
-                "create_switches": True,
             },
             "exposed_assistants": {"conversation": True},
         }

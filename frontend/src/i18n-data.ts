@@ -84,7 +84,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_ambience: "Advanced",
       settings_tab_conditions: "Conditions",
       settings_tab_actions: "Actions",
-      settings_ambience_pause_card: "Scope-level pause switch",
       settings_ambience_field_name: "Switch name",
       settings_ambience_field_pause: "Pause for",
       settings_reapply_enable_label: "Re-run all scenes after inactivity",
@@ -94,8 +93,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
         "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
       unit_minutes: "minutes",
       help: "Help",
-      help_pause_switch:
-        "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
       help_switch_name: "The name used for the per-scope pause switch entities.",
       help_pause_for:
         "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
@@ -623,7 +620,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_ambience: "Avanzado",
       settings_tab_conditions: "Condiciones",
       settings_tab_actions: "Acciones",
-      settings_ambience_pause_card: "Interruptor de pausa por ámbito",
       settings_ambience_field_name: "Nombre del interruptor",
       settings_ambience_field_pause: "Pausar durante",
       settings_reapply_enable_label: "Volver a ejecutar todas las escenas tras inactividad",
@@ -633,8 +629,6 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
         "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa.",
       unit_minutes: "minutos",
       help: "Ayuda",
-      help_pause_switch:
-        "Crea una entidad interruptor por área/planta/casa que pausa Ambience en ese ámbito cuando se apaga.",
       help_switch_name:
         "El nombre utilizado para las entidades de interruptor de pausa por ámbito.",
       help_pause_for:

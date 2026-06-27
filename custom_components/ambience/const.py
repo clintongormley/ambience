@@ -71,11 +71,6 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
-# Dispatcher signal — fired on each apply/run so the Scene-updates sensor sets its
-# state to the activity line (that state change IS the logbook entry) and refreshes
-# its detail attributes. Payload: (ActivityRecord, Context) — see service_logbook.py.
-SIGNAL_ACTIVITY_RECORDED = "ambience_activity_recorded"
-
 # Dispatcher signal — fired when the voice-assistant exposure map changes (saved
 # from the panel's Advanced page). Payload: None. The listener re-applies exposure
 # to every live switch.
@@ -90,6 +85,14 @@ SIGNAL_UNIT_LIVE = "ambience_unit_live"
 # (op, scope_kind, scope_id) where op is "record" | "undo" | "redo". Drives the
 # panel's undo/redo toolbar via ambience/history/subscribe.
 SIGNAL_HISTORY_CHANGED = "ambience_history_changed"
+
+# Bus event fired on each apply/run (see service_logbook + logbook.py). It is a
+# *described* logbook event (not a bare logbook entry): describing it makes
+# Ambience a recognised logbook context source, so the device changes dispatched
+# under the same Context render as "triggered by '<category>/<scene>' (<switch>)",
+# while the entry stays attached to the scope switch (area-filterable). Event
+# data: {"message", "entity_id"}.
+EVENT_AMBIENCE_ACTIVITY = "ambience_activity"
 
 # How many scene-list changes the in-memory undo/redo stack retains.
 HISTORY_LIMIT = 30

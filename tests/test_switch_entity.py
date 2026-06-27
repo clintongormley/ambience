@@ -71,18 +71,15 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    # One device per scope: house (main) + 1 floor + 1 area = 3, plus the
-    # always-present "Ambience" hub device (the Scene-updates sensor) = 4.
+    # One device per scope: house (main) + 1 floor + 1 area = 3.
+    # (The old "Ambience" hub device for the Scene-updates sensor was removed
+    # when that sensor was replaced by per-scope logbook entries.)
     devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
-    assert len(devices) == 4
+    assert len(devices) == 3
 
     main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
     assert main is not None
     assert main.name == "House Ambience"
-
-    # The hub device is separate from the scope devices and brand-named.
-    hub = dev_reg.async_get_device(identifiers={(DOMAIN, "hub")})
-    assert hub is not None and hub.name == "Ambience" and hub.id != main.id
 
     # Floor + area devices are sub-devices linked to the main device.
     area_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area")
@@ -107,9 +104,7 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
 async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -122,9 +117,7 @@ async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entr
 async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -140,9 +133,7 @@ async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, 
 async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 0})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -153,9 +144,7 @@ async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
 async def test_auto_on_fires_after_delay(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 60, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 60})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -175,9 +164,7 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
     pre = AmbienceStore(hass)
     await pre.async_load()
     off_at = (fixed_utcnow["now"] - timedelta(minutes=10)).isoformat()
-    await pre.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await pre.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     await pre.async_set_scope_switch_off_at("house", None, off_at)
     # off_at writes are delayed (loss-tolerant runtime state) — flush before
     # the fresh store loads from disk.
@@ -198,9 +185,7 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
     pre = AmbienceStore(hass)
     await pre.async_load()
     off_at = (fixed_utcnow["now"] - timedelta(hours=10)).isoformat()
-    await pre.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await pre.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     await pre.async_set_scope_switch_off_at("house", None, off_at)
     # off_at writes are delayed (loss-tolerant runtime state) — flush before
     # the fresh store loads from disk.
@@ -236,17 +221,16 @@ async def test_default_name_change_updates_device_names(hass, mock_config_entry)
     await _setup(hass, mock_config_entry)
 
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Master", "auto_on_delay_seconds": 7200})
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
     dev_reg = dr.async_get(hass)
     names = {d.name for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)}
-    # Scope devices follow the default-name change; the hub device's name is a
-    # constant brand name and is deliberately unaffected.
-    assert names == {"House Master", "Upstairs Master", "Living Room Master", "Ambience"}
+    # Scope devices follow the default-name change.
+    # (The old "Ambience" hub device no longer exists — the Scene-updates sensor
+    # was replaced by per-scope logbook entries.)
+    assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 
 async def test_area_rename_updates_device_name(hass, mock_config_entry):
@@ -273,9 +257,7 @@ async def test_user_device_rename_is_preserved(hass, mock_config_entry):
 
     # A default-name change must not clobber the user's rename.
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Master", "auto_on_delay_seconds": 7200})
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
@@ -285,9 +267,7 @@ async def test_user_device_rename_is_preserved(hass, mock_config_entry):
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -326,9 +306,7 @@ async def test_schedule_auto_on_replaces_existing_timer(hass, mock_config_entry,
     the old timer is cancelled and replaced (lines 233-234)."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
 
     # First turn-off schedules timer_a.
@@ -358,9 +336,7 @@ async def test_schedule_auto_on_from_store_zero_delay_returns_early(
     immediately without scheduling a timer (line 244)."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 0})
     ent = _switch(hass, "house", None)
     # Manually set the switch as off so the call is meaningful.
     ent._attr_is_on = False
@@ -377,9 +353,7 @@ async def test_schedule_auto_on_from_store_no_off_at_returns_early(
     return without scheduling a timer (line 247)."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
     # Store has no off_at for this scope (never been turned off).
@@ -398,9 +372,7 @@ async def test_schedule_auto_on_from_store_invalid_off_at_logs_warning(
 
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
     # Inject a corrupt timestamp directly into the store.
@@ -420,9 +392,7 @@ async def test_schedule_auto_on_from_store_expired_turn_on_false_does_not_turn_o
     turned on and no timer is scheduled (line 255->257 False branch)."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
     # Record an off_at that is older than the delay (expired).
@@ -444,9 +414,7 @@ async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_en
     _handle_config_updated must call _schedule_auto_on_from_store (line 271)."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
 
     # Turn off to install a timer.
@@ -456,9 +424,7 @@ async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_en
     assert old_timer is not None
 
     # Now update the defaults with a longer delay and fire the signal while off.
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
@@ -554,17 +520,13 @@ async def test_config_update_to_zero_delay_cancels_armed_timer(
     originally scheduled time."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
     assert ent._timer is not None
 
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
-    )
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 0})
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
     assert ent._timer is None

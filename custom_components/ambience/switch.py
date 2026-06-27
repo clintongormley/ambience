@@ -122,13 +122,8 @@ def make_scope_switch(
     return AmbienceScopeSwitch("area", scope_id, area.name if area else str(scope_id))
 
 
-def _desired_switch_scopes(
-    hass: HomeAssistant, store: Any, create_switches: bool
-) -> set[tuple[str, str | None]]:
-    """Scope keys that should have a switch: empty when the toggle is off, else the
-    house plus every ENABLED floor/area."""
-    if not create_switches:
-        return set()
+def _desired_switch_scopes(hass: HomeAssistant, store: Any) -> set[tuple[str, str | None]]:
+    """Scope keys that should have a switch: the house plus every ENABLED floor/area."""
     desired: set[tuple[str, str | None]] = set()
     if store.get_scope_enabled("house", None):
         desired.add(("house", None))
@@ -160,11 +155,10 @@ def _reconcile_switch_registry(
 
 def reconcile_scope_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Create switches for every desired scope not already live, and delete any
-    that should no longer exist. Driven by the store's `create_switches` flag plus
-    the enabled scopes. Safe to call repeatedly (idempotent)."""
+    that should no longer exist. Driven by which scopes are enabled. Safe to
+    call repeatedly (idempotent)."""
     store = hass.data[DOMAIN][DATA_STORE]
-    create_switches = store.get_switch_defaults()["create_switches"]
-    desired = _desired_switch_scopes(hass, store, create_switches)
+    desired = _desired_switch_scopes(hass, store)
     add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
     live = hass.data[DOMAIN].get(DATA_SWITCHES, {})
     missing = [s for s in desired if s not in live]
@@ -179,9 +173,9 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create a switch for each enabled scope when create_switches is on, reconcile
-    the registry, and re-reconcile live whenever the switch config changes (so the
-    panel toggle creates/removes switches without an integration reload)."""
+    """Create a switch for each enabled scope, reconcile the registry, and
+    re-reconcile live whenever the switch config changes (so a scope enable/
+    disable change takes effect without an integration reload)."""
     hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = async_add_entities
     hass.data[DOMAIN].setdefault(DATA_SWITCHES, {})
     reconcile_scope_switches(hass, entry)

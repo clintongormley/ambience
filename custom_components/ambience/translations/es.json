@@ -24,11 +24,6 @@
     }
   },
   "entity": {
-    "sensor": {
-      "scene_updates": {
-        "name": "Actualizaciones de escena"
-      }
-    },
     "switch": {
       "ambience": {
         "name": "Ambience"
@@ -99,7 +94,6 @@
     "unknown_scope_kind": { "message": "Tipo de ámbito desconocido: {scope_kind}" },
     "store_switch_name_empty": { "message": "El `name` predeterminado del interruptor debe ser una cadena no vacía: {name}" },
     "store_switch_auto_on_delay_invalid": { "message": "`auto_on_delay_seconds` del interruptor debe ser un entero no negativo: {delay}" },
-    "store_switch_create_switches_invalid": { "message": "`create_switches` del interruptor debe ser un booleano: {create}" },
     "store_reapply_enabled_invalid": { "message": "El `enabled` de reaplicar debe ser un booleano: {enabled}" },
     "store_reapply_interval_invalid": { "message": "El `interval_seconds` de reaplicar debe ser un entero >= {min}: {interval}" },
     "store_exposure_invalid": { "message": "La exposición de {assistant} debe ser un booleano: {value}" },

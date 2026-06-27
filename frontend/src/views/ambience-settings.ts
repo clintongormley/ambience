@@ -149,7 +149,6 @@ export class AmbienceAmbienceSettings extends LitElement {
   @state() private _defaults: SwitchDefaults = {
     name: "Ambience",
     auto_on_delay_seconds: 0,
-    create_switches: false,
   };
   @state() private _reapply: ReapplySettings = {
     enabled: false,
@@ -184,21 +183,8 @@ export class AmbienceAmbienceSettings extends LitElement {
 
   private _saveDefaults() {
     void this._safeSave(() =>
-      saveSwitchDefaults(
-        this.hass,
-        this._defaults.name,
-        this._defaults.auto_on_delay_seconds,
-        this._defaults.create_switches,
-      ),
+      saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
     );
-  }
-
-  private _onCreateSwitches(e: Event) {
-    this._defaults = {
-      ...this._defaults,
-      create_switches: (e.target as HTMLInputElement).checked,
-    };
-    this._saveDefaults();
   }
 
   private _onDefaultName(e: Event) {
@@ -280,22 +266,6 @@ export class AmbienceAmbienceSettings extends LitElement {
       ${this._error ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>` : ""}
 
       <div class="card">
-        <div class="row toggle-row">
-          <label>
-            ${localize(this.hass, "ui.settings_ambience_pause_card", "Scope-level pause switch")}
-            <ambience-help
-              .hass=${this.hass}
-              .text=${localize(
-                this.hass,
-                "ui.help_pause_switch",
-                "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
-              )}
-            ></ambience-help>
-          </label>
-          ${this._renderToggle(this._defaults.create_switches, "pause-switch-enabled", (e) =>
-            this._onCreateSwitches(e),
-          )}
-        </div>
         <div class="row">
           <label>
             ${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}
@@ -311,7 +281,6 @@ export class AmbienceAmbienceSettings extends LitElement {
           <input
             data-test="defaults-name"
             type="text"
-            ?disabled=${!this._defaults.create_switches}
             .value=${this._defaults.name}
             @change=${(e: Event) => this._onDefaultName(e)}
           />
@@ -332,7 +301,6 @@ export class AmbienceAmbienceSettings extends LitElement {
             data-test="pause-for-minutes"
             type="number"
             min="0"
-            ?disabled=${!this._defaults.create_switches}
             .value=${String(Math.round(this._defaults.auto_on_delay_seconds / 60))}
             @change=${(e: Event) => this._onPauseMinutes(e)}
           />
@@ -357,11 +325,8 @@ export class AmbienceAmbienceSettings extends LitElement {
               (row) => html`
                 <div class="row">
                   <label>${localize(this.hass, row.labelKey, row.label)}</label>
-                  ${this._renderToggle(
-                    this._exposed[row.field],
-                    row.dataTest,
-                    (e) => this._onExpose(row.field, e),
-                    !this._defaults.create_switches,
+                  ${this._renderToggle(this._exposed[row.field], row.dataTest, (e) =>
+                    this._onExpose(row.field, e),
                   )}
                 </div>
               `,

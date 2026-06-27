@@ -24,11 +24,6 @@
     }
   },
   "entity": {
-    "sensor": {
-      "scene_updates": {
-        "name": "Scene updates"
-      }
-    },
     "switch": {
       "ambience": {
         "name": "Ambience"
@@ -99,7 +94,6 @@
     "unknown_scope_kind": { "message": "Unknown scope kind: {scope_kind}" },
     "store_switch_name_empty": { "message": "Switch defaults `name` must be a non-empty string: {name}" },
     "store_switch_auto_on_delay_invalid": { "message": "Switch defaults `auto_on_delay_seconds` must be a non-negative int: {delay}" },
-    "store_switch_create_switches_invalid": { "message": "Switch defaults `create_switches` must be a bool: {create}" },
     "store_reapply_enabled_invalid": { "message": "Reapply `enabled` must be a bool: {enabled}" },
     "store_reapply_interval_invalid": { "message": "Reapply `interval_seconds` must be an int >= {min}: {interval}" },
     "store_exposure_invalid": { "message": "Exposure for {assistant} must be a bool: {value}" },

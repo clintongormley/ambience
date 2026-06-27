@@ -1382,6 +1382,21 @@ async def _ws_scope_diagnostics(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/ai_bundle"})
+@websocket_api.async_response
+async def _ws_ai_bundle(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The live AI bundle: the catalog + exposed actions + definitions + redacted
+    config + traces an external AI consults to author and diagnose scenes."""
+    from .ai_bundle import build_ai_bundle
+
+    connection.send_result(msg["id"], await build_ai_bundle(hass))
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/simulate/inputs",
@@ -1536,6 +1551,7 @@ _WS_HANDLERS = (
     _ws_history_redo,
     _ws_live_subscribe,
     _ws_scope_diagnostics,
+    _ws_ai_bundle,
     _ws_simulate_inputs,
     _ws_simulate,
 )

@@ -12,6 +12,18 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - Removed the "Set up an action to get started" banner. New installs now seed
   default actions, so the prompt no longer applied.
+- Scene-update activity is now logged to the Home Assistant logbook under each
+  scope's pause switch, one entry per scope the applied scene is active in. The
+  logbook entry is titled *Ambience '&lt;scene&gt;' in &lt;scope&gt;* and is attached to
+  the scope's switch entity, so you can filter the logbook by area (for
+  area-scoped switches) to see only the activity relevant to that space. The
+  `sensor.ambience_scene_updates` sensor has been removed — anything referencing
+  it (dashboards, automations, logbook filters) must be updated.
+- Per-scope pause switches are now always created for every enabled scope. The
+  **Scope-level pause switch** toggle in the Advanced settings has been removed.
+  Installs that previously had the toggle off will see new switch entities and
+  devices appear after upgrading. The pause-and-auto-resume behaviour of those
+  switches is unchanged.
 
 ### Fixed
 
@@ -21,6 +33,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   — even on a brand-new install — because the dismissal wasn't tied to the
   install. Each dismissal is now remembered per install, so a fresh setup starts
   with a clean slate.
+
+### Removed
+
+- `sensor.ambience_scene_updates` — replaced by per-scope logbook entries on
+  each scope's pause switch (see above).
+- The **Scope-level pause switch** setting — scope switches are now always on.
 
 ## [0.30.0] - 2026-06-26
 

@@ -3,6 +3,8 @@
 There are a number of debugging tools available in the menu behind the **⋮**
 icon to the right of the **Lights** category header.
 
+ADD THE ACTIVITY LOG STUFF
+
 ![Category menu.](../images/getting-started/step-8/menu.png "Category menu.")
 
 ## Auto-triggers and Run

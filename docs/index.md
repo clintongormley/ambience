@@ -15,9 +15,10 @@ and applies the best-matching scene automatically.
 Home Assistant already has a concept called Scenes.
 
 - They describe the desired state of the devices in the room, not **how** those
-    devices should reach that state.
-- They can be **verbose**, **difficult to read**, and **difficult to compare**
-    one with another.
+    devices should reach that state. For instance, I want lights to fade in and
+    out, not just turn on or off.
+- They can be **verbose**, **difficult to read**, and it is **difficult to
+    compare** one with another.
 
 ## The problems with Automations
 
@@ -25,8 +26,8 @@ Automations are powerful, flexible, configurable, and generic. You can do
 anything with them but, most of the time, you just want to do a few things
 easily.
 
-- They can be **verbose** and **difficult to read**.
-- It is **difficult to compare** one with another.
+- They can be **verbose** and **difficult to read**, and it is **difficult to
+    compare** one with another.
 - They are **trigger-based**: _"When a person enters the room, then turn the
     lights on."_ But what happens if the person is already inside the room? How
     do you apply the correct scene based on the **current conditions**?
@@ -40,13 +41,17 @@ easily.
 
 ## What Ambience does differently
 
-Ambience changes the way to think about scene management.
+Ambience changes the way to think about scene management. You can build
+sophisticated lifecycles out of a series of simple scenes.
 
 ### Conditions, actions, and auto-triggers
 
 Instead of defining the events that trigger a change of scene — _somebody enters
 the living room_, or _somebody turns on the projector_ — think about the
-**conditions** that define the scene, the state that the devices in that scene
+**conditions** that define the scene — _somebody is in the room_, or _the
+projector is on_.
+
+Then, given that context, think about the state that the devices in that scene
 should be in, and how they should reach that state:
 
 | Conditions                                             | Device state                                     |
@@ -58,10 +63,10 @@ should be in, and how they should reach that state:
 | The room is occupied during the evening or nighttime   | Fade lights to 25%                               |
 
 These conditions are automatically sorted by **priority** and **specificity**,
-and they are used to **automatically derive triggers**. When one of these
-triggers fires, the conditions are reassessed, the highest priority matching
-scene wins, and the winning scene is applied by calling the specified
-**actions**.
+and they are used to **automatically derive triggers** so that you don't have to
+think about it. When one of these triggers fires, the conditions are reassessed,
+the highest priority matching scene wins, and the winning scene is applied by
+calling the specified **actions**.
 
 ![Scenes to control the lights in the lounge.](images/index/lounge_lights.png "Scenes to control the lights in the lounge.")
 

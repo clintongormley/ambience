@@ -9,6 +9,7 @@ exclude_docs: |
   superpowers/
   handoffs/
   reference/
+  developers/
 
 theme:
   name: material

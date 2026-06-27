@@ -25,7 +25,7 @@ import custom_components.ambience.conditions as conditions_pkg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AI_DOCS_DIR = REPO_ROOT / "docs" / "developers" / "ai-authoring"
-SKILL_REFS_DIR = REPO_ROOT / "ai" / "skill" / "ambience-author" / "references"
+SKILL_REFS_DIR = REPO_ROOT / "ai" / "skill" / "ambience-author" / "reference"
 SERVICES_YAML = REPO_ROOT / "custom_components" / "ambience" / "services.yaml"
 
 GENERATED_BANNER = (

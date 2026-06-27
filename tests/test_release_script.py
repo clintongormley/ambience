@@ -37,13 +37,14 @@ def _clean_env(extra: dict | None = None) -> dict:
     *branch* data ("Can't combine statement coverage data with branch data").
     We don't measure changelog.py here, so scrub the bootstrap entirely.
 
-    BUILD_CMD defaults to a no-op so the frontend build guard passes without a
-    real toolchain; individual tests override it.
+    BUILD_CMD / AI_DOCS_CMD default to a no-op so the frontend-build and AI-docs
+    freshness guards pass without a real toolchain; individual tests override them.
     """
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
     }
     env.setdefault("BUILD_CMD", "true")
+    env.setdefault("AI_DOCS_CMD", "true")
     if extra:
         env.update(extra)
     return env

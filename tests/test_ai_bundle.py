@@ -53,9 +53,7 @@ async def test_bundle_includes_area_floor_and_entity_catalog(
     area = ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
     ent_reg = er.async_get(hass)
-    entry = ent_reg.async_get_or_create(
-        "light", "ambience", "lamp1", suggested_object_id="lamp"
-    )
+    entry = ent_reg.async_get_or_create("light", "ambience", "lamp1", suggested_object_id="lamp")
     ent_reg.async_update_entity(entry.entity_id, area_id=area.id)
     hass.states.async_set(entry.entity_id, "on", {"friendly_name": "Lamp"})
 
@@ -146,7 +144,8 @@ async def test_bundle_redacts_config_and_includes_traces(
 
     # Sensitive config is redacted with the same rules as diagnostics.
     assert bundle["config"]["conditions"]["day"]["workday_sensor"] == REDACTED
-    assert bundle["config"]["areas"]["living_room"]["scenes"][0]["when"]["people"]["who"] == REDACTED
+    scene = bundle["config"]["areas"]["living_room"]["scenes"][0]
+    assert scene["when"]["people"]["who"] == REDACTED
     # Traces ride along for diagnosis.
     assert any(t["scope_id"] == "living_room" for t in bundle["traces"])
     assert "person.alice" not in str(bundle["traces"])
@@ -158,3 +157,88 @@ async def test_bundle_does_not_mutate_store(
     await build_ai_bundle(hass)
 
     assert seeded_store.get_condition_config("day")["workday_sensor"] == "binary_sensor.workday"
+
+
+async def test_entities_skip_disabled_and_report_null_area(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    ent_reg = er.async_get(hass)
+    free = ent_reg.async_get_or_create("light", "ambience", "free", suggested_object_id="free")
+    disabled = ent_reg.async_get_or_create("light", "ambience", "dis", suggested_object_id="dis")
+    ent_reg.async_update_entity(disabled.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    bundle = await build_ai_bundle(hass)
+    ids = {e["entity_id"] for e in bundle["catalog"]["entities"]}
+
+    assert free.entity_id in ids
+    assert disabled.entity_id not in ids
+    found = next(e for e in bundle["catalog"]["entities"] if e["entity_id"] == free.entity_id)
+    assert found["area_id"] is None
+
+
+async def test_action_schemas_dedupe_and_skip_non_string_ids(
+    hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from custom_components.ambience import ai_bundle
+
+    monkeypatch.setattr(
+        seeded_store,
+        "get_exposed_actions",
+        lambda: [{"id": "light.turn_on"}, {"id": "light.turn_on"}, {"id": 123}, {"no_id": 1}],
+    )
+
+    async def fake_schema(_hass: HomeAssistant, _service: str) -> dict:
+        return {"fields": {}}
+
+    monkeypatch.setattr(ai_bundle, "get_service_schema", fake_schema)
+
+    bundle = await ai_bundle.build_ai_bundle(hass)
+
+    # Duplicate id collapsed to one; the non-string id and the id-less entry skipped.
+    assert list(bundle["actions"]["schemas"]) == ["light.turn_on"]
+
+
+async def test_action_schemas_tolerate_fetch_errors(
+    hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from custom_components.ambience import ai_bundle
+
+    monkeypatch.setattr(seeded_store, "get_exposed_actions", lambda: [{"id": "light.turn_on"}])
+
+    async def boom(_hass: HomeAssistant, _service: str) -> dict:
+        raise RuntimeError("service registry exploded")
+
+    monkeypatch.setattr(ai_bundle, "get_service_schema", boom)
+
+    bundle = await ai_bundle.build_ai_bundle(hass)
+
+    # A bad service is omitted, not fatal.
+    assert bundle["actions"]["schemas"] == {}
+
+
+async def test_bundle_redacts_partial_presence_cause(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """A presence cause missing one of old/new must still scrub the fields it has."""
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="entity", entity_id="person.alice", old=None, new="home"),
+            [UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, None)],
+            event_id="p",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    cause = (await build_ai_bundle(hass))["traces"][0]["cause"]
+    assert cause["entity_id"] == REDACTED
+    assert cause["new"] == REDACTED

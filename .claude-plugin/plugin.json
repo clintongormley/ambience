@@ -1,0 +1,21 @@
+{
+  "name": "ambience",
+  "description": "AI-assisted authoring and diagnosis for Ambience (Home Assistant) scene configuration. Bundles the ambience-author skill and the /ambience-create and /ambience-fix commands.",
+  "version": "0.1.0",
+  "author": {
+    "name": "clintongormley"
+  },
+  "homepage": "https://github.com/clintongormley/ambience",
+  "repository": "https://github.com/clintongormley/ambience",
+  "license": "MIT",
+  "keywords": [
+    "home-assistant",
+    "ambience",
+    "automation",
+    "scenes",
+    "lighting"
+  ],
+  "skills": "./ai/skill",
+  "commands": "./ai/skill/ambience-author/commands",
+  "_comment_phase2_mcp": "PLACEHOLDER for phase 2. A live MCP server (read/write Ambience config: list_catalog, get_config, validate, save, get_diagnostics) will be bundled into THIS plugin. When added, declare it here via an \"mcpServers\" key pointing at a \".mcp.json\" at the plugin root (or inline the server config), e.g. \"mcpServers\": \"./.mcp.json\". Until then this plugin ships docs + skill + commands only."
+}

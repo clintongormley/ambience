@@ -71,7 +71,13 @@ nav:
       - Time of day: conditions/time-of-day.md
       - Unavailable: conditions/unavailable.md
       - Weather: conditions/weather.md
-  - Actions: actions.md
+  - Actions:
+      - Overview: actions/index.md
+      - Exposed actions: actions/exposed-actions.md
+      - Built-in actions: actions/built-in-actions.md
+      - Using an action in a scene: actions/using-actions.md
+      - Apply on every match: actions/apply-on-every-match.md
+      - How actions run: actions/how-actions-run.md
   - Settings reference: settings-reference.md
   - Panel & card: panel-and-card.md
   - Troubleshooting:

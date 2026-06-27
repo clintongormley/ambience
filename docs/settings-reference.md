@@ -79,7 +79,7 @@ The Actions tab controls which HA services are available as actions inside the
 scene editor. Only services you expose here appear in the "Add action" picker
 when building a scene.
 
-See [Actions](actions.md) for a conceptual overview.
+See [Actions](actions/index.md) for a conceptual overview.
 
 !!! info "📷 Screenshot"
 

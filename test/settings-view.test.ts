@@ -87,10 +87,18 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
   });
 
-  test("clicking Advanced swaps the body", async () => {
+  test("clicking AI swaps the body to the import view", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
     (buttons[3] as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("ambience-import-config")).not.toBeNull();
+  });
+
+  test("clicking Advanced swaps the body", async () => {
+    el = await mount();
+    const buttons = el.shadowRoot.querySelectorAll("nav button");
+    (buttons[4] as HTMLButtonElement).click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).not.toBeNull();
   });
@@ -123,6 +131,7 @@ describe("ambience-settings-view", () => {
       "mdi:shape-outline",
       "mdi:filter-variant",
       "mdi:flash",
+      "mdi:creation",
       "mdi:home-lightbulb",
     ]);
   });

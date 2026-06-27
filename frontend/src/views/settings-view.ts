@@ -6,8 +6,9 @@ import "./ambience-settings.js";
 import "./categories-settings.js";
 import "./conditions-settings.js";
 import "./actions-settings.js";
+import "./import-view.js";
 
-type Tab = "ambience" | "categories" | "conditions" | "actions";
+type Tab = "ambience" | "categories" | "conditions" | "actions" | "import";
 
 @customElement("ambience-settings-view")
 export class AmbienceSettingsView extends LitElement {
@@ -94,6 +95,11 @@ export class AmbienceSettingsView extends LitElement {
         }}>
           <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
         </button>
+        <button class=${this._tab === "import" ? "active" : ""} @click=${() => {
+          this._tab = "import";
+        }}>
+          <ha-icon icon="mdi:creation"></ha-icon>${localize(this.hass, "ui.settings_tab_import", "AI")}
+        </button>
         <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => {
           this._tab = "ambience";
         }}>
@@ -108,7 +114,9 @@ export class AmbienceSettingsView extends LitElement {
               ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
               : this._tab === "actions"
                 ? html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
-                : html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
+                : this._tab === "import"
+                  ? html`<ambience-import-config .hass=${this.hass}></ambience-import-config>`
+                  : html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
         }
       </div>
     `;

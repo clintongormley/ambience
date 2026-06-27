@@ -96,7 +96,6 @@ export type ServiceField = {
 export type SwitchDefaults = {
   name: string;
   auto_on_delay_seconds: number;
-  create_switches: boolean;
 };
 
 export type ReapplySettings = {

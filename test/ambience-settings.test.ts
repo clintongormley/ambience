@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   getSwitchDefaults: vi.fn(async () => ({
     name: "Ambience",
     auto_on_delay_seconds: 0,
-    create_switches: false,
   })),
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
   getReapplySettings: vi.fn(async () => ({ enabled: false, interval_seconds: 3600 })),
@@ -53,21 +52,20 @@ describe("ambience-ambience-settings", () => {
     input.value = "Master";
     input.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
-    expect(mocks.saveSwitchDefaults).toHaveBeenCalledWith(expect.anything(), "Master", 0, false);
+    expect(mocks.saveSwitchDefaults).toHaveBeenCalledWith(expect.anything(), "Master", 0);
   });
 
   test("editing the pause-for minutes calls saveSwitchDefaults with seconds", async () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     const input = el.shadowRoot.querySelector("[data-test=pause-for-minutes]") as HTMLInputElement;
     input.value = "5";
     input.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
-    expect(mocks.saveSwitchDefaults).toHaveBeenCalledWith(expect.anything(), "Ambience", 300, true);
+    expect(mocks.saveSwitchDefaults).toHaveBeenCalledWith(expect.anything(), "Ambience", 300);
   });
 
   test("no per-scope override rows are rendered", async () => {
@@ -93,7 +91,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     mocks.saveSwitchDefaults.mockRejectedValue(42);
@@ -110,7 +107,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     mocks.saveSwitchDefaults.mockRejectedValue(new Error("save failed"));
@@ -146,7 +142,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     const input = el.shadowRoot.querySelector("[data-test=pause-for-minutes]") as HTMLInputElement;
@@ -160,7 +155,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     const input = el.shadowRoot.querySelector("[data-test=pause-for-minutes]") as HTMLInputElement;
@@ -174,7 +168,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     el = await mount();
     const input = el.shadowRoot.querySelector("[data-test=pause-for-minutes]") as HTMLInputElement;
@@ -188,11 +181,10 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockRejectedValue(new Error("initial error"));
     el = await mount();
     expect(el.shadowRoot.textContent).toContain("initial error");
-    // Now fix the mock so the next save succeeds; also need create_switches=true so input is enabled
+    // Now fix the mock so the next save succeeds
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: true,
     });
     mocks.saveSwitchDefaults.mockResolvedValue({ ok: true });
     const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
@@ -219,7 +211,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 120,
-      create_switches: true,
     });
     el = await mount();
     const input = el.shadowRoot.querySelector("[data-test=pause-for-minutes]") as HTMLInputElement;
@@ -233,7 +224,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: false,
     });
     mocks.getReapplySettings.mockResolvedValue({ enabled: true, interval_seconds: 5400 });
     el = await mount();
@@ -249,7 +239,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: false,
     });
     mocks.getReapplySettings.mockResolvedValue({ enabled: false, interval_seconds: 3600 });
     el = await mount();
@@ -264,7 +253,6 @@ describe("ambience-ambience-settings", () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 0,
-      create_switches: false,
     });
     mocks.getReapplySettings.mockResolvedValue({ enabled: true, interval_seconds: 5400 });
     el = await mount();
@@ -277,39 +265,29 @@ describe("ambience-ambience-settings", () => {
     expect(mocks.saveReapplySettings).toHaveBeenCalledWith(expect.anything(), true, 7200);
   });
 
-  // ── Task 7: new tests ──────────────────────────────────────────────────────
+  // ── Task 7 / updated for Task 4 ───────────────────────────────────────────
 
-  test("toggling the pause switch saves create_switches", async () => {
+  test("pause-switch-enabled toggle is removed — not in the DOM", async () => {
     el = await mount();
-    // default: create_switches=false
-    const toggle = el.shadowRoot.querySelector(
-      '[data-test="pause-switch-enabled"]',
-    ) as HTMLInputElement;
-    expect(toggle).not.toBeNull();
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(mocks.saveSwitchDefaults).toHaveBeenCalledWith(expect.anything(), "Ambience", 0, true);
+    expect(el.shadowRoot.querySelector('[data-test="pause-switch-enabled"]')).toBeNull();
   });
 
-  test("pause-for shows minutes and name/pause-for disabled when toggle off", async () => {
+  test("name and pause-for are always enabled (no create_switches gate)", async () => {
     el = await mount();
-    // create_switches=false → inputs disabled
     const minutes = el.shadowRoot.querySelector(
       '[data-test="pause-for-minutes"]',
     ) as HTMLInputElement;
     expect(minutes.value).toBe("0");
-    expect(minutes.disabled).toBe(true);
+    expect(minutes.disabled).toBe(false);
     expect(
       (el.shadowRoot.querySelector('[data-test="defaults-name"]') as HTMLInputElement).disabled,
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  test("name and pause-for enabled when create_switches is true", async () => {
+  test("pause-for shows minutes from a non-zero auto_on_delay_seconds", async () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",
       auto_on_delay_seconds: 300,
-      create_switches: true,
     });
     el = await mount();
     const minutes = el.shadowRoot.querySelector(
@@ -340,12 +318,7 @@ describe("ambience-ambience-settings", () => {
     expect(interval.disabled).toBe(false);
   });
 
-  test("renders the three voice toggles, enabled, when the pause switch is on", async () => {
-    mocks.getSwitchDefaults.mockResolvedValue({
-      name: "Ambience",
-      auto_on_delay_seconds: 0,
-      create_switches: true,
-    });
+  test("renders the three voice toggles, always enabled", async () => {
     el = await mount();
     for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
       const toggle = el.shadowRoot.querySelector(`[data-test="${t}"]`) as HTMLInputElement;
@@ -355,11 +328,6 @@ describe("ambience-ambience-settings", () => {
   });
 
   test("voice toggles reflect the loaded exposure values", async () => {
-    mocks.getSwitchDefaults.mockResolvedValue({
-      name: "Ambience",
-      auto_on_delay_seconds: 0,
-      create_switches: true,
-    });
     mocks.getExposedAssistants.mockResolvedValue({
       expose_assist: true,
       expose_google: true,
@@ -377,27 +345,7 @@ describe("ambience-ambience-settings", () => {
     ).toBe(false);
   });
 
-  test("voice toggles disabled when the pause switch is off", async () => {
-    mocks.getSwitchDefaults.mockResolvedValue({
-      name: "Ambience",
-      auto_on_delay_seconds: 0,
-      create_switches: false,
-    });
-    el = await mount();
-    for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
-      expect(
-        (el.shadowRoot.querySelector(`[data-test="${t}"]`) as HTMLInputElement).disabled,
-        t,
-      ).toBe(true);
-    }
-  });
-
-  test("voice toggles are grouped in a dedicated sub-section, separate from the pause-switch fields", async () => {
-    mocks.getSwitchDefaults.mockResolvedValue({
-      name: "Ambience",
-      auto_on_delay_seconds: 0,
-      create_switches: true,
-    });
+  test("voice toggles are grouped in a dedicated sub-section, separate from the switch fields", async () => {
     el = await mount();
     const group = el.shadowRoot.querySelector('[data-test="expose-group"]');
     expect(group).not.toBeNull();
@@ -405,18 +353,12 @@ describe("ambience-ambience-settings", () => {
     for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
       expect(group.querySelector(`[data-test="${t}"]`), t).not.toBeNull();
     }
-    // …and the pause-switch fields are NOT inside it (they're its siblings,
-    // not its children — the sub-section hangs off the pause switch).
+    // …and the switch fields are NOT inside it
     expect(group.querySelector('[data-test="defaults-name"]')).toBeNull();
     expect(group.querySelector('[data-test="pause-for-minutes"]')).toBeNull();
   });
 
   test("toggling a voice switch saves all three values", async () => {
-    mocks.getSwitchDefaults.mockResolvedValue({
-      name: "Ambience",
-      auto_on_delay_seconds: 0,
-      create_switches: true,
-    });
     mocks.getExposedAssistants.mockResolvedValue({
       expose_assist: true,
       expose_google: false,

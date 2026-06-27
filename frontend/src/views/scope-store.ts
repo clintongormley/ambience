@@ -230,10 +230,10 @@ export class ScopeStore implements ReactiveController {
       void this.refreshFloors();
       if (event.data.action !== "update") void this.refreshSwitches();
     }, "floor_registry_updated");
-    // Scope pause switches are created/removed when the create_switches toggle
-    // flips or a scope is enabled/disabled — none of which touches the
-    // area/floor registry. Refresh the switch set on switch.* entity
-    // create/remove so the pause icons appear/disappear without a page reload.
+    // Scope switches exist for every enabled scope; they appear/disappear when a
+    // scope is enabled/disabled — none of which touches the area/floor registry.
+    // Refresh the switch set on switch.* entity create/remove so the pause icons
+    // appear/disappear without a page reload.
     const subEntity = this._hass.connection.subscribeEvents<EntityRegistryEvent>((event) => {
       if (event.data.action !== "update" && event.data.entity_id.startsWith("switch.")) {
         void this.refreshSwitches();

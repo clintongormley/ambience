@@ -43,8 +43,8 @@ export type FloorRegistryEvent = {
 };
 
 // HA fires this whenever an entity is created/updated/removed in the registry —
-// used to spot scope pause switches appearing/disappearing (e.g. when the
-// create_switches toggle flips), which don't touch the area/floor registry.
+// used to spot scope pause switches appearing/disappearing (e.g. when a scope
+// is enabled/disabled), which don't touch the area/floor registry.
 export type EntityRegistryEvent = {
   data: { action: "create" | "update" | "remove"; entity_id: string };
 };
@@ -327,13 +327,11 @@ export async function saveSwitchDefaults(
   hass: HassConnection,
   name: string,
   auto_on_delay_seconds: number,
-  create_switches: boolean,
 ): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/switch_defaults/save",
     name,
     auto_on_delay_seconds,
-    create_switches,
   });
 }
 

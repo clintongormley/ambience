@@ -101,10 +101,11 @@ export class AmbienceImportConfig extends LitElement {
     if (!p || p.unknownCategories.length > 0 || this.busy) return;
     this.busy = true;
     try {
+      // Validate first so a shape error doesn't leave an orphaned new category.
+      await validateScopeConfig(this.hass, p.resultConfig);
       if (p.newCategory) {
         await saveCategories(this.hass, [...this.categories, p.newCategory]);
       }
-      await validateScopeConfig(this.hass, p.resultConfig);
       await saveScopeConfig(this.hass, p.scope, p.resultConfig, {
         action: "import",
         scene_name: null,

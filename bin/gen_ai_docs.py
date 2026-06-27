@@ -41,7 +41,6 @@ _REQUIRED_ATTRS = ("name", "description", "predicate_help", "input", "priority")
 # The curated source files, in the order they appear in the portable guide.
 # Missing files are skipped (so the generator runs before they're all authored).
 _PORTABLE_PARTS = [
-    ("How to use this guide", "_intro.md"),
     ("Config schema", "schema.md"),
     ("Import format", "import-format.md"),
     ("Condition reference", "condition-reference.generated.md"),

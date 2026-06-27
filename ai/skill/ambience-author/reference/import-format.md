@@ -3,8 +3,8 @@
 An AI authors Ambience scenes by emitting **import blocks**. Each block is one
 **scope's** scenes wrapped in a thin, self-describing envelope that tells the
 panel *where* the scenes go and *which group* they form. The user pastes or
-uploads the block into the panel's **Import** view, previews it (adds vs updates,
-new categories, a live dry-run of what would match now), and confirms.
+uploads the block into the panel's **Import** view, previews it (adds / updates /
+removes, plus new vs unknown categories), and confirms.
 
 Both **YAML and JSON** are accepted on import.
 
@@ -77,9 +77,12 @@ silently coerce to "General".
 - **`merge`** — read the scope's current config and **upsert** the listed scenes
   by `(category, name)`: an existing `(category, name)` is replaced, a new one is
   added, **all other scenes in the scope are left untouched.** The safe default.
-- **`replace`** — replace **only this category's** scenes in this scope with the
-  listed ones. Scenes in *other* categories in the same scope are untouched.
-  Higher blast radius — only use to deliberately clear out a group.
+- **`replace`** — for **every category your imported scenes belong to**, remove
+  the scope's existing scenes in that category and replace them with the listed
+  ones. Scenes in categories you don't import are untouched. Keep all your scenes
+  in one category so the blast radius matches your intent. Higher blast radius —
+  the preview lists exactly which existing scenes will be removed, so check it
+  before confirming.
 
 ### `scenes` (required)
 
@@ -94,8 +97,7 @@ fields: `name`, `description?`, `category`, `when`, `actions`, `apply?` — see
 paste/upload YAML or JSON
    │
    ▼  parse + validate (shape only, no save)
- preview ──► parsed scenes (adds vs updates), new categories to create
-         ──► dry-run: what would match right now
+ preview ──► parsed scenes (adds / updates / removes), new vs unknown categories
    │
    ▼  confirm
  create category if needed → save the scope (merge or replace)

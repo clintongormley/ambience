@@ -79,9 +79,15 @@ export function parseImport(text: string): ImportEnvelope {
   if (!isRecord(doc)) {
     throw new ImportError("Import must be a YAML/JSON object (an `ambience_import` block).");
   }
-  if (doc.ambience_import === undefined) {
+  const version = Number(doc.ambience_import);
+  if (doc.ambience_import === undefined || !Number.isFinite(version) || version < 1) {
     throw new ImportError(
-      "Missing the `ambience_import` marker — is this an Ambience import block?",
+      "Missing or invalid `ambience_import` marker — is this an Ambience import block?",
+    );
+  }
+  if (version > 1) {
+    throw new ImportError(
+      `This is import format v${version}, but this Ambience only understands v1 — update Ambience.`,
     );
   }
   const mode = doc.mode ?? "merge";
@@ -89,7 +95,7 @@ export function parseImport(text: string): ImportEnvelope {
     throw new ImportError("`mode` must be `merge` or `replace`.");
   }
   return {
-    ambience_import: Number(doc.ambience_import),
+    ambience_import: version,
     scope: parseScope(doc.scope),
     category: parseCategory(doc.category),
     mode,

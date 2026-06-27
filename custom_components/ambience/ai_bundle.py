@@ -75,7 +75,10 @@ def _entities(hass: HomeAssistant) -> list[dict[str, Any]]:
         state = hass.states.get(entry.entity_id)
         # A person/device_tracker entity's id is kept (the AI needs it to author
         # people conditions) but its state IS its current location — redact it,
-        # mirroring how diagnostics scrubs presence PII.
+        # mirroring how diagnostics scrubs presence PII. This is prefix-based, not
+        # capability-based: an exotic state-as-PII sensor (e.g. a geocoded-location
+        # sensor) isn't caught. The bundle is a deliberate, user-initiated local
+        # export, so that residual surface is an accepted trade-off, not a leak.
         if entry.entity_id.startswith(PRESENCE_PREFIXES):
             state_value: str | None = REDACTED
         else:

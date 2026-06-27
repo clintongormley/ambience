@@ -90,6 +90,18 @@ describe("parseImport", () => {
       parseImport("ambience_import: 1\nscope: { kind: house }\ncategory: { name: X }\nscenes: []"),
     ).toThrow(/category/);
   });
+
+  test("rejects a non-numeric ambience_import marker", () => {
+    expect(() => parseImport("ambience_import: nope\nscope: { kind: house }\nscenes: []")).toThrow(
+      /ambience_import/,
+    );
+  });
+
+  test("rejects a future import format version", () => {
+    expect(() => parseImport("ambience_import: 2\nscope: { kind: house }\nscenes: []")).toThrow(
+      /v2/,
+    );
+  });
 });
 
 const CATEGORIES: SceneCategory[] = [{ id: "general", name: "General" }];
@@ -168,5 +180,21 @@ describe("computeImportPreview (replace)", () => {
     expect(preview.removes.sort()).toEqual(["Old A", "Old B"]);
     expect(preview.adds).toEqual(["New film scene"]);
     expect(preview.resultConfig.scenes.map((s) => s.name)).toEqual(["Keep", "New film scene"]);
+  });
+
+  test("targets the categories of the imported SCENES, not the declared category", () => {
+    // A block whose declared category differs from its scenes' category: replace
+    // follows the scenes (general), so the general scene is removed and the
+    // movie_night scenes are untouched. The preview surfaces this.
+    const env = {
+      ...envWith([{ name: "New", category: "general" }], { mode: "replace" as const }),
+      category: { id: "movie_night", name: "Movie Night" },
+    };
+    const preview = computeImportPreview(env, current, [
+      ...CATEGORIES,
+      { id: "movie_night", name: "Movie Night" },
+    ]);
+    expect(preview.removes).toEqual(["Keep"]);
+    expect(preview.resultConfig.scenes.map((s) => s.name)).toEqual(["Old A", "Old B", "New"]);
   });
 });

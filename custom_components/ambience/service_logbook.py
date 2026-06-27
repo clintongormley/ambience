@@ -1,41 +1,26 @@
 """Activity attribution for Ambience applies.
 
-Composes the human-readable "'<scene>' in <scope>" activity lines and signals
-the Scene-updates sensor to record each apply/run as its state (that state change
-IS the logbook entry — the sensor is the device-filterable activity anchor). Each
-apply gets a fresh Context, shared between the sensor's state change and the
-dispatched device service calls so the logbook groups the device changes under
-the activity. Kept separate from service.py so the resolve / execute logic
-doesn't carry the message formatting, and so the message composition can be
-unit-tested without a running integration.
+Composes the human-readable "'<scene>' in <scope>" activity lines and records
+each apply/run as a Home Assistant *logbook entry* against the scope's switch
+entity. An area switch's device sits in its HA area, so the entry is filterable
+by area in the logbook. Each apply gets a fresh Context, shared between the
+logbook entry and the dispatched device service calls so the logbook groups the
+device changes under the activity. Kept separate from service.py so the resolve /
+execute logic doesn't carry the message formatting, and so message composition
+can be unit-tested without a running integration.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from homeassistant.components import logbook
 from homeassistant.core import Context, HomeAssistant
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import SIGNAL_ACTIVITY_RECORDED
+from .const import DATA_SWITCHES, DOMAIN
 from .naming import category_names, scope_display_name
 
-
-@dataclass(frozen=True, slots=True)
-class ActivityRecord:
-    """One apply/run, as surfaced to the Scene-updates sensor.
-
-    `message` is the logbook sentence; the rest are the structured fields the
-    sensor exposes as attributes. `scene` is always resolved (the "scene <N>"
-    fallback applied). `category` is the category label, or None.
-    """
-
-    message: str
-    scene: str
-    scope: str
-    scope_kind: str
-    category: str | None
-    action: str  # "applied" | "ran"
+# Brand subject for every logbook entry: "Ambience '<scene>' in <scope>".
+# Constant — independent of the configurable switch-default name.
+ACTIVITY_NAME = "Ambience"
 
 
 def resolved_scene_name(scene_name: str | None, scene_index: int) -> str:
@@ -53,13 +38,10 @@ def compose_apply_message(
 ) -> str:
     """Compose the activity line for an apply: "'<scene>' in <scope>".
 
-    This becomes the Scene-updates sensor's state, which HA's logbook renders as
-    "<entity> changed to '<scene>' in <scope>" — so no verb/brand prefix here (it
-    would double up with the entity name; the applied/ran verb lives in the
-    ActivityRecord.action attribute). Names the matched scene and scope, appending
-    the category name only when more than one category exists and a label is known
-    (an unknown category id yields no suffix). Unnamed scenes fall back to
-    "scene <N>" (1-based).
+    Shown in the logbook as "Ambience '<scene>' in <scope>". Names the matched
+    scene and scope, appending the category name only when more than one category
+    exists and a label is known (an unknown category id yields no suffix). Unnamed
+    scenes fall back to "scene <N>" (1-based).
     """
     scene = resolved_scene_name(scene_name, scene_index)
     message = f"'{scene}' in {scope_label}"
@@ -68,18 +50,41 @@ def compose_apply_message(
     return message
 
 
-def _record(hass: HomeAssistant, record: ActivityRecord) -> Context:
-    """Signal the Scene-updates sensor to record this apply/run and return its
-    Context.
+def _switch_entity_id(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:
+    """The live scope-switch entity_id to anchor this scope's activity on.
 
-    The sensor sets its state to the activity line (the logbook entry) using this
-    context; callers MUST pass the returned Context to async_execute_actions so
-    the resulting device state changes share it and group under the activity in
-    the logbook. The dispatch is a no-op (state stays put) when the sensor is
-    disabled — applies still run, they're just not logged as activity.
+    Falls back to the house switch when the scope has no live switch of its own
+    (e.g. a forced manual apply/run on a scope with no real HA area, or a disabled
+    scope); returns None when not even the house switch exists, so the caller
+    skips the logbook entry rather than crashing.
+    """
+    switches = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+    switch = switches.get((scope_kind, scope_id))
+    if switch is None and scope_kind != "house":
+        switch = switches.get(("house", None))
+    return getattr(switch, "entity_id", None)
+
+
+def _record(hass: HomeAssistant, scope_kind: str, scope_id: str | None, message: str) -> Context:
+    """Record an apply/run as a logbook entry on the scope's switch; return the
+    fresh Context.
+
+    Callers MUST pass the returned Context to async_execute_actions so the
+    resulting device state changes share it and group under the activity in the
+    logbook. When no switch resolves the entry is skipped (the Context is still
+    returned and the apply still runs).
     """
     context = Context()
-    async_dispatcher_send(hass, SIGNAL_ACTIVITY_RECORDED, record, context)
+    entity_id = _switch_entity_id(hass, scope_kind, scope_id)
+    if entity_id is not None:
+        logbook.async_log_entry(
+            hass,
+            name=ACTIVITY_NAME,
+            message=message,
+            domain=DOMAIN,
+            entity_id=entity_id,
+            context=context,
+        )
     return context
 
 
@@ -91,28 +96,17 @@ def log_apply(
     scene_name: str | None,
     scene_index: int,
 ) -> Context:
-    """Record an apply (sensor activity signal); return its Context."""
+    """Record an apply as a logbook entry on the scope switch; return its Context."""
     categories = category_names(hass)
     scope_label = scope_display_name(hass, scope_kind, scope_id)
-    category_label = categories.get(category_id)
     message = compose_apply_message(
         scene_name=scene_name,
         scene_index=scene_index,
         scope_label=scope_label,
-        category_label=category_label,
+        category_label=categories.get(category_id),
         category_count=len(categories),
     )
-    return _record(
-        hass,
-        ActivityRecord(
-            message=message,
-            scene=resolved_scene_name(scene_name, scene_index),
-            scope=scope_label,
-            scope_kind=scope_kind,
-            category=category_label,
-            action="applied",
-        ),
-    )
+    return _record(hass, scope_kind, scope_id, message)
 
 
 def log_run_actions(
@@ -122,19 +116,8 @@ def log_run_actions(
     scene_name: str | None,
     scene_index: int,
 ) -> Context:
-    """Record a manual run-actions (sensor activity signal); return its Context."""
+    """Record a manual run-actions as a logbook entry on the scope switch; return
+    its Context."""
     scene = resolved_scene_name(scene_name, scene_index)
     scope_label = scope_display_name(hass, scope_kind, scope_id)
-    return _record(
-        hass,
-        ActivityRecord(
-            # Verb-less like the apply line (see compose_apply_message); "ran"
-            # lives in action, surfaced as the last_action attribute.
-            message=f"'{scene}' in {scope_label}",
-            scene=scene,
-            scope=scope_label,
-            scope_kind=scope_kind,
-            category=None,
-            action="ran",
-        ),
-    )
+    return _record(hass, scope_kind, scope_id, f"'{scene}' in {scope_label}")

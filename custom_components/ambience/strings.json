@@ -24,11 +24,6 @@
     }
   },
   "entity": {
-    "sensor": {
-      "scene_updates": {
-        "name": "Scene updates"
-      }
-    },
     "switch": {
       "ambience": {
         "name": "Ambience"

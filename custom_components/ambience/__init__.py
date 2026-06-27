@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
@@ -178,7 +179,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_commands(hass)
 
-    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR, Platform.SWITCH])
+    # The single "Scene updates" sensor (and its hub device) was replaced by
+    # per-scope logbook entries on the scope switches. Remove the orphaned
+    # registry entries so they don't linger as "unavailable" after upgrade.
+    ent_reg = er.async_get(hass)
+    legacy_sensor = ent_reg.async_get_entity_id("sensor", DOMAIN, "ambience_scene_updates")
+    if legacy_sensor is not None:
+        ent_reg.async_remove(legacy_sensor)
+    dev_reg = dr.async_get(hass)
+    hub_device = dev_reg.async_get_device(identifiers={(DOMAIN, "hub")})
+    if hub_device is not None:
+        dev_reg.async_remove_device(hub_device.id)
+
+    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
         action = event.data["action"]
@@ -366,9 +379,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, [Platform.SENSOR, Platform.SWITCH]
-    )
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
     if not unload_ok:
         # Entities are still live and reference hass.data[DOMAIN] — tearing the
         # rest down anyway would leave them pointing at a missing store.

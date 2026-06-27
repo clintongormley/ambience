@@ -71,11 +71,6 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
-# Dispatcher signal — fired on each apply/run so the Scene-updates sensor sets its
-# state to the activity line (that state change IS the logbook entry) and refreshes
-# its detail attributes. Payload: (ActivityRecord, Context) — see service_logbook.py.
-SIGNAL_ACTIVITY_RECORDED = "ambience_activity_recorded"
-
 # Dispatcher signal — fired when the voice-assistant exposure map changes (saved
 # from the panel's Advanced page). Payload: None. The listener re-applies exposure
 # to every live switch.

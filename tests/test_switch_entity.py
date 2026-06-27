@@ -71,18 +71,15 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    # One device per scope: house (main) + 1 floor + 1 area = 3, plus the
-    # always-present "Ambience" hub device (the Scene-updates sensor) = 4.
+    # One device per scope: house (main) + 1 floor + 1 area = 3.
+    # (The old "Ambience" hub device for the Scene-updates sensor was removed
+    # when that sensor was replaced by per-scope logbook entries.)
     devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
-    assert len(devices) == 4
+    assert len(devices) == 3
 
     main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
     assert main is not None
     assert main.name == "House Ambience"
-
-    # The hub device is separate from the scope devices and brand-named.
-    hub = dev_reg.async_get_device(identifiers={(DOMAIN, "hub")})
-    assert hub is not None and hub.name == "Ambience" and hub.id != main.id
 
     # Floor + area devices are sub-devices linked to the main device.
     area_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area")
@@ -244,9 +241,10 @@ async def test_default_name_change_updates_device_names(hass, mock_config_entry)
 
     dev_reg = dr.async_get(hass)
     names = {d.name for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)}
-    # Scope devices follow the default-name change; the hub device's name is a
-    # constant brand name and is deliberately unaffected.
-    assert names == {"House Master", "Upstairs Master", "Living Room Master", "Ambience"}
+    # Scope devices follow the default-name change.
+    # (The old "Ambience" hub device no longer exists — the Scene-updates sensor
+    # was replaced by per-scope logbook entries.)
+    assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 
 async def test_area_rename_updates_device_name(hass, mock_config_entry):

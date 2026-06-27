@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -58,3 +59,25 @@ async def test_disabled_floor_still_gets_no_switch(hass: HomeAssistant) -> None:
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert ("floor", floor.floor_id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_disabled_house_still_gets_no_switch(hass: HomeAssistant) -> None:
+    entry = _entry(hass, uid="house_disabled")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("house", None, False)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert ("house", None) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_reconcile_ignores_non_ambience_switch_entities(hass: HomeAssistant) -> None:
+    # A non-switch entity owned by the ambience config entry must be skipped by the
+    # reconcile (only ambience SWITCH entities are eligible for deletion).
+    entry = _entry(hass, uid="foreign")
+    reg = er.async_get(hass)
+    reg.async_get_or_create("sensor", DOMAIN, "ambience_not_a_switch", config_entry=entry)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert reg.async_get_entity_id("sensor", DOMAIN, "ambience_not_a_switch") is not None

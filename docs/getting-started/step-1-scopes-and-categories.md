@@ -12,12 +12,6 @@ you have defined (if any), and then any **areas**.
     Assistant. You can dismiss the suggestion to set them up for now. Later you will
     see how to configure them under **Settings**.
 
-## Disabling scopes
-
-The blue toggle to the right of each scope name allows you to disable Ambience
-completely for that scope. Disabled scopes will be moved to the botom of the
-list and any scenes in a disabled scope will be ignored.
-
 ## Add a category
 
 We want to set up scenes to control the lights in the lounge. To start we will

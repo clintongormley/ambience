@@ -68,4 +68,5 @@ scene which had won the previous time.
 
 ______________________________________________________________________
 
-Next: [Step 8: Debugging scenes](step-8-debugging-scenes.md).
+Next:
+[Step 8: Pausing & disabling scopes](step-8-pausing-and-disabling-scopes.md).

@@ -75,8 +75,9 @@ ______________________________________________________________________
 
 ## Trace: "not found" vs "unavailable"
 
-In the [Traces viewer](../tips-and-testing.md#traces-why-a-scene-won), a
-condition that references an entity shows one of two states when the entity
+In the
+[Traces viewer](../getting-started/step-9-debugging-scenes.md#traces-why-a-scene-won),
+a condition that references an entity shows one of two states when the entity
 cannot be used:
 
 - **not found** — the entity id does not resolve to any state. This means the

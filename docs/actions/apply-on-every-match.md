@@ -36,11 +36,25 @@ flowing, **and** will turn the Power Shower back on whenever it turns itself
 off. The built-in **Turn on** action has a safeguard in place so that it will
 not try to turn the Power Shower on if it is already on.
 
-!!! note "Rerun all scenes after inactivity"
+## Re-run all scenes after inactivity
 
-    This is independent of the global **Re-run all scenes after inactivity** setting
-    (Settings → Advanced), which periodically re-applies every unit's winning scene
-    regardless of this toggle.
+Sometimes devices get out of sync with the currently applied scene, and can
+remain so until a new scene wins. Perhaps a turn-off light command was dropped
+because of a network outage, or somebody opened a blind manually and forgot to
+close it.
+
+The **Re-run all scenes** is a way to periodically trigger the re-evaluation of
+all scene groups after a period of inactivity, to get things back into sync.
+This feature can be enabled and the timeout configured in the **Settings →
+Advanced** tab.
+
+![Re-run all scenes after inactivity settings.](../images/actions/apply-on-every-match/rerun.png "Re-run all scenes after inactivity settings.")
+
+When the feature is enabled and the timeout elapses for a scene group, Ambience
+re-evaluates and re-dispatches that group's winning scene (even if the winner
+has not changed) to reapply any commands that may have been dropped. The idle
+clock resets each time a group's commands are actually dispatched. Disable or
+paused scopes are skipped.
 
 ______________________________________________________________________
 

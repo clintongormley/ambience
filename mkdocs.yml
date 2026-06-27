@@ -57,7 +57,8 @@ nav:
       - "5. Entity-state conditions": getting-started/step-5-entity-state-conditions.md
       - "6. Scene priority": getting-started/step-6-scene-priority.md
       - "7. Blocking scenes": getting-started/step-7-blocking-scenes.md
-      - "8. Debugging scenes": getting-started/step-8-debugging-scenes.md
+      - "8. Pausing & disabling scopes": getting-started/step-8-pausing-and-disabling-scopes.md
+      - "9. Debugging scenes": getting-started/step-9-debugging-scenes.md
   - Conditions:
       - Overview: conditions/index.md
       - Day: conditions/day.md
@@ -82,4 +83,4 @@ nav:
   - Panel & card: panel-and-card.md
   - Troubleshooting:
       - Config health: concepts/config-health.md
-      - Tips & testing: tips-and-testing.md
+      - Reporting an issue: reporting-an-issue.md

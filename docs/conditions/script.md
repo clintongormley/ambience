@@ -1,9 +1,10 @@
 # Script
 
 !!! warning "Advanced"
-    This condition requires you to write and maintain a Home Assistant script.
-    Most situations are covered by the built-in conditions; reach for this one
-    only when nothing else fits.
+
+    This condition requires you to write and maintain a Home Assistant script. Most
+    situations are covered by the built-in conditions; reach for this one only when
+    nothing else fits.
 
 Checks the result of a Home Assistant **script** that you write. The script
 runs, does whatever logic it needs, and reports back whether the condition is
@@ -11,11 +12,9 @@ met. Because the script runs inside Home Assistant, it can query anything
 available there — helper states, statistics, REST endpoints, custom integrations
 — that Ambience has no built-in condition for.
 
-## How you set it up
-
 When you add a Script condition to a scene you configure three things:
 
-### 1. Choose a script
+## 1. Choose a script
 
 Select one of your existing `script.*` entities from the dropdown. The list
 shows every script registered in Home Assistant.
@@ -35,14 +34,13 @@ See the Home Assistant documentation on
 [stopping a script sequence](https://www.home-assistant.io/integrations/script/#stopping-a-script-sequence)
 for the full syntax.
 
-### 2. Pass arguments (optional)
+## 2. Pass arguments (optional)
 
-If your script declares `fields`, the editor shows a form for those fields
-and pre-fills any defaults. Fill in the values you want Ambience to pass when
-it calls the script. If your script takes no inputs, this section does not
-appear.
+If your script declares `fields`, the editor shows a form for those fields and
+pre-fills any defaults. Fill in the values you want Ambience to pass when it
+calls the script. If your script takes no inputs, this section does not appear.
 
-### 3. List triggers (optional but usually necessary)
+## 3. List triggers (optional but usually necessary)
 
 Ambience watches your entities and re-evaluates scenes when something changes.
 However, it cannot see inside a script — it does not know which entities the
@@ -63,8 +61,8 @@ the condition directly.
 Ambience calls the script with `blocking: true` so it waits for the script to
 finish before deciding which scene applies. Calls are cached for a few seconds
 so a single evaluation snapshot does not trigger the script multiple times. The
-call times out after five seconds; a timeout counts as no match and is logged
-as a warning.
+call times out after five seconds; a timeout counts as no match and is logged as
+a warning.
 
 ## Example
 
@@ -91,8 +89,8 @@ In the scene editor you add a Script condition, select
 that sensor changes, calling the script each time and activating the scene only
 while the battery is above 80 %.
 
-!!! info "📷 Screenshot"
-    The Script condition editor showing the script dropdown with
-    "ambience_battery_high" selected, no arguments section (the script has no
-    fields), and a Triggers section with "sensor.solar_battery_level" listed as
-    a chip.
+![Example of a script condition.](../images/conditions/script/script.png "Example of a script condition.")
+
+______________________________________________________________________
+
+Next: [Sun](sun.md).

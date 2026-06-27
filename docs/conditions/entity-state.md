@@ -1,46 +1,95 @@
 # Entity state
 
-Checks the state (or an attribute) of one or more entities, and evaluates to true or false based on a test you build in the UI.
+!!! tip "Worked example"
 
-## How you set it up
+    For a worked example of the Entity-state condition, see
+    [Step 5 of Getting started](../getting-started/step-5-entity-state-conditions.md).
 
-The condition is built from one or more individual *tests*. You start by picking an entity, then choosing **where to look** — either the entity's own state (the default) or one of its attributes — and then setting a **comparison** and a **value**.
+Checks the state (or an attribute) of an entity, compares it to a value that you
+specify, and returns `true` or `false`. Multiple **clauses** can be combined
+with **AND**, **OR**, and **NOT** operators, and can be grouped using
+parentheses.
 
-**Comparison operators for text states:**
+Each clause picks an entity, then chooses **where to look** — either the
+entity's own state (the default) or one of its attributes — and then sets a
+**comparison** and a **value**.
 
-| Operator | Meaning |
-|---|---|
-| is | the value matches one of the states you list |
-| is not | the value matches none of the states you list |
+## Text comparisons
 
-For numeric states and numeric attributes, the UI switches automatically to numeric operators:
+For text comparisons, you can list multiple values:
 
-| Operator | Meaning |
-|---|---|
-| > | greater than |
-| ≥ | at least (greater than or equal) |
-| < | less than |
-| ≤ | at most (less than or equal) |
+| Operator | Meaning                                                        |
+| -------- | -------------------------------------------------------------- |
+| `is`     | the state or attribute matches **any** of the values you list  |
+| `is not` | the state or attribute matches **none** of the values you list |
 
-For an **is** or **is not** test you can list several values — the condition matches if any one of them applies (so "is on, is playing" behaves like "is on OR is playing").
+![Text value comparison.](../images/conditions/entity-state/text-values.png "Text value comparison.")
 
-You can also set a **For** duration. When you do, the *test* must have stayed true continuously for at least that long before the condition passes. This is useful for avoiding brief flickers — for example, requiring that a motion sensor has been clear for five minutes before a scene takes effect. When the test lists several states ("is *playing* or *paused*"), the clock keeps running as the entity flips between those listed states, because set membership never lapsed; it only resets when the entity moves to a state outside the list.
+## Numeric comparisons
 
-When a scene needs more than one condition on a single entity state check, you combine individual conditions into a tree using **AND** and **OR** groups. Use the **"Wrap in group"** button on any condition to place it inside a new group, then add sibling conditions to the same group. You can nest groups to arbitrary depth. Each condition and each group can also be negated with the **NOT** toggle on its header — turning it on inverts the result of that condition or group.
+For numeric states and numeric attributes, the UI switches automatically to
+numeric operators:
 
-!!! info "📷 Screenshot"
-    State expression builder showing two conditions combined in an AND group, with the For duration picker visible.
+| Operator | Meaning                          |
+| -------- | -------------------------------- |
+| `>`      | greater than                     |
+| `≥`      | at least (greater than or equal) |
+| `<`      | less than                        |
+| `≤`      | at most (less than or equal)     |
 
-## Example
+![Numeric value comparison.](../images/conditions/entity-state/numeric-values.png "Numeric value comparison.")
 
-**The projector is on**
+## Boolean operators
 
-Pick the projector's media player entity, leave "Where" set to *State*, set Comparison to *is*, and type `on` in the value field. The condition passes whenever the projector is on.
+When a scene needs more than one clause, you combine them using **AND** and
+**OR** groups. Use the **"(…)"** (wrap-in-group) button on any clause to place
+it inside a new group, then add sibling clauses to the same group. You can nest
+groups to arbitrary depth. Each clause and each group can also be negated with
+the **NOT** toggle on its header — turning it on inverts the result of that
+clause or group.
 
-**Temperature is below 18 °C**
+In the following example, we want to turn on the Power Shower when the water
+flow is over 5L/min and somebody has been present in at least one of the showers
+for at least 3 seconds.
 
-Pick a temperature sensor entity, leave "Where" set to *State*, set Comparison to *<*, and enter `18` as the threshold. The condition passes whenever the sensor reads below 18.
+![Boolean logic example.](../images/conditions/entity-state/boolean-1.png "Boolean logic example.")
 
-**Nobody home for at least five minutes**
+!!! tip "Drag handles"
 
-Pick each person entity in turn and set each one to *is not home*. Wrap them in an **AND** group so all must be away simultaneously. Set the **For** duration to 5 minutes on each condition so brief GPS drift does not trigger the scene.
+    The **⠿** drag handles can be used to drag clauses from one group to another.
+
+## Simplified descriptions
+
+As you build the expression, Ambience shows it back as a plain-language summary
+that tidies the logic to read naturally rather than mirroring the raw tree. A
+**NOT** on a simple `is` clause is folded inline — *"Lamp is on"* under a NOT
+becomes *"Lamp is NOT on"*, instead of *"NOT Lamp is on"*.
+
+The following is a complicated example where we want a **blocking scene** to
+prevent us turning off the power shower until either the water flow is under
+5L/min or all of the showers have been vacant for at least 5 seconds.
+
+![Complicated blocking scene with entity state condition.](../images/conditions/entity-state/boolean-2.png "Complicated blocking scene with entity state condition.")
+
+The "raw" description of the condition reads as follows:
+
+_NOT ((Main Bathroom · Zone Shower is Clear for ≥5s AND Bedroom 2 · Zone Shower
+is Clear for ≥5s AND Bedroom 1 · Zone Shower is Clear for ≥5s) OR Balcony ·
+Water pump Flow [L] (VF) < 5)._
+
+The simplified version is easier to read and understand:
+
+_Block until (Main Bathroom · Zone Shower is Clear for ≥5s AND Bedroom 2 · Zone
+Shower is Clear for ≥5s AND Bedroom 1 · Zone Shower is Clear for ≥5s) OR Balcony
+· Water pump Flow [L] (VF) < 5_.
+
+## For duration
+
+You can also set a **For** duration on the condition, so it only passes once its
+test has stayed continuously true for more than or less than the specified
+duration. See [The "for" duration](index.md#the-for-duration) for the details,
+including how the clock behaves when a clause lists several states.
+
+______________________________________________________________________
+
+Next: [Lux](lux.md).

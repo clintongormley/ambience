@@ -21,11 +21,11 @@ Copy `custom_components/ambience/` into your Home Assistant `config/custom_compo
 
 Requires Home Assistant **2025.2.0** or newer.
 
-See the [full documentation](docs/index.md) for details.
+See the [full documentation](https://clintongormley.github.io/ambience/) for details.
 
 ## Documentation
 
-Full documentation — concepts, configuration reference, and tips — lives in [`docs/`](docs/index.md). It is also published to GitHub Pages once the site is live.
+Full documentation — concepts, configuration reference, and tips — is published at [clintongormley.github.io/ambience](https://clintongormley.github.io/ambience/). The source lives in [`docs/`](docs/index.md).
 
 ## For developers
 

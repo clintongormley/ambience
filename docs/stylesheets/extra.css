@@ -5,25 +5,62 @@
   --md-accent-fg-color: #e8901e;
 }
 
-/* The logo already reads "Ambience", so hide the redundant title text. Keep
-   the .md-header__title element itself, since its flex-grow is the spacer that
-   keeps the search box and GitHub link over on the right. */
+/* The logo already reads "Ambience", so hide the redundant title text — and the
+   whole .md-header__title flex spacer with it. The search box's left edge is
+   instead aligned to the content column (see below), so the spacer is no longer
+   needed to shove things rightward. */
 .md-header__topic {
   display: none;
 }
 
-/* Give the freed-up space to a wider search box; GitHub stays on the right. */
-@media screen and (min-width: 60em) {
-  .md-search__inner {
-    width: 24rem;
+/* Align the search box with the body: its left edge should sit over the content
+   column's left margin (the sidebar's right edge, 12.1rem in from the grid). The
+   logo zone is padded out to exactly that width, the spacer is dropped, and the
+   search grows to fill the space up to the right-hand controls. Flex `order`
+   moves the palette toggle and GitHub link to the right of the search. Scoped to
+   the breakpoint where the sidebar is actually inline — below it there's no
+   sidebar to align to and the nav is an off-canvas drawer. */
+@media screen and (min-width: 76.25em) {
+  .md-header__title {
+    display: none;
+  }
+
+  .md-header__button.md-logo {
+    /* 7.4rem of wordmark + 4.3rem of right margin = 11.7rem; plus the 0.4rem
+       header inset that's already left of the logo, the zone ends 12.1rem in —
+       exactly where the sidebar ends and the content column begins. */
+    margin-right: 4.3rem;
+  }
+
+  .md-search {
+    order: 1;
+    flex: 1 1 auto;
+  }
+
+  .md-header__option {
+    order: 2;
+  }
+
+  .md-header__source {
+    order: 3;
+  }
+
+  /* Let the search field fill the width its flex item now spans. */
+  .md-search__inner,
+  .md-search__form {
+    width: 100%;
+    float: none;
   }
 }
 
-/* Header wordmark: hide the single <img> and paint the palette-appropriate
-   variant as a background so it stays legible in both light and dark modes. */
+/* Header logo: hide the single <img> and paint the full Ambience wordmark as a
+   background, swapping the palette-appropriate variant per colour scheme so it
+   stays legible in both light and dark modes. The logo's 520×120 viewBox is a
+   ~4.33:1 ratio, so the box width tracks its height to avoid distortion. */
 .md-header__button.md-logo {
-  width: 7rem;
-  height: 1.6rem;
+  width: 7.4rem;
+  height: 1.7rem;
+  padding: 0;
   background: url("../assets/logo-light.svg") left center / contain no-repeat;
 }
 
@@ -60,4 +97,124 @@
   width: 100%;
   max-width: 28rem;
   height: auto;
+}
+
+/* Cap content images (screenshots) so a wide PNG doesn't stretch across the
+   full reading column. max-width only shrinks oversized images — smaller
+   images (and the inline "My Home Assistant" badge) keep their natural size. */
+.md-typeset img {
+  max-width: 650px;
+  height: auto;
+}
+
+/* Lift screenshots off the white page with a soft drop shadow. Scoped to raster
+   images so the SVG logo and the My Home Assistant badge stay flat. */
+.md-typeset img:not([src$=".svg"]) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Cap the article body (not the whole grid) at 800px, so the reading column
+   stays comfortable while the nav sidebar keeps its normal width. The grid is
+   widened a little past the 61rem default to leave room for an 800px body
+   alongside the sidebar. */
+.md-grid {
+  max-width: 64rem;
+}
+
+.md-content {
+  max-width: 800px;
+}
+
+/* Page title: Material renders h1 in a thin, light-grey style. Make it the
+   strongest thing on the page — full foreground colour and a heavy weight. */
+.md-typeset h1 {
+  color: var(--md-default-fg-color);
+  font-weight: 800;
+}
+
+/* Heading weights: lighter section headers (h2), heavier sub-headers (h3). */
+.md-typeset h2 {
+  font-weight: 400;
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+}
+
+/* ── Left navigation ─────────────────────────────────────────────────────────
+   Set the menu apart from the reading column as a distinct panel, and make its
+   nesting legible: darker section labels, more indentation per level, and a
+   vertical guide line down each nested level so depth reads like a tree. */
+
+/* The menu as a panel: a soft fill plus a divider against the content. Material
+   gives .md-sidebar--primary a tiny, scroll-dependent height (it's just a sticky
+   anchor — the nav lives in a scrollwrap), so a fill on it only covers the top
+   strip. Paint the fill instead with a full-height ::before on the grid itself
+   (.md-main__inner, always as tall as the content). It bleeds left to the
+   viewport edge and ends at the content column's left margin (12.1rem = the
+   sidebar width), where the divider sits. color-mix keeps it opaque and
+   theme-following in both schemes. Desktop only — below 76.25em the primary nav
+   is an off-canvas drawer. */
+@media screen and (min-width: 76.25em) {
+  .md-main__inner {
+    position: relative;
+  }
+
+  .md-main__inner::before {
+    content: "";
+    position: absolute;
+    /* The grid has a 1.5rem top margin (whitespace above the article); pull the
+       rail up through it so the menu fill meets the header instead of starting
+       below a white gap. It tucks behind the opaque sticky header (z-index: -1). */
+    top: -1.5rem;
+    bottom: 0;
+    left: -100vw;
+    width: calc(100vw + 12.1rem);
+    z-index: -1;
+    background-color: color-mix(
+      in srgb,
+      var(--md-default-fg-color) 4%,
+      var(--md-default-bg-color)
+    );
+    border-right: 1px solid
+      color-mix(in srgb, var(--md-default-fg-color) 12%, transparent);
+    pointer-events: none;
+  }
+
+  /* The sticky nav title sits over the rail — match its fill so it blends and
+     stays opaque, masking nav items that scroll beneath it. Material masks that
+     scroll with a box-shadow tinted to the page background (white); recolour it
+     to the rail fill too, or it shows as a white bar under the title. */
+  .md-nav--primary .md-nav__title {
+    background-color: color-mix(
+      in srgb,
+      var(--md-default-fg-color) 4%,
+      var(--md-default-bg-color)
+    );
+    box-shadow: 0 0 8px 8px
+      color-mix(in srgb, var(--md-default-fg-color) 4%, var(--md-default-bg-color));
+  }
+}
+
+/* Section group labels ("Getting started", "Concepts" …): darker, tighter, and
+   set in small caps so they read as headers rather than as nav links. */
+.md-nav--primary .md-nav__item--section > .md-nav__link {
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  opacity: 1;
+}
+
+/* Indentation guides: every nested level gets a little more inset plus a guide
+   line on its left, so the padding compounds into a clear tree of depth. */
+.md-nav--primary .md-nav__item .md-nav {
+  margin-left: 0.55rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item .md-nav {
+  border-left-color: rgba(255, 255, 255, 0.14);
 }

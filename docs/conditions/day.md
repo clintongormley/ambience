@@ -12,6 +12,8 @@ Exclude entry.
 Use the **+ Add include item** and **+ Add exclude item** dropdowns to build up
 your list. Each item has a kind, chosen from the options below.
 
+![Example of Day condition.](../images/conditions/day/day.png "Example of Day condition.")
+
 ## Day of the week
 
 Pick **Weekday** and tick the days you want to match: Monday through Sunday. For
@@ -82,6 +84,8 @@ Several day types — `Workday`, `Holiday`, `First workday of month`, and
 in the **Conditions** tab of the Settings modal (open it from the cogwheel ⚙ in
 the Ambience panel header). The sensor powers the `Workday` and `Holiday` types;
 the calendar powers `First workday of month` and `Last workday of month`.
+
+![Configuration of Day condition.](../images/conditions/day/config.png "Configuration of Day condition.")
 
 **Workday sensor** Select a `binary_sensor` entity provided by the HA
 [Workday integration](https://www.home-assistant.io/integrations/workday/). The

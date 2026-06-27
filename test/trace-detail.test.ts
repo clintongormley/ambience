@@ -1043,7 +1043,10 @@ describe("trace-detail", () => {
     expect(outcomeSummary({}, unit({ outcome: "no_match", winner_name: null }))).toContain(
       "No scene matched",
     );
-    expect(outcomeSummary({}, unit({ outcome: "skipped_switch_off" }))).toContain("switch is off");
+    const switchOffSummary = outcomeSummary({}, unit({ outcome: "skipped_switch_off" }));
+    expect(switchOffSummary).toContain("switch is off");
+    expect(switchOffSummary).toContain("scope");
+    expect(switchOffSummary).not.toContain("category");
     expect(outcomeSummary({}, unit({ outcome: "skipped_scope_disabled" }))).toContain(
       "scope is disabled",
     );

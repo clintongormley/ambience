@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -82,21 +83,27 @@ def discover_conditions() -> list[dict[str, Any]]:
     return sorted(found.values(), key=lambda c: (-c["priority"], c["name"]))
 
 
+def _render_reference(
+    title: str,
+    description: str,
+    items: list[dict[str, Any]],
+    formatter: Callable[[dict[str, Any]], list[str]],
+) -> str:
+    """A generated reference doc: the banner, a titled intro, one `formatter`-
+    rendered block per item, and the end marker."""
+    lines = [GENERATED_BANNER, "", f"# {title}", "", description, ""]
+    for item in items:
+        lines += formatter(item)
+    lines += [GENERATED_END, ""]
+    return "\n".join(lines)
+
+
 def render_condition_reference(conditions: list[dict[str, Any]]) -> str:
     """The generated per-condition reference: `when` key, input widget, priority
     and purpose for every condition. The cookbook supplies the worked examples."""
-    lines = [
-        GENERATED_BANNER,
-        "",
-        "# Condition reference",
-        "",
-        "Every built-in condition usable under a scene's `when`. Each `when` key is one of "
-        "these names; its value is that condition's predicate (or `null` to match anything). "
-        "See `conditions-cookbook.md` for plain-English → predicate examples.",
-        "",
-    ]
-    for c in conditions:
-        lines += [
+
+    def fmt(c: dict[str, Any]) -> list[str]:
+        return [
             f"## `{c['name']}`",
             "",
             f"- **Purpose:** {_collapse(c['description'])}",
@@ -105,8 +112,15 @@ def render_condition_reference(conditions: list[dict[str, Any]]) -> str:
             f"- **Help:** {_collapse(c['predicate_help'])}",
             "",
         ]
-    lines += [GENERATED_END, ""]
-    return "\n".join(lines)
+
+    return _render_reference(
+        "Condition reference",
+        "Every built-in condition usable under a scene's `when`. Each `when` key is one of "
+        "these names; its value is that condition's predicate (or `null` to match anything). "
+        "See `conditions-cookbook.md` for plain-English → predicate examples.",
+        conditions,
+        fmt,
+    )
 
 
 def discover_builtin_actions() -> list[dict[str, Any]]:
@@ -129,19 +143,10 @@ def discover_builtin_actions() -> list[dict[str, Any]]:
 
 def render_action_reference(actions: list[dict[str, Any]]) -> str:
     """The generated reference for the built-in `ambience.*` safe services."""
-    lines = [
-        GENERATED_BANNER,
-        "",
-        "# Built-in action reference",
-        "",
-        "The always-available `ambience.*` safe services. The exposed services for a "
-        "specific install (e.g. `light.turn_on`) and their field schemas live in that "
-        "install's AI bundle under `actions`.",
-        "",
-    ]
-    for a in actions:
+
+    def fmt(a: dict[str, Any]) -> list[str]:
         fields = ", ".join(f"`{f}`" for f in a["fields"]) if a["fields"] else "_(none)_"
-        lines += [
+        return [
             f"## `{a['service']}`",
             "",
             f"- **Name:** {a['name']}",
@@ -149,8 +154,15 @@ def render_action_reference(actions: list[dict[str, Any]]) -> str:
             f"- **Fields:** {fields}",
             "",
         ]
-    lines += [GENERATED_END, ""]
-    return "\n".join(lines)
+
+    return _render_reference(
+        "Built-in action reference",
+        "The always-available `ambience.*` safe services. The exposed services for a "
+        "specific install (e.g. `light.turn_on`) and their field schemas live in that "
+        "install's AI bundle under `actions`.",
+        actions,
+        fmt,
+    )
 
 
 def assemble_portable_doc(parts: list[tuple[str, str]]) -> str:

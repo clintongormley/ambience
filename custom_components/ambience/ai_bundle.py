@@ -14,6 +14,7 @@ diagnostics dump uses.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -86,20 +87,23 @@ def _entities(hass: HomeAssistant) -> list[dict[str, Any]]:
 
 async def _action_schemas(hass: HomeAssistant, exposed: list[dict[str, Any]]) -> dict[str, Any]:
     """The field schema for each exposed action's service, so the AI knows which
-    params are valid. Best-effort: a service whose schema can't be resolved (not
-    loaded, or a bare on/off helper) is simply omitted."""
-    schemas: dict[str, Any] = {}
-    for action in exposed:
-        service_id = action.get("id")
-        if not isinstance(service_id, str) or service_id in schemas:
-            continue
-        try:
-            schema = await get_service_schema(hass, service_id)
-        except Exception:  # noqa: BLE001 — a single bad service must not sink the bundle
-            schema = None
-        if schema is not None:
-            schemas[service_id] = schema
-    return schemas
+    params are valid. Fetched concurrently; best-effort — a service whose schema
+    can't be resolved (not loaded, a bare on/off helper, or an outright error) is
+    simply omitted."""
+    service_ids = list(
+        dict.fromkeys(
+            a["id"] for a in exposed if isinstance(a.get("id"), str)
+        )  # unique, order-preserving
+    )
+    results = await asyncio.gather(
+        *(get_service_schema(hass, sid) for sid in service_ids),
+        return_exceptions=True,  # a single bad service must not sink the bundle
+    )
+    return {
+        sid: schema
+        for sid, schema in zip(service_ids, results, strict=True)
+        if schema is not None and not isinstance(schema, BaseException)
+    }
 
 
 async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:

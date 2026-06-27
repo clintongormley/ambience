@@ -124,7 +124,6 @@ class AmbienceStore:
             "switch_defaults": {
                 "name": DEFAULT_SWITCH_NAME,
                 "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
-                "create_switches": False,
             },
             "reapply": {
                 "enabled": DEFAULT_REAPPLY_ENABLED,
@@ -214,7 +213,7 @@ class AmbienceStore:
         sd = self._data.setdefault("switch_defaults", {})
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
         sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
-        sd.setdefault("create_switches", False)
+        sd.pop("create_switches", None)
 
     def _ensure_reapply_settings(self) -> None:
         r = self._data.setdefault("reapply", {})
@@ -511,9 +510,6 @@ class AmbienceStore:
         delay = payload.get("auto_on_delay_seconds")
         if not isinstance(delay, int) or isinstance(delay, bool) or delay < 0:
             raise AmbienceError("store_switch_auto_on_delay_invalid", delay=delay)
-        create = payload.get("create_switches")
-        if not isinstance(create, bool):
-            raise AmbienceError("store_switch_create_switches_invalid", create=create)
 
     def get_switch_defaults(self) -> dict[str, Any]:
         sd = self._data.get("switch_defaults", {})
@@ -522,7 +518,6 @@ class AmbienceStore:
             "auto_on_delay_seconds": sd.get(
                 "auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS
             ),
-            "create_switches": sd.get("create_switches", False),
         }
 
     async def async_save_switch_defaults(self, payload: dict[str, Any]) -> None:
@@ -530,7 +525,6 @@ class AmbienceStore:
         self._data["switch_defaults"] = {
             "name": payload["name"],
             "auto_on_delay_seconds": payload["auto_on_delay_seconds"],
-            "create_switches": payload["create_switches"],
         }
         await self._store.async_save(self._data)
 

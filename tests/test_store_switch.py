@@ -22,22 +22,18 @@ async def test_switch_defaults_empty_load(hass: HomeAssistant) -> None:
     assert store.get_switch_defaults() == {
         "name": "Ambience",
         "auto_on_delay_seconds": 0,
-        "create_switches": False,
     }
 
 
 async def test_switch_defaults_round_trip(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_switch_defaults(
-        {"name": "Master", "auto_on_delay_seconds": 600, "create_switches": False}
-    )
+    await store.async_save_switch_defaults({"name": "Master", "auto_on_delay_seconds": 600})
     fresh = AmbienceStore(hass)
     await fresh.async_load()
     assert fresh.get_switch_defaults() == {
         "name": "Master",
         "auto_on_delay_seconds": 600,
-        "create_switches": False,
     }
 
 
@@ -84,7 +80,6 @@ async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> Non
     assert store.get_switch_defaults() == {
         "name": "Ambience",
         "auto_on_delay_seconds": 0,
-        "create_switches": False,
     }
 
 
@@ -136,7 +131,6 @@ async def test_off_at_ignores_legacy_name_and_delay(hass: HomeAssistant) -> None
     assert store.get_switch_defaults() == {
         "name": "Ambience",
         "auto_on_delay_seconds": 0,
-        "create_switches": False,
     }
 
 

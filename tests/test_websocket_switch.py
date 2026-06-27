@@ -47,7 +47,7 @@ async def _ws_send(hass_ws_client, **payload: Any) -> dict:
 
 
 async def test_switch_defaults_list(hass, hass_ws_client):
-    # Use a fresh entry (no pre-seeded store) so create_switches defaults to False.
+    # Use a fresh entry (no pre-seeded store) to exercise the defaults.
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     entry = MockConfigEntry(
@@ -62,7 +62,6 @@ async def test_switch_defaults_list(hass, hass_ws_client):
     assert resp["result"] == {
         "name": "Ambience",
         "auto_on_delay_seconds": 0,
-        "create_switches": False,
     }
 
 
@@ -89,7 +88,6 @@ async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
         assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults() == {
             "name": "Master",
             "auto_on_delay_seconds": 600,
-            "create_switches": False,
         }
         assert fired == [None]
     finally:
@@ -188,31 +186,28 @@ async def test_set_scope_enabled_recreates_switch_on_reenable(hass, installed, h
     assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is True
 
 
-async def test_set_scope_enabled_no_switch_work_when_toggle_off(hass, hass_ws_client):
-    from homeassistant.helpers import entity_registry as er
+async def test_set_scope_enabled_persists_flag_on_fresh_entry(hass, hass_ws_client):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    # create_switches defaults to False in the store, so an entry with empty options
-    # starts with no switches (simulates toggle-off state)
+    # A fresh entry (no pre-seeded store) starts with house enabled by default.
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
         options={},
-        unique_id="ws_off",
+        unique_id="ws_fresh",
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    # Disable the house and verify the flag is persisted.
     resp = await _ws_send(
-        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=False
     )
     assert resp["success"]
     await hass.async_block_till_done()
-    reg = er.async_get(hass)
-    assert reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house") is None
-    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is True
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is False
 
 
 async def test_set_scope_enabled_noop_when_switch_unregistered(hass, installed, hass_ws_client):

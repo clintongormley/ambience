@@ -507,7 +507,7 @@ async def test_unload_aborts_when_platform_unload_fails(
 
 
 async def test_setup_does_not_stash_create_switches_in_domain_data(hass):
-    """create_switches is now owned by the store; DATA_CREATE_SWITCHES must not exist."""
+    """create_switches was removed; domain_data must not carry any create_switches key."""
     from custom_components.ambience.const import DATA_STORE
 
     entry = MockConfigEntry(
@@ -522,8 +522,8 @@ async def test_setup_does_not_stash_create_switches_in_domain_data(hass):
     await hass.async_block_till_done()
     # The store (not domain_data) is the source of truth
     assert "create_switches_enabled" not in hass.data[DOMAIN]
-    # The store defaults to False
-    assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults()["create_switches"] is False
+    # create_switches is no longer a field in switch defaults
+    assert "create_switches" not in hass.data[DOMAIN][DATA_STORE].get_switch_defaults()
 
 
 def test_manifest_orders_setup_after_frontend() -> None:

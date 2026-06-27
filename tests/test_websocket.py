@@ -2442,25 +2442,6 @@ async def test_exposed_assistants_save_persists_and_signals(
     }
 
 
-async def test_switch_defaults_save_persists_create_switches(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    client = await hass_ws_client()
-    await client.send_json(
-        {
-            "id": 1,
-            "type": "ambience/switch_defaults/save",
-            "name": "Ambience",
-            "auto_on_delay_seconds": 0,
-            "create_switches": True,
-        }
-    )
-    msg = await client.receive_json()
-    assert msg["success"] and msg["result"] == {"ok": True}
-    store = hass.data[DOMAIN][DATA_STORE]
-    assert store.get_switch_defaults()["create_switches"] is True
-
-
 async def test_exposed_actions_save_reconciles_repairs_live(
     hass: HomeAssistant, installed_with_actions, hass_ws_client
 ) -> None:

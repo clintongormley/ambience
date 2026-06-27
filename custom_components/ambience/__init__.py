@@ -201,11 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             area = area_reg.async_get_area(area_id)
-            if (
-                store.get_switch_defaults()["create_switches"]
-                and add_entities is not None
-                and area is not None
-            ):
+            if add_entities is not None and area is not None:
                 add_entities([make_scope_switch(hass, "area", area_id)])
             return
         if action == "update":
@@ -240,11 +236,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             floor = floor_reg.async_get_floor(floor_id)
-            if (
-                store.get_switch_defaults()["create_switches"]
-                and add_entities is not None
-                and floor is not None
-            ):
+            if add_entities is not None and floor is not None:
                 add_entities([make_scope_switch(hass, "floor", floor_id)])
             return
         if action == "update":

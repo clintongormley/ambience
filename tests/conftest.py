@@ -125,9 +125,8 @@ def init_frontend_extra_module_urls(hass: HomeAssistant) -> None:
 async def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
     """Mock config entry for the Ambience integration.
 
-    The store is pre-seeded with create_switches=True so the large body of
-    switch-dependent tests keeps working; the product default (off) is exercised
-    by tests that build their own entry with empty options and don't pre-seed.
+    The store is pre-seeded with switch defaults so the large body of
+    switch-dependent tests starts with a known state.
     """
     from homeassistant.helpers.storage import Store
 
@@ -142,7 +141,6 @@ async def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
             "switch_defaults": {
                 "name": "Ambience",
                 "auto_on_delay_seconds": 0,
-                "create_switches": True,
             },
         }
     )

@@ -640,31 +640,6 @@ async def test_reapply_default_interval_is_one_hour(hass: HomeAssistant) -> None
     assert store.get_reapply_settings()["interval_seconds"] == 3600
 
 
-async def test_switch_defaults_create_switches_default_false(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    assert store.get_switch_defaults()["create_switches"] is False
-
-
-async def test_save_switch_defaults_persists_create_switches(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
-    )
-    assert store.get_switch_defaults()["create_switches"] is True
-
-
-async def test_save_switch_defaults_rejects_non_bool_create_switches(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    with pytest.raises(AmbienceError) as exc:
-        await store.async_save_switch_defaults(
-            {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": 1}
-        )
-    assert exc.value.translation_key == "store_switch_create_switches_invalid"
-
-
 async def test_exposed_assistants_default_assist_only(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()

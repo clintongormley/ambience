@@ -36,7 +36,7 @@ Finally, configure the actions to take:
 
 - Click **+ Add action** and select **Turn off**.
 - Target the **Lounge Ceiling Light** and the **Lounge Painting Spots**.
-- Click **+Add action** and select **Turn on light**.
+- Click **+ Add action** and select **Turn on light**.
 - Target the **Lounge Sidetable Lights** and set **Brightness pct** to **10%**.
 - Click **Save scene**.
 

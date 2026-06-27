@@ -70,9 +70,9 @@ Each entry has a coloured **outcome bar**:
 
 Below the bar, each entry shows:
 
-- the **Trigger**, that caused the scene group to be evaluated, such as an
-    entity state change, the **Time of day**, **Sun position**, **Startup** of
-    Home Assistant, the scope config was **Reloaded**, and more,
+- the **Trigger** that caused the scene group to be evaluated, such as an entity
+    state change, the **Time of day**, **Sun position**, **Startup** of Home
+    Assistant, the scope config was **Reloaded**, and more,
 - and the scene that **Won** (if any).
 
 ### Expanding the detail

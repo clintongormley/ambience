@@ -67,7 +67,7 @@ concepts that exist in only a few rooms or even a single room.
 
 General categories like **Lights** and **Blinds** are useful, but maybe you have
 an en-suite bathroom which belongs to a bedroom area. The lights and blind in
-the bathroom would have a different lifecyle to the lights and blind in the
+the bathroom would have a different lifecycle to the lights and blind in the
 bedroom and so deserve their own dedicated **Bathroom lights** and **Bathroom
 blinds** category. And maybe in just one bathroom you have **Shower lights**
 which have a different lifecycle to the other **Bathroom lights**.

@@ -16,9 +16,8 @@ while you set up the scenes.
 
 ## Pausing a scope
 
-Automation is great, but sometimes you want to take control and control things
-manually, but just **temporarily**. That is what a scope's **pause switch** is
-for.
+Automation is great, but sometimes you want to take control and do things
+manually, just **temporarily**. That is what a scope's **pause switch** is for.
 
 Every enabled scope has its own pause switch: a `switch` entity named after the
 scope, such as **Lounge Ambience**. The pause/resume timer button on the scope
@@ -31,9 +30,9 @@ devices exactly as they are. When you resume — manually, or automatically once
 the pause delay elapses — Ambience re-evaluates and applies the winning scene
 again.
 
-Toggling the **House-** or a **floor-switch** cascades down to the scopes
-beneath it, so you can turn off Ambience in all scopes with the **House** switch
-(but then turn it back on for just a particular room, should you so desire).
+Toggling the **House** or a **floor** switch cascades down to the scopes beneath
+it, so you can turn off Ambience in all scopes with the **House** switch (but
+then turn it back on for just a particular room, should you so desire).
 
 And because each pause switch is an ordinary Home Assistant entity, you can
 pause and resume from a dashboard, an automation, or your voice assistant: *"Hey

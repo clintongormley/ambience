@@ -32,8 +32,8 @@ manually dragged to a new position if required.
 !!! note "When entities go missing"
 
     When an entity changes state to **Unavailable** or **Unknown** or goes missing,
-    it still triggers a reevalution of the related scenes, but the winning scene is
-    not acted upon unless it matched an **Unavailable** clause.
+    it still triggers a re-evaluation of the related scenes, but the winning scene
+    is not acted upon unless it matched an **Unavailable** clause.
 
 ______________________________________________________________________
 

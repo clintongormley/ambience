@@ -2,7 +2,7 @@
 
 Checks who is, or is not, at home or in a named zone.
 
-When you add a People condition to a scene, first field allows you to choose
+When you add a People condition to a scene, the first field allows you to choose
 **Who** to match on:
 
 | Option        | Meaning                                                      |

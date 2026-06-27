@@ -3891,7 +3891,7 @@ var fa=Object.defineProperty;var ga=Object.getOwnPropertyDescriptor;var c=(t,r,e
             ${mu.map(e=>d`
                 <div class="row">
                   <label>${a(this.hass,e.labelKey,e.label)}</label>
-                  ${this._renderToggle(this._exposed[e.field],e.dataTest,i=>this._onExpose(e.field,i),!1)}
+                  ${this._renderToggle(this._exposed[e.field],e.dataTest,i=>this._onExpose(e.field,i))}
                 </div>
               `)}
           </div>

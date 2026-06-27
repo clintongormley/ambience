@@ -213,6 +213,8 @@ class AmbienceStore:
         sd = self._data.setdefault("switch_defaults", {})
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
         sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
+        # Drop the removed create_switches flag from upgraded installs — a
+        # permanent idempotent cleanup, not a version-gated migration.
         sd.pop("create_switches", None)
 
     def _ensure_reapply_settings(self) -> None:

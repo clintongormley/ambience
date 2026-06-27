@@ -325,11 +325,8 @@ export class AmbienceAmbienceSettings extends LitElement {
               (row) => html`
                 <div class="row">
                   <label>${localize(this.hass, row.labelKey, row.label)}</label>
-                  ${this._renderToggle(
-                    this._exposed[row.field],
-                    row.dataTest,
-                    (e) => this._onExpose(row.field, e),
-                    false,
+                  ${this._renderToggle(this._exposed[row.field], row.dataTest, (e) =>
+                    this._onExpose(row.field, e),
                   )}
                 </div>
               `,

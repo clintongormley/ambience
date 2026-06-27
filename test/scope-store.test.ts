@@ -722,7 +722,7 @@ describe("ScopeStore", () => {
       expect(api.listSwitches).not.toHaveBeenCalled();
     });
 
-    test("a switch entity create refreshes switches (e.g. create_switches toggled on)", async () => {
+    test("a switch entity create refreshes switches", async () => {
       const { host, captured } = subscribingHost();
       const { store } = makeStore(host);
       await store.subscribe(() => {});
@@ -732,7 +732,7 @@ describe("ScopeStore", () => {
       expect(api.listSwitches).toHaveBeenCalledTimes(1);
     });
 
-    test("a switch entity remove refreshes switches (create_switches toggled off)", async () => {
+    test("a switch entity remove refreshes switches", async () => {
       const { host, captured } = subscribingHost();
       const { store } = makeStore(host);
       await store.subscribe(() => {});

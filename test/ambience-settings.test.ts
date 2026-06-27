@@ -272,7 +272,7 @@ describe("ambience-ambience-settings", () => {
     expect(el.shadowRoot.querySelector('[data-test="pause-switch-enabled"]')).toBeNull();
   });
 
-  test("name and pause-for are always enabled (no create_switches gate)", async () => {
+  test("name and pause-for are always enabled", async () => {
     el = await mount();
     const minutes = el.shadowRoot.querySelector(
       '[data-test="pause-for-minutes"]',

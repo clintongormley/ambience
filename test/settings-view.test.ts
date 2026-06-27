@@ -14,7 +14,6 @@ vi.mock("../frontend/src/api.js", () => ({
   getSwitchDefaults: vi.fn(async () => ({
     name: "Ambience",
     auto_on_delay_seconds: 7200,
-    create_switches: false,
   })),
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
   getReapplySettings: vi.fn(async () => ({ enabled: false, interval_seconds: 3600 })),

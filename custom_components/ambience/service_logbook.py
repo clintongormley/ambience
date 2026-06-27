@@ -77,6 +77,8 @@ def _record(hass: HomeAssistant, scope_kind: str, scope_id: str | None, message:
     context = Context()
     entity_id = _switch_entity_id(hass, scope_kind, scope_id)
     if entity_id is not None:
+        # No "logbook" loaded check needed: async_log_entry only fires a bus event
+        # (a no-op if logbook isn't listening), and logbook is in manifest after_dependencies.
         logbook.async_log_entry(
             hass,
             name=ACTIVITY_NAME,

@@ -33,8 +33,8 @@ stored — Ambience writes to two separate log streams in Home Assistant.
 ### The two streams
 
 **`custom_components.ambience.trace`** — the *changes* stream. Ambience writes
-here whenever an evaluation caused something to happen (outcome `acted`). This
-stream is on whenever the integration's debug logging is on.
+here whenever a scene was **applied** (the outcome the log records as `acted`).
+This stream is on whenever the integration's debug logging is on.
 
 **`custom_components.ambience.trace.noop`** — the *everything* stream. Ambience
 writes here for evaluations that ran and did nothing — the quiet majority of

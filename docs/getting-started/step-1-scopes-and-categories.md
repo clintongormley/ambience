@@ -39,8 +39,8 @@ should be added to the **Lounge** scope, under the **Lights** category — the
 **Lounge/Lights scene group**. That way you can be sure that there are no
 competing automations trying to control the same devices.
 
-The **actions** in a scene can only target devices that belong to that scope (or
-to children of the scope if the scope is the **House** or a floor).
+The **actions** in a scene can only target entities that belong to that scope
+(or to children of the scope if the scope is the **House** or a floor).
 **Conditions**, on the other hand, can reference entities anywhere in the house.
 
 Besides the lights, maybe you also have window blinds in the Lounge. They would

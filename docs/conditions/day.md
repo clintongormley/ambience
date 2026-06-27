@@ -16,8 +16,8 @@ your list. Each item has a kind, chosen from the options below.
 
 ## Day of the week
 
-Pick **Weekday** and tick the days you want to match: Monday through Sunday. For
-example, tick Monday through Friday to cover all working weekdays (without
+Pick **Day of week** and tick the days you want to match: Monday through Sunday.
+For example, tick Monday through Friday to cover all working weekdays (without
 reference to public holidays).
 
 ## Day of the month
@@ -35,16 +35,18 @@ the extra days simply never occur and the entry never matches in that month.
 
 ## A specific date (every year)
 
-Pick **Date** and choose a month and a day. The condition matches on that
-month/day combination in any year, so you can target, say, 25 December without
-specifying a year. February 29 is accepted — it only matches in leap years.
+Pick **Date (annual)** and choose a month and a day. The condition matches on
+that month/day combination in any year, so you can target, say, 25 December
+without specifying a year. February 29 is accepted — it only matches in leap
+years.
 
 ## A date range (every year)
 
-Pick **Date range** and set a From month/day and a To month/day. The condition
-matches any date falling within that range, inclusive of both endpoints, in any
-year. Ranges can wrap the year boundary: a range from 20 December to 5 January
-matches from 20 Dec through to 5 Jan the following calendar year.
+Pick **Date range (annual)** and set a From month/day and a To month/day. The
+condition matches any date falling within that range, inclusive of both
+endpoints, in any year. Ranges can wrap the year boundary: a range from 20
+December to 5 January matches from 20 Dec through to 5 Jan the following
+calendar year.
 
 ## The last day of the month
 

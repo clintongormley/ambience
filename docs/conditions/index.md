@@ -33,19 +33,17 @@ becomes false.
 This prevents brief interruptions — a phone wandering out of a geofence, a GPS
 hiccup, a sensor flicker — from triggering scenes they should not.
 
-After a Home Assistant restart the clock resumes from the last change Home
-Assistant can prove (an entity's last state change), so a "switch on for 2
-hours" rule that was already an hour in still fires an hour after the restart
-rather than starting a fresh two hours. It never counts time during a window
-Home Assistant did not observe.
-
-Not every entity remembers its history across a restart, though: some restore
-their previous state and keep their original change time, while others come back
-fresh and report their last change as the moment Home Assistant started. For
-those, the *for* clock simply starts over from the restart.
-
 Leave the duration at zero (the default) to match immediately as soon as the
 test becomes true.
+
+!!! info "After a restart"
+
+    After a Home Assistant restart the `for` clock is measured from the entity's
+    last recorded change time. Entities that keep their real change time pick up
+    where they left off — a "switch on for 2 hours" rule already an hour in fires an
+    hour after the restart, not two — while entities that come back fresh report
+    their last change as the restart moment, so their clock starts over. Either way,
+    Ambience never counts time during a window Home Assistant did not observe.
 
 ## Available conditions
 

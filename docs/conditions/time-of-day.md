@@ -46,7 +46,7 @@ Select **Custom range** from the dropdown and the editor expands to show a
 
 1. A **kind** dropdown — choose **Time** for a fixed clock time, or **Sun** for
     a sun-relative anchor.
-1. The value itself:
+2. The value itself:
     - **Time**: a standard time-of-day picker (hh:mm in your local timezone,
         DST-aware).
     - **Sun**: an anchor dropdown (Dawn, Sunrise, Noon, Sunset, Dusk, or
@@ -81,8 +81,7 @@ drift to a fixed clock time. Pick a direction and a time (leave the direction on
     summer sunrise.
 
 The clamp time is read in your local timezone and is applied **after** the
-offset, so it bounds the already-offset anchor. The same control is available
-when you define or override a period in [Settings](#settings).
+offset, so it bounds the already-offset anchor.
 
 ![Example of Time of Day condition.](../images/conditions/time-of-day/time-of-day.png "Example of Time of Day condition.")
 

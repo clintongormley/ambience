@@ -14,18 +14,20 @@ raises a Repairs issue for each of the following problems.
 
 ### Missing entity
 
-> **Ambience: a scene references a missing entity**
+> **Ambience: a scene references a missing or disabled entity**
 
-A scene refers to an entity that does not exist — either in a condition (an
-entity Ambience monitors to decide which scene wins) or in an action (an entity
-Ambience tries to control).
+A scene refers to an entity that does not exist, or that exists but has been
+**disabled** (for example because its device was disabled) — either in a
+condition (an entity Ambience monitors to decide which scene wins) or in an
+action (an entity Ambience tries to control).
 
-Common causes: a typo in the entity id, or an entity that was deleted or renamed
-after the scene was saved.
+Common causes: a typo in the entity id, an entity that was deleted or renamed
+after the scene was saved, or an entity (or its device) that has since been
+disabled.
 
-To resolve it, open the scene in the Ambience editor, correct or remove the
-reference, and save. The issue clears automatically once all references are
-valid.
+To resolve it, either re-enable the entity (or its device), or open the scene in
+the Ambience editor and correct or remove the reference. The issue clears
+automatically once all references are valid.
 
 ### Action overlap
 

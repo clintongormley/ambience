@@ -19,13 +19,13 @@ long as it produces a single value when rendered.
 Ambience treats the condition as **met** when the rendered result is truthy by
 Home Assistant's own conventions:
 
-| Result                                                 | Treated as |
-| ------------------------------------------------------ | ---------- |
-| `true` (boolean)                                       | met        |
-| `yes`, `on`, `1`, `enable` (strings, case-insensitive) | met        |
-| Any non-zero number                                    | met        |
-| `false`, `off`, `no`, `0`, `none`, blank, `unknown`    | not met    |
-| Any other string (e.g. `"42"`, `"active"`)             | not met    |
+| Result                                                         | Treated as |
+| -------------------------------------------------------------- | ---------- |
+| `true` (boolean)                                               | met        |
+| `true`, `yes`, `on`, `1`, `enable` (strings, case-insensitive) | met        |
+| Any non-zero number                                            | met        |
+| `false`, `off`, `no`, `0`, `none`, blank, `unknown`            | not met    |
+| Any other string (e.g. `"42"`, `"active"`)                     | not met    |
 
 Note that a numeric string such as `"42"` is **not** truthy — only the
 explicitly listed strings are. If your template produces a number rather than a

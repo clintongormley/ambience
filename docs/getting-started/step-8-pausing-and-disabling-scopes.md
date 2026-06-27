@@ -21,8 +21,8 @@ manually, but just **temporarily**. That is what a scope's **pause switch** is
 for.
 
 Every enabled scope has its own pause switch: a `switch` entity named after the
-scope, such as **Lounge Ambience**. The pause/resume stopwatch button on the
-scope row toggles the switch.
+scope, such as **Lounge Ambience**. The pause/resume timer button on the scope
+row toggles the switch.
 
 ![The scope-pause switch.](../images/getting-started/step-8/pause.png "The scope-pause switch.")
 

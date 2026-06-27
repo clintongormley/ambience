@@ -8,7 +8,7 @@ numeric attributes such as temperature, humidity, and wind speed.
 
     Before the weather condition can do anything, you need to tell Ambience which
     weather entity to reference, as explained in
-    [Add a Weather integration](../../getting-started/step-4-weather-conditions/#add-a-weather-integration).
+    [Add a Weather integration](../getting-started/step-4-weather-conditions.md#add-a-weather-integration).
 
 In the scene editor, click **+ Add condition…** and choose **Weather**. The
 condition panel has two independent sections — **Groups** and **Thresholds** —
@@ -38,9 +38,6 @@ from the full set that Home Assistant defines. Once saved, your custom groups
 appear alongside the built-ins in every scene's weather condition picker.
 
 ![Configuration of Weather condition.](../images/conditions/weather/config.png "Configuration of Weather condition.")
-
-If you leave the Groups section empty, any weather state will satisfy that part
-of the condition.
 
 ## Thresholds
 
@@ -74,9 +71,6 @@ ______________________________________________________________________
 - If the configured weather entity is unavailable or not yet loaded, the
     condition does not match. Scenes that depend on the weather condition are
     therefore skipped until the entity reports a valid state.
-- A weather condition with no groups selected and no thresholds added passes
-    unconditionally for any weather state. This is rarely useful on its own but
-    can serve as a placeholder while you decide which groups to use.
 - If you rename or delete a custom group that is already referenced by a scene,
     Ambience will warn you via a banner in Settings listing the affected scenes.
 

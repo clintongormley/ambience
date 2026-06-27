@@ -27,7 +27,7 @@ We can solve this in two steps:
 1. We want to include state of the Power Shower switch as a trigger, so we add
     it as a clause which matches on both **On** and **Off** into the entity
     state condition.
-1. Turn the Action's **Apply on every match** toggle to **On**.
+2. Turn the scene's **Apply on every match** toggle to **On**.
 
 ![Apply on every match.](../images/actions/apply-on-every-match/power-shower-2.png "Apply on every match.")
 

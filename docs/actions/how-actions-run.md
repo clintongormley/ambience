@@ -15,19 +15,17 @@ scene's actions once, independently of the normal evaluation cycle.
 The actions of the winning scene are applied as follows:
 
 - **In parallel**, not sequentially — every action is turned into a coroutine
-    and they're all launched together via `asyncio.gather`. There's no
-    per-action `await` in the loop, so action #2 doesn't wait for action #1.
+    and they're all launched together via `asyncio.gather`. Because they run
+    concurrently, completion order is nondeterministic. If the same entity
+    exists in two actions, whichever arrives last wins.
 - **Not fire-and-forget** — each call is `blocking=True`, and the whole batch is
     `await`ed. Ambience waits for all the service calls to finish before the
     apply completes (it then records last-applied, traces, etc.). It does not
     just dispatch and move on.
 - **Fault-isolated** — `return_exceptions=True` means one action raising an
     exception is logged (`"ambience: action raised: …"`) but doesn't abort the
-    others. Malformed, unexposed, or empty-target actions are skipped with a
-    warning before the gather (so they never become coros).
-- **No ordering guarantee between actions** — because they run concurrently,
-    completion order is nondeterministic. If the same entity exists in two
-    actions, whichever arrives last wins.
+    others. Malformed and unexposed actions are skipped with a warning before
+    the gather (so they never become coros).
 
 ______________________________________________________________________
 

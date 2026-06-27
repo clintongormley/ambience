@@ -55,7 +55,7 @@ Each entry has a coloured **outcome bar**:
 
 - **applied** (the winning scene's actions ran, also when triggered by **Run**
     or a
-    [**Re-run**](../../actions/apply-on-every-match/#re-run-all-scenes-after-inactivity)),
+    [**Re-run**](../actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity)),
 
 - **blocked** (a scene won but has no actions to run — a pure blocker),
 

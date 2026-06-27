@@ -5,6 +5,7 @@ import { type HassConnection, listConditions } from "../api.js";
 import { localize, localizeWsError } from "../i18n.js";
 import type { ConditionInfo } from "../types.js";
 import "./ambience-help.js";
+import "./ambience-doc-link.js";
 import "./condition-card.js";
 import "./time-of-day-config.js";
 import "./lux-config.js";
@@ -59,6 +60,7 @@ export class AmbienceConditionsSettings extends LitElement {
       <div class="tab-heading">
         <span>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}</span>
         <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
+        <ambience-doc-link .hass=${this.hass} path="conditions"></ambience-doc-link>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${configurable.map(

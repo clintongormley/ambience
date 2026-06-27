@@ -93,6 +93,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
         "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
       unit_minutes: "minutes",
       help: "Help",
+      open_documentation: "Open documentation",
       help_switch_name: "The name used for the per-scope pause switch entities.",
       help_pause_for:
         "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
@@ -629,6 +630,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
         "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa.",
       unit_minutes: "minutos",
       help: "Ayuda",
+      open_documentation: "Abrir documentación",
       help_switch_name:
         "El nombre utilizado para las entidades de interruptor de pausa por ámbito.",
       help_pause_for:

@@ -74,10 +74,15 @@ scenes:
 
 ## Step 6 — Hand off
 
-Tell the user to:
+**Deliver the block as a file** so the user can upload rather than copy-paste:
+if you can write files, save each block as `ambience-import-<scope>.yaml` (`.json`
+if JSON) and give the path; otherwise put it in one fenced code block they can save
+as a `.yaml` file. One file per scope.
+
+Then tell the user to:
 
 1. Open the Ambience panel → Settings → **AI** tab.
-2. Paste or upload the block.
+2. **Upload the file** (or paste the block).
 3. Preview (adds / updates / removes, new vs unknown categories) and **confirm**.
 
 Remind them every import is reversible via the panel's undo/redo history. You do

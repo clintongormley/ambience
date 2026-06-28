@@ -170,6 +170,7 @@ export class ScopeStore implements ReactiveController {
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
+    window.addEventListener("ambience-config-imported", this._onConfigImported);
     this._tick = setInterval(() => {
       for (const id of this.switchEntityIds.values()) {
         if (this._hass.states?.[id]?.state === "off") {
@@ -184,6 +185,7 @@ export class ScopeStore implements ReactiveController {
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
+    window.removeEventListener("ambience-config-imported", this._onConfigImported);
     if (this._tick) clearInterval(this._tick);
     this._tick = undefined;
     this._unsubArea?.();
@@ -292,6 +294,18 @@ export class ScopeStore implements ReactiveController {
     } catch {
       // Silent — the user just saw a successful save; transient refetch failures
       // are not worth surfacing here. The next manual reload will re-fetch.
+    }
+  };
+
+  // A config import (AI tab) saves with is_self=true, so the history path skips
+  // its auto-reload — refetch the scopes here so the imported scenes show without
+  // a manual page refresh.
+  private _onConfigImported = async () => {
+    try {
+      await this.reloadConfigs();
+    } catch {
+      // Silent — transient refetch failure after a successful import; the next
+      // reload re-fetches.
     }
   };
 

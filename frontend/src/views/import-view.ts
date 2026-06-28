@@ -63,6 +63,12 @@ export class AmbienceImportConfig extends LitElement {
     .error { color: var(--error-color, #d32f2f); margin-top: 0.5rem; }
     .done { color: var(--success-color, #43a047); margin-top: 0.5rem; }
     .target { color: var(--secondary-text-color, #666); margin-bottom: 0.5rem; }
+    .controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .upload {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      color: var(--secondary-text-color, #666); font-size: 0.85rem; cursor: pointer;
+    }
+    .upload input[type="file"] { max-width: 14rem; font: inherit; }
   `;
 
   private async _download(): Promise<void> {
@@ -73,12 +79,30 @@ export class AmbienceImportConfig extends LitElement {
     }
   }
 
-  private _onInput(e: Event): void {
-    this.text = (e.target as HTMLTextAreaElement).value;
+  private _setText(value: string): void {
+    this.text = value;
     this.error = null;
     this.done = null;
     // Drop any stale preview so Import can't save a block the text no longer shows.
     this.preview = null;
+  }
+
+  private _onInput(e: Event): void {
+    this._setText((e.target as HTMLTextAreaElement).value);
+  }
+
+  // Load a block the AI saved as a file, so the user can upload it instead of
+  // copy-pasting a long block.
+  private async _onFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      this._setText(await file.text());
+    } catch (err) {
+      this.error = localizeWsError(this.hass, err);
+    }
+    input.value = ""; // let the same file be re-selected after an edit
   }
 
   private async _doPreview(): Promise<void> {
@@ -112,6 +136,14 @@ export class AmbienceImportConfig extends LitElement {
         action: "import",
         scene_name: null,
       });
+      // The import saves with is_self=true, so the scopes-view's history path
+      // skips its auto-reload — tell the panel to refetch scope configs (so the
+      // scenes show) and, if a category was created, the category list too. Both
+      // mirror what the in-panel editors dispatch.
+      window.dispatchEvent(new CustomEvent("ambience-config-imported"));
+      if (p.newCategory) {
+        window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
+      }
       this.done = localize(this.hass, "ui.import_done", "Imported successfully.");
       this.preview = null;
       this.text = "";
@@ -170,10 +202,18 @@ export class AmbienceImportConfig extends LitElement {
         @input=${this._onInput}
         placeholder=${localize(this.hass, "ui.import_placeholder", "Paste the YAML or JSON import block here")}
       ></textarea>
-      <div>
+      <div class="controls">
         <button class="preview" @click=${() => this._doPreview()}>
           ${localize(this.hass, "ui.import_preview", "Preview")}
         </button>
+        <label class="upload">
+          ${localize(this.hass, "ui.import_upload_file", "…or upload a file")}
+          <input
+            type="file"
+            accept=".yaml,.yml,.json,.txt"
+            @change=${(e: Event) => this._onFile(e)}
+          />
+        </label>
       </div>
       ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       ${this.preview ? this._renderPreview(this.preview) : nothing}

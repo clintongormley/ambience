@@ -104,8 +104,9 @@ In short:
 4. Wrap it in a **single-scope import block** with `mode: merge` and a declared
    `category` (so a new group is created, not coerced to General). One block per
    scope; emit multiple clearly-labelled blocks for multi-room requests.
-5. Tell the user to paste/upload the block into the panel's **AI** tab,
-   preview (adds / updates / removes, new vs unknown categories), and confirm.
+5. **Deliver the block as a file** (see below) and tell the user to upload it in
+   the panel's **AI** tab, preview (adds / updates / removes, new vs unknown
+   categories), and confirm.
 
 ### Fixing
 
@@ -116,7 +117,18 @@ In short:
 3. For `no_match`, find the predicate with `passed: false`; its `detail` names
    the value that blocked it.
 4. Emit a corrected import block (`mode: merge`, **same scene name** so it
-   upserts) changing only what the trace pinned down. Tell the user to import it.
+   upserts) changing only what the trace pinned down. **Deliver it as a file**
+   (see below) and tell the user to upload it.
+
+### Delivering the block
+
+The import block is often long, so don't make the user copy-paste it. **If you
+can write files** (e.g. Claude Code), save each block to a file the user can
+**upload** in the AI tab — name it for the scope, e.g. `ambience-import-living-room.yaml`
+(use `.json` if you emitted JSON) — and tell the user the path. **If you can't
+write files**, give the block in a single fenced code block they can save as a
+`.yaml` file and upload, or paste directly. One file per scope for multi-room
+requests.
 
 ## Rules
 

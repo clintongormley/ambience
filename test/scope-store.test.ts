@@ -277,6 +277,25 @@ describe("ScopeStore", () => {
       expect(api.getHouse).toHaveBeenCalled();
     });
 
+    test("ambience-config-imported re-fetches scope configs so imported scenes show", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.refreshAreas();
+      await store.refreshFloors();
+      vi.mocked(api.getArea).mockClear();
+      vi.mocked(api.getFloor).mockClear();
+      vi.mocked(api.getHouse).mockClear();
+      // An import saves with is_self=true, so the history path skips the reload —
+      // this event is how the scopes-view picks up the newly-imported scenes.
+      window.dispatchEvent(new Event("ambience-config-imported"));
+      await tick();
+      expect(vi.mocked(api.getArea).mock.calls.map((c) => c[1])).toEqual(
+        expect.arrayContaining(["living_room", "bedroom"]),
+      );
+      expect(api.getFloor).toHaveBeenCalled();
+      expect(api.getHouse).toHaveBeenCalled();
+    });
+
     test("ambience-categories-changed refetches categories", async () => {
       const { store } = makeStore();
       connect(store);

@@ -76,6 +76,19 @@ describe("ambience-import-config", () => {
     expect(text).toContain("Movie Night"); // new category to create
   });
 
+  test("uploading a file populates the import text (no copy-paste needed)", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    const file = new File([MERGE_BLOCK], "ambience-import.yaml", { type: "text/yaml" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    input.dispatchEvent(new Event("change"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const ta = el.shadowRoot.querySelector("textarea") as HTMLTextAreaElement;
+    expect(ta.value).toContain("ambience_import");
+  });
+
   test("an invalid block shows an error and no preview", async () => {
     el = await mount();
     await pasteAndPreview("not a valid block");
@@ -113,6 +126,28 @@ describe("ambience-import-config", () => {
     const [, scope, config] = (saveScopeConfig as any).mock.calls[0];
     expect(scope).toEqual({ kind: "area", id: "living_room" });
     expect(config.scenes.map((s: any) => s.name)).toEqual(["Existing", "Film"]);
+  });
+
+  test("broadcasts refresh events so the panel shows the import without a manual reload", async () => {
+    el = await mount();
+    const seen = new Set<string>();
+    const handler = (e: Event) => {
+      seen.add(e.type);
+    };
+    window.addEventListener("ambience-categories-changed", handler);
+    window.addEventListener("ambience-config-imported", handler);
+    try {
+      await pasteAndPreview(MERGE_BLOCK); // declares a new movie_night category
+      (el.shadowRoot.querySelector("button.confirm") as HTMLButtonElement).click();
+      await new Promise((r) => setTimeout(r, 0));
+      await el.updateComplete;
+      // Scenes refresh (config-imported) AND the new category list refreshes.
+      expect(seen.has("ambience-config-imported")).toBe(true);
+      expect(seen.has("ambience-categories-changed")).toBe(true);
+    } finally {
+      window.removeEventListener("ambience-categories-changed", handler);
+      window.removeEventListener("ambience-config-imported", handler);
+    }
   });
 
   test("a scene referencing an unknown category blocks the import", async () => {

@@ -72,6 +72,8 @@ scenes:
 
 ## Step 6 — Hand off
 
-Tell the user to import the corrected block via the panel's **Import** view
+**Deliver the block as a file** the user can upload (if you can write files, save
+`ambience-import-<scope>.yaml`/`.json` and give the path; otherwise a single fenced
+code block they can save). Tell the user to upload it in Settings → **AI** tab
 (preview → confirm), then re-test. If it still fails, ask for a fresh bundle and
 repeat — the new trace will show the next blocker.

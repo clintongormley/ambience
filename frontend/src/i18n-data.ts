@@ -1150,6 +1150,3 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
   }, // end es
 };
-
-// Back-compat: existing imports expect AMBIENCE_STRINGS (the English catalogue).
-export const AMBIENCE_STRINGS = AMBIENCE_STRINGS_BY_LOCALE.en;

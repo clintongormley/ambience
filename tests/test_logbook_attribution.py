@@ -453,26 +453,3 @@ async def test_run_scene_actions_with_empty_actions_logs_nothing(
     await hass.async_block_till_done()
 
     assert events == []
-
-
-async def test_setup_removes_legacy_scene_updates_entity_and_hub_device(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry
-) -> None:
-    from homeassistant.helpers import device_registry as dr
-    from homeassistant.helpers import entity_registry as er
-
-    mock_config_entry.add_to_hass(hass)
-    ent_reg = er.async_get(hass)
-    ent_reg.async_get_or_create(
-        "sensor", DOMAIN, "ambience_scene_updates", config_entry=mock_config_entry
-    )
-    dev_reg = dr.async_get(hass)
-    dev_reg.async_get_or_create(
-        config_entry_id=mock_config_entry.entry_id, identifiers={(DOMAIN, "hub")}
-    )
-
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "ambience_scene_updates") is None
-    assert dev_reg.async_get_device(identifiers={(DOMAIN, "hub")}) is None

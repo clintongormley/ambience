@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { AMBIENCE_STRINGS } from "../frontend/src/i18n-data";
+import { AMBIENCE_STRINGS_BY_LOCALE } from "../frontend/src/i18n-data";
 import {
   sceneDisplayName,
   summariseAction,
@@ -2068,7 +2068,7 @@ describe("blocker_summary i18n bundle", () => {
     // source must live in the bundle so the strings are localizable like
     // day_summary (and unlike the still-inline occupancy/people/lux/unavailable
     // families — tracked for a separate i18n cleanup).
-    const ns = AMBIENCE_STRINGS.blocker_summary as Record<string, unknown> | undefined;
+    const ns = AMBIENCE_STRINGS_BY_LOCALE.en.blocker_summary as Record<string, unknown> | undefined;
     for (const key of [
       "block",
       "block_mid",

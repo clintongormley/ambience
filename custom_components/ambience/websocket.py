@@ -337,10 +337,7 @@ async def _ws_area_get(
     msg: dict[str, Any],
 ) -> None:
     area_id = msg["area_id"]
-    if ar.async_get(hass).async_get_area(area_id) is None:
-        send_ambience_error(
-            connection, msg["id"], AmbienceError("area_not_found"), code="unknown_area"
-        )
+    if not _require_scope(hass, connection, msg, "area", area_id):
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"scenes": []}
@@ -398,13 +395,7 @@ async def _ws_area_save(
     msg: dict[str, Any],
 ) -> None:
     area_id = msg["area_id"]
-    if ar.async_get(hass).async_get_area(area_id) is None:
-        send_ambience_error(
-            connection,
-            msg["id"],
-            AmbienceError("unknown_area", scope_id=area_id),
-            code="validation_error",
-        )
+    if not _require_scope(hass, connection, msg, "area", area_id):
         return
     await _save_scope(hass, connection, msg, "area", area_id)
 
@@ -423,10 +414,7 @@ async def _ws_floor_get(
     msg: dict[str, Any],
 ) -> None:
     floor_id = msg["floor_id"]
-    if fr.async_get(hass).async_get_floor(floor_id) is None:
-        send_ambience_error(
-            connection, msg["id"], AmbienceError("floor_not_found"), code="unknown_floor"
-        )
+    if not _require_scope(hass, connection, msg, "floor", floor_id):
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"scenes": []}
@@ -449,13 +437,7 @@ async def _ws_floor_save(
     msg: dict[str, Any],
 ) -> None:
     floor_id = msg["floor_id"]
-    if fr.async_get(hass).async_get_floor(floor_id) is None:
-        send_ambience_error(
-            connection,
-            msg["id"],
-            AmbienceError("unknown_floor", scope_id=floor_id),
-            code="validation_error",
-        )
+    if not _require_scope(hass, connection, msg, "floor", floor_id):
         return
     await _save_scope(hass, connection, msg, "floor", floor_id)
 
@@ -1030,21 +1012,7 @@ async def _ws_set_scope_enabled(
         return
     # Validate the id against the registry (like the save handlers): the store
     # setdefaults a scope bucket, so a typo'd/stale id would persist junk.
-    if scope_kind == "area" and ar.async_get(hass).async_get_area(scope_id) is None:
-        send_ambience_error(
-            connection,
-            msg["id"],
-            AmbienceError("unknown_area", scope_id=scope_id),
-            code="validation_error",
-        )
-        return
-    if scope_kind == "floor" and fr.async_get(hass).async_get_floor(scope_id) is None:
-        send_ambience_error(
-            connection,
-            msg["id"],
-            AmbienceError("unknown_floor", scope_id=scope_id),
-            code="validation_error",
-        )
+    if not _require_scope(hass, connection, msg, scope_kind, scope_id):
         return
     enabled = msg["enabled"]
     store = hass.data[DOMAIN][DATA_STORE]
@@ -1216,6 +1184,32 @@ def _scope_exists(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
         return ar.async_get(hass).async_get_area(scope_id) is not None
     if scope_kind == "floor":
         return fr.async_get(hass).async_get_floor(scope_id) is not None
+    return False
+
+
+def _require_scope(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    scope_kind: str,
+    scope_id: str | None,
+) -> bool:
+    """Verify an area/floor scope still exists in its registry (house always
+    does). On a miss, send the one canonical scope-not-found error — translation
+    key `unknown_area`/`unknown_floor` with `scope_id`, code `validation_error` —
+    and return False; else return True. The single source of that contract for
+    the scope get / save / set-enabled handlers (which the store would otherwise
+    `setdefault` a junk bucket for)."""
+    if _scope_exists(hass, scope_kind, scope_id):
+        return True
+    # Literal keys: the exceptions-key gate requires AmbienceError's first arg to
+    # be a string literal so it can statically verify the key exists in strings.json.
+    error = (
+        AmbienceError("unknown_area", scope_id=scope_id)
+        if scope_kind == "area"
+        else AmbienceError("unknown_floor", scope_id=scope_id)
+    )
+    send_ambience_error(connection, msg["id"], error, code="validation_error")
     return False
 
 

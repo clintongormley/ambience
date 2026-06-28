@@ -575,8 +575,9 @@ async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) 
     """area/get errors when the area_id is not in HA's registry at all."""
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id="nope")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "unknown_area"
-    assert resp["error"]["translation_key"] == "area_not_found"
+    # Same "scope not found" contract as the save / set-enabled handlers.
+    assert resp["error"]["code"] == "validation_error"
+    assert resp["error"]["translation_key"] == "unknown_area"
 
 
 async def test_area_get_unconfigured_returns_empty_config(
@@ -1432,8 +1433,8 @@ async def test_floor_get_unknown_returns_error(
 ) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id="nope")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "unknown_floor"
-    assert resp["error"]["translation_key"] == "floor_not_found"
+    assert resp["error"]["code"] == "validation_error"
+    assert resp["error"]["translation_key"] == "unknown_floor"
 
 
 async def test_floor_save_round_trip(

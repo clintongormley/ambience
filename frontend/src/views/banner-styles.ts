@@ -1,10 +1,10 @@
 import { css } from "lit";
 
-/** Shared notice/hint banner styles (icon + text block + CTA + dismiss ✕).
- *  Hosts add `bannerStyles` to their `static styles` array and render a
- *  `<div class="banner …">`. The `.banner-hint` modifier tints the icon with
- *  the primary colour (optional suggestion).
- *  The CTA is styled for both `<button>` and `<a>` (text-decoration removed). */
+/** Structural styles for the `<ambience-banner>` primitive (icon + text block +
+ *  CTA + dismiss ✕), kept in their own module. The `.banner-hint` modifier tints
+ *  the icon with the primary colour; the CTA is styled for both `<button>` and
+ *  `<a>` (text-decoration removed). Slotted heading/body text is styled via
+ *  `::slotted(...)` in `banner.ts`, not here. */
 export const bannerStyles = css`
   .banner {
     display: flex;

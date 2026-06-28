@@ -43,13 +43,37 @@ If the user hasn't provided a bundle, ask for it before authoring anything that
 references entities. (You can sketch the structure first, but final ids must come
 from the bundle.)
 
+## Step 0 — Check the bundle is current (do this before authoring or fixing)
+
+Once you have a bundle, **before** you produce any block:
+
+1. Read `reference/bundle-format.generated.md` for the bundle format this pack
+   supports, then read the bundle's top-level `ambience_ai_bundle` number:
+   - **greater than** the supported format → the user's Ambience is newer than
+     this pack. **Stop. Do not author.** Tell them to update the plugin
+     (`/plugin marketplace update ambience`, then `/plugin install ambience@ambience`)
+     and re-run — the schema may have changed in ways this pack doesn't know.
+   - **less than** the supported format → the bundle is from an older Ambience.
+     Ask them to update Ambience and re-download the bundle before continuing.
+   - **equal** → compatible, continue.
+2. Surface the freshness fields so the user can sanity-check the bundle is
+   current: `ambience_version` (the Ambience version that produced it) and
+   `generated_at` (when). If their setup has changed since `generated_at`
+   (added entities, exposed services, renamed areas), ask them to re-download —
+   you must author against current ids, not a stale snapshot.
+
+Only proceed once the format is compatible and the user is happy the bundle is
+current.
+
 ## Reference material (progressive disclosure)
 
 Read these as needed — don't dump them at the user:
 
+- `reference/bundle-format.generated.md` — the AI bundle format this pack
+  supports (used by the compatibility check below).
 - `reference/schema.md` — scene / `when` / action / envelope overview.
 - `reference/conditions-cookbook.md` — **the main tool:** plain-English intent →
-  exact predicate JSON for all 14 conditions. Author from this.
+  exact predicate JSON for every built-in condition. Author from this.
 - `reference/actions.md` — exposed services, how `params` merge with defaults,
   the safe `ambience.*` services.
 - `reference/import-format.md` — the single-scope import envelope in full.

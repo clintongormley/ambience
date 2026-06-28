@@ -16,6 +16,12 @@ Ask the user to download it from the Ambience panel (Settings → **AI** tab →
 exposed services, and the user's vocabulary (categories, periods, lux ranges,
 weather groups). Don't finalise ids without it.
 
+Then run the **bundle compatibility check** (SKILL.md Step 0 /
+`reference/bundle-format.generated.md`): if the bundle's `ambience_ai_bundle` is
+newer than this pack supports, **stop** and have the user update the plugin
+before continuing; surface `ambience_version` / `generated_at` so they can
+confirm the bundle is current.
+
 ## Step 2 — Confirm intent and scope
 
 Restate the request in one sentence and confirm the **scope**:

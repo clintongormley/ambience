@@ -13,6 +13,12 @@ DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
 
+# Structure version of the AI bundle (see ai_bundle.py). Bump ONLY when the
+# bundle's shape changes incompatibly — the knowledge pack stamps this so the
+# skill can refuse a bundle it's too old to read. Independent of the release
+# version (which tracks features, not bundle shape).
+AI_BUNDLE_VERSION = 1
+
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"

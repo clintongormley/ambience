@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 
 import custom_components.ambience.conditions as conditions_pkg
+from custom_components.ambience.const import AI_BUNDLE_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AI_DOCS_DIR = REPO_ROOT / "docs" / "developers" / "ai-authoring"
@@ -41,6 +42,7 @@ _REQUIRED_ATTRS = ("name", "description", "predicate_help", "input", "priority")
 # The curated source files, in the order they appear in the portable guide.
 # Missing files are skipped (so the generator runs before they're all authored).
 _PORTABLE_PARTS = [
+    ("Supported AI bundle format", "bundle-format.generated.md"),
     ("Config schema", "schema.md"),
     ("Import format", "import-format.md"),
     ("Condition reference", "condition-reference.generated.md"),
@@ -164,6 +166,30 @@ def render_action_reference(actions: list[dict[str, Any]]) -> str:
     )
 
 
+def render_bundle_format(version: int) -> str:
+    """The generated compatibility note: the bundle format this pack understands,
+    derived from the `AI_BUNDLE_VERSION` code constant so it can't go stale."""
+    lines = [
+        GENERATED_BANNER,
+        "",
+        "# Supported AI bundle format",
+        "",
+        f"This pack understands **AI bundle format {version}**. Before authoring or "
+        "diagnosing, read the bundle's `ambience_ai_bundle` field and compare:",
+        "",
+        f"- **equal to {version}** — compatible, proceed.",
+        f"- **greater than {version}** — the user's Ambience is newer than this pack. "
+        "**Stop** and tell them to update the plugin "
+        "(`/plugin marketplace update ambience`) before continuing.",
+        f"- **less than {version}** — the bundle is from an older Ambience; ask them to "
+        "re-download it (or update Ambience).",
+        "",
+        GENERATED_END,
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def assemble_portable_doc(parts: list[tuple[str, str]]) -> str:
     """One self-contained markdown built from titled section bodies, suitable to
     paste/upload into any AI."""
@@ -196,6 +222,9 @@ def main() -> None:
 
     action_ref = render_action_reference(discover_builtin_actions())
     (AI_DOCS_DIR / "action-reference.generated.md").write_text(action_ref, encoding="utf-8")
+
+    bundle_format = render_bundle_format(AI_BUNDLE_VERSION)
+    (AI_DOCS_DIR / "bundle-format.generated.md").write_text(bundle_format, encoding="utf-8")
 
     # Assemble the portable guide from whatever curated + generated parts exist.
     parts: list[tuple[str, str]] = []

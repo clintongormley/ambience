@@ -77,6 +77,17 @@ rm -f pyproject.toml.bak
 grep -q "^version = \"$VERSION\"" pyproject.toml \
   || { echo "error: failed to bump version in pyproject.toml" >&2; exit 1; }
 
+# The Claude plugin's version (.claude-plugin/plugin.json) tracks the integration
+# version so a `/plugin marketplace update` actually pulls the refreshed knowledge
+# pack each release. Optional — absent on older checkouts, so skip rather than fail.
+PLUGIN=".claude-plugin/plugin.json"
+if [ -f "$PLUGIN" ]; then
+  sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PLUGIN"
+  rm -f "$PLUGIN.bak"
+  grep -q "\"version\": \"$VERSION\"" "$PLUGIN" \
+    || { echo "error: failed to bump version in $PLUGIN" >&2; exit 1; }
+fi
+
 # package-lock.json carries the root version twice (top-level + packages[""]).
 # Restrict the edit to the header block before the first "node_modules/" entry
 # so dependency versions are never touched.

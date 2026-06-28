@@ -14,6 +14,12 @@ Ask the user to download it from the Ambience panel (Settings → **AI** tab →
 **Download AI bundle**). It carries the **current config** and **recent traces** —
 both needed to diagnose.
 
+Then run the **bundle compatibility check** (SKILL.md Step 0 /
+`reference/bundle-format.generated.md`): if the bundle's `ambience_ai_bundle` is
+newer than this pack supports, **stop** and have the user update the plugin
+before continuing. A stale bundle's traces won't reflect the live problem — check
+`generated_at` and re-download if their setup changed since.
+
 ## Step 2 — Find the relevant trace(s)
 
 Identify the failing **unit** by `scope_kind` / `scope_id` + `category`. Each

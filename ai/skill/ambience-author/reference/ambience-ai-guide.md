@@ -4,6 +4,16 @@
 
 This single document teaches an AI how to author and diagnose Home Assistant Ambience scene config. Paste it into your AI, then paste your downloaded **AI bundle** (Ambience panel → Download AI bundle) so the AI knows your real entities, areas and exposed actions.
 
+# Supported AI bundle format
+
+# Supported AI bundle format
+
+This pack understands **AI bundle format 1**. Before authoring or diagnosing, read the bundle's `ambience_ai_bundle` field and compare:
+
+- **equal to 1** — compatible, proceed.
+- **greater than 1** — the user's Ambience is newer than this pack. **Stop** and tell them to update the plugin (`/plugin marketplace update ambience`) before continuing.
+- **less than 1** — the bundle is from an older Ambience; ask them to re-download it (or update Ambience).
+
 # Config schema
 
 # Ambience configuration schema (overview)

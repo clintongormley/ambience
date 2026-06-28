@@ -55,6 +55,17 @@ def test_condition_reference_sorted_by_priority_desc() -> None:
     assert out.index("unavailable") < out.index("weather")
 
 
+def test_bundle_format_reference_states_supported_version() -> None:
+    from custom_components.ambience.const import AI_BUNDLE_VERSION
+
+    out = gen_ai_docs.render_bundle_format(AI_BUNDLE_VERSION)
+    assert out.startswith(GENERATED_BANNER)
+    assert GENERATED_END in out
+    # The supported format number and the field the skill checks must appear.
+    assert str(AI_BUNDLE_VERSION) in out
+    assert "ambience_ai_bundle" in out
+
+
 def test_assemble_portable_doc_concatenates_parts_under_one_banner() -> None:
     doc = gen_ai_docs.assemble_portable_doc(
         [("Schema", "schema body"), ("Cookbook", "cookbook body")]

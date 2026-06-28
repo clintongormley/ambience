@@ -107,6 +107,20 @@ async def test_bundle_includes_exposed_actions(
     assert isinstance(bundle["actions"]["schemas"], dict)
 
 
+async def test_bundle_carries_version_metadata(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    from custom_components.ambience.const import AI_BUNDLE_VERSION
+
+    bundle = await build_ai_bundle(hass)
+
+    # Format version (the hard-compat key the skill gates on) tracks the constant.
+    assert bundle["ambience_ai_bundle"] == AI_BUNDLE_VERSION
+    # Freshness signals are present (value resolved best-effort).
+    assert "ambience_version" in bundle
+    assert isinstance(bundle["generated_at"], str) and bundle["generated_at"]
+
+
 async def test_bundle_includes_definitions(
     hass: HomeAssistant, seeded_store: AmbienceStore
 ) -> None:
@@ -149,6 +163,23 @@ async def test_bundle_redacts_config_and_includes_traces(
     # Traces ride along for diagnosis.
     assert any(t["scope_id"] == "living_room" for t in bundle["traces"])
     assert "person.alice" not in str(bundle["traces"])
+
+
+async def test_ambience_version_falls_back_to_none_when_unresolvable(
+    hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A teardown-race / loader error must not sink the bundle — version is advisory."""
+    import homeassistant.loader as loader
+
+    async def boom(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("no integration")
+
+    monkeypatch.setattr(loader, "async_get_integration", boom)
+
+    bundle = await build_ai_bundle(hass)
+
+    assert bundle["ambience_version"] is None
+    assert bundle["ambience_ai_bundle"]  # the rest of the bundle still assembles
 
 
 async def test_bundle_does_not_mutate_store(

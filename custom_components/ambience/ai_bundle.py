@@ -23,14 +23,25 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.util import dt as dt_util
 
-from .const import DATA_STORE, DOMAIN
+from .const import AI_BUNDLE_VERSION, DATA_STORE, DOMAIN
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .redact import PRESENCE_PREFIXES, redact, redacted_traces
 from .services_meta import get_service_schema
 
-BUNDLE_VERSION = 1
+
+async def _ambience_version(hass: HomeAssistant) -> str | None:
+    """The running integration version, for the skill's freshness check. Best-
+    effort — None if the integration can't be resolved (e.g. teardown race)."""
+    try:
+        from homeassistant.loader import async_get_integration
+
+        integration = await async_get_integration(hass, DOMAIN)
+        return str(integration.version) if integration.version is not None else None
+    except Exception:  # noqa: BLE001 — version is advisory; never sink the bundle
+        return None
 
 
 def _areas(hass: HomeAssistant) -> list[dict[str, Any]]:
@@ -123,7 +134,11 @@ async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
     store = hass.data[DOMAIN][DATA_STORE]
     exposed = store.get_exposed_actions()
     return {
-        "ambience_ai_bundle": BUNDLE_VERSION,
+        # Format version: the skill gates hard-compatibility on this.
+        "ambience_ai_bundle": AI_BUNDLE_VERSION,
+        # Freshness signals the skill surfaces (is this bundle current?).
+        "ambience_version": await _ambience_version(hass),
+        "generated_at": dt_util.utcnow().isoformat(),
         "catalog": {
             "areas": _areas(hass),
             "floors": _floors(hass),

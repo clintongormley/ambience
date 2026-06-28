@@ -36,6 +36,9 @@ async def test_ai_bundle_returns_catalog_actions_definitions_config(
     assert resp["success"] is True
     bundle = resp["result"]
     assert bundle["ambience_ai_bundle"] == 1
+    # With the integration fully set up, the running version resolves to a string.
+    assert isinstance(bundle["ambience_version"], str) and bundle["ambience_version"]
+    assert bundle["generated_at"]
     assert "areas" in bundle["catalog"]
     assert "entities" in bundle["catalog"]
     assert "exposed" in bundle["actions"]

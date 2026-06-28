@@ -259,6 +259,118 @@ def test_redact_store_non_dict_passthrough() -> None:
     assert redact_store("not-a-dict") == "not-a-dict"  # type: ignore[arg-type]
 
 
+# --- presence entity_ids inside scene predicates (state / unavailable) --------
+
+
+def test_redact_store_scrubs_presence_entity_ids_in_state_predicate() -> None:
+    # A `state` rule that tests a person/device_tracker directly reveals that
+    # person's location; the bare entity_id must be scrubbed (the key-based
+    # `who`/`where` scrub never reaches a `state` atom's `entity_id`).
+    dump = {
+        "areas": {
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {
+                            "state": {
+                                "kind": "and",
+                                "items": [
+                                    {"kind": "is", "entity_id": "person.alice", "states": ["home"]},
+                                    {
+                                        "kind": "not",
+                                        "item": {
+                                            "kind": "is",
+                                            "entity_id": "device_tracker.bobs_phone",
+                                            "states": ["home"],
+                                        },
+                                    },
+                                    {"kind": "is", "entity_id": "light.hall", "states": ["on"]},
+                                ],
+                            }
+                        },
+                        "actions": [],
+                    }
+                ]
+            }
+        }
+    }
+    out = redact_store(dump)
+    items = out["areas"]["lr"]["scenes"][0]["when"]["state"]["items"]
+    assert items[0]["entity_id"] == REDACTED  # person, nested directly
+    assert items[1]["item"]["entity_id"] == REDACTED  # device_tracker, under `not`
+    assert items[2]["entity_id"] == "light.hall"  # benign entity kept
+    assert items[0]["states"] == ["home"]  # rest of the rule shape survives
+
+
+def test_redact_store_scrubs_presence_entity_ids_in_any_predicate() -> None:
+    # The scrub walks the whole `when` block, so a presence id riding in a
+    # different predicate (e.g. `unavailable.entities`) is caught too.
+    dump = {
+        "areas": {
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {"unavailable": {"entities": ["device_tracker.phone", "sensor.x"]}},
+                        "actions": [],
+                    }
+                ]
+            }
+        }
+    }
+    out = redact_store(dump)
+    entities = out["areas"]["lr"]["scenes"][0]["when"]["unavailable"]["entities"]
+    assert entities == [REDACTED, "sensor.x"]
+
+
+def test_redact_store_presence_scrub_preserves_non_string_scalars() -> None:
+    # The presence scrub recurses through containers but leaves non-string
+    # scalars (ints/bools/None) in a predicate untouched.
+    dump = {
+        "areas": {
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {"lux": {"sensors": ["sensor.x"], "min": 5, "max": 100}},
+                        "actions": [],
+                    }
+                ]
+            }
+        }
+    }
+    out = redact_store(dump)
+    assert out["areas"]["lr"]["scenes"][0]["when"]["lux"] == {
+        "sensors": ["sensor.x"],
+        "min": 5,
+        "max": 100,
+    }
+
+
+def test_redact_store_passes_through_non_dict_scene() -> None:
+    # Defensive: a malformed (non-dict) scene in the list is passed through
+    # untouched rather than crashing the export.
+    out = redact_store({"areas": {"lr": {"scenes": ["not-a-scene"]}}})
+    assert out["areas"]["lr"]["scenes"][0] == "not-a-scene"
+
+
+def test_redact_store_presence_scrub_does_not_mutate_input() -> None:
+    dump = {
+        "areas": {
+            "lr": {
+                "scenes": [
+                    {
+                        "when": {
+                            "state": {"kind": "is", "entity_id": "person.alice", "states": ["home"]}
+                        },
+                        "actions": [],
+                    }
+                ]
+            }
+        }
+    }
+    redact_store(dump)
+    assert dump["areas"]["lr"]["scenes"][0]["when"]["state"]["entity_id"] == "person.alice"
+
+
 def test_redact_store_leaves_malformed_actions_unchanged() -> None:
     # A scene whose `actions` isn't a list (hand-edited export) must be passed
     # through, not coerced — the old `... or []` mangled a dict into its keys.

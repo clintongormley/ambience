@@ -106,14 +106,38 @@ def redact_exposed_action(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _redact_presence_strings(node: Any) -> Any:
+    """A copy of `node` with every presence entity id (person./device_tracker.)
+    blanked, recursing through dicts and lists. Run over a scene's `when` block so
+    a condition that references a presence entity directly — a `state` rule
+    testing a person's zone, an `unavailable` rule on a device_tracker — can't
+    leak that entity (and the location it implies) into an export. The `people`
+    predicate's own `who`/`where` are already blanked by key (see TO_REDACT); this
+    catches the presence ids riding in other predicates' entity_id/entities
+    fields, which a key-based scrub can't reach."""
+    if isinstance(node, str):
+        return REDACTED if node.startswith(PRESENCE_PREFIXES) else node
+    if isinstance(node, dict):
+        return {k: _redact_presence_strings(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_redact_presence_strings(v) for v in node]
+    return node
+
+
 def _redact_scene(scene: Any) -> Any:
-    """A copy of one scene with its action params redacted. Defensive: a scene of
-    an unexpected shape (non-dict, or `actions` not a list) is passed through
-    unchanged rather than coerced — these run on export payloads that may be
-    hand-edited."""
-    if not isinstance(scene, dict) or not isinstance(scene.get("actions"), list):
+    """A copy of one scene with its action params redacted and presence entity ids
+    scrubbed from its `when` conditions. Defensive: a scene of an unexpected shape
+    (non-dict, or `actions`/`when` not of the expected type) has those parts
+    passed through unchanged rather than coerced — these run on export payloads
+    that may be hand-edited."""
+    if not isinstance(scene, dict):
         return scene
-    return {**scene, "actions": [redact_action(a) for a in scene["actions"]]}
+    out = scene
+    if isinstance(scene.get("actions"), list):
+        out = {**out, "actions": [redact_action(a) for a in scene["actions"]]}
+    if isinstance(out.get("when"), dict):
+        out = {**out, "when": _redact_presence_strings(out["when"])}
+    return out
 
 
 def redact_scene_actions(scope_config: Any) -> Any:

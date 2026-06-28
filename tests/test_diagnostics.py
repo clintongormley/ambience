@@ -82,6 +82,33 @@ async def test_config_entry_diagnostics_redacts_sensitive_keys(
     assert when["template"] == REDACTED
 
 
+async def test_diagnostics_redacts_presence_entity_ids_in_state_predicate(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    """A `state` condition that tests a person/device_tracker directly leaks that
+    person's location via the bare entity_id — it must be scrubbed from the dump
+    (the `who`/`where` key-scrub doesn't reach `state` atoms)."""
+    await seeded_store.async_save_area(
+        "study",
+        {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {
+                        "state": {"kind": "is", "entity_id": "person.charlie", "states": ["home"]}
+                    },
+                    "actions": [],
+                }
+            ]
+        },
+    )
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+    assert "person.charlie" not in str(result)
+    atom = result["areas"]["study"]["scenes"][0]["when"]["state"]
+    assert atom["entity_id"] == REDACTED
+    assert atom["states"] == ["home"]  # rule shape preserved
+
+
 async def test_diagnostics_redacts_security_action_params(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
 ) -> None:

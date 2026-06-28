@@ -215,6 +215,9 @@ export class AmbienceCategoriesSettings extends LitElement {
     }
     const draft = { ...this._editing, name: this._editing.name.trim() };
     const exists = this._categories.some((g) => g.id === draft.id);
+    // Optimistic update; roll back if the server refuses (mirrors _deleteCategory)
+    // so the panel can't keep showing an edit the store rejected.
+    const previous = this._categories;
     this._categories = exists
       ? this._categories.map((g) => (g.id === draft.id ? draft : g))
       : [...this._categories, draft];
@@ -226,6 +229,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
       })
       .catch((e) => {
+        this._categories = previous;
         this._error = localizeWsError(this.hass, e);
       });
   }

@@ -15,7 +15,7 @@ you have defined (if any), and then any **areas**.
 ## Add a category
 
 We want to set up scenes to control the lights in the lounge. To start we will
-add a new category called **Lights**, by clicking **+ Add category** at the top
+add a new category called **Lights**, by clicking **Add category…** at the top
 of the screen.
 
 This link takes you to the **Categories** tab under **Settings**. Then click the

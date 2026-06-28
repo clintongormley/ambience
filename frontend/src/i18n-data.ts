@@ -262,6 +262,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       lux_error_need_bound: "Enter a min, a max, or both.",
       lux_error_negative: "Bounds must be 0 or greater.",
       lux_error_order: "Min must be less than max.",
+      lux_error_not_integer: "Bounds must be whole numbers.",
       from_label: "From",
       to_label: "To",
       any_time: "Any time",
@@ -837,6 +838,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       lux_error_need_bound: "Introduce un mínimo, un máximo o ambos.",
       lux_error_negative: "Los límites deben ser 0 o mayores.",
       lux_error_order: "El mínimo debe ser menor que el máximo.",
+      lux_error_not_integer: "Los límites deben ser números enteros.",
       from_label: "Desde",
       to_label: "Hasta",
       any_time: "Cualquier hora",
@@ -1150,6 +1152,3 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
   }, // end es
 };
-
-// Back-compat: existing imports expect AMBIENCE_STRINGS (the English catalogue).
-export const AMBIENCE_STRINGS = AMBIENCE_STRINGS_BY_LOCALE.en;

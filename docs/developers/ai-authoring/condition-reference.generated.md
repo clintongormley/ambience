@@ -37,7 +37,7 @@ Every built-in condition usable under a scene's `when`. Each `when` key is one o
 - **Purpose:** Matches who is (not) at home or in a named zone.
 - **Input type:** `people_predicate`
 - **Priority:** 925 (higher conditions are evaluated first)
-- **Help:** {who: [person.*] (empty = all persons), quant: 'any'|'everyone'|'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. None = match-anything.
+- **Help:** {who: [person.*] (omit to match all persons), quant: 'any'|'everyone'|'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. None = match-anything.
 
 ## `occupancy`
 

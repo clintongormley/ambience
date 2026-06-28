@@ -264,7 +264,7 @@ The panel runs `ambience/validate` (shape-only, no save) on import before
 preview. A block must satisfy all of:
 
 - `config` is an object; `scenes` a list; each scene an object.
-- Scene names unique (case-insensitive, trimmed) within a `(category, name)`.
+- Scene names unique (case-insensitive, trimmed) within a `(category, scope)`.
 - `description`/`category`, if present, are strings.
 - `when` is an object; each key a known condition; each non-null predicate passes
   that condition's validation (see the generated reference for per-field rules).
@@ -578,7 +578,7 @@ Every built-in condition usable under a scene's `when`. Each `when` key is one o
 - **Purpose:** Matches who is (not) at home or in a named zone.
 - **Input type:** `people_predicate`
 - **Priority:** 925 (higher conditions are evaluated first)
-- **Help:** {who: [person.*] (empty = all persons), quant: 'any'|'everyone'|'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. None = match-anything.
+- **Help:** {who: [person.*] (omit to match all persons), quant: 'any'|'everyone'|'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. None = match-anything.
 
 ## `occupancy`
 
@@ -716,7 +716,7 @@ attributes), with optional `for`.
 
 ```jsonc
 {
-  "who": ["person.alice", "person.bob"], // optional; empty/absent = ALL tracked persons
+  "who": ["person.alice", "person.bob"], // optional; omit/absent = ALL tracked persons (empty list rejected)
   "quant": "any" | "everyone" | "nobody",// default "any"
   "where": "home" | "zone.work",         // the POSITIVE location; default "home"
   "negate": false,                       // optional; true = NOT at `where`

@@ -29,7 +29,7 @@ The core logic lives in `custom_components/ambience/engine.py` and is intentiona
 
 **Shadowing.** A scene that can never win — because an earlier, always-matching scene precedes it — is said to be *shadowed*. The `evaluate_explained` path (used by the dry-run WebSocket command) records the full evaluation trace, including which scenes were not evaluated, so the frontend can surface shadowing warnings.
 
-**`evaluate_explained` vs `resolve`.** `resolve` is a thin wrapper over `evaluate_explained` so the two share a single source of truth. `evaluate_explained` accepts a `describe` flag; when `True`, each successfully evaluated predicate's `detail` is populated from `condition.describe(snapshot)` (used for trace output only — callers pass `True` only in that path).
+**`evaluate_explained` vs `resolve`.** `resolve` is a thin wrapper over `evaluate_explained` so the two share a single source of truth. `evaluate_explained` accepts a `describe` flag; when `True`, each successfully evaluated predicate's `detail` is populated from `condition.describe(snapshot, predicate)` — the predicate is passed so an entity-quantifier condition can scope the detail to the entities that predicate references (used for trace output only — callers pass `True` only in that path).
 
 ---
 
@@ -49,11 +49,11 @@ Floors use a `_floor_ambience` suffix to avoid entity-ID collisions when a floor
 
 **What the switch does.** Each switch independently gates *automatic* scene application for its own scope only. While a scope's switch is off, the engine stops applying scenes there (an explicit apply from the panel forces past the switch); same for floor and house. Each scope is checked independently — there is no inherited-off propagation during resolution.
 
-**Cascade on turn-on/turn-off.** Turning a switch *off* (or *on*) via the UI or a service call does cascade to descendants: turning the house switch off also turns off all floor and area switches; turning it back on restores them. Turning a floor switch off brings down its areas. This cascade is one-directional — it fires only on explicit user action, not during scene resolution.
+**Cascade on turn-on/turn-off.** Turning a switch *off* (or *on*) via the UI or a service call does cascade to descendants: turning the house switch off also turns off all floor and area switches; turning it back on restores them. Turning a floor switch off brings down its areas. This cascade is one-directional (parent → descendants) and fires on any switch turn-on/turn-off — whether an explicit user action or the auto-on timer firing — never during scene resolution.
 
-**Auto-on timer.** When a switch is turned off it schedules an automatic turn-on after a configurable delay (default: 7 200 seconds / 2 hours). A delay of 0 disables the timer. The off-timestamp is persisted so the remaining delay survives HA restarts. The timer fires `async_turn_on`, which also cascades to descendants.
+**Auto-on timer.** When a switch is turned off it can schedule an automatic turn-on after a configurable delay. The default delay is **0, which disables the timer** — a paused scope stays paused until you turn it back on; set a positive delay to have it auto-resume. The off-timestamp is persisted so the remaining delay survives HA restarts. When armed, the timer fires `async_turn_on`, which also cascades to descendants.
 
-**Configuration.** Global defaults (`name`, `auto_on_delay_seconds`) are set in **Settings → Ambience** and apply to all scopes. The per-scope save commands `ambience/house/switch/save`, `ambience/floor/switch/save`, and `ambience/area/switch/save` exist in the WebSocket API and accept per-scope `name`/`auto_on_delay_seconds` values, but the switch currently resolves both from the global defaults only (`_resolved_delay` and the name composition read `get_switch_defaults()`), so per-scope overrides are not consulted at runtime.
+**Configuration.** The switch defaults (`name`, `auto_on_delay_seconds`) are **global**: set once in **Settings → Ambience** (saved via the `ambience/switch_defaults/save` WebSocket command) and applied to every scope. There are no per-scope switch overrides — every scope resolves its delay and name from the global defaults (`_resolved_delay` and the name composition both read `get_switch_defaults()`). The per-scope `off_at` timestamp that persists a paused switch's remaining auto-on delay is runtime state, not a configurable override.
 
 All scope switches are grouped under a single virtual *Ambience* service device so the integration card links to one device page rather than a flat entity list.
 
@@ -88,7 +88,7 @@ over this API; there are no REST endpoints.
 The authoritative command list lives in `custom_components/ambience/websocket.py`
 (`_WS_HANDLERS` at the bottom of the file — registration and unregistration both
 derive from it, and each handler's `@websocket_command` schema documents its
-payload). The ~40 commands fall into these families:
+payload). The ~50 commands fall into these families:
 
 | Family | Commands (representative) | Purpose |
 |---|---|---|

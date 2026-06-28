@@ -86,8 +86,13 @@ Paste the single self-contained guide into your AI:
 The AI bundle is a **local download** — you choose when and to whom to send it.
 Presence and location data is redacted before it leaves Home Assistant: person and
 device-tracker locations, the zones in your traces, your weather/workday entities,
-and the rendered output of `people`/`template` conditions. Person *ids* remain so
-the AI can still write presence conditions, but their current location does not.
+and the rendered output of `people`/`template` conditions. Secrets in your actions
+are scrubbed too — alarm/lock codes, and the default values of sensitive fields
+such as a notification's message, recipients or push token.
+
+Person *ids and names* do remain, so the AI can write presence conditions that
+reference the right people — a household member's name may therefore appear in the
+bundle — but their current location does not.
 
 ## What it's good at
 

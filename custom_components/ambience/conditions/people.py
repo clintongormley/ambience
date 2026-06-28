@@ -16,6 +16,7 @@ from ._common import (
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
+    for_contains,
     for_elapsed_satisfied,
     tenure_held,
     tenure_within,
@@ -60,7 +61,7 @@ class PeopleCondition:
     """Match on who is (not) at home / in a named zone.
 
     Predicate (scoped quantifier):
-      {who: [person.*]? (empty/absent = all persons),
+      {who: [person.*]? (omit/absent = all persons; an empty list is rejected),
        quant: 'any'|'everyone'|'nobody' (default 'any'),
        where: 'home'|'zone.*' (default 'home'),  # the POSITIVE location
        negate: bool? (default false),            # true = NOT at `where`
@@ -72,7 +73,7 @@ class PeopleCondition:
     name = "people"
     description = "Matches who is (not) at home or in a named zone."
     predicate_help = (
-        "{who: [person.*] (empty = all persons), quant: 'any'|'everyone'|"
+        "{who: [person.*] (omit to match all persons), quant: 'any'|'everyone'|"
         "'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. "
         "None = match-anything."
     )
@@ -436,6 +437,13 @@ class PeopleCondition:
         if who is not None:
             if not isinstance(who, list):
                 raise ValueError("`who` must be a list of person entity_ids")
+            if not who:
+                # Present-but-empty = "specific mode, nobody picked" (incomplete).
+                # Omit `who` entirely to mean all tracked persons; this keeps the
+                # backend in step with the editor, which flags an empty selection.
+                raise ValueError(
+                    "`who` must list at least one person, or be omitted for all persons"
+                )
             for p in who:
                 if not isinstance(p, str) or not p.startswith("person."):
                     raise ValueError(f"`who` entries must be person.* entity_ids, got {p!r}")
@@ -471,8 +479,9 @@ class PeopleCondition:
             return False
         if bool(outer.get("negate")) != bool(inner.get("negate")):
             return False
-        # inner must hold at least as long as outer (longer for = more specific).
-        if dur_seconds(inner.get("for")) < dur_seconds(outer.get("for")):
+        # The `for`/`for_mode` duration axis must permit inner ⊆ outer
+        # (at_least: longer is stricter; less_than: shorter is stricter).
+        if not for_contains(outer, inner):
             return False
         qo = outer.get("quant") or "any"
         qi = inner.get("quant") or "any"

@@ -17,7 +17,6 @@ from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
@@ -178,18 +177,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await store.async_apply_builtin_labels(builtin_labels)
 
     async_register_commands(hass)
-
-    # The single "Scene updates" sensor (and its hub device) was replaced by
-    # per-scope logbook entries on the scope switches. Remove the orphaned
-    # registry entries so they don't linger as "unavailable" after upgrade.
-    ent_reg = er.async_get(hass)
-    legacy_sensor = ent_reg.async_get_entity_id("sensor", DOMAIN, "ambience_scene_updates")
-    if legacy_sensor is not None:
-        ent_reg.async_remove(legacy_sensor)
-    dev_reg = dr.async_get(hass)
-    hub_device = dev_reg.async_get_device(identifiers={(DOMAIN, "hub")})
-    if hub_device is not None:
-        dev_reg.async_remove_device(hub_device.id)
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 

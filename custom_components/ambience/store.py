@@ -148,61 +148,6 @@ class AmbienceStore:
         self._data.setdefault("floors", {})
         self._data.setdefault("house", {"scenes": []})
 
-    def _migrate_action_targets_to_entity_ids(self) -> None:
-        """TEMPORARY: roll actions saved in the short-lived v0.29.0 ``target``
-        format back to the flat ``entity_ids`` list (revert of #156).
-
-        v0.29.0 briefly stored each scene action's selection as a generic
-        ``target: {entity_id/device_id/area_id/label_id/floor_id}`` object. The
-        codebase is now back to ``entity_ids: [...]`` and the backend reads that
-        directly, so any action still carrying a ``target`` would be ignored. On
-        load we rewrite each such action in place: the target's ``entity_id``
-        becomes ``entity_ids``, and any indirect selectors (device/area/label/
-        floor) are dropped (the sole affected deployment has none). No explicit
-        persistence — the next user save rewrites the file.
-
-        This is safe to delete in a future release once that one deployment has
-        loaded at least once. Actions already in ``entity_ids`` form (no
-        ``target`` key) are left untouched, so the pass is idempotent. If an
-        action somehow carried both keys (#156 never produced that), the
-        ``target`` is authoritative and overwrites ``entity_ids``.
-        """
-        indirect_keys = ("device_id", "area_id", "label_id", "floor_id")
-        for _kind, _scope_id, cfg in self.all_scope_configs():
-            if not isinstance(cfg, dict):
-                continue
-            scenes = cfg.get("scenes")
-            if not isinstance(scenes, list):
-                continue
-            for scene in scenes:
-                if not isinstance(scene, dict):
-                    continue
-                actions = scene.get("actions")
-                if not isinstance(actions, list):
-                    continue
-                for action in actions:
-                    if not isinstance(action, dict) or "target" not in action:
-                        continue
-                    target = action["target"]
-                    target = target if isinstance(target, dict) else {}
-                    entity_id = target.get("entity_id")
-                    # Drop blank/whitespace ids: a blank entity_id violates the
-                    # save-time invariant and would make an invalid call target.
-                    if isinstance(entity_id, str):
-                        entity_ids = [entity_id] if entity_id.strip() else []
-                    elif isinstance(entity_id, (list, tuple)):
-                        entity_ids = [e for e in entity_id if isinstance(e, str) and e.strip()]
-                    else:
-                        entity_ids = []
-                    if any(target.get(k) for k in indirect_keys):
-                        _LOGGER.warning(
-                            "ambience: dropping indirect target(s) from action %r during "
-                            "entity_ids migration (revert of #156)",
-                            action.get("service"),
-                        )
-                    action["entity_ids"] = entity_ids
-                    del action["target"]
-
     def _ensure_categories(self) -> None:
         """Seed the General category when no categories exist. Categories are
         required: a store must always have at least one."""
@@ -303,7 +248,6 @@ class AmbienceStore:
             self._data = raw
             self._ensure_conditions_namespace()
             self._ensure_scope_buckets()
-            self._migrate_action_targets_to_entity_ids()
             self._ensure_categories()
             self._ensure_switch_defaults()
             self._ensure_reapply_settings()

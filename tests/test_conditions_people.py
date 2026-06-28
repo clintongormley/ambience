@@ -353,6 +353,17 @@ def test_validate_rejects_bad_who() -> None:
         m.validate_predicate({"who": ["light.x"]})
 
 
+def test_validate_rejects_present_but_empty_who() -> None:
+    # A present-but-empty `who` is "specific mode, nobody picked" — incomplete.
+    # The frontend flags it; the backend must too, so an AI/imported config can't
+    # smuggle it past validation and silently run as "all persons". Omitting
+    # `who` entirely (base mode = all persons) stays valid.
+    m = PeopleCondition()
+    with pytest.raises(ValueError, match="who"):
+        m.validate_predicate({"who": [], "quant": "any"})
+    m.validate_predicate({"quant": "any"})  # absent who is still fine
+
+
 def test_validate_rejects_bad_quant() -> None:
     with pytest.raises(ValueError, match="quant"):
         PeopleCondition().validate_predicate({"quant": "some"})
@@ -523,6 +534,41 @@ def test_contains_nobody_bigger_set_subset_of_smaller() -> None:
     inner = {"who": ["person.a", "person.b"], "quant": "nobody", "where": "home"}
     outer = {"who": ["person.a"], "quant": "nobody", "where": "home"}
     assert m.contains(outer, inner) is True
+
+
+def test_contains_less_than_shorter_inner_is_more_specific() -> None:
+    m = PeopleCondition()
+    short = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    long = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 60},
+        "for_mode": "less_than",
+    }
+    # less_than inverts: held < 30 ⊆ held < 60.
+    assert m.contains(long, short) is True
+    assert m.contains(short, long) is False
+
+
+def test_contains_false_when_for_mode_differs() -> None:
+    m = PeopleCondition()
+    at_least = {"who": ["person.a"], "quant": "any", "where": "home", "for": {"s": 30}}
+    less_than = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    assert m.contains(at_least, less_than) is False
+    assert m.contains(less_than, at_least) is False
 
 
 def test_contains_nobody_disjoint_from_any() -> None:

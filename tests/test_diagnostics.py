@@ -82,6 +82,55 @@ async def test_config_entry_diagnostics_redacts_sensitive_keys(
     assert when["template"] == REDACTED
 
 
+async def test_diagnostics_redacts_security_action_params(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    """A lock/alarm code authored into a scene action is scrubbed from the dump."""
+    await seeded_store.async_save_area(
+        "hallway",
+        {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "lock.unlock",
+                            "entity_ids": ["lock.front"],
+                            "params": {"code": "4321"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    action = result["areas"]["hallway"]["scenes"][0]["actions"][0]
+    assert action["params"]["code"] == REDACTED
+    assert action["entity_ids"] == ["lock.front"]
+    assert "4321" not in str(result)
+
+
+async def test_diagnostics_redacts_exposed_action_defaults(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    seeded_store._data["exposed_actions"] = [
+        {
+            "id": "notify.mobile",
+            "visible_fields": [],
+            "defaults": {"data": {"token": "SECRET-TOKEN"}},
+        },
+    ]
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    entry = next(e for e in result["exposed_actions"] if e["id"] == "notify.mobile")
+    assert entry["defaults"]["data"] == REDACTED
+    assert "SECRET-TOKEN" not in str(result)
+
+
 async def test_config_entry_diagnostics_does_not_mutate_store(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
 ) -> None:
@@ -195,6 +244,41 @@ async def test_scope_diagnostics_house_scope(
     # Only the house unit must be included — the area unit is filtered out.
     assert len(result["traces"]) == 1
     assert result["traces"][0]["scope_id"] is None
+
+
+async def test_scope_diagnostics_does_not_mutate_store(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """scope_diagnostics redacts the LIVE scope_config() reference (not a deep
+    copy, unlike the full-store dump), so it must build copies and never mutate
+    the store — the redacted output blanks secrets while the store keeps them."""
+    from custom_components.ambience.diagnostics import scope_diagnostics
+
+    await seeded_store.async_save_area(
+        "hallway",
+        {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "lock.unlock",
+                            "entity_ids": ["lock.front"],
+                            "params": {"code": "4321"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    result = scope_diagnostics(hass, "area", "hallway", "general")
+
+    assert result["scope"]["config"]["scenes"][0]["actions"][0]["params"]["code"] == REDACTED
+    # The live store still holds the real code — redaction copied, never mutated.
+    live = seeded_store.scope_config("area", "hallway")
+    assert live["scenes"][0]["actions"][0]["params"]["code"] == "4321"
 
 
 async def test_device_diagnostics_dumps_redacted_store(

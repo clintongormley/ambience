@@ -83,13 +83,17 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     return out;
   }
 
-  private _emit(value: OccupancyPredicate) {
+  private _emit(value: OccupancyPredicate | null) {
     this.value = value;
     emitValueChanged(this, value);
   }
 
   _setSensors(sensors: string[]) {
-    this._emit(this._build({ sensors }));
+    // Clearing the picker drops the whole condition (empty sensors = match-
+    // anything), like the unavailable widget — emit the null "condition removed"
+    // sentinel. Other edits keep their partial predicate, so a polarity/quant/for
+    // choice made before a sensor is picked isn't lost.
+    this._emit(sensors.length ? this._build({ sensors }) : null);
   }
 
   _setOccupied(occupied: boolean) {

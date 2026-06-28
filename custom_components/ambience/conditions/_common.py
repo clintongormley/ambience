@@ -110,6 +110,30 @@ def for_elapsed_satisfied(elapsed: float, seconds: float, for_mode: Any) -> bool
     return elapsed >= seconds
 
 
+def for_contains(outer: Any, inner: Any) -> bool:
+    """Whether the `for`/`for_mode` duration axis permits ``inner``'s match-set to
+    nest inside ``outer``'s — one input to a condition's ``contains`` lattice.
+
+    An ungated ``outer`` (`for` <= 0) constrains nothing on this axis, so any
+    ``inner`` nests. A gated ``outer`` needs ``inner`` gated in the SAME mode:
+    differing comparators (``at_least`` vs ``less_than``) describe non-nesting
+    match-sets, so that's conservatively False. With ``at_least`` (held >= for) a
+    longer threshold is the more specific (smaller) set, so ``inner.for`` must be
+    >= ``outer.for``; with ``less_than`` (held < for) a *shorter* threshold is the
+    more specific set, so ``inner.for`` must be <= ``outer.for``."""
+    outer_for = dur_seconds(outer.get("for"))
+    if outer_for <= 0:
+        return True
+    inner_for = dur_seconds(inner.get("for"))
+    if inner_for <= 0:
+        return False
+    if (outer.get("for_mode") or "at_least") != (inner.get("for_mode") or "at_least"):
+        return False
+    if (outer.get("for_mode") or "at_least") == "less_than":
+        return inner_for <= outer_for
+    return inner_for >= outer_for
+
+
 def fmt_duration(seconds: float) -> str:
     """Compact h/m/s render of a whole-second duration, for diagnostics: 1500 ->
     '25m', 90 -> '1m30s', 3661 -> '1h1m1s', 0 -> '0s'. Fractions floor."""

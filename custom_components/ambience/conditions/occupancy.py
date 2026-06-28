@@ -25,6 +25,7 @@ from ._common import (
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
+    for_contains,
     for_elapsed_satisfied,
     kleene_all,
     kleene_any,
@@ -371,8 +372,9 @@ class OccupancyCondition:
             return False
         if (outer.get("quant") or "any") != (inner.get("quant") or "any"):
             return False
-        # inner must hold at least as long as outer (longer for = more specific).
-        if dur_seconds(inner.get("for")) < dur_seconds(outer.get("for")):
+        # The `for`/`for_mode` duration axis must permit inner ⊆ outer
+        # (at_least: longer is stricter; less_than: shorter is stricter).
+        if not for_contains(outer, inner):
             return False
         so = frozenset(outer["sensors"])
         si = frozenset(inner["sensors"])

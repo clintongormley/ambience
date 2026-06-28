@@ -2,6 +2,7 @@ import { css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { localize, luxLabel } from "../i18n.js";
 import type { LuxRangeDef } from "../types.js";
+import { luxBoundsError } from "./lux-input.js";
 import { AmbienceNamedDefEditModal, MODAL_STYLES } from "./named-def-edit-modal.js";
 
 /**
@@ -84,11 +85,7 @@ export class AmbienceLuxEditModal extends AmbienceNamedDefEditModal<LuxRangeDef>
   protected _validateDef() {
     if (this._min == null && this._max == null)
       return localize(this.hass, "ui.lux_error_need_bound", "Enter a min, a max, or both.");
-    if ((this._min != null && this._min < 0) || (this._max != null && this._max < 0))
-      return localize(this.hass, "ui.lux_error_negative", "Bounds must be 0 or greater.");
-    if (this._min != null && this._max != null && this._min >= this._max)
-      return localize(this.hass, "ui.lux_error_order", "Min must be less than max.");
-    return "";
+    return luxBoundsError(this._min, this._max, this.hass) ?? "";
   }
 
   protected _buildDefinition(): LuxRangeDef {

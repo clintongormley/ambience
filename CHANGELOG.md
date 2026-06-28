@@ -63,12 +63,40 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - When a scene is skipped because its scope's pause switch is off, the trace
   timeline now says *"Skipped — the scope's pause switch is off."* It previously
   referred to a non-existent "category switch".
+- A negated group in a **state condition** (`NOT (… AND …)`) no longer loses its
+  negation when you change the group's AND/OR operator — that previously dropped
+  the NOT silently and inverted the condition's meaning.
+- A **category** add/edit that the server rejects now rolls back in the Settings
+  panel instead of continuing to show the rejected change as if it had saved.
+- Scene **shadowing / ordering hints** for `occupancy` and `people` duration
+  gates are now correct for the "held for less than" mode, and no longer relate
+  two predicates that use different duration modes — either could surface a
+  spurious "this scene can never win" warning or mis-order the scene list.
+- Clearing every sensor from an **occupancy** or **lux** condition now removes
+  the condition, instead of leaving behind a no-op "any sensor" row.
+- The **lux** range min/max inputs now reject fractional values inline ("Bounds
+  must be whole numbers.") instead of letting them through to a generic save
+  error from the backend.
+- A **people** condition whose `who` is a present-but-empty list (`who: []`) is
+  now rejected on save and on import / AI authoring, matching the editor —
+  previously it slipped through and silently ran as "all persons". Omit `who`
+  entirely to mean all tracked persons.
 
 ### Removed
 
 - `sensor.ambience_scene_updates` — replaced by per-scope logbook entries on
   each scope's pause switch (see above).
 - The **Scope-level pause switch** setting — scope switches are now always on.
+
+### Security
+
+- The **diagnostics download** and the **AI bundle** now scrub more before they
+  leave Home Assistant — both are meant to be safe to paste into a GitHub issue
+  or an AI chat. Newly redacted: alarm/lock codes and other secrets in scene
+  action parameters; sensitive exposed-action defaults (push tokens, message
+  bodies, recipients); the rendered detail of a `state` condition that targets a
+  person or device-tracker; and the zone label of a multi-person "for duration"
+  gate.
 
 ## [0.30.0] - 2026-06-26
 

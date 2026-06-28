@@ -12,7 +12,7 @@ A diagnostics file is a JSON snapshot of your configuration and recent traces.
 There are two places to get one, depending on how much you want to share:
 
 - **Scoped to one category** — in the Ambience panel, open a category's
-    **Traces** viewer and click **Download diagnostics**. The file covers just
+    **⋮** menu and choose **Download diagnostics**. The file covers just
     that (scope, category): its configuration, the relevant global context
     (categories and conditions), and its recent traces. Best when you already
     know which scene group is misbehaving.
@@ -42,7 +42,7 @@ evaluations. This stream is kept at `warning` by default, even when the parent
 logger is at `debug`, so it does not flood the log. You have to raise it
 explicitly.
 
-### From the integration page (the quick way)
+### From the integration page
 
 Home Assistant has built-in debug logging for any integration:
 
@@ -58,7 +58,7 @@ This raises the `custom_components.ambience` logger, so it captures the
 quiet `…trace.noop` **everything** stream at `warning` by design — if you need
 that one too, use the action below.
 
-### With an action (for the everything stream)
+### With an action
 
 For finer control — in particular to raise the **everything** stream — use
 **Developer Tools → Actions**. No restart needed.

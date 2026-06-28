@@ -403,6 +403,11 @@ export class AmbienceScenesList extends LitElement {
               label: localize(this.hass, "ui.auto_triggers_section", "Auto-triggers"),
               icon: "mdi:flash-auto",
             },
+            {
+              id: "download",
+              label: localize(this.hass, "ui.download_diagnostics", "Download diagnostics"),
+              icon: "mdi:download",
+            },
           ] satisfies KebabItem[]
         }
         @menu-action=${(e: CustomEvent<{ id: string }>) =>
@@ -585,6 +590,7 @@ export class AmbienceScenesList extends LitElement {
     else if (id === "traces") this._emit("show-traces", { category: category.id });
     else if (id === "simulate") this._emit("show-simulator", { category: category.id });
     else if (id === "auto") this._emit("show-auto-triggers", { category: category.id });
+    else if (id === "download") this._emit("download-diagnostics", { category: category.id });
   }
 
   private _onSceneMenu(i: number, id: string) {

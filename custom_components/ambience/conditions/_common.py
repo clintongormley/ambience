@@ -187,14 +187,14 @@ def predicate_has_any(predicate: Any, *keys: str) -> bool:
 def sensor_quant_contains(
     outer: Any,
     inner: Any,
-    band_contains: Callable[[dict[str, Any], dict[str, Any]], bool],
+    axis_contains: Callable[[dict[str, Any], dict[str, Any]], bool],
 ) -> bool:
     """The shared ``contains`` lattice for the sensor-quantifier conditions
     (occupancy, lux): True iff every world-state matching ``inner`` also matches
     ``outer`` on the axes both share — negation, the empty-``sensors`` wildcard,
     the quantifier, and the sensor-set subset rule. The condition-specific axis
     (occupancy polarity + ``for``, lux band) is decided by
-    ``band_contains(outer, inner)``, called only once both are constrained.
+    ``axis_contains(outer, inner)``, called only once both are constrained.
     Conservative: anything unprovable -> False."""
     if not isinstance(outer, dict) or not isinstance(inner, dict):
         return False
@@ -207,13 +207,14 @@ def sensor_quant_contains(
         return True
     if not inner.get("sensors"):
         return False
-    if (outer.get("quant") or "any") != (inner.get("quant") or "any"):
+    quant = outer.get("quant") or "any"
+    if quant != (inner.get("quant") or "any"):
         return False
-    if not band_contains(outer, inner):
+    if not axis_contains(outer, inner):
         return False
     so = frozenset(outer["sensors"])
     si = frozenset(inner["sensors"])
-    if (outer.get("quant") or "any") == "any":
+    if quant == "any":
         return si <= so  # any over fewer sensors ⊆ any over more
     return so <= si  # all over more sensors ⊆ all over fewer
 
@@ -221,7 +222,8 @@ def sensor_quant_contains(
 def wrap_quantified(parts: list[str], quant: Any, negate: bool) -> str:
     """Join per-sensor ``describe`` cells and wrap them for a sensor-quantifier
     condition: an ``all of:``/``any of:`` prefix when more than one sensor, then a
-    ``not(...)`` wrap when the predicate is negated."""
+    ``not(...)`` wrap when the predicate is negated. Callers append exactly one
+    ``part`` per sensor, so ``len(parts)`` is the sensor count."""
     body = ", ".join(parts)
     if len(parts) > 1:
         body = f"{'all' if quant == 'all' else 'any'} of: {body}"

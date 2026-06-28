@@ -349,7 +349,7 @@ class OccupancyCondition:
         """True iff every world-state matching `inner` also matches `outer`
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
 
-        def _band(o: dict[str, Any], i: dict[str, Any]) -> bool:
+        def _axis(o: dict[str, Any], i: dict[str, Any]) -> bool:
             # Comparable only when polarity matches (occupied vs vacant are
             # different match-sets); then the `for`/`for_mode` duration axis must
             # permit inner ⊆ outer (at_least: longer is stricter; less_than:
@@ -358,4 +358,4 @@ class OccupancyCondition:
                 return False
             return for_contains(o, i)
 
-        return sensor_quant_contains(outer, inner, _band)
+        return sensor_quant_contains(outer, inner, _axis)

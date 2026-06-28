@@ -254,7 +254,7 @@ class LuxCondition:
         """True iff every world-state matching `inner` also matches `outer`.
         Conservative: unprovable -> False."""
 
-        def _band(o: dict[str, Any], i: dict[str, Any]) -> bool:
+        def _axis(o: dict[str, Any], i: dict[str, Any]) -> bool:
             try:
                 o_lo, o_hi = self._resolve_range(o)
                 i_lo, i_hi = self._resolve_range(i)
@@ -262,7 +262,7 @@ class LuxCondition:
                 return False  # unknown range id -> can't prove containment
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 
-        return sensor_quant_contains(outer, inner, _band)
+        return sensor_quant_contains(outer, inner, _axis)
 
 
 def as_float_state(state: str) -> float | None:

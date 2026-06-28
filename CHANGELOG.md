@@ -33,6 +33,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- Consolidated the WebSocket scope handling internally (one save dispatcher, a
+  shared scope-selector schema, and a single "scope not found" error contract
+  across the get / save / enable commands). The only user-visible effect: opening
+  an area or floor that no longer exists now shows the same "Unknown area/floor"
+  message as trying to save it did.
 - **Download diagnostics** has moved out of the Traces viewer into each
   category's **⋮** menu, alongside Run / View traces / Simulate / Auto-triggers.
   It still downloads the same diagnostics bundle scoped to that one (scope,

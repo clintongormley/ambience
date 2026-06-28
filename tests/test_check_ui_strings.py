@@ -5,15 +5,21 @@ from pathlib import Path
 from bin.check_ui_strings import bundle_keys, compare, used_keys
 
 SAMPLE_BUNDLE = """
-export const AMBIENCE_STRINGS: Record<string, unknown> = {
-  weekday: { mon: "Mon" },
-  ui: {
-    close: "Close",
-    long_one:
-      "A value that wraps onto its own line, with: a colon for good measure.",
-    sun: {
-      elevation: "Elevation",
+export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, unknown> = {
+  en: {
+    weekday: { mon: "Mon" },
+    ui: {
+      close: "Close",
+      long_one:
+        "A value that wraps onto its own line, with: a colon for good measure.",
+      sun: {
+        elevation: "Elevation",
+      },
     },
+  },
+  es: {
+    weekday: { mon: "Lun" },
+    ui: { close: "Cerrar", long_one: "...", sun: { elevation: "Elevación" } },
   },
 };
 """

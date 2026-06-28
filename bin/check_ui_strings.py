@@ -19,49 +19,20 @@ import re
 import sys
 from pathlib import Path
 
+from bin._i18n_bundle import parse_locales
+
 # A quoted ui.* literal, e.g. "ui.close" or "ui.sun.elevation". Dynamic keys
 # (template literals) are out of scope — the bundle check covers literals only.
 _USED_RE = re.compile(r'"(ui\.[A-Za-z0-9_.]+)"')
 
-# Inside the bundle's ui block: `key:` / `"key":` opening a value or a nested
-# object. Continuation lines of wrapped string values never match because the
-# quoted string is followed by a comma, not a colon.
-_ENTRY_RE = re.compile(r'([A-Za-z0-9_]+|"[^"]+")\s*:\s*(\{)?')
-
 
 def bundle_keys(text: str) -> set[str]:
-    """The flattened `ui.*` key set of an i18n-data.ts source text."""
-    match = re.search(r"\bui:\s*\{", text)
-    if match is None:
-        return set()
-    start = text.index("{", match.start())
-    depth = 0
-    end = start
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                end = i
-                break
-    keys: set[str] = set()
-    prefix: list[str] = []
-    for line in text[start + 1 : end].splitlines():
-        stripped = line.strip()
-        if stripped.startswith("}"):
-            if prefix:
-                prefix.pop()
-            continue
-        entry = _ENTRY_RE.match(stripped)
-        if entry is None:
-            continue
-        name = entry.group(1).strip('"')
-        if entry.group(2):  # nested object, e.g. `sun: {`
-            prefix.append(name)
-        else:
-            keys.add(".".join(["ui", *prefix, name]))
-    return keys
+    """The flattened `ui.*` key set of an i18n-data.ts source text (the `en`
+    locale — en/es ship the same keys). Reads the bundle via the shared
+    recursive-descent parser in `_i18n_bundle` rather than a second brace-walk."""
+    locales = parse_locales(text)
+    en = locales.get("en") or next(iter(locales.values()), {})
+    return {key for key in en if key.startswith("ui.")}
 
 
 def used_keys(text: str) -> set[str]:

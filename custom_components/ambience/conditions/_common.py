@@ -10,7 +10,7 @@ fix-it-in-one-place drift that crept in when each condition carried its own.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -182,6 +182,54 @@ def predicate_has_any(predicate: Any, *keys: str) -> bool:
     `keys` — the shared body behind the conditions' ``is_constraining`` hooks
     (a predicate with none of them matches everything: a sorting wildcard)."""
     return isinstance(predicate, dict) and any(bool(predicate.get(k)) for k in keys)
+
+
+def sensor_quant_contains(
+    outer: Any,
+    inner: Any,
+    axis_contains: Callable[[dict[str, Any], dict[str, Any]], bool],
+) -> bool:
+    """The shared ``contains`` lattice for the sensor-quantifier conditions
+    (occupancy, lux): True iff every world-state matching ``inner`` also matches
+    ``outer`` on the axes both share — negation, the empty-``sensors`` wildcard,
+    the quantifier, and the sensor-set subset rule. The condition-specific axis
+    (occupancy polarity + ``for``, lux band) is decided by
+    ``axis_contains(outer, inner)``, called only once both are constrained.
+    Conservative: anything unprovable -> False."""
+    if not isinstance(outer, dict) or not isinstance(inner, dict):
+        return False
+    # A negated predicate's match-set is a complement; it doesn't nest here.
+    if outer.get("negate") or inner.get("negate"):
+        return False
+    # Empty/absent `sensors` is a wildcard: a wildcard outer contains everything;
+    # a wildcard inner is the universe, contained only by another wildcard outer.
+    if not outer.get("sensors"):
+        return True
+    if not inner.get("sensors"):
+        return False
+    quant = outer.get("quant") or "any"
+    if quant != (inner.get("quant") or "any"):
+        return False
+    if not axis_contains(outer, inner):
+        return False
+    so = frozenset(outer["sensors"])
+    si = frozenset(inner["sensors"])
+    if quant == "any":
+        return si <= so  # any over fewer sensors ⊆ any over more
+    return so <= si  # all over more sensors ⊆ all over fewer
+
+
+def wrap_quantified(parts: list[str], quant: Any, negate: bool) -> str:
+    """Join per-sensor ``describe`` cells and wrap them for a sensor-quantifier
+    condition: an ``all of:``/``any of:`` prefix when more than one sensor, then a
+    ``not(...)`` wrap when the predicate is negated. Callers append exactly one
+    ``part`` per sensor, so ``len(parts)`` is the sensor count."""
+    body = ", ".join(parts)
+    if len(parts) > 1:
+        body = f"{'all' if quant == 'all' else 'any'} of: {body}"
+    if negate:
+        body = f"not({body})"
+    return body
 
 
 def state_sources(hass: Any, entities: frozenset[str] | None, domain: str | None = None) -> Any:

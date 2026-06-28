@@ -327,6 +327,21 @@ class AmbienceStore:
         await self._store.async_save(self._data)
         self._notify_config_changed(("house", None))
 
+    async def async_save_scope(
+        self, scope_kind: str, scope_id: str | None, config: dict[str, Any]
+    ) -> None:
+        """Persist a scope's config, dispatching to the per-kind saver — the
+        unified writer mirroring `scope_config()`'s unified reader, behind the
+        websocket scope-save handlers and the undo/redo restore."""
+        if scope_kind == "area":
+            await self.async_save_area(scope_id, config)
+        elif scope_kind == "floor":
+            await self.async_save_floor(scope_id, config)
+        elif scope_kind == "house":
+            await self.async_save_house(config)
+        else:
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.
 

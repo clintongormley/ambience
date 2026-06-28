@@ -31,11 +31,13 @@ from ._common import (
     kleene_any,
     kleene_not,
     predicate_has_any,
+    sensor_quant_contains,
     state_sources,
     tenure_held,
     tenure_within,
     validate_for,
     validate_for_mode,
+    wrap_quantified,
 )
 
 _QUANTS = ("any", "all")
@@ -254,12 +256,7 @@ class OccupancyCondition:
                 eid, snapshot, want_on=want_on, seconds=per_sensor_seconds, mode=mode
             )
             parts.append(f"{name}: {state}{elapsed} {'✓' if held else '✗'}")
-        body = ", ".join(parts)
-        if len(sensors) > 1:
-            body = f"{'all' if quant == 'all' else 'any'} of: {body}"
-        # `negate` inverts the whole match — show it wrapping the per-sensor read.
-        if predicate.get("negate"):
-            body = f"not({body})"
+        body = wrap_quantified(parts, quant, bool(predicate.get("negate")))
         if not seconds:
             return body
         # State the duration threshold once; the comparator follows `for_mode`
@@ -351,33 +348,14 @@ class OccupancyCondition:
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
-        if not isinstance(outer, dict) or not isinstance(inner, dict):
-            return False
-        # A negated predicate's match-set is a complement, which does not nest
-        # under this (sensor-subset / polarity / quant / for) lattice. Be
-        # conservative: unprovable -> False.
-        if outer.get("negate") or inner.get("negate"):
-            return False
-        # Empty/absent `sensors` is a wildcard (matches every world-state, per
-        # matches()), so its polarity/quant/for are irrelevant. A wildcard outer
-        # contains everything; a wildcard inner is the universe, contained only
-        # by another wildcard outer (handled above).
-        if not outer.get("sensors"):
-            return True
-        if not inner.get("sensors"):
-            return False
-        # Both constrained: comparable only when polarity AND quant match (a
-        # different polarity or quantifier is a different, non-nesting match-set).
-        if (outer.get("occupied", True) is not False) != (inner.get("occupied", True) is not False):
-            return False
-        if (outer.get("quant") or "any") != (inner.get("quant") or "any"):
-            return False
-        # The `for`/`for_mode` duration axis must permit inner ⊆ outer
-        # (at_least: longer is stricter; less_than: shorter is stricter).
-        if not for_contains(outer, inner):
-            return False
-        so = frozenset(outer["sensors"])
-        si = frozenset(inner["sensors"])
-        if (outer.get("quant") or "any") == "any":
-            return si <= so  # any over fewer sensors ⊆ any over more
-        return so <= si  # all over more sensors ⊆ all over fewer
+
+        def _axis(o: dict[str, Any], i: dict[str, Any]) -> bool:
+            # Comparable only when polarity matches (occupied vs vacant are
+            # different match-sets); then the `for`/`for_mode` duration axis must
+            # permit inner ⊆ outer (at_least: longer is stricter; less_than:
+            # shorter is stricter).
+            if (o.get("occupied", True) is not False) != (i.get("occupied", True) is not False):
+                return False
+            return for_contains(o, i)
+
+        return sensor_quant_contains(outer, inner, _axis)

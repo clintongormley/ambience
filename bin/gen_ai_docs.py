@@ -194,7 +194,8 @@ def render_compatibility(bundle_format: int, version_minor: str) -> str:
         "**Before authoring or diagnosing, check the bundle against this pack:**",
         "",
         f"1. **Version.** Take the bundle's `ambience_version` (e.g. `{version_minor}.2`), drop "
-        f"the patch, and compare its `MAJOR.MINOR` to **{version_minor}**:",
+        f"the patch, and compare its major.minor to **{version_minor}** — compare each part as "
+        "an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):",
         f"   - **newer than {version_minor}** → the user's Ambience is newer than this pack. "
         "**Stop. Do not author.** Update the plugin (below), then retry.",
         f"   - **older than {version_minor}** → the user's Ambience is older than this pack. "

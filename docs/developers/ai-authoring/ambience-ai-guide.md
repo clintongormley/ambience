@@ -12,7 +12,7 @@ This pack was built for **Ambience 0.31.x** and understands **AI bundle format 1
 
 **Before authoring or diagnosing, check the bundle against this pack:**
 
-1. **Version.** Take the bundle's `ambience_version` (e.g. `0.31.2`), drop the patch, and compare its `MAJOR.MINOR` to **0.31**:
+1. **Version.** Take the bundle's `ambience_version` (e.g. `0.31.2`), drop the patch, and compare its major.minor to **0.31** — compare each part as an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):
    - **newer than 0.31** → the user's Ambience is newer than this pack. **Stop. Do not author.** Update the plugin (below), then retry.
    - **older than 0.31** → the user's Ambience is older than this pack. Ask them to update Ambience (HACS) and re-download the bundle.
    - **same `0.31`** → compatible, continue.

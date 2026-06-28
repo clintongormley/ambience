@@ -120,6 +120,11 @@ jobs:
         with:
           ref: main
 
+      # Needed to re-stamp the AI knowledge pack after the version bump (below).
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
       # The bump PR must be opened by a PAT/App token, NOT the default
       # GITHUB_TOKEN: GitHub deliberately does not trigger `on: pull_request`
       # workflows for token-created PRs, so a GITHUB_TOKEN-created PR never runs
@@ -165,6 +170,13 @@ jobs:
             echo "Next minor $NEXT is ahead of current manifest version $CURRENT; will open bump PR."
             # Same verified bump bin/release.sh uses, so the two can't drift.
             bin/bump-version.sh "$NEXT"
+            # Re-stamp the AI knowledge pack with the bumped version (release.sh
+            # does the same): the pack records the version it was built for, so
+            # without this the AI-docs drift gate would fail on the auto-bump PR
+            # and block its auto-merge. gen_ai_docs imports the conditions package,
+            # which needs Home Assistant.
+            python -m pip install --quiet homeassistant pyyaml
+            python -m bin.gen_ai_docs
           else
             echo "do_bump=false" >> "$GITHUB_OUTPUT"
             echo "Next minor $NEXT is not ahead of current manifest version $CURRENT (an old/patch tag was pushed); skipping bump."

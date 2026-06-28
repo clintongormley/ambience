@@ -10,6 +10,7 @@ import {
   saveScopeConfig,
   validateScopeConfig,
 } from "../api.js";
+import { GITHUB_REPO_URL } from "../github.js";
 import { localize, localizeWsError } from "../i18n.js";
 import {
   computeImportPreview,
@@ -25,7 +26,7 @@ const AI_DOCS_URL = "https://clintongormley.github.io/ambience/ai-assisted-scene
 
 // Where to send "the AI got it wrong, here's a better answer" feedback — used to
 // improve the cookbook the AI learns from.
-const AI_ISSUES_URL = "https://github.com/clintongormley/ambience/issues/new";
+const AI_ISSUES_URL = `${GITHUB_REPO_URL}/issues/new`;
 
 /**
  * Paste-and-import view for AI-authored config blocks.

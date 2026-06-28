@@ -8,8 +8,16 @@ export interface HassLike {
   [key: string]: unknown;
 }
 
+/** Normalise a raw locale tag to its base language subtag, e.g.
+ *  "pt-BR" / "pt_BR" → "pt". The single home for this rule so detection and
+ *  string-loading can never drift apart. */
+function _baseCode(raw: string): string {
+  return raw.toLowerCase().split(/[-_]/)[0];
+}
+
 function _localeOf(hass: HassLike | undefined): string {
-  const lang = (hass?.language as string | undefined)?.toLowerCase().split(/[-_]/)[0];
+  const raw = hass?.language as string | undefined;
+  const lang = raw ? _baseCode(raw) : undefined;
   return lang && lang in AMBIENCE_STRINGS_BY_LOCALE ? lang : "en";
 }
 
@@ -31,7 +39,7 @@ export interface LanguageSupport {
 export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
   const raw = hass?.language as string | undefined;
   if (!raw) return { available: true, code: "", baseCode: "" };
-  const baseCode = raw.toLowerCase().split(/[-_]/)[0];
+  const baseCode = _baseCode(raw);
   const available = !!(AMBIENCE_STRINGS_BY_LOCALE[raw] || AMBIENCE_STRINGS_BY_LOCALE[baseCode]);
   return { available, code: raw, baseCode };
 }

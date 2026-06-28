@@ -77,6 +77,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - The **lux** range min/max inputs now reject fractional values inline ("Bounds
   must be whole numbers.") instead of letting them through to a generic save
   error from the backend.
+- A **people** condition whose `who` is a present-but-empty list (`who: []`) is
+  now rejected on save and on import / AI authoring, matching the editor —
+  previously it slipped through and silently ran as "all persons". Omit `who`
+  entirely to mean all tracked persons.
 
 ### Removed
 

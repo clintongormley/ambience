@@ -90,7 +90,7 @@ attributes), with optional `for`.
 
 ```jsonc
 {
-  "who": ["person.alice", "person.bob"], // optional; empty/absent = ALL tracked persons
+  "who": ["person.alice", "person.bob"], // optional; omit/absent = ALL tracked persons (empty list rejected)
   "quant": "any" | "everyone" | "nobody",// default "any"
   "where": "home" | "zone.work",         // the POSITIVE location; default "home"
   "negate": false,                       // optional; true = NOT at `where`

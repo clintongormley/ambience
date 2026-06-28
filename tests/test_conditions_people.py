@@ -353,6 +353,17 @@ def test_validate_rejects_bad_who() -> None:
         m.validate_predicate({"who": ["light.x"]})
 
 
+def test_validate_rejects_present_but_empty_who() -> None:
+    # A present-but-empty `who` is "specific mode, nobody picked" — incomplete.
+    # The frontend flags it; the backend must too, so an AI/imported config can't
+    # smuggle it past validation and silently run as "all persons". Omitting
+    # `who` entirely (base mode = all persons) stays valid.
+    m = PeopleCondition()
+    with pytest.raises(ValueError, match="who"):
+        m.validate_predicate({"who": [], "quant": "any"})
+    m.validate_predicate({"quant": "any"})  # absent who is still fine
+
+
 def test_validate_rejects_bad_quant() -> None:
     with pytest.raises(ValueError, match="quant"):
         PeopleCondition().validate_predicate({"quant": "some"})

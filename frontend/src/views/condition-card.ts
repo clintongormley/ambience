@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { conditionDocPath } from "../docs.js";
 import { conditionLabel } from "../i18n.js";
-import "./ambience-doc-link.js";
+import "./ambience-help.js";
 
 @customElement("ambience-condition-card")
 export class AmbienceConditionCard extends LitElement {
@@ -74,10 +74,10 @@ export class AmbienceConditionCard extends LitElement {
             <div class="name">${label}</div>
             <div class="description">${this.conditionDescription}</div>
           </label>
-          <ambience-doc-link
+          <ambience-help
             .hass=${this.hass}
-            .path=${conditionDocPath(this.conditionName) ?? ""}
-          ></ambience-doc-link>
+            .docPath=${conditionDocPath(this.conditionName) ?? ""}
+          ></ambience-help>
         </header>
         <div class="body ${this._expanded ? "" : "collapsed"}">
           <slot></slot>

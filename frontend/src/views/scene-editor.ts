@@ -24,7 +24,6 @@ import type {
 import "./action-slot.js";
 import "./ambience-help.js";
 import "./condition-input.js";
-import "./ambience-doc-link.js";
 import "./problem-flag.js";
 import { dayPredicateError } from "./day-predicate-input.js";
 import { luxPredicateError } from "./lux-input.js";
@@ -859,7 +858,7 @@ export class AmbienceSceneEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
         <div class="summary" @click=${() => this._toggleSlot({ kind: "condition", id: m.name })}>
           <span class="summary-label"><strong>${conditionLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
-          <ambience-doc-link .hass=${this.hass} .path=${conditionDocPath(m.name) ?? ""}></ambience-doc-link>
+          <ambience-help .hass=${this.hass} .docPath=${conditionDocPath(m.name) ?? ""}></ambience-help>
           <button
             class="remove"
             @click=${(e: Event) => {

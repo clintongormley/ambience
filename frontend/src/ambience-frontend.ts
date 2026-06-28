@@ -18,7 +18,7 @@ import { getFilterCategory } from "./ui-state.js";
 import "./views/category-filter.js";
 import "./views/scopes-view.js";
 import "./views/settings-modal.js";
-import "./views/ambience-doc-link.js";
+import "./views/ambience-help.js";
 
 export class AmbienceFrontend extends LitElement {
   static override styles = css`
@@ -174,10 +174,7 @@ export class AmbienceFrontend extends LitElement {
             aria-label=${localize(this.hass, "ui.tab_settings", "Settings")}
             title=${localize(this.hass, "ui.tab_settings", "Settings")}
           ><ha-icon icon="mdi:cog"></ha-icon></button>
-          <ambience-doc-link
-            .hass=${this.hass}
-            path="getting-started"
-          ></ambience-doc-link>
+          <ambience-help .hass=${this.hass} .docPath=${"getting-started"}></ambience-help>
         </div>
       </header>
       <ambience-scopes-view

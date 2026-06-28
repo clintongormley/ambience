@@ -59,8 +59,6 @@ export const bannerStyles = css`
     border: none;
     color: var(--secondary-text-color, #888);
     cursor: pointer;
-    font-size: 1rem;
-    line-height: 1;
     padding: 0.15rem 0.3rem;
   }
   .banner-dismiss:hover {

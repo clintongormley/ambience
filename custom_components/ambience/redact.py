@@ -14,7 +14,7 @@ from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_TRACE_BUFFER, DOMAIN
-from .trace import BufferedUnit, buffered_unit_to_dict
+from .trace import BufferedUnit, CauseKind, buffered_unit_to_dict
 
 # Keys whose values can reveal where people live or go: the workday/calendar
 # sensors a household keys off, the configured weather entity, and the
@@ -36,32 +36,136 @@ TO_REDACT = {
 PRESENCE_PREFIXES = ("person.", "device_tracker.")
 _DETAIL_REDACTED_CONDITIONS = {"people", "template"}
 
+# Action params for these service domains can carry secrets — alarm codes, lock
+# PINs — that must not ride into an export. Redacted by VALUE wherever an action
+# surfaces (scene actions in the store dump, dispatched actions in traces).
+_SECURITY_ACTION_DOMAINS = ("alarm_control_panel.", "lock.")
+
+# Exposed-action default VALUES under these field names can carry secrets/PII
+# (notification bodies, push tokens, recipients, phone numbers). Key-based
+# async_redact_data can't reach these per-action nested defaults, so they're
+# scrubbed by value.
+_SENSITIVE_DEFAULT_FIELDS = {
+    "message",
+    "title",
+    "data",
+    "target",
+    "token",
+    "api_key",
+    "password",
+    "credentials",
+    "code",
+    "pin",
+    "phone_number",
+}
+
+
+def _has_presence(eids: Any) -> bool:
+    """True if `eids` contains a presence entity (person./device_tracker.)."""
+    return bool(eids) and any(isinstance(e, str) and e.startswith(PRESENCE_PREFIXES) for e in eids)
+
 
 def redact(data: Any) -> Any:
     """Redact the location-revealing keys in `TO_REDACT` from a config payload."""
     return async_redact_data(data, TO_REDACT)
 
 
+def redact_action(action: dict[str, Any]) -> dict[str, Any]:
+    """Blank the param VALUES of a security-domain action (alarm/lock) — an
+    alarm code or lock PIN must not leave the home. Non-security actions and
+    actions without params are returned unchanged. Handles both the old
+    `service` key and the new `action` key for the service id."""
+    if not isinstance(action, dict):
+        return action
+    service = action.get("service") or action.get("action")
+    params = action.get("params")
+    if (
+        isinstance(service, str)
+        and service.startswith(_SECURITY_ACTION_DOMAINS)
+        and isinstance(params, dict)
+        and params
+    ):
+        return {**action, "params": dict.fromkeys(params, REDACTED)}
+    return action
+
+
+def redact_exposed_action(entry: dict[str, Any]) -> dict[str, Any]:
+    """Blank sensitive default VALUES of one exposed-action entry (tokens,
+    recipients, message bodies). Field names, ids and visible_fields are kept so
+    an AI/contributor still sees the action's shape."""
+    if not isinstance(entry, dict):
+        return entry
+    defaults = entry.get("defaults")
+    if not isinstance(defaults, dict) or not any(k in _SENSITIVE_DEFAULT_FIELDS for k in defaults):
+        return entry
+    return {
+        **entry,
+        "defaults": {
+            k: (REDACTED if k in _SENSITIVE_DEFAULT_FIELDS else v) for k, v in defaults.items()
+        },
+    }
+
+
+def redact_scene_actions(scope_config: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of one scope's config with every scene's actions redacted."""
+    if not isinstance(scope_config, dict) or not isinstance(scope_config.get("scenes"), list):
+        return scope_config
+    return {
+        **scope_config,
+        "scenes": [
+            {**scene, "actions": [redact_action(a) for a in scene.get("actions") or []]}
+            if isinstance(scene, dict)
+            else scene
+            for scene in scope_config["scenes"]
+        ],
+    }
+
+
+def redact_store(dump: dict[str, Any]) -> dict[str, Any]:
+    """Full store redaction for the diagnostics dump and the AI bundle config:
+    the key-based presence/location scrub of `redact`, PLUS the value-based
+    secret scrub of security-domain scene-action params and sensitive
+    exposed-action defaults. Operates on a copy; never mutates the input."""
+    out = redact(dump)
+    if not isinstance(out, dict):
+        return out
+    for container_key in ("areas", "floors"):
+        container = out.get(container_key)
+        if isinstance(container, dict):
+            out[container_key] = {sid: redact_scene_actions(cfg) for sid, cfg in container.items()}
+    if isinstance(out.get("house"), dict):
+        out["house"] = redact_scene_actions(out["house"])
+    if isinstance(out.get("exposed_actions"), list):
+        out["exposed_actions"] = [redact_exposed_action(e) for e in out["exposed_actions"]]
+    return out
+
+
 def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
-    """Blank a people/template predicate's free-text detail (it renders each
-    person's location / the rendered template), and scrub presence-revealing
-    entity_ids (person./device_tracker.) from the predicate's `entity_ids` —
-    the same identifiers redact_trace removes from causes. A people predicate
-    carries person.* ids there; any predicate may reference a device_tracker."""
+    """Blank a predicate's free-text detail and scrub presence-revealing
+    entity_ids (person./device_tracker.). Detail is blanked for people/template
+    predicates (they render a person's location / the rendered template) AND for
+    any predicate that references a presence entity directly — e.g. a `state`
+    rule on a person renders the live location in its detail."""
     out = predicate
-    if out.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and out.get("detail"):
-        out = {**out, "detail": REDACTED}
     eids = out.get("entity_ids")
-    if eids and any(e.startswith(PRESENCE_PREFIXES) for e in eids):
+    presence = _has_presence(eids)
+    if out.get("detail") and (out.get("condition_key") in _DETAIL_REDACTED_CONDITIONS or presence):
+        out = {**out, "detail": REDACTED}
+    if presence:
         out = {
             **out,
-            "entity_ids": [REDACTED if e.startswith(PRESENCE_PREFIXES) else e for e in eids],
+            "entity_ids": [
+                REDACTED if (isinstance(e, str) and e.startswith(PRESENCE_PREFIXES)) else e
+                for e in eids
+            ],
         }
     return out
 
 
 def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
-    """Scrub presence PII from one serialised trace record (see above)."""
+    """Scrub presence PII and secrets from one serialised trace record: presence
+    causes (old/new zone names), the multi-entity `for:` gate label, security
+    action params, and the per-predicate detail/entity_ids."""
     out = dict(trace)
     cause = dict(trace.get("cause") or {})
     entity_id = cause.get("entity_id")
@@ -69,7 +173,20 @@ def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
         for key in ("entity_id", "old", "new"):
             if cause.get(key) is not None:
                 cause[key] = REDACTED
+    elif (
+        cause.get("kind") == CauseKind.DURATION
+        and entity_id is None
+        and cause.get("new") is not None
+    ):
+        # A multi-entity duration gate carries its label in `new`; a people
+        # gate's label embeds the raw zone ("anybody in zone.work"). There's no
+        # entity_id to prefix-match and the dict carries no condition, so blank
+        # the label outright (`detail` is a plain human duration, kept). This
+        # over-redacts a benign occupancy count label — acceptable for safety.
+        cause["new"] = REDACTED
     out["cause"] = cause
+    if "actions" in out:
+        out["actions"] = [redact_action(a) for a in trace.get("actions") or []]
     explanation = trace.get("explanation")
     if isinstance(explanation, dict):
         scenes = []

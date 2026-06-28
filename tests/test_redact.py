@@ -1,0 +1,259 @@
+"""Value-based redaction in the shared redact module.
+
+Beyond the key-based presence/location scrub, the diagnostics dump and AI
+bundle must also blank secrets/PII that ride in *values and rendered strings*:
+a `state` rule's rendered detail on a presence entity (R1), a multi-entity
+`for:` gate's zone label (R2), security-service action params like alarm codes
+(R3), and sensitive exposed-action default values like tokens (R4).
+"""
+
+from __future__ import annotations
+
+from homeassistant.components.diagnostics import REDACTED
+
+from custom_components.ambience.redact import (
+    redact_action,
+    redact_exposed_action,
+    redact_predicate,
+    redact_store,
+    redact_trace,
+)
+
+# --- R1: predicate detail on a presence-referencing predicate ----------------
+
+
+def test_redact_predicate_blanks_detail_for_state_rule_on_device_tracker() -> None:
+    pred = {
+        "condition_key": "state",
+        "detail": "Dad's Phone: home ✓ (is home)",
+        "entity_ids": ["device_tracker.dads_phone"],
+        "passed": True,
+    }
+    out = redact_predicate(pred)
+    assert out["detail"] == REDACTED
+    assert out["entity_ids"] == [REDACTED]
+
+
+def test_redact_predicate_blanks_detail_for_state_rule_on_person() -> None:
+    pred = {"condition_key": "state", "detail": "Alice: home", "entity_ids": ["person.alice"]}
+    assert redact_predicate(pred)["detail"] == REDACTED
+
+
+def test_redact_predicate_keeps_detail_for_non_presence_state() -> None:
+    pred = {"condition_key": "state", "detail": "Hall light: on", "entity_ids": ["light.hall"]}
+    out = redact_predicate(pred)
+    assert out["detail"] == "Hall light: on"
+    assert out["entity_ids"] == ["light.hall"]
+
+
+def test_redact_predicate_still_blanks_people_detail() -> None:
+    # Regression: the original people/template behaviour must be preserved.
+    pred = {
+        "condition_key": "people",
+        "detail": "Alice at zone.work",
+        "entity_ids": ["person.alice"],
+    }
+    out = redact_predicate(pred)
+    assert out["detail"] == REDACTED
+    assert out["entity_ids"] == [REDACTED]
+
+
+# --- R2: multi-entity DURATION cause label -----------------------------------
+
+
+def test_redact_trace_blanks_multi_entity_duration_label() -> None:
+    trace = {
+        "cause": {
+            "kind": "duration",
+            "entity_id": None,
+            "old": None,
+            "new": "anybody in zone.work",
+            "detail": "5 minutes",
+        }
+    }
+    out = redact_trace(trace)
+    assert out["cause"]["new"] == REDACTED
+    assert out["cause"]["detail"] == "5 minutes"  # plain duration is not PII
+
+
+def test_redact_trace_keeps_non_duration_none_entity_cause() -> None:
+    trace = {"cause": {"kind": "has_time", "entity_id": None, "new": None, "detail": "periodic"}}
+    assert redact_trace(trace)["cause"]["detail"] == "periodic"
+
+
+def test_redact_trace_keeps_non_presence_entity_cause() -> None:
+    trace = {"cause": {"kind": "entity", "entity_id": "light.hall", "old": "off", "new": "on"}}
+    assert redact_trace(trace)["cause"]["new"] == "on"
+
+
+# --- R3: security-domain action params ---------------------------------------
+
+
+def test_redact_action_blanks_alarm_code() -> None:
+    action = {
+        "service": "alarm_control_panel.alarm_disarm",
+        "entity_ids": ["alarm_control_panel.home"],
+        "params": {"code": "1234"},
+    }
+    out = redact_action(action)
+    assert out["params"] == {"code": REDACTED}
+    assert out["entity_ids"] == ["alarm_control_panel.home"]  # target stays
+
+
+def test_redact_action_blanks_lock_code() -> None:
+    assert redact_action({"service": "lock.unlock", "params": {"code": "9999"}})["params"][
+        "code"
+    ] == (REDACTED)
+
+
+def test_redact_action_keeps_non_security_params() -> None:
+    action = {"service": "light.turn_on", "params": {"brightness_pct": 30}}
+    assert redact_action(action)["params"] == {"brightness_pct": 30}
+
+
+def test_redact_action_without_params_is_unchanged() -> None:
+    action = {"service": "lock.unlock", "entity_ids": ["lock.front"]}
+    assert redact_action(action) == action
+
+
+def test_redact_action_supports_new_action_key() -> None:
+    # "service" is the old term; the new HA terminology is "action". Redaction
+    # must match the security domain under either key so it survives the rename.
+    out = redact_action({"action": "lock.lock", "params": {"code": "4321"}})
+    assert out["params"]["code"] == REDACTED
+
+
+def test_redact_action_non_dict_passthrough() -> None:
+    assert redact_action("not-a-dict") == "not-a-dict"  # type: ignore[arg-type]
+
+
+def test_redact_trace_redacts_security_action_params() -> None:
+    trace = {
+        "cause": {"kind": "manual"},
+        "actions": [
+            {"service": "alarm_control_panel.alarm_arm_away", "params": {"code": "1"}},
+            {"service": "light.turn_on", "params": {"brightness_pct": 5}},
+        ],
+    }
+    out = redact_trace(trace)
+    assert out["actions"][0]["params"]["code"] == REDACTED
+    assert out["actions"][1]["params"]["brightness_pct"] == 5
+
+
+# --- R4: sensitive exposed-action default values -----------------------------
+
+
+def test_redact_exposed_action_blanks_sensitive_defaults() -> None:
+    entry = {
+        "id": "notify.mobile",
+        "label": "Notify",
+        "visible_fields": ["message"],
+        "defaults": {
+            "message": "the kids are home alone",
+            "data": {"token": "xyz"},
+            "title": "Alert",
+        },
+    }
+    out = redact_exposed_action(entry)
+    assert out["defaults"]["message"] == REDACTED
+    assert out["defaults"]["data"] == REDACTED
+    assert out["defaults"]["title"] == REDACTED
+    assert out["id"] == "notify.mobile"
+    assert out["visible_fields"] == ["message"]
+
+
+def test_redact_exposed_action_keeps_harmless_defaults() -> None:
+    entry = {"id": "light.turn_on", "defaults": {"brightness_pct": 50, "transition": 2}}
+    assert redact_exposed_action(entry)["defaults"] == {"brightness_pct": 50, "transition": 2}
+
+
+def test_redact_exposed_action_without_defaults_is_unchanged() -> None:
+    entry = {"id": "light.turn_on", "visible_fields": ["brightness_pct"]}
+    assert redact_exposed_action(entry) == entry
+
+
+def test_redact_exposed_action_non_dict_passthrough() -> None:
+    assert redact_exposed_action("not-a-dict") == "not-a-dict"  # type: ignore[arg-type]
+
+
+# --- R3 + R4 + key-based, over a full store dump -----------------------------
+
+
+def _store_dump() -> dict:
+    return {
+        "areas": {
+            "lr": {
+                "scenes": [
+                    {
+                        "category": "general",
+                        "when": {"people": {"who": ["person.alice"], "where": "zone.work"}},
+                        "actions": [
+                            {
+                                "service": "alarm_control_panel.alarm_disarm",
+                                "params": {"code": "1234"},
+                            },
+                            {"service": "light.turn_on", "params": {"brightness_pct": 30}},
+                        ],
+                    }
+                ]
+            }
+        },
+        "floors": {
+            "f1": {"scenes": [{"actions": [{"service": "lock.unlock", "params": {"code": "9"}}]}]}
+        },
+        "house": {
+            "scenes": [
+                {
+                    "actions": [
+                        {"service": "alarm_control_panel.alarm_arm_home", "params": {"code": "8"}}
+                    ]
+                }
+            ]
+        },
+        "conditions": {"day": {"workday_sensor": "binary_sensor.workday"}},
+        "exposed_actions": [
+            {"id": "notify.mobile", "defaults": {"message": "secret", "data": {"token": "t"}}},
+            {"id": "light.turn_on", "defaults": {"brightness_pct": 50}},
+        ],
+    }
+
+
+def test_redact_store_redacts_scene_security_params_across_all_scopes() -> None:
+    out = redact_store(_store_dump())
+    assert out["areas"]["lr"]["scenes"][0]["actions"][0]["params"]["code"] == REDACTED
+    assert out["areas"]["lr"]["scenes"][0]["actions"][1]["params"]["brightness_pct"] == 30
+    assert out["floors"]["f1"]["scenes"][0]["actions"][0]["params"]["code"] == REDACTED
+    assert out["house"]["scenes"][0]["actions"][0]["params"]["code"] == REDACTED
+
+
+def test_redact_store_redacts_exposed_defaults() -> None:
+    out = redact_store(_store_dump())
+    assert out["exposed_actions"][0]["defaults"]["message"] == REDACTED
+    assert out["exposed_actions"][0]["defaults"]["data"] == REDACTED
+    assert out["exposed_actions"][1]["defaults"]["brightness_pct"] == 50
+
+
+def test_redact_store_still_applies_key_based_redaction() -> None:
+    out = redact_store(_store_dump())
+    assert out["areas"]["lr"]["scenes"][0]["when"]["people"]["who"] == REDACTED
+    assert out["conditions"]["day"]["workday_sensor"] == REDACTED
+
+
+def test_redact_store_does_not_mutate_input() -> None:
+    dump = _store_dump()
+    redact_store(dump)
+    assert dump["house"]["scenes"][0]["actions"][0]["params"]["code"] == "8"
+    assert dump["exposed_actions"][0]["defaults"]["message"] == "secret"
+    assert dump["areas"]["lr"]["scenes"][0]["when"]["people"]["who"] == ["person.alice"]
+
+
+def test_redact_store_tolerates_missing_sections() -> None:
+    # A sparse/empty dump must not raise.
+    assert redact_store({}) == {}
+    out = redact_store({"areas": {}, "exposed_actions": []})
+    assert out == {"areas": {}, "exposed_actions": []}
+
+
+def test_redact_store_non_dict_passthrough() -> None:
+    # Defensive: a non-dict payload is returned untouched, never crashes an export.
+    assert redact_store("not-a-dict") == "not-a-dict"  # type: ignore[arg-type]

@@ -165,6 +165,60 @@ async def test_bundle_redacts_config_and_includes_traces(
     assert "person.alice" not in str(bundle["traces"])
 
 
+async def test_bundle_redacts_exposed_action_defaults(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """Exposed-action default values can carry secrets (push tokens, message
+    bodies) — they must not ride into the externally-shared bundle."""
+    seeded_store._data["exposed_actions"] = [
+        {
+            "id": "notify.mobile",
+            "visible_fields": [],
+            "defaults": {"data": {"token": "SECRET-TOKEN"}, "message": "kids home alone"},
+        },
+        {"id": "light.turn_on", "visible_fields": [], "defaults": {"brightness_pct": 40}},
+    ]
+
+    bundle = await build_ai_bundle(hass)
+
+    exposed = {e["id"]: e for e in bundle["actions"]["exposed"]}
+    assert exposed["notify.mobile"]["defaults"]["data"] == REDACTED
+    assert exposed["notify.mobile"]["defaults"]["message"] == REDACTED
+    assert exposed["light.turn_on"]["defaults"]["brightness_pct"] == 40
+    assert "SECRET-TOKEN" not in str(bundle["actions"]["exposed"])
+
+
+async def test_bundle_redacts_security_action_params_in_config(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """An alarm/lock code authored into a scene action must not leave the home."""
+    await seeded_store.async_save_area(
+        "hallway",
+        {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "alarm_control_panel.alarm_disarm",
+                            "entity_ids": ["alarm_control_panel.home"],
+                            "params": {"code": "1234"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    bundle = await build_ai_bundle(hass)
+
+    action = bundle["config"]["areas"]["hallway"]["scenes"][0]["actions"][0]
+    assert action["params"]["code"] == REDACTED
+    assert action["entity_ids"] == ["alarm_control_panel.home"]
+    assert "1234" not in str(bundle["config"])
+
+
 async def test_ambience_version_falls_back_to_none_when_unresolvable(
     hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:

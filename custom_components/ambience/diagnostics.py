@@ -19,13 +19,20 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import DATA_STORE, DOMAIN
-from .redact import buffer_records, redact, redact_trace, redacted_traces
+from .redact import (
+    buffer_records,
+    redact,
+    redact_scene_actions,
+    redact_store,
+    redact_trace,
+    redacted_traces,
+)
 from .trace import buffered_unit_to_dict
 
 
 def _store_dump(hass: HomeAssistant) -> dict[str, Any]:
     store = hass.data[DOMAIN][DATA_STORE]
-    dump = redact(store.as_dict())
+    dump = redact_store(store.as_dict())
     dump["traces"] = redacted_traces(hass)
     return dump
 
@@ -49,7 +56,7 @@ def scope_diagnostics(
             "scope_kind": scope_kind,
             "scope_id": scope_id,
             "category": category,
-            "config": store.scope_config(scope_kind, scope_id),
+            "config": redact_scene_actions(store.scope_config(scope_kind, scope_id)),
         },
         "context": {
             "categories": store.categories(),

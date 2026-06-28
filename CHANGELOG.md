@@ -70,6 +70,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   each scope's pause switch (see above).
 - The **Scope-level pause switch** setting — scope switches are now always on.
 
+### Security
+
+- The **diagnostics download** and the **AI bundle** now scrub more before they
+  leave Home Assistant — both are meant to be safe to paste into a GitHub issue
+  or an AI chat. Newly redacted: alarm/lock codes and other secrets in scene
+  action parameters; sensitive exposed-action defaults (push tokens, message
+  bodies, recipients); the rendered detail of a `state` condition that targets a
+  person or device-tracker; and the zone label of a multi-person "for duration"
+  gate.
+
 ## [0.30.0] - 2026-06-26
 
 ### Changed

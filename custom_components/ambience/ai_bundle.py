@@ -28,7 +28,7 @@ from homeassistant.util import dt as dt_util
 from .const import AI_BUNDLE_VERSION, DATA_STORE, DOMAIN
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .redact import PRESENCE_PREFIXES, redact, redacted_traces
+from .redact import PRESENCE_PREFIXES, redact_exposed_action, redact_store, redacted_traces
 from .services_meta import get_service_schema
 
 
@@ -84,12 +84,16 @@ def _entities(hass: HomeAssistant) -> list[dict[str, Any]]:
         if entry.disabled or entry.hidden:
             continue
         state = hass.states.get(entry.entity_id)
-        # A person/device_tracker entity's id is kept (the AI needs it to author
-        # people conditions) but its state IS its current location — redact it,
-        # mirroring how diagnostics scrubs presence PII. This is prefix-based, not
-        # capability-based: an exotic state-as-PII sensor (e.g. a geocoded-location
-        # sensor) isn't caught. The bundle is a deliberate, user-initiated local
-        # export, so that residual surface is an accepted trade-off, not a leak.
+        # A person/device_tracker entity's STATE is its current location — redact
+        # it, mirroring how diagnostics scrubs presence PII. Its id and friendly
+        # name are kept on purpose (the AI needs the id to author people
+        # conditions), so a household member's name/slug (e.g. `person.alice`) IS
+        # present in the bundle — redacting only `name` would be pointless while
+        # the id rides along. This is also prefix-based, not capability-based: an
+        # exotic state-as-PII sensor (e.g. a geocoded-location sensor) isn't
+        # caught. The bundle is a deliberate, user-initiated local export, so
+        # these residual person-identifier surfaces are an accepted trade-off,
+        # documented in the AI-authoring docs, not an unflagged leak.
         if entry.entity_id.startswith(PRESENCE_PREFIXES):
             state_value: str | None = REDACTED
         else:
@@ -145,7 +149,9 @@ async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
             "entities": _entities(hass),
         },
         "actions": {
-            "exposed": exposed,
+            # Sensitive default values (tokens, message bodies, recipients) are
+            # scrubbed; the schema ids fetched below use the unredacted list.
+            "exposed": [redact_exposed_action(a) for a in exposed],
             "schemas": await _action_schemas(hass, exposed),
         },
         "definitions": {
@@ -156,6 +162,6 @@ async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
             "periods": PeriodStore(store).view_for_ui(),
             "lux_ranges": LuxRangeStore(store).view_for_ui(),
         },
-        "config": redact(store.as_dict()),
+        "config": redact_store(store.as_dict()),
         "traces": redacted_traces(hass),
     }

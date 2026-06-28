@@ -5055,7 +5055,7 @@ var Da=Object.defineProperty;var Ha=Object.getOwnPropertyDescriptor;var c=(t,r,e
       </div>
     `}};oe.styles=y`
     :host { display: block; }
-    .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem; }
     .header .title { font-size: 1.1rem; font-weight: 500; }
     .beta {
       font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;

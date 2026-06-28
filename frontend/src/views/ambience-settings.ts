@@ -276,7 +276,7 @@ export class AmbienceAmbienceSettings extends LitElement {
               .text=${localize(
                 this.hass,
                 "ui.help_pause_switch",
-                "Ambience creates a switch entity for every area, floor, and house scope. Turning a scope's switch off pauses Ambience for that scope.",
+                "Ambience creates a switch entity for every enabled area, floor, and house scope. Turning a scope's switch off pauses Ambience for that scope.",
               )}
               .docPath=${"getting-started/step-8-pausing-and-disabling-scopes"}
             ></ambience-help>

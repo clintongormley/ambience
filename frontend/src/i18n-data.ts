@@ -86,7 +86,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_actions: "Actions",
       settings_ambience_pause_card: "Scope-level pause switch",
       help_pause_switch:
-        "Ambience creates a switch entity for every area, floor, and house scope. Turning a scope's switch off pauses Ambience for that scope.",
+        "Ambience creates a switch entity for every enabled area, floor, and house scope. Turning a scope's switch off pauses Ambience for that scope.",
       settings_ambience_field_name: "Switch name",
       settings_ambience_field_pause: "Pause for",
       settings_reapply_enable_label: "Re-run all scenes after inactivity",
@@ -627,7 +627,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_actions: "Acciones",
       settings_ambience_pause_card: "Interruptor de pausa por ámbito",
       help_pause_switch:
-        "Ambience crea una entidad de interruptor para cada ámbito de área, planta y casa. Apagar el interruptor de un ámbito pausa Ambience para ese ámbito.",
+        "Ambience crea una entidad de interruptor para cada ámbito de área, planta y casa habilitado. Apagar el interruptor de un ámbito pausa Ambience para ese ámbito.",
       settings_ambience_field_name: "Nombre del interruptor",
       settings_ambience_field_pause: "Pausar durante",
       settings_reapply_enable_label: "Volver a ejecutar todas las escenas tras inactividad",

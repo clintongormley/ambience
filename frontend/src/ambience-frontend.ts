@@ -47,9 +47,10 @@ export class AmbienceFrontend extends LitElement {
     }
     /* Header contents are capped to the content width and centred, tracking the
      same reading-column cap as the body below (the card overrides this var to
-     fill its width). The filter is the only in-flow child so it centres at the
-     bar midpoint; the logo and cog are absolutely positioned at the edges so
-     they never shift the centre. */
+     fill its width). The in-flow group — the category filter plus the help (?)
+     beside it — centres at the bar midpoint (so the filter sits a touch left of
+     centre, balanced by the help on its right); the logo and cog are absolutely
+     positioned at the edges so they never shift that centre. */
     .bar {
       position: relative;
       display: flex;

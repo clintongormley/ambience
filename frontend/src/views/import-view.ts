@@ -19,9 +19,9 @@ import {
 } from "../import-config.js";
 import type { SceneCategory } from "../types.js";
 
-// The canonical install + usage guide for the AI knowledge pack (plugin / skill /
-// portable doc), shown as a link in the AI tab.
-const AI_DOCS_URL = "https://github.com/clintongormley/ambience/blob/main/ai/README.md";
+// The user guide for the AI feature (install steps + workflow), shown as a link
+// in the AI tab. Points at the published docs, not a branch, so it can't go stale.
+const AI_DOCS_URL = "https://clintongormley.github.io/ambience/ai-assisted-scenes/";
 
 /**
  * Paste-and-import view for AI-authored config blocks.

@@ -97,6 +97,14 @@ jobs:
           prerelease: ${{ steps.version.outputs.prerelease }}
           make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
 
+      - name: Advance the stable release channel
+        # The AI knowledge pack (Claude plugin / skill / docs) is installed from the
+        # `stable` branch so users get the pack matching their release — never main's
+        # unreleased dev work. Pre-releases don't move it (they aren't "latest"). The
+        # checkout is at the tag commit, so this points stable at the release.
+        if: steps.version.outputs.prerelease == 'false'
+        run: git push -f origin "HEAD:refs/heads/stable"
+
   bump:
     needs: publish
     # Only final releases roll main forward; pre-releases leave the version alone.

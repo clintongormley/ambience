@@ -74,7 +74,7 @@ describe("ambience-import-config", () => {
     expect(text).toContain("download");
     expect(text).toContain("upload");
     const link = el.shadowRoot.querySelector("a.help-link") as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toContain("github.com");
+    expect(link.getAttribute("href")).toContain("ai-assisted-scenes");
     expect(link.getAttribute("target")).toBe("_blank");
     // No paste box — upload is the only input.
     expect(el.shadowRoot.querySelector("textarea")).toBeFalsy();

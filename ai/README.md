@@ -28,15 +28,24 @@ The AI never writes to Home Assistant directly — you review and import its out
 
 ---
 
+> **User-facing guide:** the install + workflow docs live at
+> <https://clintongormley.github.io/ambience/ai-assisted-scenes/>. This README is
+> the in-repo reference.
+
+**Always install from `@stable`**, not the default branch — `stable` tracks the
+latest release; `main` is unreleased dev work and may be incompatible with your
+installed integration. (`stable` is maintained automatically by the release
+workflow.)
+
 ## A) Claude Code users — install the plugin
 
 ```text
-/plugin marketplace add clintongormley/ambience
+/plugin marketplace add clintongormley/ambience@stable
 /plugin install ambience@ambience
 ```
 
-- The first line registers this repo as a plugin marketplace (the marketplace is
-  named `ambience` in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)).
+- The first line registers this repo (at `stable`) as a plugin marketplace (the
+  marketplace is named `ambience` in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)).
 - The second installs the `ambience` plugin, which bundles:
   - the **`ambience-author` skill** (auto-activates when you talk about Ambience
     scenes), and
@@ -66,15 +75,17 @@ auto-update. New releases then land at session start with no manual step.
 
 ## B) claude.ai users — install just the skill
 
-Upload the skill folder [`ai/skill/ambience-author/`](skill/ambience-author/) as
-a Claude Skill (it contains `SKILL.md`, its `reference/` docs, and the two
-command flows). Then start a chat, paste your downloaded AI bundle, and describe
-your request — the skill drives the rest.
+Upload the skill folder
+[`ai/skill/ambience-author/`](https://github.com/clintongormley/ambience/tree/stable/ai/skill/ambience-author)
+(from the `stable` branch) as a Claude Skill — it contains `SKILL.md`, its
+`reference/` docs, and the two command flows. Then start a chat, paste your
+downloaded AI bundle, and describe your request — the skill drives the rest.
 
 ## C) Any other AI — use the portable doc
 
-Open [`docs/developers/ai-authoring/ambience-ai-guide.md`](../docs/developers/ai-authoring/ambience-ai-guide.md)
-(a single self-contained markdown). Paste or upload it into your AI of choice,
+Open
+[`ambience-ai-guide.md`](https://github.com/clintongormley/ambience/blob/stable/docs/developers/ai-authoring/ambience-ai-guide.md)
+(from the `stable` branch — a single self-contained markdown). Paste or upload it into your AI of choice,
 then paste your downloaded AI bundle and describe what you want. The guide
 contains the full schema, conditions cookbook, actions reference, diagnostics
 guide, and import format.

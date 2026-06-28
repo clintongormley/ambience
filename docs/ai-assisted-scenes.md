@@ -13,22 +13,53 @@ what blocked the scene, and gives you a corrected version.
 
 Open it from the Ambience panel → **Settings → the AI tab**.
 
+## Installing the AI pack
+
+The "AI pack" teaches the AI the Ambience schema and how to read a diagnostic.
+Install it in whichever form suits your AI. **Always install the `stable`
+version** — it matches the released integration; the `main` branch is unreleased
+development and may be incompatible.
+
+### Claude Code
+
+Install the plugin (it bundles the skill and the `/ambience-create` /
+`/ambience-fix` commands):
+
+```text
+/plugin marketplace add clintongormley/ambience@stable
+/plugin install ambience@ambience
+```
+
+The `@stable` is important — it pins the pack to the latest release. To get new
+versions automatically, enable **auto-update** for the marketplace once:
+`/plugin` → **Marketplaces** → `ambience` → enable auto-update.
+
+### claude.ai
+
+Upload the skill folder as a Claude Skill:
+[`ai/skill/ambience-author/`](https://github.com/clintongormley/ambience/tree/stable/ai/skill/ambience-author)
+(from the `stable` branch). It contains the skill plus its reference docs.
+
+### Any other AI
+
+Paste the single self-contained guide into your AI:
+[`ambience-ai-guide.md`](https://github.com/clintongormley/ambience/blob/stable/docs/developers/ai-authoring/ambience-ai-guide.md)
+(from the `stable` branch).
+
+!!! tip "Keep the pack in step with Ambience"
+    Before authoring, the skill checks that the bundle's Ambience version matches
+    the pack. If your installed Ambience is **newer** than the pack, it asks you
+    to update the plugin first (so it isn't working from an out-of-date schema) —
+    update with `/plugin marketplace update ambience` then re-install, or enable
+    auto-update as above.
+
 ## How it works — three steps
 
-1. **Install the skill or plugin.** This teaches the AI the Ambience schema and how
-   to read a diagnostic. Pick the form that fits your AI:
-    - **Claude Code** — install the plugin (one command).
-    - **claude.ai** — install the skill.
-    - **Any other AI** — paste the portable guide.
-
-    See the [install &amp; usage guide](https://github.com/clintongormley/ambience/blob/main/ai/README.md)
-    for the exact steps.
-
+1. **Install the skill or plugin** (above) — once per AI.
 2. **Download your AI bundle.** In the AI tab, click **Download AI bundle**. It's a
    snapshot of your areas, floors, entities, exposed actions and current config —
    so the AI references *your* real ids, not made-up ones. Give the file to the AI
    along with your request.
-
 3. **Upload the result.** The AI returns a small YAML (or JSON) file. Upload it in
    the AI tab — Ambience **previews** exactly what it will add, update or remove
    (and any new category it will create) before you confirm.
@@ -40,16 +71,6 @@ Presence and location data is redacted before it leaves Home Assistant: person a
 device-tracker locations, the zones in your traces, your weather/workday entities,
 and the rendered output of `people`/`template` conditions. Person *ids* remain so
 the AI can still write presence conditions, but their current location does not.
-
-## Keeping the pack in step with Ambience
-
-The knowledge pack is versioned together with the integration. Before authoring,
-the skill checks that the bundle's Ambience version matches the pack — if your
-installed Ambience is **newer** than the pack, it asks you to update the plugin
-first (so it isn't working from an out-of-date schema). To avoid doing this each
-release, enable **auto-update** for the plugin marketplace once; new versions then
-arrive automatically. The exact commands are in the
-[install &amp; usage guide](https://github.com/clintongormley/ambience/blob/main/ai/README.md).
 
 ## What it's good at
 

@@ -19,6 +19,10 @@ import {
 } from "../import-config.js";
 import type { SceneCategory } from "../types.js";
 
+// The canonical install + usage guide for the AI knowledge pack (plugin / skill /
+// portable doc), shown as a link in the AI tab.
+const AI_DOCS_URL = "https://github.com/clintongormley/ambience/blob/main/ai/README.md";
+
 /**
  * Paste-and-import view for AI-authored config blocks.
  *
@@ -40,7 +44,15 @@ export class AmbienceImportConfig extends LitElement {
 
   static override styles = css`
     :host { display: block; }
-    .intro { color: var(--secondary-text-color, #666); margin-bottom: 0.75rem; }
+    .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .header .title { font-size: 1.1rem; font-weight: 500; }
+    .beta {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+      padding: 0.05rem 0.4rem; border-radius: 999px;
+      background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
+    }
+    .intro { color: var(--secondary-text-color, #666); margin-bottom: 0.5rem; }
+    .help-link { color: var(--primary-color, #03a9f4); }
     textarea.block {
       width: 100%; box-sizing: border-box; min-height: 12rem;
       font-family: var(--code-font-family, monospace); font-size: 0.85rem;
@@ -190,8 +202,19 @@ export class AmbienceImportConfig extends LitElement {
 
   override render() {
     return html`
+      <div class="header">
+        <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
+        <span class="beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
+      </div>
       <div class="intro">
-        ${localize(this.hass, "ui.import_intro", "Download your AI bundle, give it to an AI with the Ambience skill, then paste the block it returns below.")}
+        ${localize(this.hass, "ui.import_intro", "Install the Ambience AI pack — a Claude Code plugin, a claude.ai skill, or a guide for any AI — then download your bundle below, describe what you want, and import the block it returns.")}
+        <a
+          class="help-link"
+          href=${AI_DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          >${localize(this.hass, "ui.import_help_link", "Install & usage guide")}</a
+        >
       </div>
       <button class="download" @click=${() => this._download()}>
         ${localize(this.hass, "ui.import_download_bundle", "Download AI bundle")}

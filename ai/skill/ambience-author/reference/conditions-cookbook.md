@@ -464,3 +464,37 @@ situations — so a narrower scene beats a broader one, and a catch-all (empty
 with list order. A broad rule that must beat more-specific scenes (an
 override/blocker) instead needs the user to **pin** it to the top in the panel —
 see `schema.md` → *How scenes are chosen*.
+
+---
+
+## Patterns
+
+### Don't decide while a cover is moving (the "settle" blocker)
+
+Covers (blinds, shades, garage doors) have **transitional** states — `opening`
+and `closing` — between their final states `open` and `closed`. A scene group that
+reacts to or controls a blind can otherwise fire **mid-movement** and fight the
+cover (re-deciding off a half-open position, or interrupting a move). When a group
+involves blinds, add a **no-op blocker at the top** that matches while *any* of its
+covers is in transit, so the cascade stops there and the deciding scenes only run
+once every blind has **settled** in its final position:
+
+```yaml
+- name: Wait for blinds to settle
+  category: <the group's category>
+  when:
+    state:
+      kind: or
+      items:
+        - { kind: is, entity_id: cover.living_room, states: [opening, closing] }
+        - { kind: is, entity_id: cover.bedroom, states: [opening, closing] }
+  actions: []        # no actions → matches but does nothing; the cascade stops here
+```
+
+- `actions: []` makes it a **pure blocker** — while it wins, nothing else in the
+  group runs, so no decision is made until the move finishes.
+- It must sit **above** the deciding scenes. A blocker is not more *specific* than
+  them, so containment won't float it up on its own — have the user **pin** it to
+  the top (Scopes view), per `schema.md` → *How scenes are chosen*.
+- Once every listed cover reaches `open`/`closed`, the blocker stops matching and
+  the scene below it that fits the settled situation wins.

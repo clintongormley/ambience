@@ -59,6 +59,15 @@ describe("ambience-import-config", () => {
     await el.updateComplete;
   }
 
+  test("marks the feature Beta and links to install/usage docs", async () => {
+    el = await mount();
+    expect((el.shadowRoot.textContent || "").toLowerCase()).toContain("beta");
+    const link = el.shadowRoot.querySelector("a.help-link") as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute("href")).toContain("github.com");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
   test("the download button fetches the AI bundle", async () => {
     el = await mount();
     (el.shadowRoot.querySelector("button.download") as HTMLButtonElement).click();

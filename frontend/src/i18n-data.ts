@@ -88,8 +88,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       help_pause_switch:
         "Ambience creates a switch entity for every enabled area, floor, and house scope. Turning a scope's switch off pauses Ambience for that scope.",
       settings_tab_import: "AI",
+      import_title: "Author & fix scenes with AI",
+      import_beta: "Beta",
+      import_help_link: "Install & usage guide",
       import_intro:
-        "Download your AI bundle, give it to an AI with the Ambience skill, then paste the block it returns below.",
+        "Install the Ambience AI pack — a Claude Code plugin, a claude.ai skill, or a guide for any AI — then download your bundle below, describe what you want, and import the block it returns.",
       import_download_bundle: "Download AI bundle",
       import_placeholder: "Paste the YAML or JSON import block here",
       import_upload_file: "…or upload a file",
@@ -644,8 +647,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       help_pause_switch:
         "Ambience crea una entidad de interruptor para cada ámbito de área, planta y casa habilitado. Apagar el interruptor de un ámbito pausa Ambience para ese ámbito.",
       settings_tab_import: "IA",
+      import_title: "Crea y arregla escenas con IA",
+      import_beta: "Beta",
+      import_help_link: "Guía de instalación y uso",
       import_intro:
-        "Descarga tu paquete de IA, dáselo a una IA con la skill de Ambience y luego pega aquí el bloque que devuelva.",
+        "Instala el paquete de IA de Ambience — un plugin de Claude Code, una skill de claude.ai o una guía para cualquier IA — luego descarga tu paquete abajo, describe lo que quieres e importa el bloque que devuelva.",
       import_download_bundle: "Descargar paquete de IA",
       import_placeholder: "Pega aquí el bloque de importación YAML o JSON",
       import_upload_file: "…o sube un archivo",

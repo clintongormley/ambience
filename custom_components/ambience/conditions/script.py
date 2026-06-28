@@ -21,9 +21,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from ..const import get_store
 from ..triggers import TriggerSpec
-from ._collect import collect_scope_predicates
+from ._opaque import OpaquePrecomputedCondition
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ class ScriptSnapshot:
     results: dict[str, bool] = field(default_factory=dict)
 
 
-class ScriptCondition:
+class ScriptCondition(OpaquePrecomputedCondition):
     """Matches by calling a HA script and reading {match: bool} from its response."""
 
     name = "script"
@@ -65,14 +64,11 @@ class ScriptCondition:
     _ttl_seconds: float = 2.0
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
-        self._hass = hass
+        super().__init__(hass)
         # {cache_key: (result, expires_at_monotonic_s)}
         self._cache: dict[str, tuple[bool, float]] = {}
 
     # --- protocol stubs ----------------------------------------------------
-
-    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
-        return None
 
     def order_key(self, predicate: Any) -> str:
         if not isinstance(predicate, dict):
@@ -115,12 +111,6 @@ class ScriptCondition:
             return ""
         return _cache_key(script, args)
 
-    def matches(self, predicate: Any, snapshot: ScriptSnapshot) -> bool:
-        if predicate is None:
-            return True
-        key = self.result_key(predicate)
-        return bool(key) and snapshot.results.get(key, False) is True
-
     # --- trigger dependencies ---------------------------------------------
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -133,33 +123,21 @@ class ScriptCondition:
 
     # --- snapshot orchestration -------------------------------------------
 
+    def _pair_key(self, pred: dict[str, Any]) -> tuple[str, str] | None:
+        """The (script, sorted-args-json) work/dedup key for one predicate, or
+        None if malformed (skipped by `_distinct_keys`)."""
+        script = pred.get("script")
+        if not isinstance(script, str):
+            return None
+        args = pred.get("args") or {}
+        if not isinstance(args, dict):
+            return None
+        return (script, json.dumps(args, sort_keys=True, separators=(",", ":")))
+
     def _collect_pairs(self) -> list[tuple[str, str]]:
-        """Walk every scope's scenes (areas, floors, house) and return distinct
-        (script, args-json) pairs carried by `when.script` predicates. Malformed
-        predicates are skipped. Order is insertion order; duplicates are removed."""
-        if self._hass is None:
-            return []
-        store = get_store(self._hass)
-        if store is None:
-            return []
-        seen: set[tuple[str, str]] = set()
-        pairs: list[tuple[str, str]] = []
-        for pred in collect_scope_predicates(store, "script"):
-            if not isinstance(pred, dict):
-                continue
-            script = pred.get("script")
-            if not isinstance(script, str):
-                continue
-            args = pred.get("args") or {}
-            if not isinstance(args, dict):
-                continue
-            args_json = json.dumps(args, sort_keys=True, separators=(",", ":"))
-            key = (script, args_json)
-            if key in seen:
-                continue
-            seen.add(key)
-            pairs.append(key)
-        return pairs
+        """Distinct (script, args-json) pairs carried by `when.script` predicates
+        across all scopes (areas, floors, house)."""
+        return self._distinct_keys(self._pair_key)
 
     # Per-call timeout for script invocations. Tests may override.
     _timeout_seconds: float = 5.0

@@ -23,9 +23,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template, result_as_boolean
 
-from ..const import get_store
 from ..triggers import EMPTY, TriggerSpec
-from ._collect import collect_scope_predicates
+from ._opaque import OpaquePrecomputedCondition
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class TemplateSnapshot:
     deps: dict[str, TemplateDeps] = field(default_factory=dict)
 
 
-class TemplateCondition:
+class TemplateCondition(OpaquePrecomputedCondition):
     """Matches by rendering a Jinja2 template against HA state to a boolean."""
 
     name = "template"
@@ -75,13 +74,7 @@ class TemplateCondition:
     # slightly-more-structured named-script constraint.
     priority = 970
 
-    def __init__(self, hass: HomeAssistant | None = None) -> None:
-        self._hass = hass
-
     # --- protocol stubs ----------------------------------------------------
-
-    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
-        return None
 
     def order_key(self, predicate: Any) -> str:
         if not isinstance(predicate, dict):
@@ -115,12 +108,6 @@ class TemplateCondition:
         tmpl = predicate.get("template")
         return tmpl if isinstance(tmpl, str) else ""
 
-    def matches(self, predicate: Any, snapshot: TemplateSnapshot) -> bool:
-        if predicate is None:
-            return True
-        key = self.result_key(predicate)
-        return bool(key) and snapshot.results.get(key, False) is True
-
     # --- trigger dependencies ---------------------------------------------
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -151,28 +138,16 @@ class TemplateCondition:
 
     # --- snapshot orchestration -------------------------------------------
 
+    def _template_key(self, pred: dict[str, Any]) -> str | None:
+        """The non-empty template string for one predicate, or None if malformed
+        (skipped by `_distinct_keys`)."""
+        tmpl = pred.get("template")
+        return tmpl if isinstance(tmpl, str) and tmpl else None
+
     def _collect_templates(self) -> list[str]:
         """Distinct, non-empty template strings carried by `when.template`
-        predicates across all scopes (areas, floors, house). Insertion order;
-        duplicates and malformed predicates dropped."""
-        if self._hass is None:
-            return []
-        store = get_store(self._hass)
-        if store is None:
-            return []
-        seen: set[str] = set()
-        templates: list[str] = []
-        for pred in collect_scope_predicates(store, "template"):
-            if not isinstance(pred, dict):
-                continue
-            tmpl = pred.get("template")
-            if not isinstance(tmpl, str) or not tmpl:
-                continue
-            if tmpl in seen:
-                continue
-            seen.add(tmpl)
-            templates.append(tmpl)
-        return templates
+        predicates across all scopes (areas, floors, house)."""
+        return self._distinct_keys(self._template_key)
 
     async def snapshot(
         self,

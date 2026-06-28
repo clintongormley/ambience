@@ -1,6 +1,7 @@
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import { docUrl } from "../docs.js";
 import { type HassLike, localize } from "../i18n.js";
 
 /** A "(?)" trigger that opens a small white popover with help text. Click the
@@ -14,7 +15,7 @@ export class AmbienceHelp extends LitElement {
       display: inline-flex;
       vertical-align: middle;
     }
-    button.trigger {
+    .trigger {
       all: unset;
       cursor: pointer;
       display: inline-flex;
@@ -31,9 +32,19 @@ export class AmbienceHelp extends LitElement {
       font-weight: 700;
       line-height: 1;
     }
-    button.trigger:focus-visible {
+    .trigger:focus-visible {
       outline: 2px solid var(--primary-color, #03a9f4);
       outline-offset: 2px;
+    }
+    a.doc-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      color: var(--primary-color, #03a9f4);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    a.doc-link:hover {
+      text-decoration: underline;
     }
     .popover {
       position: absolute;
@@ -64,6 +75,11 @@ export class AmbienceHelp extends LitElement {
   /** When true, the popover preserves line breaks (white-space: pre-wrap) so a
    *  multi-line value (e.g. a scene description) renders with its newlines. */
   @property({ type: Boolean }) multiline = false;
+  /** Optional site-relative docs path, e.g. "conditions/lux". With no `text`, the
+   *  (?) trigger is itself a direct external link to that page. Alongside `text`,
+   *  the popover ends with a "Read more →" link. Bind with `.docPath=${…}` (the
+   *  default attribute would be the lower-cased `docpath`). */
+  @property() docPath = "";
   @state() private _open = false;
 
   private _onDocClick = (e: MouseEvent): void => {
@@ -104,6 +120,39 @@ export class AmbienceHelp extends LitElement {
   }
 
   override render() {
+    if (!this.text && !this.docPath) return nothing;
+
+    // Direct-link mode: with no help text, the (?) itself opens the docs. The
+    // click is stopped from propagating so the link works inside a clickable
+    // header/summary without triggering that ancestor's own action; navigation
+    // still happens via the anchor's default.
+    if (!this.text) {
+      const label = localize(this.hass, "ui.open_documentation", "Open documentation");
+      return html`
+        <a
+          class="trigger"
+          data-test="help-doc-link"
+          href=${docUrl(this.docPath)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title=${label}
+          aria-label=${label}
+          @click=${(e: Event) => e.stopPropagation()}
+        >?</a>
+      `;
+    }
+
+    // Popover mode, optionally ending with a "Read more →" docs link.
+    const docLink = this.docPath
+      ? html`<a
+          class="doc-link"
+          data-test="help-doc-link"
+          href=${docUrl(this.docPath)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label=${localize(this.hass, "ui.open_documentation", "Open documentation")}
+        >${localize(this.hass, "ui.read_documentation", "Read more")} →</a>`
+      : "";
     return html`
       <button
         class="trigger"
@@ -119,12 +168,13 @@ export class AmbienceHelp extends LitElement {
           ? // The slot is kept tight against the popover's tags — no newline or
             // indentation inside the element — so that under `multiline`
             // (white-space: pre-wrap) the template's own whitespace isn't
-            // rendered as a leading offset before the text.
+            // rendered as a leading offset before the text. `docLink` is "" when
+            // no docPath is set, so the text-only popover is unchanged.
             html`<div
               class="popover${this.multiline ? " multiline" : ""}"
               role="dialog"
               data-test="help-popover"
-            ><slot>${this.text}</slot></div>`
+            ><slot>${this.text}</slot>${docLink}</div>`
           : ""
       }
     `;

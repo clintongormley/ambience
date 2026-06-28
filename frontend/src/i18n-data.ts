@@ -94,6 +94,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       unit_minutes: "minutes",
       help: "Help",
       open_documentation: "Open documentation",
+      read_documentation: "Read more",
       help_switch_name: "The name used for the per-scope pause switch entities.",
       help_pause_for:
         "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
@@ -631,6 +632,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       unit_minutes: "minutos",
       help: "Ayuda",
       open_documentation: "Abrir documentación",
+      read_documentation: "Más información",
       help_switch_name:
         "El nombre utilizado para las entidades de interruptor de pausa por ámbito.",
       help_pause_for:

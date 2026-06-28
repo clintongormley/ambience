@@ -106,22 +106,25 @@ def redact_exposed_action(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def redact_scene_actions(scope_config: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of one scope's config with every scene's actions redacted."""
+def _redact_scene(scene: Any) -> Any:
+    """A copy of one scene with its action params redacted. Defensive: a scene of
+    an unexpected shape (non-dict, or `actions` not a list) is passed through
+    unchanged rather than coerced — these run on export payloads that may be
+    hand-edited."""
+    if not isinstance(scene, dict) or not isinstance(scene.get("actions"), list):
+        return scene
+    return {**scene, "actions": [redact_action(a) for a in scene["actions"]]}
+
+
+def redact_scene_actions(scope_config: Any) -> Any:
+    """Return a copy of one scope's config with every scene's actions redacted.
+    A non-dict config, or one whose `scenes` isn't a list, is passed through."""
     if not isinstance(scope_config, dict) or not isinstance(scope_config.get("scenes"), list):
         return scope_config
-    return {
-        **scope_config,
-        "scenes": [
-            {**scene, "actions": [redact_action(a) for a in scene.get("actions") or []]}
-            if isinstance(scene, dict)
-            else scene
-            for scene in scope_config["scenes"]
-        ],
-    }
+    return {**scope_config, "scenes": [_redact_scene(s) for s in scope_config["scenes"]]}
 
 
-def redact_store(dump: dict[str, Any]) -> dict[str, Any]:
+def redact_store(dump: Any) -> Any:
     """Full store redaction for the diagnostics dump and the AI bundle config:
     the key-based presence/location scrub of `redact`, PLUS the value-based
     secret scrub of security-domain scene-action params and sensitive
@@ -185,8 +188,8 @@ def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
         # over-redacts a benign occupancy count label — acceptable for safety.
         cause["new"] = REDACTED
     out["cause"] = cause
-    if "actions" in out:
-        out["actions"] = [redact_action(a) for a in trace.get("actions") or []]
+    if isinstance(out.get("actions"), list):
+        out["actions"] = [redact_action(a) for a in out["actions"]]
     explanation = trace.get("explanation")
     if isinstance(explanation, dict):
         scenes = []

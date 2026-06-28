@@ -25,12 +25,6 @@ const CUSTOM = "__custom__";
  * `time-of-day-input.ts` for the named-range dropdown. Emits `value-changed`.
  */
 /**
- * Structural validity for a stored lux predicate (mirrors statePredicateError):
- * the widget only mounts when its slot is expanded, so the save gate needs a
- * pure check for never-opened slots. The backend rejects min >= max and
- * negative bounds. Returns a user-facing error or null.
- */
-/**
  * Localized error for a half-open lux band's numeric bounds — negative,
  * non-integer, or min >= max — or null if valid. The single source of these
  * rules for the frontend, shared by {@link luxPredicateError} (the save gate)
@@ -53,6 +47,11 @@ export function luxBoundsError(min: unknown, max: unknown, hass?: HassLike): str
   return null;
 }
 
+/**
+ * Structural validity for a stored lux predicate (mirrors statePredicateError):
+ * the widget only mounts when its slot is expanded, so the save gate needs a
+ * pure check for never-opened slots. Returns a user-facing error or null.
+ */
 export function luxPredicateError(pred: unknown, hass?: HassConnection): string | null {
   if (pred == null || typeof pred !== "object") return null;
   const p = pred as { range?: unknown; min?: unknown; max?: unknown };

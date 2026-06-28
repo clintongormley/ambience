@@ -257,3 +257,19 @@ def test_redact_store_tolerates_missing_sections() -> None:
 def test_redact_store_non_dict_passthrough() -> None:
     # Defensive: a non-dict payload is returned untouched, never crashes an export.
     assert redact_store("not-a-dict") == "not-a-dict"  # type: ignore[arg-type]
+
+
+def test_redact_store_leaves_malformed_actions_unchanged() -> None:
+    # A scene whose `actions` isn't a list (hand-edited export) must be passed
+    # through, not coerced — the old `... or []` mangled a dict into its keys.
+    dump = {
+        "areas": {"lr": {"scenes": [{"actions": {"weird": 1}}, {"name": "no-actions"}]}},
+    }
+    out = redact_store(dump)
+    assert out["areas"]["lr"]["scenes"][0]["actions"] == {"weird": 1}
+    assert out["areas"]["lr"]["scenes"][1] == {"name": "no-actions"}
+
+
+def test_redact_trace_leaves_malformed_actions_unchanged() -> None:
+    trace = {"cause": {"kind": "manual"}, "actions": {"weird": 1}}
+    assert redact_trace(trace)["actions"] == {"weird": 1}

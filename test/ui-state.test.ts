@@ -1,17 +1,49 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 
 import {
   getCollapsedCategories,
   getConditionsHintDismissed,
+  getDismissedLangRequests,
   getExpandedScopes,
   getFadoNoticeDismissed,
   getFilterCategory,
+  isLangRequestDismissed,
+  persistDismissedLangRequest,
   setCollapsedCategories,
   setConditionsHintDismissed,
   setExpandedScopes,
   setFadoNoticeDismissed,
   setFilterCategory,
 } from "../frontend/src/ui-state";
+
+describe("language-request dismissal set", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it("returns [] when nothing is stored", () => {
+    expect(getDismissedLangRequests()).toEqual([]);
+  });
+  it("round-trips a dismissal", () => {
+    persistDismissedLangRequest("fr");
+    expect(isLangRequestDismissed("fr")).toBe(true);
+    expect(isLangRequestDismissed("de")).toBe(false);
+  });
+  it("remembers EVERY dismissed locale (set, not single value)", () => {
+    persistDismissedLangRequest("fr");
+    persistDismissedLangRequest("de");
+    expect(isLangRequestDismissed("fr")).toBe(true); // earlier one still dismissed
+    expect(isLangRequestDismissed("de")).toBe(true);
+    expect(getDismissedLangRequests().sort()).toEqual(["de", "fr"]);
+  });
+  it("de-dups repeats", () => {
+    persistDismissedLangRequest("fr");
+    persistDismissedLangRequest("fr");
+    expect(getDismissedLangRequests()).toEqual(["fr"]);
+  });
+  it("returns [] on malformed JSON", () => {
+    window.localStorage.setItem("ambience-lang-request-dismissed", "{not json");
+    expect(getDismissedLangRequests()).toEqual([]);
+  });
+});
 
 describe("ui-state persistence", () => {
   beforeEach(() => {

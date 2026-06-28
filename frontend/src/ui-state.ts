@@ -139,3 +139,39 @@ export function getFadoNoticeDismissed(installId: string | null): boolean {
 export function setFadoNoticeDismissed(installId: string | null): void {
   setInstallDismissed(FADO_NOTICE_DISMISSED_KEY, installId);
 }
+
+const LANG_REQUEST_DISMISSED_KEY = "ambience-lang-request-dismissed";
+
+/** The set of locale codes for which the user dismissed the "request a
+ *  translation" nudge. Returns [] when nothing is stored, the value isn't valid
+ *  JSON, or it isn't an array (non-string entries are dropped). */
+export function getDismissedLangRequests(): string[] {
+  try {
+    const raw = window.localStorage.getItem(LANG_REQUEST_DISMISSED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((c): c is string => typeof c === "string");
+  } catch {
+    // Malformed JSON or storage disabled — treat as nothing dismissed.
+    return [];
+  }
+}
+
+/** Whether the translation nudge was dismissed for `code`. */
+export function isLangRequestDismissed(code: string): boolean {
+  return getDismissedLangRequests().includes(code);
+}
+
+/** Record that the user dismissed the translation nudge for `code` (append +
+ *  de-dup). A single-value store would forget earlier dismissals — dismiss fr,
+ *  then de, then switch back to fr would re-nag. */
+export function persistDismissedLangRequest(code: string): void {
+  try {
+    const current = getDismissedLangRequests();
+    if (current.includes(code)) return;
+    window.localStorage.setItem(LANG_REQUEST_DISMISSED_KEY, JSON.stringify([...current, code]));
+  } catch {
+    // Storage disabled — the dismissal just won't persist.
+  }
+}

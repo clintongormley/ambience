@@ -353,12 +353,11 @@ async def _save_scope(
     msg: dict[str, Any],
     scope_kind: str,
     scope_id: str | None,
-    save_fn: Any,
 ) -> None:
     """The shared validate → coerce → canonicalise → save → respond pipeline
     behind the three scope-save commands (the caller has already verified the
-    scope exists in the relevant registry). `save_fn(store, config)` persists.
-    Records the change in the undo history (a snapshot before + after the save)."""
+    scope exists in the relevant registry). Persists via `store.async_save_scope`
+    and records the change in the undo history (a snapshot before + after)."""
     try:
         validate_scope_config(hass, msg["config"])
     except (HomeAssistantError, ValueError) as exc:
@@ -370,7 +369,7 @@ async def _save_scope(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     before = copy.deepcopy(store.scope_config(scope_kind, scope_id))
-    await save_fn(store, config)
+    await store.async_save_scope(scope_kind, scope_id, config)
     after = copy.deepcopy(store.scope_config(scope_kind, scope_id))
     history = hass.data[DOMAIN][DATA_HISTORY]
     change = msg.get("change") or {"action": "edit", "scene_name": None}
@@ -407,14 +406,7 @@ async def _ws_area_save(
             code="validation_error",
         )
         return
-    await _save_scope(
-        hass,
-        connection,
-        msg,
-        "area",
-        area_id,
-        lambda store, cfg: store.async_save_area(area_id, cfg),
-    )
+    await _save_scope(hass, connection, msg, "area", area_id)
 
 
 @websocket_api.require_admin
@@ -465,14 +457,7 @@ async def _ws_floor_save(
             code="validation_error",
         )
         return
-    await _save_scope(
-        hass,
-        connection,
-        msg,
-        "floor",
-        floor_id,
-        lambda store, cfg: store.async_save_floor(floor_id, cfg),
-    )
+    await _save_scope(hass, connection, msg, "floor", floor_id)
 
 
 @websocket_api.require_admin
@@ -502,14 +487,7 @@ async def _ws_house_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    await _save_scope(
-        hass,
-        connection,
-        msg,
-        "house",
-        None,
-        lambda store, cfg: store.async_save_house(cfg),
-    )
+    await _save_scope(hass, connection, msg, "house", None)
 
 
 @websocket_api.require_admin
@@ -577,6 +555,17 @@ def _house_must_be_true(v: Any) -> bool:
     return v
 
 
+# The scope selector shared by every command that targets one (scope, id):
+# exactly one of area_id / floor_id / house, parsed by `_parse_scope`. Spread
+# (`**_SCOPE_SELECTOR_SCHEMA`) into each command schema so the three keys stay in
+# lockstep across commands.
+_SCOPE_SELECTOR_SCHEMA = {
+    vol.Optional("area_id"): str,
+    vol.Optional("floor_id"): str,
+    vol.Optional("house"): _house_must_be_true,
+}
+
+
 def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     """Map a ws message's scope selector to (scope_kind, scope_id).
 
@@ -599,9 +588,7 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/dry_run",
-        vol.Optional("area_id"): str,
-        vol.Optional("floor_id"): str,
-        vol.Optional("house"): _house_must_be_true,
+        **_SCOPE_SELECTOR_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -630,9 +617,7 @@ async def _ws_dry_run(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/apply",
-        vol.Optional("area_id"): str,
-        vol.Optional("floor_id"): str,
-        vol.Optional("house"): _house_must_be_true,
+        **_SCOPE_SELECTOR_SCHEMA,
         vol.Optional("category_id"): str,
     }
 )
@@ -657,9 +642,7 @@ async def _ws_apply(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/scene/run_actions",
-        vol.Optional("area_id"): str,
-        vol.Optional("floor_id"): str,
-        vol.Optional("house"): _house_must_be_true,
+        **_SCOPE_SELECTOR_SCHEMA,
         vol.Required("scene_index"): int,
     }
 )
@@ -1030,9 +1013,7 @@ async def _ws_switches_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/set_scope_enabled",
-        vol.Optional("area_id"): str,
-        vol.Optional("floor_id"): str,
-        vol.Optional("house"): _house_must_be_true,
+        **_SCOPE_SELECTOR_SCHEMA,
         vol.Required("enabled"): bool,
     }
 )
@@ -1246,12 +1227,7 @@ async def _apply_scope_config(
     `enabled` flag and switch state are preserved. Returns the full post-write
     scope config (scenes + enabled + …) for the response."""
     store = hass.data[DOMAIN][DATA_STORE]
-    if scope_kind == "area":
-        await store.async_save_area(scope_id, config)
-    elif scope_kind == "floor":
-        await store.async_save_floor(scope_id, config)
-    else:
-        await store.async_save_house(config)
+    await store.async_save_scope(scope_kind, scope_id, config)
     return copy.deepcopy(store.scope_config(scope_kind, scope_id))
 
 

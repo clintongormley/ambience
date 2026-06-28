@@ -604,6 +604,14 @@ async def test_save_and_get_reapply_settings(hass: HomeAssistant) -> None:
     assert store.get_reapply_settings() == {"enabled": True, "interval_seconds": 3600}
 
 
+async def test_async_save_scope_rejects_unknown_kind(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(AmbienceError) as exc:
+        await store.async_save_scope("galaxy", None, {"scenes": []})
+    assert exc.value.translation_key == "unknown_scope_kind"
+
+
 async def test_save_reapply_settings_rejects_non_bool_enabled(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()

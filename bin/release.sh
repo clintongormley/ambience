@@ -153,6 +153,11 @@ trap _abort_release ERR
 # (shared with the release workflow's next-minor bump so they can't drift).
 "$(dirname "$0")/bump-version.sh" "$VERSION"
 
+# Re-stamp the AI knowledge pack now that the version has bumped — the pack
+# records the Ambience version it was built for (so the skill can require a
+# matching plugin), so it must be regenerated AFTER the bump and committed below.
+eval "$AI_DOCS_CMD"
+
 # Promote the changelog's [Unreleased] section into a dated version section so
 # the chore/release commit — and the published Release notes — carry it. Invoked
 # by path (not `python -m bin.changelog`) so it resolves regardless of cwd.

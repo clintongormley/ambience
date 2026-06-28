@@ -42,7 +42,8 @@ scope: { kind: area, id: lounge }
 mode: merge
 category: { id: movie_night, name: Movie Night, icon: mdi:movie, color: deep-purple }
 scenes:
-  # Most specific first: TV playing in the evening → cinema-dark.
+  # The more-specific scene (TV playing in the evening) → cinema-dark. It wins by
+  # being a subset of "Evening default", not by being listed first.
   - name: Film mode
     category: movie_night
     when:
@@ -65,10 +66,14 @@ scenes:
 
 Notes:
 
-- **Two scenes, ANDed conditions, ORed by ordering.** "Film mode" requires *both*
-  evening *and* TV playing; "Evening default" requires only evening. Because the
-  most specific matching scene wins, "Film mode" beats "Evening default" whenever
-  the TV is playing, and "Evening default" handles every other evening.
+- **Two scenes, ANDed conditions, ORed by specificity.** "Film mode" requires
+  *both* evening *and* TV playing; "Evening default" requires only evening. "Film
+  mode" matches a strict *subset* of the situations "Evening default" does, so the
+  engine evaluates it first (more specific wins): it beats "Evening default"
+  whenever the TV is playing, and "Evening default" handles every other evening.
+  This is automatic because the two are containment-related — a *broad* override
+  that is **not** a subset of what it must beat (e.g. "projector on") would instead
+  need pinning; see `schema.md` → *How scenes are chosen*.
 - Both scenes share the `movie_night` category, declared once in the envelope so
   the import creates it.
 - The catch-all is listed last and is intentionally broad. If you wanted a *true*

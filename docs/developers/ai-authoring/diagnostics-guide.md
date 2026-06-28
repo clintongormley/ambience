@@ -119,7 +119,9 @@ predicate is your culprit.
 2. **Read `outcome`.** A `skipped_*` outcome means the scene never got a chance —
    address the switch/scope state, not the conditions. A `no_match` means the
    conditions are the problem. An `acted`/`debounced` with the *wrong* scene
-   means scene **order/specificity** is off.
+   means the resolved **order** is off: either the scene you wanted isn't actually
+   more specific, so the broader one wins (tighten it), or a broad override isn't
+   pinned above the specific scenes. See `schema.md` → *How scenes are chosen*.
 3. **For `no_match`,** open the scene in `explanation.scenes` and find the
    predicate with `passed: false`. Its `detail` tells you what value blocked it.
 4. **Cross-check the `cause`:** did the evaluation even run for the right reason?
@@ -236,8 +238,12 @@ Always:
 - Change only the predicate(s) the trace pinned down.
 - Keep `scope` and `category` matching the failing unit's `scope_kind`/`scope_id`
   and `category`.
-- If the fix is about **scene order** (a shadow), reorder by listing scenes
-  most-specific first, or add the missing constraint to the over-broad scene.
+- If the fix is about **resolved order** (a shadow), you can't fix it with list
+  order — the engine re-derives the order. Either add the missing constraint to
+  the over-broad scene (so the intended winner is strictly more specific, as in
+  walkthrough 2), or, for a broad override/blocker that must beat specific scenes,
+  tell the user to **pin it to the top** in the panel. See `schema.md` → *How
+  scenes are chosen*.
 
 ## A note on privacy / redaction
 

@@ -6,13 +6,28 @@ This single document teaches an AI how to author and diagnose Home Assistant Amb
 
 # Supported AI bundle format
 
-# Supported AI bundle format
+# Pack compatibility
 
-This pack understands **AI bundle format 1**. Before authoring or diagnosing, read the bundle's `ambience_ai_bundle` field and compare:
+This pack was built for **Ambience 0.31.x** and understands **AI bundle format 1**.
 
-- **equal to 1** — compatible, proceed.
-- **greater than 1** — the user's Ambience is newer than this pack. **Stop** and tell them to update the plugin (`/plugin marketplace update ambience`) before continuing.
-- **less than 1** — the bundle is from an older Ambience; ask them to re-download it (or update Ambience).
+**Before authoring or diagnosing, check the bundle against this pack:**
+
+1. **Version.** Take the bundle's `ambience_version` (e.g. `0.31.2`), drop the patch, and compare its `MAJOR.MINOR` to **0.31**:
+   - **newer than 0.31** → the user's Ambience is newer than this pack. **Stop. Do not author.** Update the plugin (below), then retry.
+   - **older than 0.31** → the user's Ambience is older than this pack. Ask them to update Ambience (HACS) and re-download the bundle.
+   - **same `0.31`** → compatible, continue.
+2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater than **1**, also stop and update the plugin.
+
+## Updating the plugin
+
+On a version mismatch, give the user these exact steps (and, in Claude Code, offer to run the CLI form for them with `claude plugin ...`):
+
+```
+/plugin marketplace update ambience
+/plugin install ambience@ambience
+```
+
+If it doesn't take effect, a clean reinstall always works (`/plugin uninstall ambience@ambience` then `/plugin install ambience@ambience`). The updated skill loads on the **next session** — have them restart and re-run. To skip this every release, they can enable **auto-update** for the `ambience` marketplace (`/plugin` → Marketplaces → ambience → enable auto-update).
 
 # Config schema
 
@@ -92,8 +107,11 @@ and house all share this shape:
 }
 ```
 
-- `scenes`: **ordered** — array order is the engine's authoritative tiebreaker.
-  The backend also computes a `priority` number; you do not set it.
+- `scenes`: a list. The engine **re-derives** the evaluation order from the
+  scenes' conditions (and any pinning) — your array order is only the final
+  tiebreaker between scenes it can't otherwise separate, never the authoritative
+  order. The backend owns each scene's `priority`; you do not set it. See
+  [How scenes are chosen](#how-scenes-are-chosen).
 - `enabled`: a permanent per-scope switch, independent of the runtime pause
   toggle. You normally do not set this from an import.
 
@@ -124,16 +142,45 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 | `actions` | array | yes | List of [ActionSpec](#5-actionspec). May be empty (a pure "blocker" scene that matches but does nothing). |
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |
 
-**Fields you must NOT set** (backend-owned / response-only): `priority`,
-`pinned`, `shadowed_by`, `missing_entities`, `overlap_entities`,
-`config_issues`. They are stripped on save.
+**Fields you don't author** (backend-owned / response-only): `priority`,
+`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`. `pinned`
+is a real, persisted field, but **you can't usefully set it from an import** (a
+freshly-imported pinned scene with no priority sorts to the *bottom*) — leave it
+off and have the user pin in the panel (see below).
 
 ### How scenes are chosen
 
-Within a `(scope, category)` unit, the **most specific matching scene wins** (the
-backend linearises scenes by condition specificity, array order breaking ties).
-Order scenes most-specific → least-specific; a final scene with an empty `when`
-makes a good catch-all default.
+Resolution is **first match wins** within one `(scope, category)`, over the scenes
+in the engine's **derived** order (highest `priority` first). Two things set that
+order — neither is your array order:
+
+1. **Containment (automatic).** A scene whose match-set is a strict **subset** of
+   another's is evaluated **first** — the more specific scene wins. "More specific"
+   means *matches a subset of situations*, **not** "has more conditions": adding a
+   condition usually shrinks the match-set, but a scene with an empty `when: {}`
+   matches everything, so it always sorts **last** — the natural catch-all. Scenes
+   whose match-sets are **incomparable** (neither contains the other — e.g.
+   "projector is on" vs "it's mid-morning and the blind is low") are ordered by
+   which higher-priority *conditions* they constrain; the one you think of as the
+   "override" is **not** promoted for being broad.
+2. **Pinning (manual, in the panel).** A pinned scene holds a fixed priority that
+   bypasses the containment order. This is the **only** reliable way to force a
+   broad rule above more-specific ones.
+
+**Consequences for authoring:**
+
+- A broad **override or blocker** (few conditions, must beat everything — e.g.
+  "projector on → close the blind", or an empty-`when` "block while moving" no-op)
+  will **not** float to the top on its own; containment sorts it *below* the
+  specific scenes. Author it, then tell the user to **pin it to the top** in the
+  panel (Scopes view → pin/drag). Don't rely on array order.
+- Because evaluation is a first-match cascade, a scene may **omit any condition an
+  earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
+  close" sits on top, lower scenes needn't re-test the projector; once a pinned
+  "closed dusk→sunrise" sits above the daytime scenes, those needn't gate on the
+  daytime window. Prefer that cascade over repeating a guard on every scene.
+- A final scene with an empty `when` is the catch-all default (it always sorts
+  last).
 
 ---
 
@@ -284,8 +331,10 @@ workday/weather entities), so don't expect those values; reference people by the
 - **Scope** — `house` / a `floor` / an `area`. Holds an ordered scene list; the
   surface a scene activates on.
 - **Category** — a global named grouping of scenes (id + name + icon + color).
-  Every scene belongs to exactly one. Within one `(scope, category)` the most
-  specific matching scene wins.
+  Every scene belongs to exactly one. Within one `(scope, category)`, the first
+  matching scene wins in the engine's derived order — more-specific (subset)
+  scenes first, pinned scenes forced to the top. See
+  [How scenes are chosen](#how-scenes-are-chosen).
 - **Scene** — `{name, description?, category, when, actions, apply?}`.
 - **Predicate** — the value of a condition inside `when`. `null`/absent =
   wildcard.
@@ -390,6 +439,15 @@ A non-empty list of [Scene](schema.md#3-scene) objects. Each scene's `category`
 should match the envelope `category.id` (or an existing category id). Scene
 fields: `name`, `description?`, `category`, `when`, `actions`, `apply?` — see
 [schema.md](schema.md) and the [conditions cookbook](conditions-cookbook.md).
+
+> **Ordering & overrides.** List order does **not** set which scene wins — on save
+> the engine re-derives the evaluation order from each scene's conditions (more
+> specific, i.e. matching a *subset* of situations, evaluated first) and from any
+> pinning. So a broad **override/blocker** (e.g. "projector on → close", a "block
+> while moving" no-op) won't beat the more-specific scenes just by being listed
+> first or last; after importing, the user must **pin it to the top** in the panel.
+> You can't reliably set `pinned`/`priority` through the block. See
+> [schema.md → How scenes are chosen](schema.md#how-scenes-are-chosen).
 
 ## What the import does
 
@@ -1025,9 +1083,13 @@ when:
   people: { quant: any, where: home }
 ```
 
-To express an **OR across whole situations**, author two scenes (each a separate
-list entry in `scenes`). The most specific matching scene wins, so put the
-narrower scene earlier and a catch-all (empty `when`) last.
+To express an **OR across whole situations**, author two scenes. The engine
+evaluates the more **specific** one first — the scene matching a *subset* of
+situations — so a narrower scene beats a broader one, and a catch-all (empty
+`when`, which matches everything) always sorts last. You do **not** control this
+with list order. A broad rule that must beat more-specific scenes (an
+override/blocker) instead needs the user to **pin** it to the top in the panel —
+see `schema.md` → *How scenes are chosen*.
 
 # Actions
 
@@ -1329,7 +1391,9 @@ predicate is your culprit.
 2. **Read `outcome`.** A `skipped_*` outcome means the scene never got a chance —
    address the switch/scope state, not the conditions. A `no_match` means the
    conditions are the problem. An `acted`/`debounced` with the *wrong* scene
-   means scene **order/specificity** is off.
+   means the resolved **order** is off: either the scene you wanted isn't actually
+   more specific, so the broader one wins (tighten it), or a broad override isn't
+   pinned above the specific scenes. See `schema.md` → *How scenes are chosen*.
 3. **For `no_match`,** open the scene in `explanation.scenes` and find the
    predicate with `passed: false`. Its `detail` tells you what value blocked it.
 4. **Cross-check the `cause`:** did the evaluation even run for the right reason?
@@ -1446,8 +1510,12 @@ Always:
 - Change only the predicate(s) the trace pinned down.
 - Keep `scope` and `category` matching the failing unit's `scope_kind`/`scope_id`
   and `category`.
-- If the fix is about **scene order** (a shadow), reorder by listing scenes
-  most-specific first, or add the missing constraint to the over-broad scene.
+- If the fix is about **resolved order** (a shadow), you can't fix it with list
+  order — the engine re-derives the order. Either add the missing constraint to
+  the over-broad scene (so the intended winner is strictly more specific, as in
+  walkthrough 2), or, for a broad override/blocker that must beat specific scenes,
+  tell the user to **pin it to the top** in the panel. See `schema.md` → *How
+  scenes are chosen*.
 
 ## A note on privacy / redaction
 

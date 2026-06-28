@@ -27,7 +27,11 @@ Every scene belongs to a **category** (a named group). A scene has:
 - `actions` — Home Assistant service calls run when the scene wins. Only services
   the user has **exposed** are valid.
 
-Within one `(scope, category)`, the **most specific matching scene wins**.
+Within one `(scope, category)`, the **first matching scene wins** in the engine's
+derived order: more-specific scenes (those matching a *subset* of situations) are
+evaluated first, and **pinned** scenes are forced to the top. A broad
+override/blocker won't beat more-specific scenes unless the user pins it — see
+`reference/schema.md` → *How scenes are chosen*.
 
 ## The two things you need from the user
 
@@ -43,27 +47,30 @@ If the user hasn't provided a bundle, ask for it before authoring anything that
 references entities. (You can sketch the structure first, but final ids must come
 from the bundle.)
 
-## Step 0 — Check the bundle is current (do this before authoring or fixing)
+## Step 0 — Check the bundle matches this pack (before authoring or fixing)
 
-Once you have a bundle, **before** you produce any block:
+Once you have a bundle, **before** you produce any block, follow
+`reference/bundle-format.generated.md` (it states the Ambience version this pack
+was built for, the supported bundle format, and the exact update steps):
 
-1. Read `reference/bundle-format.generated.md` for the bundle format this pack
-   supports, then read the bundle's top-level `ambience_ai_bundle` number:
-   - **greater than** the supported format → the user's Ambience is newer than
-     this pack. **Stop. Do not author.** Tell them to update the plugin
-     (`/plugin marketplace update ambience`, then `/plugin install ambience@ambience`)
-     and re-run — the schema may have changed in ways this pack doesn't know.
-   - **less than** the supported format → the bundle is from an older Ambience.
-     Ask them to update Ambience and re-download the bundle before continuing.
-   - **equal** → compatible, continue.
-2. Surface the freshness fields so the user can sanity-check the bundle is
-   current: `ambience_version` (the Ambience version that produced it) and
-   `generated_at` (when). If their setup has changed since `generated_at`
-   (added entities, exposed services, renamed areas), ask them to re-download —
-   you must author against current ids, not a stale snapshot.
+1. **Version match.** Compare the bundle's `ambience_version` (`MAJOR.MINOR`, drop
+   the patch) to the version that file says this pack was built for:
+   - **bundle newer** → **Stop. Do not author.** The pack is behind the user's
+     Ambience and may not know its current conditions/actions. Walk them through
+     **updating the plugin** — give the exact `/plugin …` steps from that file, and
+     mention the one-time auto-update toggle so it's automatic next time. In Claude
+     Code you may **offer to run** `claude plugin marketplace update ambience` for
+     them; either way the updated skill loads on the **next session**, so they
+     restart and re-run.
+   - **bundle older** → ask them to update Ambience (HACS) and re-download.
+   - **same `MAJOR.MINOR`** → continue.
+2. **Format backstop.** Also stop and update the plugin if the bundle's
+   `ambience_ai_bundle` exceeds the supported format in that file.
+3. **Freshness.** Note `generated_at`; if the user's setup changed since then
+   (added entities, exposed services, renamed areas), have them re-download so the
+   ids you author against are current.
 
-Only proceed once the format is compatible and the user is happy the bundle is
-current.
+Only proceed once the version/format match and the bundle is current.
 
 ## Reference material (progressive disclosure)
 
@@ -113,7 +120,9 @@ In short:
 1. Get the bundle; find the relevant **trace(s)** for the user's scope+category.
 2. Read `outcome` first. A `skipped_*` outcome means the switch/scope is
    off — not a config bug. A `no_match` means the conditions blocked it. An
-   `acted` with the wrong scene means ordering/specificity.
+   `acted` with the wrong scene means the resolved order is off — tighten the
+   intended winner so it's more specific, or have the user pin a broad override
+   (see `reference/schema.md` → *How scenes are chosen*).
 3. For `no_match`, find the predicate with `passed: false`; its `detail` names
    the value that blocked it.
 4. Emit a corrected import block (`mode: merge`, **same scene name** so it
@@ -140,6 +149,12 @@ requests.
 - **One scope per block.** Multi-room → multiple labelled blocks.
 - **Prefer built-in conditions**; reserve `unavailable`/`script`/`template` for
   fallback guards or logic the built-ins can't express.
+- **Pin broad overrides; lean on the cascade.** A rule meant to beat more-specific
+  scenes (e.g. "projector on → close", a "block while moving" no-op) won't win on
+  its own — tell the user to **pin it to the top** in the panel after importing.
+  Then drop any guard a higher/pinned scene already guarantees (don't re-test the
+  projector, or re-gate the daytime window, on every scene). See
+  `reference/schema.md` → *How scenes are chosen*.
 - Keep `mode: merge` and reuse the **exact scene name** when fixing, so you
   upsert rather than duplicate.
 - Always end by telling the user to **import via the panel's Import view** — you

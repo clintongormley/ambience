@@ -457,6 +457,10 @@ when:
   people: { quant: any, where: home }
 ```
 
-To express an **OR across whole situations**, author two scenes (each a separate
-list entry in `scenes`). The most specific matching scene wins, so put the
-narrower scene earlier and a catch-all (empty `when`) last.
+To express an **OR across whole situations**, author two scenes. The engine
+evaluates the more **specific** one first — the scene matching a *subset* of
+situations — so a narrower scene beats a broader one, and a catch-all (empty
+`when`, which matches everything) always sorts last. You do **not** control this
+with list order. A broad rule that must beat more-specific scenes (an
+override/blocker) instead needs the user to **pin** it to the top in the panel —
+see `schema.md` → *How scenes are chosen*.

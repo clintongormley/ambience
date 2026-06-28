@@ -55,15 +55,27 @@ def test_condition_reference_sorted_by_priority_desc() -> None:
     assert out.index("unavailable") < out.index("weather")
 
 
-def test_bundle_format_reference_states_supported_version() -> None:
+def test_compatibility_reference_states_version_format_and_update_steps() -> None:
     from custom_components.ambience.const import AI_BUNDLE_VERSION
 
-    out = gen_ai_docs.render_bundle_format(AI_BUNDLE_VERSION)
+    out = gen_ai_docs.render_compatibility(AI_BUNDLE_VERSION, "0.31")
     assert out.startswith(GENERATED_BANNER)
     assert GENERATED_END in out
-    # The supported format number and the field the skill checks must appear.
+    # The built-for version (major.minor) the skill compares against.
+    assert "0.31" in out
+    assert "ambience_version" in out
+    # The supported bundle format (structural backstop) + the field name.
     assert str(AI_BUNDLE_VERSION) in out
     assert "ambience_ai_bundle" in out
+    # The exact update command the skill hands to the user.
+    assert "/plugin marketplace update ambience" in out
+
+
+def test_ambience_minor_reads_manifest() -> None:
+    minor = gen_ai_docs.ambience_minor()
+    # Looks like "MAJOR.MINOR".
+    assert minor.count(".") == 1
+    assert all(part.isdigit() for part in minor.split("."))
 
 
 def test_assemble_portable_doc_concatenates_parts_under_one_banner() -> None:

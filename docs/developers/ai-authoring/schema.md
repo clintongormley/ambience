@@ -74,8 +74,11 @@ and house all share this shape:
 }
 ```
 
-- `scenes`: **ordered** — array order is the engine's authoritative tiebreaker.
-  The backend also computes a `priority` number; you do not set it.
+- `scenes`: a list. The engine **re-derives** the evaluation order from the
+  scenes' conditions (and any pinning) — your array order is only the final
+  tiebreaker between scenes it can't otherwise separate, never the authoritative
+  order. The backend owns each scene's `priority`; you do not set it. See
+  [How scenes are chosen](#how-scenes-are-chosen).
 - `enabled`: a permanent per-scope switch, independent of the runtime pause
   toggle. You normally do not set this from an import.
 
@@ -106,16 +109,45 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 | `actions` | array | yes | List of [ActionSpec](#5-actionspec). May be empty (a pure "blocker" scene that matches but does nothing). |
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |
 
-**Fields you must NOT set** (backend-owned / response-only): `priority`,
-`pinned`, `shadowed_by`, `missing_entities`, `overlap_entities`,
-`config_issues`. They are stripped on save.
+**Fields you don't author** (backend-owned / response-only): `priority`,
+`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`. `pinned`
+is a real, persisted field, but **you can't usefully set it from an import** (a
+freshly-imported pinned scene with no priority sorts to the *bottom*) — leave it
+off and have the user pin in the panel (see below).
 
 ### How scenes are chosen
 
-Within a `(scope, category)` unit, the **most specific matching scene wins** (the
-backend linearises scenes by condition specificity, array order breaking ties).
-Order scenes most-specific → least-specific; a final scene with an empty `when`
-makes a good catch-all default.
+Resolution is **first match wins** within one `(scope, category)`, over the scenes
+in the engine's **derived** order (highest `priority` first). Two things set that
+order — neither is your array order:
+
+1. **Containment (automatic).** A scene whose match-set is a strict **subset** of
+   another's is evaluated **first** — the more specific scene wins. "More specific"
+   means *matches a subset of situations*, **not** "has more conditions": adding a
+   condition usually shrinks the match-set, but a scene with an empty `when: {}`
+   matches everything, so it always sorts **last** — the natural catch-all. Scenes
+   whose match-sets are **incomparable** (neither contains the other — e.g.
+   "projector is on" vs "it's mid-morning and the blind is low") are ordered by
+   which higher-priority *conditions* they constrain; the one you think of as the
+   "override" is **not** promoted for being broad.
+2. **Pinning (manual, in the panel).** A pinned scene holds a fixed priority that
+   bypasses the containment order. This is the **only** reliable way to force a
+   broad rule above more-specific ones.
+
+**Consequences for authoring:**
+
+- A broad **override or blocker** (few conditions, must beat everything — e.g.
+  "projector on → close the blind", or an empty-`when` "block while moving" no-op)
+  will **not** float to the top on its own; containment sorts it *below* the
+  specific scenes. Author it, then tell the user to **pin it to the top** in the
+  panel (Scopes view → pin/drag). Don't rely on array order.
+- Because evaluation is a first-match cascade, a scene may **omit any condition an
+  earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
+  close" sits on top, lower scenes needn't re-test the projector; once a pinned
+  "closed dusk→sunrise" sits above the daytime scenes, those needn't gate on the
+  daytime window. Prefer that cascade over repeating a guard on every scene.
+- A final scene with an empty `when` is the catch-all default (it always sorts
+  last).
 
 ---
 
@@ -266,8 +298,10 @@ workday/weather entities), so don't expect those values; reference people by the
 - **Scope** — `house` / a `floor` / an `area`. Holds an ordered scene list; the
   surface a scene activates on.
 - **Category** — a global named grouping of scenes (id + name + icon + color).
-  Every scene belongs to exactly one. Within one `(scope, category)` the most
-  specific matching scene wins.
+  Every scene belongs to exactly one. Within one `(scope, category)`, the first
+  matching scene wins in the engine's derived order — more-specific (subset)
+  scenes first, pinned scenes forced to the top. See
+  [How scenes are chosen](#how-scenes-are-chosen).
 - **Scene** — `{name, description?, category, when, actions, apply?}`.
 - **Predicate** — the value of a condition inside `when`. `null`/absent =
   wildcard.

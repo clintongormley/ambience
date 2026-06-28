@@ -40,7 +40,9 @@ For each part of the intent, find the matching condition in
 ids. Remember:
 
 - Multiple conditions in one scene are **ANDed** (all must hold).
-- For **OR** / "otherwise", write **separate scenes**, most-specific first.
+- For **OR** / "otherwise", write **separate scenes** — the more-specific one
+  (matching a subset) wins automatically; a broad override needs **pinning**, not
+  ordering (see `reference/schema.md` → *How scenes are chosen*).
 - A missing condition key (or `null`) is a wildcard.
 - Prefer built-in conditions; reserve `unavailable` / `script` / `template`.
 

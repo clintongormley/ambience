@@ -91,6 +91,15 @@ should match the envelope `category.id` (or an existing category id). Scene
 fields: `name`, `description?`, `category`, `when`, `actions`, `apply?` — see
 [schema.md](schema.md) and the [conditions cookbook](conditions-cookbook.md).
 
+> **Ordering & overrides.** List order does **not** set which scene wins — on save
+> the engine re-derives the evaluation order from each scene's conditions (more
+> specific, i.e. matching a *subset* of situations, evaluated first) and from any
+> pinning. So a broad **override/blocker** (e.g. "projector on → close", a "block
+> while moving" no-op) won't beat the more-specific scenes just by being listed
+> first or last; after importing, the user must **pin it to the top** in the panel.
+> You can't reliably set `pinned`/`priority` through the block. See
+> [schema.md → How scenes are chosen](schema.md#how-scenes-are-chosen).
+
 ## What the import does
 
 ```text

@@ -77,7 +77,7 @@ bundle_src_changed=$(printf '%s\n' "$changed" | grep -E '^frontend/src/' || true
 trans_changed=$(printf '%s\n' "$changed" | grep -E 'strings\.json$|/translations/' || true)
 # The AI knowledge pack's generated sections derive from the conditions, the
 # built-in services and the curated source docs — regen + diff when any change.
-ai_docs_src_changed=$(printf '%s\n' "$changed" | grep -E '^custom_components/ambience/conditions/|^custom_components/ambience/services\.yaml$|^docs/developers/ai-authoring/|^ai/skill/|^bin/gen_ai_docs\.py$' || true)
+ai_docs_src_changed=$(printf '%s\n' "$changed" | grep -E '^custom_components/ambience/conditions/|^custom_components/ambience/services\.yaml$|^custom_components/ambience/manifest\.json$|^docs/developers/ai-authoring/|^ai/skill/|^bin/gen_ai_docs\.py$' || true)
 
 # --- Step 1: fast lint/format (fail fast — this is usually what breaks CI) ---
 if [ -n "$py_changed" ]; then echo "› ruff";       make lint-py; fi

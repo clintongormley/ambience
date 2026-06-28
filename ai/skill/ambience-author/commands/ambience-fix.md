@@ -46,7 +46,9 @@ with `passed: false`. Its `detail` usually names the exact value that blocked it
 - A too-strict band/threshold → widen or change it (see the cookbook).
 - An unintended constraint → remove that condition key (missing = wildcard).
 - A shadowing scene that wins too often → add the missing constraint to the
-  over-broad scene, or reorder most-specific first.
+  over-broad scene (so the intended winner is strictly more specific), or — for a
+  broad override that must beat specific scenes — have the user **pin** it to the
+  top. List order won't fix it (the engine re-derives the order).
 
 > `people` / `template` `detail` strings and `person.*` / `device_tracker.*` ids
 > may be **redacted** in the bundle — you can still diagnose from `passed`, the

@@ -46,6 +46,24 @@ Then just describe what you want (e.g. "create an evening dim scene for the
 living room") or paste a bundle and ask "why didn't my scene fire?". The skill
 will ask for your AI bundle if it needs it.
 
+### Keeping the plugin in step with the integration
+
+The pack records the Ambience version it was built for, and the AI bundle records
+the version that produced it. Before authoring, the skill compares them and
+**stops if your installed Ambience is newer than the plugin** (its knowledge of
+conditions/actions may be out of date). To update:
+
+```text
+/plugin marketplace update ambience
+/plugin install ambience@ambience
+```
+
+(or a clean reinstall: `/plugin uninstall ambience@ambience` then
+`/plugin install ambience@ambience`). The updated skill loads on your **next
+session**, so restart and re-run. **To make this automatic**, enable auto-update
+for the marketplace once: `/plugin` → **Marketplaces** → `ambience` → enable
+auto-update. New releases then land at session start with no manual step.
+
 ## B) claude.ai users — install just the skill
 
 Upload the skill folder [`ai/skill/ambience-author/`](skill/ambience-author/) as

@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
+import { conditionDocPath } from "../docs.js";
 import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { renderHaSwitch } from "../ha-switch.js";
@@ -857,6 +858,7 @@ export class AmbienceSceneEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
         <div class="summary" @click=${() => this._toggleSlot({ kind: "condition", id: m.name })}>
           <span class="summary-label"><strong>${conditionLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
+          <ambience-help .hass=${this.hass} .docPath=${conditionDocPath(m.name) ?? ""}></ambience-help>
           <button
             class="remove"
             @click=${(e: Event) => {
@@ -1166,6 +1168,7 @@ export class AmbienceSceneEditor extends LitElement {
               "ui.help_apply_on_every_match",
               "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
             )}
+            .docPath=${"actions/apply-on-every-match"}
           ></ambience-help>
         </label>
         ${renderHaSwitch({

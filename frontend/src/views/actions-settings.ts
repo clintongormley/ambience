@@ -630,7 +630,7 @@ export class AmbienceActionsSettings extends LitElement {
       <section>
         <div class="section-heading">
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
-          <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
+          <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")} .docPath=${"actions"}></ambience-help>
         </div>
         ${this._renderFadoNotice()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}

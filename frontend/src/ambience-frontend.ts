@@ -18,6 +18,7 @@ import { getFilterCategory } from "./ui-state.js";
 import "./views/category-filter.js";
 import "./views/scopes-view.js";
 import "./views/settings-modal.js";
+import "./views/ambience-help.js";
 
 export class AmbienceFrontend extends LitElement {
   static override styles = css`
@@ -46,17 +47,26 @@ export class AmbienceFrontend extends LitElement {
     }
     /* Header contents are capped to the content width and centred, tracking the
      same reading-column cap as the body below (the card overrides this var to
-     fill its width). The filter is the only in-flow child so it centres at the
-     bar midpoint; the logo and cog are absolutely positioned at the edges so
-     they never shift the centre. */
+     fill its width). The in-flow group — the category filter plus the help (?)
+     beside it — centres at the bar midpoint (so the filter sits a touch left of
+     centre, balanced by the help on its right); the logo and cog are absolutely
+     positioned at the edges so they never shift that centre. */
     .bar {
       position: relative;
       display: flex;
       justify-content: center;
       align-items: center;
+      /* Gap separates the category filter from the help (?) so it isn't jammed
+         against the dropdown; the logo/cog are absolute, so it only spaces these
+         two in-flow items. */
+      gap: 0.6rem;
       max-width: var(--ambience-content-max-width, 60rem);
       margin: 0 auto;
       padding: 0.75rem 1rem;
+    }
+    /* Match HA's toolbar help icon size (the cog uses the same 24px). */
+    .bar ambience-help {
+      --ambience-help-size: 24px;
     }
     h1.brand {
       margin: 0;
@@ -173,6 +183,7 @@ export class AmbienceFrontend extends LitElement {
             aria-label=${localize(this.hass, "ui.tab_settings", "Settings")}
             title=${localize(this.hass, "ui.tab_settings", "Settings")}
           ><ha-icon icon="mdi:cog"></ha-icon></button>
+          <ambience-help .hass=${this.hass} .docPath=${"getting-started"}></ambience-help>
         </div>
       </header>
       <ambience-scopes-view

@@ -8,6 +8,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- Documentation help links throughout the panel: each settings tab, condition,
+  and the "Apply on every match" toggle now shows a small **(?)** help icon —
+  where it has explanatory text the popover ends with a "Read more" link to the
+  matching online documentation page, and where it doesn't the (?) opens that
+  page directly in a new tab.
+
 ### Changed
 
 - Removed the "Set up an action to get started" banner. New installs now seed

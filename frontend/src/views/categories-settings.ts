@@ -403,7 +403,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         <button class="add" @click=${() => this._addCategory()}>
           ${localize(this.hass, "ui.category_add", "+ Add category")}
         </button>
-        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")} .docPath=${"getting-started/step-1-scopes-and-categories"}></ambience-help>
       </div>
       ${this._renderModal()}
     `;

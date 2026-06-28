@@ -86,6 +86,11 @@ export class AmbienceLuxEditModal extends AmbienceNamedDefEditModal<LuxRangeDef>
       return localize(this.hass, "ui.lux_error_need_bound", "Enter a min, a max, or both.");
     if ((this._min != null && this._min < 0) || (this._max != null && this._max < 0))
       return localize(this.hass, "ui.lux_error_negative", "Bounds must be 0 or greater.");
+    if (
+      (this._min != null && !Number.isInteger(this._min)) ||
+      (this._max != null && !Number.isInteger(this._max))
+    )
+      return localize(this.hass, "ui.lux_error_not_integer", "Bounds must be whole numbers.");
     if (this._min != null && this._max != null && this._min >= this._max)
       return localize(this.hass, "ui.lux_error_order", "Min must be less than max.");
     return "";

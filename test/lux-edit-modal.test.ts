@@ -90,6 +90,16 @@ describe("ambience-lux-edit-modal", () => {
     expect(el.shadowRoot.querySelector(".error").textContent).toContain("0 or greater");
   });
 
+  test("rejects a non-integer bound", async () => {
+    el = await mount();
+    const get = captureSave(el);
+    setInput(el, "label", "Frac");
+    setInput(el, "min", "12.5");
+    clickSave(el);
+    expect(get()).toBeUndefined();
+    expect(el.shadowRoot.querySelector(".error").textContent).toContain("whole number");
+  });
+
   test("edit mode preserves existingId and prefills bounds", async () => {
     el = await mount({ existingId: "dim", initial: { min: 10, max: 50, label: "Dim" } });
     expect(el.shadowRoot.querySelector("h3").textContent).toContain("Dim");

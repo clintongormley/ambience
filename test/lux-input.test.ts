@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
-
-import "../frontend/src/views/lux-input";
 import type { LuxPredicate, LuxRangeStoreView } from "../frontend/src/types";
+import { luxPredicateError } from "../frontend/src/views/lux-input";
 
 const luxRanges: LuxRangeStoreView = {
   builtins: {
@@ -32,6 +31,24 @@ function capture(el: HTMLElement): () => any {
 }
 
 describe("ambience-lux-input", () => {
+  test("clearing all sensors collapses the predicate to null (condition removed)", async () => {
+    // Empty sensors is a wildcard regardless of the range/band, so emit null and
+    // let the scene editor drop the condition (matches the unavailable widget).
+    const el = await mount({ sensors: ["sensor.a"], range: "dark" });
+    const v = capture(el);
+    el._setSensors([]);
+    expect(v()).toBeNull();
+    el.remove();
+  });
+
+  test("luxPredicateError rejects a non-integer inline bound (matches the backend)", () => {
+    // The backend raises lux_not_integer; the FE save-gate must catch it inline
+    // instead of letting it through to a generic save error.
+    expect(luxPredicateError({ min: 12.5, max: 100 })).toContain("whole number");
+    expect(luxPredicateError({ min: 0, max: 99.9 })).toContain("whole number");
+    expect(luxPredicateError({ min: 10, max: 100 })).toBeNull();
+  });
+
   test("sensor picker is a sensor entity selector filtered to illuminance", async () => {
     const el = await mount({ sensors: [], range: "dark" });
     const sel = el._sensorSchema()[0].selector.entity;

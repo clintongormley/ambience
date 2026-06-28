@@ -76,6 +76,20 @@ describe("ambience-occupancy-predicate-input", () => {
     el.remove();
   });
 
+  test("clearing all sensors collapses the predicate to null (condition removed)", async () => {
+    // Empty sensors is match-anything; emit null so the scene editor drops the
+    // condition rather than leaving a no-op "any sensor" row (matches the
+    // unavailable widget).
+    const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
+    let captured: any = "unset";
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setSensors([]);
+    expect(captured).toBeNull();
+    el.remove();
+  });
+
   test("toggling 'is not' emits negate:true; 'is' drops it", async () => {
     const el = await mount({ sensors: ["binary_sensor.a"], occupied: false });
     let captured: any;

@@ -84,8 +84,11 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   }
 
   private _emit(value: OccupancyPredicate) {
-    this.value = value;
-    emitValueChanged(this, value);
+    // No sensors selected = match-anything; collapse to null (the "condition
+    // removed" sentinel) so the editor drops the row, like the unavailable widget.
+    const next = value.sensors?.length ? value : null;
+    this.value = next;
+    emitValueChanged(this, next);
   }
 
   _setSensors(sensors: string[]) {

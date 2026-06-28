@@ -72,6 +72,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   gates are now correct for the "held for less than" mode, and no longer relate
   two predicates that use different duration modes — either could surface a
   spurious "this scene can never win" warning or mis-order the scene list.
+- Clearing every sensor from an **occupancy** or **lux** condition now removes
+  the condition, instead of leaving behind a no-op "any sensor" row.
+- The **lux** range min/max inputs now reject fractional values inline ("Bounds
+  must be whole numbers.") instead of letting them through to a generic save
+  error from the backend.
 
 ### Removed
 

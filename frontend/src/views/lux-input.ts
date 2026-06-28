@@ -38,6 +38,12 @@ export function luxPredicateError(pred: unknown, hass?: HassConnection): string 
   if ((typeof min === "number" && min < 0) || (typeof max === "number" && max < 0)) {
     return localize(hass, "ui.lux_error_negative", "Bounds must be 0 or greater.");
   }
+  if (
+    (typeof min === "number" && !Number.isInteger(min)) ||
+    (typeof max === "number" && !Number.isInteger(max))
+  ) {
+    return localize(hass, "ui.lux_error_not_integer", "Bounds must be whole numbers.");
+  }
   if (typeof min === "number" && typeof max === "number" && min >= max) {
     return localize(hass, "ui.lux_error_order", "Min must be less than max.");
   }
@@ -119,8 +125,11 @@ export class AmbienceLuxInput extends LitElement {
   }
 
   private _emit(value: LuxPredicate) {
-    this.value = value;
-    emitValueChanged(this, value);
+    // Empty sensors is a wildcard regardless of the range/band, so collapse to
+    // null (condition removed), mirroring the unavailable widget.
+    const next = value.sensors?.length ? value : null;
+    this.value = next;
+    emitValueChanged(this, next);
   }
 
   _setSensors(sensors: string[]) {

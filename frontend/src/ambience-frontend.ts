@@ -55,9 +55,17 @@ export class AmbienceFrontend extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
+      /* Gap separates the category filter from the help (?) so it isn't jammed
+         against the dropdown; the logo/cog are absolute, so it only spaces these
+         two in-flow items. */
+      gap: 0.6rem;
       max-width: var(--ambience-content-max-width, 60rem);
       margin: 0 auto;
       padding: 0.75rem 1rem;
+    }
+    /* Match HA's toolbar help icon size (the cog uses the same 24px). */
+    .bar ambience-help {
+      --ambience-help-size: 24px;
     }
     h1.brand {
       margin: 0;

@@ -169,3 +169,58 @@ describe("ambience-help docs link", () => {
     expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).not.toBeNull();
   });
 });
+
+function rect(r: Partial<DOMRect>): DOMRect {
+  return { top: 0, bottom: 0, left: 0, right: 0, width: 16, height: 16, ...r } as DOMRect;
+}
+
+describe("ambience-help popover positioning", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("anchors the fixed popover below the trigger by default", async () => {
+    const el = await mount();
+    const trigger = el.shadowRoot.querySelector('[data-test="help-trigger"]') as HTMLElement;
+    trigger.getBoundingClientRect = () => rect({ top: 100, bottom: 116, left: 40 });
+    trigger.click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.getAttribute("style")).toContain("top:122px");
+    expect(pop.getAttribute("style")).toContain("left:40px");
+    expect(pop.getAttribute("style")).not.toContain("translateY");
+  });
+
+  it("flips the popover above the trigger when there is no room below", async () => {
+    // jsdom's viewport is 1024x768; a trigger near the bottom has no room below.
+    const el = await mount();
+    const trigger = el.shadowRoot.querySelector('[data-test="help-trigger"]') as HTMLElement;
+    trigger.getBoundingClientRect = () => rect({ top: 750, bottom: 760, left: 100 });
+    trigger.click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.getAttribute("style")).toContain("translateY(-100%)");
+    expect(pop.getAttribute("style")).toContain("top:744px");
+  });
+
+  it("clamps the popover so it does not overflow the right edge", async () => {
+    // left 1000 + 260 max-width would overflow vw 1024 → clamp to 1024-260-8.
+    const el = await mount();
+    const trigger = el.shadowRoot.querySelector('[data-test="help-trigger"]') as HTMLElement;
+    trigger.getBoundingClientRect = () => rect({ top: 10, bottom: 26, left: 1000 });
+    trigger.click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.getAttribute("style")).toContain("left:756px");
+  });
+
+  it("closes the popover on scroll", async () => {
+    const el = await mount();
+    el.shadowRoot.querySelector('[data-test="help-trigger"]').click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).not.toBeNull();
+    window.dispatchEvent(new Event("scroll"));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).toBeNull();
+  });
+});

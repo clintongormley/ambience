@@ -30,7 +30,9 @@ from ._common import (
     kleene_any,
     kleene_not,
     predicate_has_any,
+    sensor_quant_contains,
     state_sources,
+    wrap_quantified,
 )
 
 _QUANTS = ("any", "all")
@@ -176,12 +178,7 @@ class LuxCondition:
                 continue
             val = snapshot.sensors[eid]
             parts.append(f"{name}: {_fmt_lux(val)} lx {'✓' if held else '✗'}")
-        body = ", ".join(parts)
-        if len(sensors) > 1:
-            body = f"{'all' if quant == 'all' else 'any'} of: {body}"
-        # `negate` inverts the whole match — show it wrapping the per-sensor read.
-        if predicate.get("negate"):
-            body = f"not({body})"
+        body = wrap_quantified(parts, quant, bool(predicate.get("negate")))
         band = self._fmt_band(lo, hi)
         # A bare reading is meaningless without the target band, so state it once.
         return f"want {band}; {body}" if band else body
@@ -256,32 +253,16 @@ class LuxCondition:
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`.
         Conservative: unprovable -> False."""
-        if not isinstance(outer, dict) or not isinstance(inner, dict):
-            return False
-        # A negated predicate's match-set is a complement, which does not nest
-        # under this (band / sensor-subset / quant) lattice. Be conservative:
-        # unprovable -> False.
-        if outer.get("negate") or inner.get("negate"):
-            return False
-        # Empty/absent `sensors` is a wildcard (matches every world-state).
-        if not outer.get("sensors"):
-            return True
-        if not inner.get("sensors"):
-            return False
-        if (outer.get("quant") or "any") != (inner.get("quant") or "any"):
-            return False
-        try:
-            o_lo, o_hi = self._resolve_range(outer)
-            i_lo, i_hi = self._resolve_range(inner)
-        except ValueError:
-            return False  # unknown range id -> can't prove containment
-        if not _band_within(i_lo, i_hi, o_lo, o_hi):
-            return False
-        so = frozenset(outer["sensors"])
-        si = frozenset(inner["sensors"])
-        if (outer.get("quant") or "any") == "any":
-            return si <= so  # any over fewer sensors ⊆ any over more
-        return so <= si  # all over more sensors ⊆ all over fewer
+
+        def _band(o: dict[str, Any], i: dict[str, Any]) -> bool:
+            try:
+                o_lo, o_hi = self._resolve_range(o)
+                i_lo, i_hi = self._resolve_range(i)
+            except ValueError:
+                return False  # unknown range id -> can't prove containment
+            return _band_within(i_lo, i_hi, o_lo, o_hi)
+
+        return sensor_quant_contains(outer, inner, _band)
 
 
 def as_float_state(state: str) -> float | None:

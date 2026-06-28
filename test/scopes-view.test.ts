@@ -42,6 +42,7 @@ vi.mock("../frontend/src/api", async (importActual) => {
     getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
     applyScenes: vi.fn(async () => ({ ok: true })),
     runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
+    downloadScopeDiagnostics: vi.fn(async () => undefined),
     listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
     // Pass through the real subscribeLiveScenes so it delegates to
     // connection.subscribeMessage, which tests can override per-case.
@@ -2100,6 +2101,71 @@ describe("ambience-scopes-view", () => {
     modal.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
     await el.updateComplete;
     expect(modal.open).toBe(false);
+  });
+
+  test("download-diagnostics event downloads for the area scope + category", async () => {
+    el = await mount();
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-scenes-list")!.dispatchEvent(
+      new CustomEvent("download-diagnostics", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(api.downloadScopeDiagnostics).toHaveBeenCalledWith(
+      el.hass,
+      { scope_kind: "area", scope_id: "living_room" },
+      "lights",
+    );
+  });
+
+  test("download-diagnostics on the house scope sends scope_id null", async () => {
+    el = await mount();
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-scenes-list")!.dispatchEvent(
+      new CustomEvent("download-diagnostics", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(api.downloadScopeDiagnostics).toHaveBeenCalledWith(
+      el.hass,
+      { scope_kind: "house", scope_id: null },
+      "lights",
+    );
+  });
+
+  test("download-diagnostics failure surfaces the error in the store", async () => {
+    el = await mount();
+    await el.updateComplete;
+    vi.mocked(api.downloadScopeDiagnostics).mockRejectedValueOnce(new Error("ws boom"));
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-scenes-list")!.dispatchEvent(
+      new CustomEvent("download-diagnostics", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".error")?.textContent).toContain("ws boom");
   });
 
   test("show-simulator event opens the simulator modal with correct props", async () => {

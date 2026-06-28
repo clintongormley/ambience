@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 vi.mock("../frontend/src/api", () => ({
   listTraces: vi.fn(),
   getServiceSchema: vi.fn(),
-  downloadScopeDiagnostics: vi.fn(),
   clearTraces: vi.fn(async () => undefined),
 }));
 
@@ -220,27 +219,9 @@ describe("ambience-traces-modal", () => {
     expect(el.shadowRoot.querySelector("h3")!.textContent).toContain("cat-fallback-id");
   });
 
-  test("download button calls downloadScopeDiagnostics with this scope+category", async () => {
+  test("no download button in the header (moved to the category kebab menu)", async () => {
     el = await mount([unit()]);
-    const btn = el.shadowRoot.querySelector(".download");
-    expect(btn).toBeTruthy();
-    btn.click();
-    expect(api.downloadScopeDiagnostics).toHaveBeenCalledWith(
-      el.hass,
-      { scope_kind: "area", scope_id: "kitchen" },
-      "g1",
-    );
-  });
-
-  test("download failure surfaces an error instead of an unhandled rejection", async () => {
-    el = await mount([unit()]);
-    vi.mocked(api.downloadScopeDiagnostics).mockRejectedValueOnce(new Error("ws boom"));
-
-    el.shadowRoot.querySelector(".download").click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-
-    expect(el.shadowRoot.querySelector(".error")!.textContent).toContain("ws boom");
+    expect(el.shadowRoot.querySelector(".download")).toBeNull();
   });
 
   test("close button dispatches the close event", async () => {

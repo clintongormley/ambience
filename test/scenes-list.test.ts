@@ -1198,6 +1198,15 @@ describe("ambience-scenes-list", () => {
     expect(detail()).toEqual({ category: "c1" });
   });
 
+  test("category kebab Download diagnostics emits download-diagnostics with the category id", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as SceneCategory;
+    const sceneInCategory = { ...movieScene, category: "g1" } as Scene;
+    el = await mount([sceneInCategory], [], {}, [category]);
+    const get = captureEvent(el, "download-diagnostics");
+    await pickCategoryKebab(el, "download");
+    expect(get()).toEqual({ category: "g1" });
+  });
+
   // --- collapsible category sections -----------------------------------------
 
   test("clicking a category header emits toggle-category-collapse with the category id", async () => {

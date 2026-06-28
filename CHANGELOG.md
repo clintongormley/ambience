@@ -18,6 +18,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- **Download diagnostics** has moved out of the Traces viewer into each
+  category's **⋮** menu, alongside Run / View traces / Simulate / Auto-triggers.
+  It still downloads the same diagnostics bundle scoped to that one (scope,
+  category).
 - Removed the "Set up an action to get started" banner. New installs now seed
   default actions, so the prompt no longer applied.
 - Scene-update activity is now logged to the Home Assistant logbook against each

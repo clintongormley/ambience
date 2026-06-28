@@ -1,13 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import {
-  clearTraces,
-  downloadScopeDiagnostics,
-  getServiceSchema,
-  type HassConnection,
-  listTraces,
-} from "../api.js";
+import { clearTraces, getServiceSchema, type HassConnection, listTraces } from "../api.js";
 import { localize, localizeWsError } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type { BufferedUnit, ExposedAction, PeriodStoreView, ServiceSchema } from "../types.js";
@@ -51,7 +45,7 @@ export class AmbienceTracesModal extends LitElement {
         display: flex; align-items: center; gap: 0.5rem;
       }
       .header h3 { margin: 0; flex: 1; }
-      .refresh, .download, .clear {
+      .refresh, .clear {
         padding: 0.25rem 0.75rem; cursor: pointer;
         border: 1px solid var(--divider-color, #ccc);
         border-radius: 4px; background: none; color: inherit;
@@ -206,14 +200,6 @@ export class AmbienceTracesModal extends LitElement {
     this._expanded = next;
   }
 
-  private async _download(): Promise<void> {
-    try {
-      await downloadScopeDiagnostics(this.hass, this.scope, this.category);
-    } catch (e) {
-      this._error = localizeWsError(this.hass, e);
-    }
-  }
-
   private async _clear(): Promise<void> {
     try {
       await clearTraces(this.hass);
@@ -243,9 +229,6 @@ export class AmbienceTracesModal extends LitElement {
           </button>
           <button class="clear" @click=${this._clear}>
             ${localize(this.hass, "ui.clear_traces", "Clear")}
-          </button>
-          <button class="download" @click=${this._download}>
-            ${localize(this.hass, "ui.download_diagnostics", "Download diagnostics")}
           </button>
           <button class="close" @click=${this._onClose} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>

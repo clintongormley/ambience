@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { HassConnection, HistoryAction } from "../api.js";
-import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
+import { applyScenes, downloadScopeDiagnostics, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.js";
 import { renderHaSwitch } from "../ha-switch.js";
 import { localize, localizeWsError } from "../i18n.js";
@@ -721,6 +721,11 @@ export class AmbienceScopesView extends LitElement {
     };
   }
 
+  private _downloadDiagnostics(scope: Scope, category: string) {
+    const wire = { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null };
+    return this._callApi(() => downloadScopeDiagnostics(this.hass, wire, category));
+  }
+
   private _showSimulator(scope: Scope, category: string) {
     const g = this._store.categories.find((x) => x.id === category);
     this._viewingSimulator = {
@@ -1283,6 +1288,8 @@ export class AmbienceScopesView extends LitElement {
                     this._applyScenes(scope, e.detail.categoryId)}
                   @show-traces=${(e: CustomEvent<{ category: string }>) =>
                     this._showTraces(scope, e.detail.category)}
+                  @download-diagnostics=${(e: CustomEvent<{ category: string }>) =>
+                    this._downloadDiagnostics(scope, e.detail.category)}
                   @show-simulator=${(e: CustomEvent<{ category: string }>) =>
                     this._showSimulator(scope, e.detail.category)}
                   @show-auto-triggers=${(e: CustomEvent<{ category: string }>) =>

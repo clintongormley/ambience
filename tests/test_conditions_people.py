@@ -525,6 +525,41 @@ def test_contains_nobody_bigger_set_subset_of_smaller() -> None:
     assert m.contains(outer, inner) is True
 
 
+def test_contains_less_than_shorter_inner_is_more_specific() -> None:
+    m = PeopleCondition()
+    short = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    long = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 60},
+        "for_mode": "less_than",
+    }
+    # less_than inverts: held < 30 ⊆ held < 60.
+    assert m.contains(long, short) is True
+    assert m.contains(short, long) is False
+
+
+def test_contains_false_when_for_mode_differs() -> None:
+    m = PeopleCondition()
+    at_least = {"who": ["person.a"], "quant": "any", "where": "home", "for": {"s": 30}}
+    less_than = {
+        "who": ["person.a"],
+        "quant": "any",
+        "where": "home",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    assert m.contains(at_least, less_than) is False
+    assert m.contains(less_than, at_least) is False
+
+
 def test_contains_nobody_disjoint_from_any() -> None:
     m = PeopleCondition()
     a = {"quant": "nobody", "where": "home"}

@@ -521,23 +521,17 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._emit(next);
   }
 
-  /** Set the operator of the group at `path`. Strips any legacy outer NOT
-   *  wrap; whole-group negation isn't exposed in the UI any more — per-row
-   *  NOT toggles handle child-level negation instead. */
+  /** Set the operator of the group at `path`. A NOT-wrapped group keeps its
+   *  negation — whole-group NOT is a supported toggle (see `_renderGroup`), so
+   *  changing AND↔OR must not silently drop it and invert the predicate. */
   _setGroupOpAt(path: number[], op: "and" | "or") {
     const next = this._patch(this.value, path, (node) => {
       if (!node) return node;
-      let bareGroup: StateGroup | null = null;
-      if (node.kind === "and" || node.kind === "or") {
-        bareGroup = node as StateGroup;
-      } else if (node.kind === "not") {
-        const inner = (node as StateNot).item;
-        if (inner.kind === "and" || inner.kind === "or") {
-          bareGroup = inner as StateGroup;
-        }
-      }
-      if (!bareGroup) return node;
-      return { kind: op, items: bareGroup.items } as StateGroup;
+      const isNot = node.kind === "not";
+      const target = isNot ? (node as StateNot).item : node;
+      if (target.kind !== "and" && target.kind !== "or") return node;
+      const rebuilt = { kind: op, items: (target as StateGroup).items } as StateGroup;
+      return isNot ? ({ kind: "not", item: rebuilt } as StateNot) : rebuilt;
     });
     this._emit(next);
   }

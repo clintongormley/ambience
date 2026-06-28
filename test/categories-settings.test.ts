@@ -200,6 +200,27 @@ describe("ambience-categories-settings", () => {
     expect(el._categories.some((g: any) => g.id === "blinds")).toBe(true); // restored
   });
 
+  test("a server save rejection reverts the optimistic category change", async () => {
+    // _save optimistically updates _categories and closes the modal; if the
+    // server then refuses, the local list must roll back (it previously kept the
+    // rejected edit, leaving the UI out of sync with the store).
+    (saveCategories as any).mockRejectedValueOnce({ message: "save failed" });
+    el = await mount();
+    el._categories = [
+      { id: "blinds", name: "Blinds" },
+      { id: "lights", name: "Lights" },
+    ];
+    el._openEditor({ id: "blinds", name: "Blinds" });
+    await el.updateComplete;
+    el._editing = { id: "blinds", name: "Shades" };
+    el._save();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // The optimistic rename is rolled back to the persisted value.
+    expect(el._categories.find((g: any) => g.id === "blinds")?.name).toBe("Blinds");
+    expect(el._categories.some((g: any) => g.name === "Shades")).toBe(false);
+  });
+
   test("a new (unsaved) category's modal has no Delete button", async () => {
     el = await mount();
     el._addCategory();

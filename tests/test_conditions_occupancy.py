@@ -196,6 +196,62 @@ def test_contains_conservative_when_either_side_negates() -> None:
     assert m.contains(neg, neg) is False
 
 
+def test_contains_at_least_longer_inner_is_more_specific() -> None:
+    m = OccupancyCondition()
+    short = {"sensors": ["binary_sensor.a"], "quant": "any", "for": {"s": 30}}
+    long = {"sensors": ["binary_sensor.a"], "quant": "any", "for": {"s": 60}}
+    # at_least (default): held >= 60 ⊆ held >= 30.
+    assert m.contains(short, long) is True
+    assert m.contains(long, short) is False
+
+
+def test_contains_less_than_shorter_inner_is_more_specific() -> None:
+    m = OccupancyCondition()
+    short = {
+        "sensors": ["binary_sensor.a"],
+        "quant": "any",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    long = {
+        "sensors": ["binary_sensor.a"],
+        "quant": "any",
+        "for": {"s": 60},
+        "for_mode": "less_than",
+    }
+    # less_than inverts: held < 30 ⊆ held < 60 (shorter threshold = more specific).
+    assert m.contains(long, short) is True
+    assert m.contains(short, long) is False
+
+
+def test_contains_false_when_for_mode_differs() -> None:
+    m = OccupancyCondition()
+    at_least = {"sensors": ["binary_sensor.a"], "quant": "any", "for": {"s": 30}}
+    less_than = {
+        "sensors": ["binary_sensor.a"],
+        "quant": "any",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    # Different comparators don't nest.
+    assert m.contains(at_least, less_than) is False
+    assert m.contains(less_than, at_least) is False
+
+
+def test_contains_ungated_outer_contains_gated_inner() -> None:
+    m = OccupancyCondition()
+    ungated = {"sensors": ["binary_sensor.a"], "quant": "any"}
+    gated = {
+        "sensors": ["binary_sensor.a"],
+        "quant": "any",
+        "for": {"s": 30},
+        "for_mode": "less_than",
+    }
+    # An outer with no duration gate constrains nothing on that axis.
+    assert m.contains(ungated, gated) is True
+    assert m.contains(gated, ungated) is False
+
+
 def test_describe_counts_active() -> None:
     snap = _snap(
         {"binary_sensor.a": _s("on"), "binary_sensor.b": _s("off")},

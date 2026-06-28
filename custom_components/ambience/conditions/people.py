@@ -16,6 +16,7 @@ from ._common import (
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
+    for_contains,
     for_elapsed_satisfied,
     tenure_held,
     tenure_within,
@@ -471,8 +472,9 @@ class PeopleCondition:
             return False
         if bool(outer.get("negate")) != bool(inner.get("negate")):
             return False
-        # inner must hold at least as long as outer (longer for = more specific).
-        if dur_seconds(inner.get("for")) < dur_seconds(outer.get("for")):
+        # The `for`/`for_mode` duration axis must permit inner ⊆ outer
+        # (at_least: longer is stricter; less_than: shorter is stricter).
+        if not for_contains(outer, inner):
             return False
         qo = outer.get("quant") or "any"
         qi = inner.get("quant") or "any"

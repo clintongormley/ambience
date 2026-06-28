@@ -63,6 +63,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - When a scene is skipped because its scope's pause switch is off, the trace
   timeline now says *"Skipped — the scope's pause switch is off."* It previously
   referred to a non-existent "category switch".
+- A negated group in a **state condition** (`NOT (… AND …)`) no longer loses its
+  negation when you change the group's AND/OR operator — that previously dropped
+  the NOT silently and inverted the condition's meaning.
+- A **category** add/edit that the server rejects now rolls back in the Settings
+  panel instead of continuing to show the rejected change as if it had saved.
+- Scene **shadowing / ordering hints** for `occupancy` and `people` duration
+  gates are now correct for the "held for less than" mode, and no longer relate
+  two predicates that use different duration modes — either could surface a
+  spurious "this scene can never win" warning or mis-order the scene list.
 
 ### Removed
 

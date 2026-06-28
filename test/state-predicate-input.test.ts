@@ -276,6 +276,46 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[0].item.kind).toBe("and");
   });
 
+  test("_setGroupOpAt on a NOT-wrapped group preserves the NOT (regression)", async () => {
+    // Bug: changing a negated group's AND/OR operator silently dropped the NOT,
+    // inverting the predicate's meaning ("NOT (a AND b)" became "(a OR b)").
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setGroupOpAt([], "or");
+    expect(captured.kind).toBe("not");
+    expect(captured.item.kind).toBe("or");
+    expect(captured.item.items).toHaveLength(2);
+  });
+
+  test("_setGroupOpAt changes the operator of a plain group", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setGroupOpAt([], "or");
+    expect(captured.kind).toBe("or");
+    expect(captured.items).toHaveLength(2);
+  });
+
   test("group header has a '(…)' wrap button on the right, next to the ✕", async () => {
     el = await mount({
       kind: "and",
@@ -1366,33 +1406,9 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.entity_id).toBe("a");
   });
 
-  test("_setGroupOpAt on a NOT-wrapped group strips the NOT and changes op (lines 255-260)", async () => {
-    // Node is { kind:'not', item: { kind:'and', items:[a,b] } }.
-    // _setGroupOpAt must enter the else-if(node.kind==='not') branch.
-    el = await mount({
-      kind: "not",
-      item: {
-        kind: "and",
-        items: [
-          { kind: "is", entity_id: "a", states: ["on"] },
-          { kind: "is", entity_id: "b", states: ["off"] },
-        ],
-      },
-    });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => {
-      captured = (e as CustomEvent).detail.value;
-    });
-    el._setGroupOpAt([], "or");
-    // NOT stripped; op changed from AND → OR; items preserved.
-    expect(captured.kind).toBe("or");
-    expect(captured.items).toHaveLength(2);
-    expect(captured.items[0].entity_id).toBe("a");
-  });
-
-  test("_setGroupOpAt on a plain atom returns it unchanged (line 261: !bareGroup guard)", async () => {
-    // Node at root is an atom — neither group nor NOT-wrapped group.
-    // _setGroupOpAt must hit the !bareGroup guard and return node unchanged.
+  test("_setGroupOpAt on a plain atom returns it unchanged", async () => {
+    // Node at root is an atom — neither a group nor a NOT-wrapped group — so
+    // _setGroupOpAt returns it unchanged.
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => {

@@ -37,7 +37,9 @@ def ambience_minor() -> str:
     """The integration's MAJOR.MINOR from manifest.json — the Ambience version this
     pack is built for. The skill compares the bundle's `ambience_version` to it."""
     version = str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
-    major, minor, *_ = version.split(".")
+    parts = version.split(".")
+    major = parts[0] if parts else "0"
+    minor = parts[1] if len(parts) > 1 else "0"
     return f"{major}.{minor}"
 
 

@@ -101,6 +101,7 @@ export class AmbienceImportConfig extends LitElement {
     const file = input.files?.[0];
     input.value = ""; // let the same file be re-selected after a fix
     if (!file) return;
+    this.error = null;
     this.done = null;
     this.preview = null;
     try {

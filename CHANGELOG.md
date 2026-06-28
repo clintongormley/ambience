@@ -10,6 +10,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- A banner now nudges you to request a translation when your Home Assistant
+  language isn't one Ambience ships yet. It opens a prefilled GitHub issue, and
+  dismissing it is remembered per language (region variants such as pt-BR are
+  treated separately), so you're never nagged twice for the same language.
 - Documentation help links throughout the panel: each settings tab, condition,
   and the "Apply on every match" toggle now shows a small **(?)** help icon —
   where it has explanatory text the popover ends with a "Read more" link to the

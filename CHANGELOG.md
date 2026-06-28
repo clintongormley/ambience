@@ -100,8 +100,17 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   or an AI chat. Newly redacted: alarm/lock codes and other secrets in scene
   action parameters; sensitive exposed-action defaults (push tokens, message
   bodies, recipients); the rendered detail of a `state` condition that targets a
-  person or device-tracker; and the zone label of a multi-person "for duration"
-  gate.
+  person or device-tracker; the zone label of a multi-person "for duration"
+  gate; and a person/device-tracker **entity id referenced directly by a scene's
+  conditions** in the exported config (e.g. a `state` rule that tests where
+  someone is, or an `unavailable` rule on a device-tracker) — previously the bare
+  entity id slipped through the config dump even though its trace detail was
+  already scrubbed.
+- The trace **debug log** now records only the *names* of a scene action's
+  parameters, never their values, so secrets such as alarm/lock codes or push
+  tokens can't leak into a log that gets pasted into a bug report. (Debug logging
+  is off by default; the full values remain available via the admin-only trace
+  view.)
 
 ## [0.30.0] - 2026-06-26
 

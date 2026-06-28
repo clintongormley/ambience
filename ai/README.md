@@ -122,15 +122,5 @@ expects them:
 .claude-plugin/
 ├── marketplace.json              # hosts the `ambience` plugin
 └── plugin.json                   # the plugin manifest (points at the skill +
-                                  #   commands above; phase-2 MCP placeholder noted)
+                                  #   commands above)
 ```
-
-## Phase 2 (not built yet) — live MCP server
-
-A future release will add a live **MCP server** to this same plugin, exposing
-Ambience read/write as tools (`list_catalog`, `get_config`, `validate`, `save`,
-`get_diagnostics`) so Claude can read context and write config **live** —
-no bundle download / import copy-paste. It will be declared in
-[`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json) (see the
-`_comment_phase2_mcp` placeholder there). Phase 1 (this pack) is designed so
-phase 2 reuses the same schema, redaction, and validation surface.

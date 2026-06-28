@@ -75,7 +75,6 @@ export class AmbienceImportConfig extends LitElement {
       border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font: inherit;
     }
     button[disabled] { opacity: 0.5; cursor: not-allowed; }
-    button.download { background: var(--secondary-background-color, #e0e0e0); color: inherit; }
     .preview-panel {
       margin-top: 1rem; padding: 0.75rem;
       border: 1px solid var(--divider-color, #e0e0e0); border-radius: 6px;

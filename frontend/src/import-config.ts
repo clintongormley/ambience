@@ -121,6 +121,11 @@ function nameKey(scene: { name?: string; category: string }): string {
   return `${scene.category}\u0000${(scene.name ?? "").trim().toLowerCase()}`;
 }
 
+/** A scene's display label for the preview lists (unnamed scenes are possible). */
+function sceneLabel(scene: { name?: string }): string {
+  return scene.name ?? "(unnamed)";
+}
+
 /**
  * Compute what importing `env` into `currentConfig` would do, given the
  * categories that already exist. Pure: returns the classification plus the exact
@@ -150,11 +155,11 @@ export function computeImportPreview(
   if (env.mode === "replace") {
     const replaced = new Set(env.scenes.map((s) => s.category));
     for (const s of current) {
-      if (replaced.has(s.category)) removes.push(s.name ?? "(unnamed)");
+      if (replaced.has(s.category)) removes.push(sceneLabel(s));
     }
     resultScenes = current.filter((s) => !replaced.has(s.category));
     for (const s of env.scenes) {
-      adds.push(s.name ?? "(unnamed)");
+      adds.push(sceneLabel(s));
       resultScenes.push(s);
     }
   } else {
@@ -165,11 +170,11 @@ export function computeImportPreview(
       const existingIndex = named ? indexByKey.get(nameKey(s)) : undefined;
       if (existingIndex !== undefined) {
         resultScenes[existingIndex] = s;
-        updates.push(s.name ?? "(unnamed)");
+        updates.push(sceneLabel(s));
       } else {
         indexByKey.set(nameKey(s), resultScenes.length);
         resultScenes.push(s);
-        adds.push(s.name ?? "(unnamed)");
+        adds.push(sceneLabel(s));
       }
     }
   }

@@ -84,11 +84,22 @@ describe("ambience-actions-settings", () => {
   describe("fado notice", () => {
     beforeEach(() => window.localStorage.clear());
 
+    // Helper: resolves the fado-notice banner host, waits for its shadow to be
+    // ready, and returns it. The CTA/dismiss now live inside <ambience-banner>'s
+    // shadow as [data-test="banner-cta"] / [data-test="banner-dismiss"].
+    async function fadoBanner(view: any) {
+      const banner = view.shadowRoot.querySelector('[data-test="fado-notice"]');
+      if (banner) await banner.updateComplete;
+      return banner;
+    }
+
     test("shows when fado is not loaded and not dismissed", async () => {
       el = await mount({ localize: () => "", config: { components: ["cover", "light"] } });
       const notice = el.shadowRoot.querySelector('[data-test="fado-notice"]');
       expect(notice).not.toBeNull();
-      const cta = el.shadowRoot.querySelector('[data-test="fado-notice-cta"]') as HTMLAnchorElement;
+      const cta = (await fadoBanner(el)).shadowRoot.querySelector(
+        '[data-test="banner-cta"]',
+      ) as HTMLAnchorElement;
       expect(cta.getAttribute("href")).toBe(
         "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado",
       );
@@ -103,10 +114,7 @@ describe("ambience-actions-settings", () => {
 
     test("dismiss hides it and persists (stamped with the install id)", async () => {
       el = await mount({ localize: () => "", config: { components: ["light"] } });
-      const dismiss = el.shadowRoot.querySelector(
-        '[data-test="dismiss-fado-notice"]',
-      ) as HTMLButtonElement;
-      dismiss.click();
+      (await fadoBanner(el)).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
       await el.updateComplete;
       expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
       expect(window.localStorage.getItem("ambience-fado-notice-dismissed")).toBe("test-install");

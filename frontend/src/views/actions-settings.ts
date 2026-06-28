@@ -4,6 +4,7 @@ import { isComponentLoaded } from "../ha-config.js";
 import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
 import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
 import { bannerStyles } from "./banner-styles.js";
+import "./banner.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -643,27 +644,18 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderFadoNotice() {
     if (this._fadoNoticeDismissed || isComponentLoaded(this.hass, FADO_DOMAIN)) return "";
     return html`
-      <div class="banner banner-hint" data-test="fado-notice">
-        <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
-        <div class="banner-text">
-          <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
-          <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
-        </div>
-        <a
-          class="banner-cta"
-          data-test="fado-notice-cta"
-          href=${FADO_HACS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}</a>
-        <button
-          class="banner-dismiss"
-          data-test="dismiss-fado-notice"
-          title=${localize(this.hass, "ui.dismiss", "Dismiss")}
-          aria-label=${localize(this.hass, "ui.dismiss", "Dismiss")}
-          @click=${() => this._dismissFadoNotice()}
-        >✕</button>
-      </div>
+      <ambience-banner
+        data-test="fado-notice"
+        icon="mdi:lightbulb-on-outline"
+        hint
+        .ctaLabel=${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}
+        .ctaHref=${FADO_HACS_URL}
+        .dismissLabel=${localize(this.hass, "ui.dismiss", "Dismiss")}
+        @banner-dismiss=${() => this._dismissFadoNotice()}
+      >
+        <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
+        <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
+      </ambience-banner>
     `;
   }
 

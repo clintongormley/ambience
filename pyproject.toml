@@ -33,13 +33,15 @@ source = ["custom_components.ambience"]
 branch = true
 
 [tool.coverage.report]
-# Backend is at 100.00% branch+line coverage; fail_under keeps 1 point of
-# headroom. Two spots carry inline pragmas: time_of_day._clamp_emptied's
-# endpoint-count guard is `# pragma: no cover` — genuinely unreachable, since
-# callers always pass _resolve_range first, which guarantees 2 endpoints; and
-# trace.py's import-time logger-level one-shot is `# pragma: no branch` — its
-# False branch is just impractical to exercise (the module is imported once,
-# already NOTSET, before any test could preset the level), not impossible.
+# Backend coverage runs close to 100% (~99.8% line+branch); fail_under=99 leaves
+# a point of headroom for a handful of defensive/edge branches across the suite
+# that aren't worth a dedicated test. Two spots also carry inline pragmas:
+# time_of_day._clamp_emptied's endpoint-count guard is `# pragma: no cover` —
+# genuinely unreachable, since callers always pass _resolve_range first, which
+# guarantees 2 endpoints; and trace.py's import-time logger-level one-shot is
+# `# pragma: no branch` — its False branch is just impractical to exercise (the
+# module is imported once, already NOTSET, before any test could preset the
+# level), not impossible.
 fail_under = 99
 show_missing = true
 exclude_also = [

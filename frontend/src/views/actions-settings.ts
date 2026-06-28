@@ -5,7 +5,6 @@ import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18
 import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
 import { bannerStyles } from "./banner-styles.js";
 import "./ambience-help.js";
-import "./ambience-doc-link.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
 // existing importers of this view keep working.
@@ -631,8 +630,7 @@ export class AmbienceActionsSettings extends LitElement {
       <section>
         <div class="section-heading">
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
-          <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
-          <ambience-doc-link .hass=${this.hass} path="actions"></ambience-doc-link>
+          <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")} .docPath=${"actions"}></ambience-help>
         </div>
         ${this._renderFadoNotice()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}

@@ -7,7 +7,6 @@ import { categoryColorLabel, localize, localizeWsError } from "../i18n.js";
 import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
 import "./ambience-help.js";
-import "./ambience-doc-link.js";
 
 @customElement("ambience-categories-settings")
 export class AmbienceCategoriesSettings extends LitElement {
@@ -404,8 +403,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         <button class="add" @click=${() => this._addCategory()}>
           ${localize(this.hass, "ui.category_add", "+ Add category")}
         </button>
-        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")}></ambience-help>
-        <ambience-doc-link .hass=${this.hass} path="getting-started/step-1-scopes-and-categories"></ambience-doc-link>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")} .docPath=${"getting-started/step-1-scopes-and-categories"}></ambience-help>
       </div>
       ${this._renderModal()}
     `;

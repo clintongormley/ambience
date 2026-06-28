@@ -1169,11 +1169,8 @@ export class AmbienceSceneEditor extends LitElement {
               "ui.help_apply_on_every_match",
               "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
             )}
+            .docPath=${"actions/apply-on-every-match"}
           ></ambience-help>
-          <ambience-doc-link
-            .hass=${this.hass}
-            path="actions/apply-on-every-match"
-          ></ambience-doc-link>
         </label>
         ${renderHaSwitch({
           checked: this._draft!.apply === "always",

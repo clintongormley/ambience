@@ -19,6 +19,8 @@ import {
   setExpandedScopes,
 } from "../ui-state.js";
 import { bannerStyles } from "./banner-styles.js";
+import "./banner.js";
+import "./language-banner.js";
 import { renderAggregateProblemFlag } from "./problem-flag.js";
 import { ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
@@ -912,39 +914,34 @@ export class AmbienceScopesView extends LitElement {
     setConditionsHintDismissed(this._store.installId);
   }
 
-  /** The optional, dismissible hint above the scope list, nudging the user to
-   *  configure Workday/Weather while either is still unset. */
+  /** The dismissible notices above the scope list: the optional conditions hint
+   *  (configure Workday/Weather) and the per-locale translation-request nudge.
+   *  Only rendered once static data has loaded (never over the loading state). */
   private _renderBanners() {
     if (!this._store.staticLoaded) return "";
-    if (!this._conditionsHintDismissed && this._conditionsUnconfigured) {
-      const { title, body } = this._conditionsHintText();
-      return html`
-        <div class="banner banner-hint" data-test="conditions-hint-banner">
-          <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
-          <div class="banner-text">
-            <strong>${title}</strong>
-            <span>${body}</span>
-          </div>
-          <button
-            class="banner-cta"
-            data-test="setup-conditions-btn"
-            @click=${() => this._openSettings("conditions")}
-          >
-            ${localize(this.hass, "ui.conditions_hint_cta", "Configure conditions")}
-          </button>
-          <button
-            class="banner-dismiss"
-            data-test="dismiss-conditions-hint"
-            title=${localize(this.hass, "ui.dismiss", "Dismiss")}
-            aria-label=${localize(this.hass, "ui.dismiss", "Dismiss")}
-            @click=${() => this._dismissConditionsHint()}
-          >
-            ✕
-          </button>
-        </div>
-      `;
-    }
-    return "";
+    return html`
+      ${this._renderConditionsHint()}
+      <ambience-language-banner .hass=${this.hass}></ambience-language-banner>
+    `;
+  }
+
+  private _renderConditionsHint() {
+    if (this._conditionsHintDismissed || !this._conditionsUnconfigured) return "";
+    const { title, body } = this._conditionsHintText();
+    return html`
+      <ambience-banner
+        data-test="conditions-hint-banner"
+        icon="mdi:lightbulb-on-outline"
+        hint
+        .ctaLabel=${localize(this.hass, "ui.conditions_hint_cta", "Configure conditions")}
+        .dismissLabel=${localize(this.hass, "ui.dismiss", "Dismiss")}
+        @banner-cta=${() => this._openSettings("conditions")}
+        @banner-dismiss=${() => this._dismissConditionsHint()}
+      >
+        <strong>${title}</strong>
+        <span>${body}</span>
+      </ambience-banner>
+    `;
   }
 
   // --- render --------------------------------------------------------------

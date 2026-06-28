@@ -51,15 +51,13 @@ export class AmbienceImportConfig extends LitElement {
       padding: 0.05rem 0.4rem; border-radius: 999px;
       background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
     }
-    .intro { color: var(--secondary-text-color, #666); margin-bottom: 0.5rem; }
     .help-link { color: var(--primary-color, #03a9f4); }
-    textarea.block {
-      width: 100%; box-sizing: border-box; min-height: 12rem;
-      font-family: var(--code-font-family, monospace); font-size: 0.85rem;
-      background: var(--secondary-background-color, #f5f5f5); color: inherit;
-      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 6px;
-      padding: 0.5rem; margin: 0.5rem 0;
-    }
+    ol.steps { margin: 0.25rem 0 0; padding-left: 1.5rem; }
+    ol.steps > li { margin-bottom: 1.1rem; }
+    ol.steps > li::marker { font-weight: 600; color: var(--primary-text-color, inherit); }
+    .step-title { font-weight: 600; margin-bottom: 0.2rem; }
+    .step-body { color: var(--secondary-text-color, #666); margin-bottom: 0.45rem; }
+    input.file { font: inherit; max-width: 100%; }
     button {
       background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff);
       border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font: inherit;
@@ -75,12 +73,6 @@ export class AmbienceImportConfig extends LitElement {
     .error { color: var(--error-color, #d32f2f); margin-top: 0.5rem; }
     .done { color: var(--success-color, #43a047); margin-top: 0.5rem; }
     .target { color: var(--secondary-text-color, #666); margin-bottom: 0.5rem; }
-    .controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    .upload {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      color: var(--secondary-text-color, #666); font-size: 0.85rem; cursor: pointer;
-    }
-    .upload input[type="file"] { max-width: 14rem; font: inherit; }
   `;
 
   private async _download(): Promise<void> {
@@ -91,30 +83,22 @@ export class AmbienceImportConfig extends LitElement {
     }
   }
 
-  private _setText(value: string): void {
-    this.text = value;
-    this.error = null;
-    this.done = null;
-    // Drop any stale preview so Import can't save a block the text no longer shows.
-    this.preview = null;
-  }
-
-  private _onInput(e: Event): void {
-    this._setText((e.target as HTMLTextAreaElement).value);
-  }
-
-  // Load a block the AI saved as a file, so the user can upload it instead of
-  // copy-pasting a long block.
+  // Step 3: the user uploads the file the AI produced. Reading it immediately
+  // previews the import (parse + classify) — no separate paste/preview step.
   private async _onFile(e: Event): Promise<void> {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
+    input.value = ""; // let the same file be re-selected after a fix
     if (!file) return;
+    this.done = null;
+    this.preview = null;
     try {
-      this._setText(await file.text());
+      this.text = await file.text();
     } catch (err) {
       this.error = localizeWsError(this.hass, err);
+      return;
     }
-    input.value = ""; // let the same file be re-selected after an edit
+    await this._doPreview();
   }
 
   private async _doPreview(): Promise<void> {
@@ -206,38 +190,38 @@ export class AmbienceImportConfig extends LitElement {
         <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
         <span class="beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
       </div>
-      <div class="intro">
-        ${localize(this.hass, "ui.import_intro", "Install the Ambience AI pack — a Claude Code plugin, a claude.ai skill, or a guide for any AI — then download your bundle below, describe what you want, and import the block it returns.")}
-        <a
-          class="help-link"
-          href=${AI_DOCS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          >${localize(this.hass, "ui.import_help_link", "Install & usage guide")}</a
-        >
-      </div>
-      <button class="download" @click=${() => this._download()}>
-        ${localize(this.hass, "ui.import_download_bundle", "Download AI bundle")}
-      </button>
-      <textarea
-        class="block"
-        .value=${this.text}
-        @input=${this._onInput}
-        placeholder=${localize(this.hass, "ui.import_placeholder", "Paste the YAML or JSON import block here")}
-      ></textarea>
-      <div class="controls">
-        <button class="preview" @click=${() => this._doPreview()}>
-          ${localize(this.hass, "ui.import_preview", "Preview")}
-        </button>
-        <label class="upload">
-          ${localize(this.hass, "ui.import_upload_file", "…or upload a file")}
+      <ol class="steps">
+        <li>
+          <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin")}</div>
+          <div class="step-body">
+            ${localize(this.hass, "ui.import_step1_desc", "Add the Ambience AI pack to your AI — a Claude Code plugin, a claude.ai skill, or a guide to paste into any AI.")}
+            <a class="help-link" href=${AI_DOCS_URL} target="_blank" rel="noopener noreferrer"
+              >${localize(this.hass, "ui.import_help_link", "Install & usage guide")}</a
+            >
+          </div>
+        </li>
+        <li>
+          <div class="step-title">${localize(this.hass, "ui.import_step2", "Download your AI bundle")}</div>
+          <div class="step-body">
+            ${localize(this.hass, "ui.import_step2_desc", "A snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Give it to the AI with your request.")}
+          </div>
+          <button class="download" @click=${() => this._download()}>
+            ${localize(this.hass, "ui.import_download_bundle", "Download AI bundle")}
+          </button>
+        </li>
+        <li>
+          <div class="step-title">${localize(this.hass, "ui.import_step3", "Upload the result")}</div>
+          <div class="step-body">
+            ${localize(this.hass, "ui.import_step3_desc", "Upload the YAML or JSON file the AI gives you. It's previewed before anything is saved.")}
+          </div>
           <input
+            class="file"
             type="file"
             accept=".yaml,.yml,.json,.txt"
             @change=${(e: Event) => this._onFile(e)}
           />
-        </label>
-      </div>
+        </li>
+      </ol>
       ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       ${this.preview ? this._renderPreview(this.preview) : nothing}
       ${this.done ? html`<div class="done">${this.done}</div>` : nothing}

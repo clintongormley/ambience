@@ -91,12 +91,16 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_title: "Author & fix scenes with AI",
       import_beta: "Beta",
       import_help_link: "Install & usage guide",
-      import_intro:
-        "Install the Ambience AI pack — a Claude Code plugin, a claude.ai skill, or a guide for any AI — then download your bundle below, describe what you want, and import the block it returns.",
+      import_step1: "Install the skill or plugin",
+      import_step1_desc:
+        "Add the Ambience AI pack to your AI — a Claude Code plugin, a claude.ai skill, or a guide to paste into any AI.",
+      import_step2: "Download your AI bundle",
+      import_step2_desc:
+        "A snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Give it to the AI with your request.",
+      import_step3: "Upload the result",
+      import_step3_desc:
+        "Upload the YAML or JSON file the AI gives you. It's previewed before anything is saved.",
       import_download_bundle: "Download AI bundle",
-      import_placeholder: "Paste the YAML or JSON import block here",
-      import_upload_file: "…or upload a file",
-      import_preview: "Preview",
       import_target: "Target",
       import_new_category: "New category to create",
       import_unknown_categories: "Unknown categories (create them first)",
@@ -650,12 +654,16 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_title: "Crea y arregla escenas con IA",
       import_beta: "Beta",
       import_help_link: "Guía de instalación y uso",
-      import_intro:
-        "Instala el paquete de IA de Ambience — un plugin de Claude Code, una skill de claude.ai o una guía para cualquier IA — luego descarga tu paquete abajo, describe lo que quieres e importa el bloque que devuelva.",
+      import_step1: "Instala la skill o el plugin",
+      import_step1_desc:
+        "Añade el paquete de IA de Ambience a tu IA — un plugin de Claude Code, una skill de claude.ai o una guía para pegar en cualquier IA.",
+      import_step2: "Descarga tu paquete de IA",
+      import_step2_desc:
+        "Una instantánea de tus áreas, entidades y acciones expuestas (datos de ubicación redactados) para que la IA cree sobre ella. Dásela a la IA con tu petición.",
+      import_step3: "Sube el resultado",
+      import_step3_desc:
+        "Sube el archivo YAML o JSON que te dé la IA. Se previsualiza antes de guardar nada.",
       import_download_bundle: "Descargar paquete de IA",
-      import_placeholder: "Pega aquí el bloque de importación YAML o JSON",
-      import_upload_file: "…o sube un archivo",
-      import_preview: "Vista previa",
       import_target: "Destino",
       import_new_category: "Nueva categoría a crear",
       import_unknown_categories: "Categorías desconocidas (créalas primero)",

@@ -48,24 +48,37 @@ describe("ambience-import-config", () => {
     return el;
   }
 
-  async function pasteAndPreview(block: string) {
-    const ta = el.shadowRoot.querySelector("textarea") as HTMLTextAreaElement;
-    ta.value = block;
-    ta.dispatchEvent(new Event("input"));
+  // Upload a file — the only input now. Reading it auto-previews (no paste box,
+  // no separate Preview button), so this awaits the file read + the preview's
+  // getScopeConfig/listCategories.
+  async function uploadAndPreview(block: string) {
+    const input = el.shadowRoot.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([block], "ambience-import.yaml", { type: "text/yaml" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    input.dispatchEvent(new Event("change"));
+    await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
-    (el.shadowRoot.querySelector("button.preview") as HTMLButtonElement).click();
-    // preview awaits getScopeConfig + listCategories.
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
   }
 
-  test("marks the feature Beta and links to install/usage docs", async () => {
+  function confirmButton() {
+    return el.shadowRoot.querySelector("button.confirm") as HTMLButtonElement;
+  }
+
+  test("lays out the three steps and marks the feature Beta", async () => {
     el = await mount();
-    expect((el.shadowRoot.textContent || "").toLowerCase()).toContain("beta");
+    const text = (el.shadowRoot.textContent || "").toLowerCase();
+    expect(text).toContain("beta");
+    expect(text).toContain("install");
+    expect(text).toContain("download");
+    expect(text).toContain("upload");
     const link = el.shadowRoot.querySelector("a.help-link") as HTMLAnchorElement;
-    expect(link).toBeTruthy();
     expect(link.getAttribute("href")).toContain("github.com");
     expect(link.getAttribute("target")).toBe("_blank");
+    // No paste box — upload is the only input.
+    expect(el.shadowRoot.querySelector("textarea")).toBeFalsy();
+    expect(el.shadowRoot.querySelector('input[type="file"]')).toBeTruthy();
   });
 
   test("the download button fetches the AI bundle", async () => {
@@ -74,9 +87,9 @@ describe("ambience-import-config", () => {
     expect(downloadAiBundle).toHaveBeenCalledOnce();
   });
 
-  test("previewing a valid block classifies adds, updates and a new category", async () => {
+  test("uploading a valid file previews adds, updates and a new category", async () => {
     el = await mount();
-    await pasteAndPreview(MERGE_BLOCK);
+    await uploadAndPreview(MERGE_BLOCK);
     const panel = el.shadowRoot.querySelector(".preview-panel");
     expect(panel).toBeTruthy();
     const text = panel.textContent as string;
@@ -85,48 +98,21 @@ describe("ambience-import-config", () => {
     expect(text).toContain("Movie Night"); // new category to create
   });
 
-  test("uploading a file populates the import text (no copy-paste needed)", async () => {
+  test("uploading an invalid file shows an error and no preview", async () => {
     el = await mount();
-    const input = el.shadowRoot.querySelector('input[type="file"]') as HTMLInputElement;
-    expect(input).toBeTruthy();
-    const file = new File([MERGE_BLOCK], "ambience-import.yaml", { type: "text/yaml" });
-    Object.defineProperty(input, "files", { value: [file], configurable: true });
-    input.dispatchEvent(new Event("change"));
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    const ta = el.shadowRoot.querySelector("textarea") as HTMLTextAreaElement;
-    expect(ta.value).toContain("ambience_import");
-  });
-
-  test("an invalid block shows an error and no preview", async () => {
-    el = await mount();
-    await pasteAndPreview("not a valid block");
+    await uploadAndPreview("not a valid block");
     expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
     expect(el.shadowRoot.querySelector(".preview-panel")).toBeFalsy();
   });
 
-  test("editing the text after a preview clears the stale preview", async () => {
-    el = await mount();
-    await pasteAndPreview(MERGE_BLOCK);
-    expect(el.shadowRoot.querySelector(".preview-panel")).toBeTruthy();
-    // Edit the textarea — the now-stale preview (and its Import button) must go.
-    const ta = el.shadowRoot.querySelector("textarea") as HTMLTextAreaElement;
-    ta.value = `${MERGE_BLOCK}\n# edited`;
-    ta.dispatchEvent(new Event("input"));
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".preview-panel")).toBeFalsy();
-    expect(el.shadowRoot.querySelector("button.confirm")).toBeFalsy();
-  });
-
   test("confirming creates the new category, validates and saves the merged config", async () => {
     el = await mount();
-    await pasteAndPreview(MERGE_BLOCK);
-    (el.shadowRoot.querySelector("button.confirm") as HTMLButtonElement).click();
+    await uploadAndPreview(MERGE_BLOCK);
+    confirmButton().click();
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
 
     expect(saveCategories).toHaveBeenCalledOnce();
-    // The created list includes the existing + the new movie_night category.
     const savedCats = (saveCategories as any).mock.calls[0][1];
     expect(savedCats.map((c: any) => c.id)).toContain("movie_night");
 
@@ -146,11 +132,10 @@ describe("ambience-import-config", () => {
     window.addEventListener("ambience-categories-changed", handler);
     window.addEventListener("ambience-config-imported", handler);
     try {
-      await pasteAndPreview(MERGE_BLOCK); // declares a new movie_night category
-      (el.shadowRoot.querySelector("button.confirm") as HTMLButtonElement).click();
+      await uploadAndPreview(MERGE_BLOCK); // declares a new movie_night category
+      confirmButton().click();
       await new Promise((r) => setTimeout(r, 0));
       await el.updateComplete;
-      // Scenes refresh (config-imported) AND the new category list refreshes.
       expect(seen.has("ambience-config-imported")).toBe(true);
       expect(seen.has("ambience-categories-changed")).toBe(true);
     } finally {
@@ -161,8 +146,7 @@ describe("ambience-import-config", () => {
 
   test("a scene referencing an unknown category blocks the import", async () => {
     el = await mount();
-    await pasteAndPreview(UNKNOWN_CATEGORY_BLOCK);
-    const confirm = el.shadowRoot.querySelector("button.confirm") as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
+    await uploadAndPreview(UNKNOWN_CATEGORY_BLOCK);
+    expect(confirmButton().disabled).toBe(true);
   });
 });

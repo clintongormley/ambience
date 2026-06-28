@@ -121,6 +121,15 @@ run. It describes what *would* happen, not what actually happened in your home
 
 ![Simulate tool with trace details.](../images/getting-started/step-9/simulate_result.png "Simulate tool with trace details.")
 
+## Download diagnostics
+
+The **Download diagnostics** option saves a JSON snapshot scoped to that one
+(scope, category): its configuration, the global context needed to read it
+(categories and conditions), and its recent traces. It is the quickest thing to
+attach to a bug report when you already know which scene group is misbehaving.
+See [Reporting an issue](../reporting-an-issue.md#downloading-diagnostics) for
+what the file contains and for the whole-integration alternative.
+
 ______________________________________________________________________
 
 If a problem still has you stuck, see

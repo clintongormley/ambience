@@ -263,9 +263,15 @@ def _format_action(action: dict[str, Any]) -> str:
     targets = action.get("entity_ids") or []
     if targets:
         parts.append(f"[{', '.join(targets)}]")
-    params = action.get("params") or {}
-    if params:
-        parts.append(str(params))
+    params = action.get("params")
+    if isinstance(params, dict) and params:
+        # Log param KEYS only, never their values — action params can carry
+        # secrets (alarm/lock codes, push tokens, message bodies) and trace debug
+        # logs get pasted into issues. The full values stay available via the
+        # admin-gated trace API. (redact.py can't be imported here — it imports
+        # this module — so this is a local, allowlist-free scrub.) Only a dict is
+        # introspected; any other (malformed) shape is skipped so it can't leak.
+        parts.append("{" + ", ".join(sorted(map(str, params))) + "}")
     if action.get("unexposed"):
         parts.append("(skipped — not exposed)")
     return " ".join(parts)

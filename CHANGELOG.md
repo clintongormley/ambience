@@ -15,7 +15,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   where it has explanatory text the popover ends with a "Read more" link to the
   matching online documentation page, and where it doesn't the (?) opens that
   page directly in a new tab.
-- A new **AI** tab in Settings (**beta**) lets you build and fix scenes by
+- A new **AI** tab in Settings (**beta**, off by default — turn it on in the
+  integration's options: Settings → Devices & services → Ambience → Configure)
+  lets you build and fix scenes by
   describing what you want to an AI. *Download AI bundle* exports a snapshot of your areas,
   entities, exposed actions and current config (presence/location data redacted)
   to hand to an AI; upload the config file it returns back into the same tab to

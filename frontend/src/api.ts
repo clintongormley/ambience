@@ -140,6 +140,18 @@ export async function getInstallId(hass: HassConnection): Promise<string | null>
   return res.install_id;
 }
 
+/** Panel-relevant config-entry options the frontend gates UI on. */
+export interface AmbienceOptions {
+  /** Whether the AI authoring tab (beta) is enabled. Off by default; the user
+   *  opts in via the integration's options. */
+  enable_ai_tab: boolean;
+}
+
+/** Read the panel-relevant integration options (e.g. whether to show the AI tab). */
+export async function getOptions(hass: HassConnection): Promise<AmbienceOptions> {
+  return hass.callWS<AmbienceOptions>({ type: "ambience/options" });
+}
+
 /** Read-only list of the watches the engine derives from a scope's scenes,
  *  for the Auto-triggers display. `scope_id` is omitted for the house scope. */
 export async function listAutoTriggers(

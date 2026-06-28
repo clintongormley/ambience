@@ -79,7 +79,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     ui: {
       language_request: {
-        message: "Your Home Assistant language is {language}, but {product} isn't translated into it yet.",
+        message:
+          "Your Home Assistant language is {language}, but {product} isn't translated into it yet.",
         action: "Request a translation →",
         dismiss: "Dismiss",
       },
@@ -650,7 +651,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     ui: {
       language_request: {
-        message: "El idioma de tu Home Assistant es {language}, pero {product} aún no está traducido a ese idioma.",
+        message:
+          "El idioma de tu Home Assistant es {language}, pero {product} aún no está traducido a ese idioma.",
         action: "Solicitar una traducción →",
         dismiss: "Descartar",
       },

@@ -333,22 +333,30 @@ describe("weatherAttrUnit", () => {
 describe("getLanguageSupport", () => {
   it("covered base language → available", () => {
     expect(getLanguageSupport({ language: "es" })).toEqual({
-      available: true, code: "es", baseCode: "es",
+      available: true,
+      code: "es",
+      baseCode: "es",
     });
   });
   it("covered via base (region variant of a shipped base) → available", () => {
     expect(getLanguageSupport({ language: "es-ES" })).toEqual({
-      available: true, code: "es-ES", baseCode: "es",
+      available: true,
+      code: "es-ES",
+      baseCode: "es",
     });
   });
   it("uncovered language → not available", () => {
     expect(getLanguageSupport({ language: "fr" })).toEqual({
-      available: false, code: "fr", baseCode: "fr",
+      available: false,
+      code: "fr",
+      baseCode: "fr",
     });
   });
   it("uncovered region variant keeps full code + base", () => {
     expect(getLanguageSupport({ language: "pt-BR" })).toEqual({
-      available: false, code: "pt-BR", baseCode: "pt",
+      available: false,
+      code: "pt-BR",
+      baseCode: "pt",
     });
   });
   it("undeterminable language → available (no nudge)", () => {

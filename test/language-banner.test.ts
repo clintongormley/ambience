@@ -65,12 +65,16 @@ describe("ambience-language-banner", () => {
   it("STAYS dismissed for an earlier locale after dismissing another", async () => {
     // dismiss fr, dismiss de, switch back to fr → still hidden (set, not single)
     const fr = await mount("fr");
-    fr.shadowRoot.querySelector("ambience-banner").shadowRoot
-      .querySelector('[data-test="banner-dismiss"]').click();
+    fr.shadowRoot
+      .querySelector("ambience-banner")
+      .shadowRoot.querySelector('[data-test="banner-dismiss"]')
+      .click();
     await fr.updateComplete;
     const de = await mount("de");
-    de.shadowRoot.querySelector("ambience-banner").shadowRoot
-      .querySelector('[data-test="banner-dismiss"]').click();
+    de.shadowRoot
+      .querySelector("ambience-banner")
+      .shadowRoot.querySelector('[data-test="banner-dismiss"]')
+      .click();
     await de.updateComplete;
     const frAgain = await mount("fr");
     expect(frAgain.shadowRoot.querySelector("ambience-banner")).toBeNull();

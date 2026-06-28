@@ -13,6 +13,32 @@ what blocked the scene, and gives you a corrected version.
 
 Open it from the Ambience panel → **Settings → the AI tab**.
 
+## How it works — three steps
+
+1. **Install the skill or plugin** (see [below](#installing-the-ai-pack)) — once
+   per AI. This teaches the AI the Ambience schema and how to read a diagnostic.
+2. **Download your AI bundle.** In the AI tab, click **Download AI bundle**. It's a
+   snapshot of your areas, floors, entities, exposed actions and current config —
+   so the AI references *your* real ids, not made-up ones. Give the file to the AI
+   along with your request.
+3. **Upload the result.** The AI returns a small YAML (or JSON) file. Upload it in
+   the AI tab — Ambience **previews** exactly what it will add, update or remove
+   (and any new category it will create) before you confirm.
+
+!!! question "Can you do better than the AI?"
+    This feature is only as good as the knowledge pack behind it — and **you can
+    help make it better**. If the AI gives you bad advice, please
+    [open a GitHub issue](https://github.com/clintongormley/ambience/issues/new)
+    with:
+
+    - **the AI's suggestion** — the import block it produced,
+    - **your corrected version**, and
+    - **a short note** on what was wrong and why your version is better.
+
+    Real before/after examples like these are exactly what's used to improve the
+    cookbook the AI learns from — so the next person (and the next *you*) gets
+    better answers.
+
 ## Installing the AI pack
 
 The "AI pack" teaches the AI the Ambience schema and how to read a diagnostic.
@@ -52,17 +78,6 @@ Paste the single self-contained guide into your AI:
     to update the plugin first (so it isn't working from an out-of-date schema) —
     update with `/plugin marketplace update ambience` then re-install, or enable
     auto-update as above.
-
-## How it works — three steps
-
-1. **Install the skill or plugin** (above) — once per AI.
-2. **Download your AI bundle.** In the AI tab, click **Download AI bundle**. It's a
-   snapshot of your areas, floors, entities, exposed actions and current config —
-   so the AI references *your* real ids, not made-up ones. Give the file to the AI
-   along with your request.
-3. **Upload the result.** The AI returns a small YAML (or JSON) file. Upload it in
-   the AI tab — Ambience **previews** exactly what it will add, update or remove
-   (and any new category it will create) before you confirm.
 
 ## Privacy
 

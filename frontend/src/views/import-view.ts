@@ -23,6 +23,10 @@ import type { SceneCategory } from "../types.js";
 // in the AI tab. Points at the published docs, not a branch, so it can't go stale.
 const AI_DOCS_URL = "https://clintongormley.github.io/ambience/ai-assisted-scenes/";
 
+// Where to send "the AI got it wrong, here's a better answer" feedback — used to
+// improve the cookbook the AI learns from.
+const AI_ISSUES_URL = "https://github.com/clintongormley/ambience/issues/new";
+
 /**
  * Paste-and-import view for AI-authored config blocks.
  *
@@ -52,6 +56,14 @@ export class AmbienceImportConfig extends LitElement {
       background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
     }
     .help-link { color: var(--primary-color, #03a9f4); }
+    .feedback {
+      margin-top: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
+      background: var(--secondary-background-color, #f5f5f5);
+      border: 1px solid var(--divider-color, #e0e0e0);
+    }
+    .feedback .fb-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .feedback .fb-body { color: var(--secondary-text-color, #666); }
+    .feedback a { color: var(--primary-color, #03a9f4); }
     ol.steps { margin: 0.25rem 0 0; padding-left: 1.5rem; }
     ol.steps > li { margin-bottom: 1.1rem; }
     ol.steps > li::marker { font-weight: 600; color: var(--primary-text-color, inherit); }
@@ -225,6 +237,15 @@ export class AmbienceImportConfig extends LitElement {
       ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       ${this.preview ? this._renderPreview(this.preview) : nothing}
       ${this.done ? html`<div class="done">${this.done}</div>` : nothing}
+      <div class="feedback">
+        <div class="fb-title">${localize(this.hass, "ui.import_feedback_title", "Can you do better than the AI?")}</div>
+        <div class="fb-body">
+          ${localize(this.hass, "ui.import_feedback_body", "If the AI gives you bad advice, share its suggestion, your corrected version, and a short note on what was wrong — it's used to improve the cookbook the AI learns from.")}
+          <a class="fb-link" href=${AI_ISSUES_URL} target="_blank" rel="noopener noreferrer"
+            >${localize(this.hass, "ui.import_feedback_link", "Report it on GitHub")}</a
+          >
+        </div>
+      </div>
     `;
   }
 }

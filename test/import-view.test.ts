@@ -81,6 +81,15 @@ describe("ambience-import-config", () => {
     expect(el.shadowRoot.querySelector('input[type="file"]')).toBeTruthy();
   });
 
+  test("invites feedback when the AI gets it wrong, linking to GitHub issues", async () => {
+    el = await mount();
+    expect((el.shadowRoot.textContent || "").toLowerCase()).toContain("better than the ai");
+    const link = el.shadowRoot.querySelector("a.fb-link") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toContain("github.com");
+    expect(link.getAttribute("href")).toContain("issues");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
   test("the download button fetches the AI bundle", async () => {
     el = await mount();
     (el.shadowRoot.querySelector("button.download") as HTMLButtonElement).click();

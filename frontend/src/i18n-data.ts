@@ -109,6 +109,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_removes: "Remove",
       import_confirm: "Import",
       import_done: "Imported successfully.",
+      import_feedback_title: "Can you do better than the AI?",
+      import_feedback_body:
+        "If the AI gives you bad advice, share its suggestion, your corrected version, and a short note on what was wrong — it's used to improve the cookbook the AI learns from.",
+      import_feedback_link: "Report it on GitHub",
       settings_ambience_field_name: "Switch name",
       settings_ambience_field_pause: "Pause for",
       settings_reapply_enable_label: "Re-run all scenes after inactivity",
@@ -672,6 +676,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_removes: "Eliminar",
       import_confirm: "Importar",
       import_done: "Importado correctamente.",
+      import_feedback_title: "¿Puedes hacerlo mejor que la IA?",
+      import_feedback_body:
+        "Si la IA te da malos consejos, comparte su sugerencia, tu versión corregida y una nota breve sobre qué estaba mal — se usa para mejorar el recetario del que aprende la IA.",
+      import_feedback_link: "Repórtalo en GitHub",
       settings_ambience_field_name: "Nombre del interruptor",
       settings_ambience_field_pause: "Pausar durante",
       settings_reapply_enable_label: "Volver a ejecutar todas las escenas tras inactividad",

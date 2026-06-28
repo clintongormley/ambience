@@ -101,6 +101,10 @@ describe("<ambience-card>", () => {
 
 describe("<ambience-card> lazy-load failure", () => {
   test("a failed load is caught, shows a hint, and a later setConfig retries", async () => {
+    // The card logs the load failure via console.error (a real production
+    // diagnostic). Suppress it so the deliberately-injected failure doesn't dump
+    // a stack to the test output, but assert the diagnostic actually fired.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(loadFrontend).mockRejectedValueOnce(new Error("network boom"));
     const el = document.createElement("ambience-card") as HTMLElement & {
       setConfig: (c: object) => void;
@@ -118,6 +122,8 @@ describe("<ambience-card> lazy-load failure", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(el.querySelector("ambience-frontend")).not.toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
     el.remove();
   });
 });

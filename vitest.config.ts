@@ -5,6 +5,15 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./test/setup.ts"],
     include: ["test/**/*.test.ts"],
+    // Node 22+ ships an experimental global `localStorage` that emits an
+    // ExperimentalWarning the moment it's referenced (and returns undefined
+    // without --localstorage-file). jsdom + test/setup.ts provide the real
+    // window.localStorage, so disable Node's variant in the worker processes to
+    // keep test output pristine. Set on both pools so it applies whichever runs.
+    poolOptions: {
+      forks: { execArgv: ["--no-experimental-webstorage"] },
+      threads: { execArgv: ["--no-experimental-webstorage"] },
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

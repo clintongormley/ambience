@@ -653,6 +653,15 @@ describe("ambience-scopes-view", () => {
 
   // --- empty-state banners -------------------------------------------------
 
+  // Helper: resolves the conditions-hint banner host, waits for its shadow to
+  // be ready, and returns it. CTA/dismiss now live inside <ambience-banner>'s
+  // shadow as [data-test="banner-cta"] / [data-test="banner-dismiss"].
+  async function conditionsBanner(view: any) {
+    const banner = view.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    if (banner) await banner.updateComplete;
+    return banner;
+  }
+
   test("no longer shows a required 'set up an action' banner (default actions are seeded)", async () => {
     el = await mount({ actions: [] });
     expect(el.shadowRoot.querySelector('[data-test="no-actions-banner"]')).toBeNull();
@@ -706,7 +715,8 @@ describe("ambience-scopes-view", () => {
     el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
       detail = e.detail;
     });
-    (el.shadowRoot.querySelector('[data-test="setup-conditions-btn"]') as HTMLElement).click();
+    const banner = await conditionsBanner(el);
+    (banner.shadowRoot.querySelector('[data-test="banner-cta"]') as HTMLElement).click();
     expect(detail).toEqual({ tab: "conditions" });
   });
 
@@ -721,7 +731,7 @@ describe("ambience-scopes-view", () => {
   test("dismissing the conditions hint hides it and persists across remounts", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
-    (el.shadowRoot.querySelector('[data-test="dismiss-conditions-hint"]') as HTMLElement).click();
+    (await conditionsBanner(el)).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
 
@@ -735,7 +745,7 @@ describe("ambience-scopes-view", () => {
     // Dismiss against install "entry-1".
     vi.mocked(api.getInstallId).mockResolvedValue("entry-1");
     el = await mount();
-    (el.shadowRoot.querySelector('[data-test="dismiss-conditions-hint"]') as HTMLElement).click();
+    (await conditionsBanner(el)).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
 
@@ -779,6 +789,18 @@ describe("ambience-scopes-view", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+  });
+
+  test("shows the translation nudge for an uncovered HA language", async () => {
+    el = await mount();
+    // Override hass with an uncovered language after mount so the component sees
+    // the change via willUpdate.
+    el.hass = { ...el.hass, language: "fr" };
+    await el.updateComplete;
+    const lang = el.shadowRoot.querySelector("ambience-language-banner");
+    expect(lang).not.toBeNull();
+    await lang.updateComplete;
+    expect(lang.shadowRoot.querySelector("ambience-banner")).not.toBeNull();
   });
 
   // --- duplicate ----------------------------------------------------------

@@ -39,22 +39,26 @@ export function setFilterCategory(id: string): void {
   }
 }
 
-/** The remembered set of expanded scope keys. Returns [] when nothing is stored,
- *  the value isn't valid JSON, or it isn't an array. A stored array is recovered
- *  leniently: any non-string entries are dropped and the valid keys kept (a
- *  corrupted entry shouldn't discard the user's whole expanded set — unknown
- *  keys are harmless, they just never match a scope at render). */
-export function getExpandedScopes(): string[] {
+/** Read a JSON string-array from localStorage leniently: [] when absent, not
+ *  valid JSON, or not an array; non-string entries are dropped (one corrupted
+ *  entry shouldn't discard the rest, and unknown keys are harmless — they just
+ *  never match at render). Shared by every stored-set accessor. */
+function getStringArray(key: string): string[] {
   try {
-    const raw = window.localStorage.getItem(EXPANDED_SCOPES_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((k): k is string => typeof k === "string");
+    return parsed.filter((v): v is string => typeof v === "string");
   } catch {
-    // Malformed JSON or storage disabled — treat as nothing expanded.
+    // Malformed JSON or storage disabled — treat as empty.
     return [];
   }
+}
+
+/** The remembered set of expanded scope keys. */
+export function getExpandedScopes(): string[] {
+  return getStringArray(EXPANDED_SCOPES_KEY);
 }
 
 /** Persist the set of expanded scope keys. */
@@ -73,16 +77,7 @@ export function setExpandedScopes(keys: string[]): void {
  *  valid keys kept (a corrupted entry shouldn't discard the user's whole
  *  collapsed set — unknown keys are harmless, they just never match at render). */
 export function getCollapsedCategories(): string[] {
-  try {
-    const raw = window.localStorage.getItem(COLLAPSED_CATEGORIES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((k): k is string => typeof k === "string");
-  } catch {
-    // Malformed JSON or storage disabled — treat as nothing collapsed.
-    return [];
-  }
+  return getStringArray(COLLAPSED_CATEGORIES_KEY);
 }
 
 /** Persist the set of collapsed category-section keys. */
@@ -138,4 +133,31 @@ export function getFadoNoticeDismissed(installId: string | null): boolean {
 /** Persist that the user dismissed the Fado notice for this install. */
 export function setFadoNoticeDismissed(installId: string | null): void {
   setInstallDismissed(FADO_NOTICE_DISMISSED_KEY, installId);
+}
+
+const LANG_REQUEST_DISMISSED_KEY = "ambience-lang-request-dismissed";
+
+/** The set of locale codes for which the user dismissed the "request a
+ *  translation" nudge. Returns [] when nothing is stored, the value isn't valid
+ *  JSON, or it isn't an array (non-string entries are dropped). */
+export function getDismissedLangRequests(): string[] {
+  return getStringArray(LANG_REQUEST_DISMISSED_KEY);
+}
+
+/** Whether the translation nudge was dismissed for `code`. */
+export function isLangRequestDismissed(code: string): boolean {
+  return getDismissedLangRequests().includes(code);
+}
+
+/** Record that the user dismissed the translation nudge for `code` (append +
+ *  de-dup). A single-value store would forget earlier dismissals — dismiss fr,
+ *  then de, then switch back to fr would re-nag. */
+export function persistDismissedLangRequest(code: string): void {
+  try {
+    const current = getDismissedLangRequests();
+    if (current.includes(code)) return;
+    window.localStorage.setItem(LANG_REQUEST_DISMISSED_KEY, JSON.stringify([...current, code]));
+  } catch {
+    // Storage disabled — the dismissal just won't persist.
+  }
 }

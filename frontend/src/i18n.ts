@@ -8,9 +8,66 @@ export interface HassLike {
   [key: string]: unknown;
 }
 
+/** Normalise a raw locale tag to its base language subtag, e.g.
+ *  "pt-BR" / "pt_BR" → "pt". The single home for this rule so detection and
+ *  string-loading can never drift apart. */
+function _baseCode(raw: string): string {
+  return raw.toLowerCase().split(/[-_]/)[0];
+}
+
 function _localeOf(hass: HassLike | undefined): string {
-  const lang = (hass?.language as string | undefined)?.toLowerCase().split(/[-_]/)[0];
+  const raw = hass?.language as string | undefined;
+  const lang = raw ? _baseCode(raw) : undefined;
   return lang && lang in AMBIENCE_STRINGS_BY_LOCALE ? lang : "en";
+}
+
+export interface LanguageSupport {
+  /** Whether Ambience ships UI strings for the user's language. */
+  available: boolean;
+  /** Full requested locale, e.g. "pt-BR". */
+  code: string;
+  /** Base language of `code`, e.g. "pt". */
+  baseCode: string;
+}
+
+/** Whether Ambience ships UI strings for the user's HA language. Resolves the
+ *  base code from `hass.language` and tests catalogue membership the SAME way
+ *  {@link _localeOf} does (`baseCode in catalogue`), so `available` can never
+ *  disagree with which catalogue `localize` loads — even if region-specific keys
+ *  are ever added, both would still key off the base. An undeterminable language
+ *  is treated as available (no nudge). */
+export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
+  const raw = hass?.language as string | undefined;
+  if (!raw) return { available: true, code: "", baseCode: "" };
+  // Normalise separators to hyphens (HA uses BCP-47, but be robust to "pt_BR")
+  // so the display name, issue URL, and per-locale dismissal all key off one
+  // canonical form — and `pt-BR`/`pt_BR` can't be treated as distinct locales.
+  const code = raw.replace(/_/g, "-");
+  const baseCode = _baseCode(code);
+  const available = baseCode in AMBIENCE_STRINGS_BY_LOCALE;
+  return { available, code, baseCode };
+}
+
+/** Native display name for a BCP-47 code ("fr" → "français", "pt-BR" →
+ *  "português (Brasil)"): native name → English name → raw code, every Intl call
+ *  guarded. NB Intl.DisplayNames defaults to fallback:"code", so an unknown tag
+ *  echoes the code back; the `!== code` guards stop that echo masquerading as a
+ *  real name. */
+export function languageDisplayName(code: string): string {
+  if (!code) return code;
+  try {
+    const native = new Intl.DisplayNames([code], { type: "language" }).of(code);
+    if (native && native !== code) return native;
+  } catch {
+    // Invalid locale for Intl — fall through to the English name.
+  }
+  try {
+    const english = new Intl.DisplayNames(["en"], { type: "language" }).of(code);
+    if (english && english !== code) return english;
+  } catch {
+    // Intl unavailable — fall through to the raw code.
+  }
+  return code;
 }
 
 function _interp(s: string, ph?: Record<string, string>): string {

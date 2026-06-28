@@ -1,3 +1,9 @@
+// Silence Lit's "dev mode" banner in test output. Lit's dev build emits it once
+// via issueWarning("dev-mode", …), which is skipped when its issued-warnings set
+// already contains the code. Pre-seed it here (this setup file runs before any
+// Lit import) — we run the dev build under test deliberately, so it's pure noise.
+(globalThis as { litIssuedWarnings?: Set<string> }).litIssuedWarnings = new Set(["dev-mode"]);
+
 // jsdom under this Node/vitest combo doesn't expose a working localStorage
 // (Node's experimental Web Storage is gated behind --localstorage-file). The
 // panel uses window.localStorage to remember a dismissed banner, so provide a

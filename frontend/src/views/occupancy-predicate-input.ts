@@ -146,7 +146,6 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     return renderSelect(
       this.hass,
       "negate",
-      "negate",
       negate ? "is_not" : "is",
       [
         { value: "is", label: localize(this.hass, "ui.occupancy_is", "is") },
@@ -160,7 +159,6 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     return renderSelect(
       this.hass,
       "state",
-      "state",
       occupied ? "occupied" : "vacant",
       [
         { value: "occupied", label: localize(this.hass, "ui.occupancy_detected", "Detected") },
@@ -173,7 +171,6 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   private _renderQuant(quant: OccupancyQuant) {
     return renderSelect(
       this.hass,
-      "quant",
       "quant",
       quant,
       [

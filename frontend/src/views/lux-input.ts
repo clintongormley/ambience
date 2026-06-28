@@ -208,7 +208,6 @@ export class AmbienceLuxInput extends LitElement {
     const select = renderSelect(
       this.hass,
       "band",
-      "band",
       custom ? CUSTOM : (cur.range ?? this._defaultRangeId()),
       options,
       (v) => this._setBand(v),
@@ -244,7 +243,6 @@ export class AmbienceLuxInput extends LitElement {
     return renderSelect(
       this.hass,
       "quant",
-      "quant",
       quant,
       [
         { value: "any", label: localize(this.hass, "ui.lux_any", "Any of") },
@@ -257,7 +255,6 @@ export class AmbienceLuxInput extends LitElement {
   private _renderNegate(negate: boolean) {
     return renderSelect(
       this.hass,
-      "negate",
       "negate",
       negate ? "is_not" : "is",
       [

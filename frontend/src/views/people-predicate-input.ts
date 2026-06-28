@@ -295,7 +295,6 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return renderSelect(
       this.hass,
       "mode",
-      "mode",
       mode,
       MODES.map((m) => ({ value: m, label: this._modeLabel(m) })),
       (v) => this._setMode(v as Mode),
@@ -330,7 +329,6 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return renderSelect(
       this.hass,
       "negate",
-      "negate",
       negate ? "true" : "false",
       [
         { value: "false", label: localize(this.hass, "ui.people_is_at", "Is at") },
@@ -344,7 +342,6 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const zones = this._zones().filter((z) => z.id !== "zone.home");
     return renderSelect(
       this.hass,
-      "where",
       "where",
       where,
       [

@@ -39,9 +39,13 @@ export interface LanguageSupport {
 export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
   const raw = hass?.language as string | undefined;
   if (!raw) return { available: true, code: "", baseCode: "" };
-  const baseCode = _baseCode(raw);
+  // Normalise separators to hyphens (HA uses BCP-47, but be robust to "pt_BR")
+  // so the display name, issue URL, and per-locale dismissal all key off one
+  // canonical form — and `pt-BR`/`pt_BR` can't be treated as distinct locales.
+  const code = raw.replace(/_/g, "-");
+  const baseCode = _baseCode(code);
   const available = baseCode in AMBIENCE_STRINGS_BY_LOCALE;
-  return { available, code: raw, baseCode };
+  return { available, code, baseCode };
 }
 
 /** Native display name for a BCP-47 code ("fr" → "français", "pt-BR" →

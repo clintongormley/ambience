@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../frontend/src/views/language-banner";
 import { buildTranslationRequestUrl } from "../frontend/src/github";
 
@@ -18,6 +18,7 @@ describe("ambience-language-banner", () => {
     document.body.innerHTML = "";
     window.localStorage.clear();
   });
+  afterEach(() => vi.restoreAllMocks());
 
   it("shows for an uncovered, undismissed language", async () => {
     const el = await mount("fr");
@@ -84,5 +85,29 @@ describe("ambience-language-banner", () => {
     await de.updateComplete;
     const frAgain = await mount("fr");
     expect(frAgain.shadowRoot.querySelector("ambience-banner")).toBeNull();
+  });
+
+  it("keeps each dismissed locale hidden for the session even when storage is unavailable", async () => {
+    // Private-mode style: localStorage throws, so nothing persists — only the
+    // in-memory dismissed-set can keep an earlier locale hidden on return.
+    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    const el = await mount("fr");
+    innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
+    await el.updateComplete;
+    // switch to a second uncovered locale and dismiss it too
+    el.hass = { language: "de" };
+    await el.updateComplete;
+    await innerBanner(el)?.updateComplete;
+    innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
+    await el.updateComplete;
+    // back to the first locale — still hidden (a single-value store would re-nag)
+    el.hass = { language: "fr" };
+    await el.updateComplete;
+    expect(innerBanner(el)).toBeNull();
   });
 });

@@ -46,16 +46,17 @@ export class AmbienceLanguageBanner extends LitElement {
   private _dismissLabel = "";
   /** The locale currently shown — the code a dismissal is recorded against. */
   private _code = "";
-  /** In-memory instant-hide so a dismissal sticks for the session even when
-   *  localStorage is unavailable (where persistence silently no-ops). */
-  private _dismissedCode = "";
+  /** In-memory set of dismissed locales so EVERY dismissal sticks for the session
+   *  even when localStorage is unavailable (where persistence silently no-ops) —
+   *  a single value would forget all but the most recently dismissed locale. */
+  private _dismissedCodes = new Set<string>();
 
   override willUpdate(changed: Map<string, unknown>): void {
     if (!changed.has("hass")) return;
     const support = getLanguageSupport(this.hass);
     if (
       support.available ||
-      this._dismissedCode === support.code ||
+      this._dismissedCodes.has(support.code) ||
       isLangRequestDismissed(support.code)
     ) {
       this._visible = false;
@@ -75,7 +76,7 @@ export class AmbienceLanguageBanner extends LitElement {
   }
 
   private _dismiss(): void {
-    this._dismissedCode = this._code;
+    this._dismissedCodes.add(this._code);
     persistDismissedLangRequest(this._code);
     this._visible = false;
   }

@@ -823,6 +823,20 @@ describe("ambience-state-expr-atom", () => {
     expect(captured.attribute).toBeNull();
   });
 
+  test("clearing the attribute schedules no redundant update (lit change-in-update)", async () => {
+    // Populate _knownAttributeValues, then clear the attribute. The clear is a
+    // synchronous reactive write; it must happen in willUpdate (folded into this
+    // render), not as a side-effect of the completed update — updateComplete
+    // resolves false iff a property was set inside updated(), which is exactly
+    // what Lit's change-in-update warning flags.
+    vi.mocked(getKnownAttributeValues).mockResolvedValueOnce({ values: ["Spotify", "Radio"] });
+    el = await mount({ kind: "is", entity_id: "x", attribute: "source", states: ["Spotify"] });
+    expect(el._knownAttributeValues.length).toBeGreaterThan(0);
+    el._setAttribute("");
+    expect(await el.updateComplete).toBe(true);
+    expect(el._knownAttributeValues).toEqual([]);
+  });
+
   test("_setAttribute('source') stores the attribute name", async () => {
     el = await mount({ kind: "is", entity_id: "media_player.x", states: [] });
     let captured: any;

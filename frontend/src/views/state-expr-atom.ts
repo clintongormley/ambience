@@ -69,6 +69,22 @@ export class AmbienceStateExprAtom extends LitElement {
   @state() private _knownStates: string[] = [];
   @state() private _knownAttributeValues: string[] = [];
 
+  // When the target loses its attribute (or entity), no attribute values can be
+  // offered. Clearing them is a synchronous reactive write, so it runs here —
+  // folded into the current render — rather than from updated(), where it would
+  // schedule a redundant update as a side-effect of the completed one (Lit's
+  // change-in-update warning). The async fetch for a *present* attribute stays
+  // in updated().
+  override willUpdate(changed: Map<string, unknown>): void {
+    if (!changed.has("value")) return;
+    const prev = changed.get("value") as StateAtom | undefined;
+    const { entity_id: curId, attribute: attr } = this.value;
+    const targetChanged = curId !== prev?.entity_id || attr !== prev?.attribute;
+    if (targetChanged && !(curId && attr && this.hass) && this._knownAttributeValues.length) {
+      this._knownAttributeValues = [];
+    }
+  }
+
   override async updated(changed: Map<string, unknown>): Promise<void> {
     if (!changed.has("value")) return;
     const prev = changed.get("value") as StateAtom | undefined;
@@ -99,9 +115,9 @@ export class AmbienceStateExprAtom extends LitElement {
             this._knownAttributeValues = [];
           }
         }
-      } else if (this._knownAttributeValues.length) {
-        this._knownAttributeValues = [];
       }
+      // The target losing its attribute/entity is handled synchronously in
+      // willUpdate(), so there is no else branch here.
     }
   }
 

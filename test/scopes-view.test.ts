@@ -44,6 +44,13 @@ vi.mock("../frontend/src/api", async (importActual) => {
     runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
     downloadScopeDiagnostics: vi.fn(async () => undefined),
     listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
+    // The mounted traces/simulator modals fetch on open; stub them so the fetch
+    // suspends at a real await instead of throwing synchronously (undefined call)
+    // into the catch, which would set state inside updated() (Lit change-in-update).
+    listTraces: vi.fn(async () => []),
+    clearTraces: vi.fn(async () => undefined),
+    simulateInputs: vi.fn(async () => ({ has_time: false, knobs: [] })),
+    simulate: vi.fn(async () => undefined),
     // Pass through the real subscribeLiveScenes so it delegates to
     // connection.subscribeMessage, which tests can override per-case.
     subscribeLiveScenes: actual.subscribeLiveScenes,

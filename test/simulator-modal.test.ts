@@ -95,6 +95,23 @@ describe("ambience-simulator-modal", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => el?.remove());
 
+  test("opening schedules no redundant update (lit change-in-update)", async () => {
+    // updateComplete resolves false iff a reactive property was set inside
+    // updated() — the exact condition Lit's change-in-update warning flags. The
+    // loading reset must happen in willUpdate, not as a side-effect of the
+    // completed update.
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
+    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    el = document.createElement("ambience-simulator-modal");
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.categoryName = "Lights";
+    el.open = true;
+    document.body.appendChild(el);
+    expect(await el.updateComplete).toBe(true);
+  });
+
   test("renders a friendly-named row per knob with the right control", async () => {
     el = await mount();
     expect(el.shadowRoot.textContent).toContain("Hall motion");

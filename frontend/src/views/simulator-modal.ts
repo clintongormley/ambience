@@ -155,17 +155,30 @@ export class AmbienceSimulatorModal extends LitElement {
     new ModalDismissController(this, () => this._onClose());
   }
 
+  // A reopen / category-switch / scope-switch reloads the inputs. The
+  // synchronous reset to a loading state happens in willUpdate so it folds into
+  // the current render; the async fetch fires from updated. Splitting them keeps
+  // the reset from scheduling a redundant update as a side-effect of the
+  // completed one (Lit's change-in-update warning).
+  private _reloadTriggered(changed: Map<string, unknown>): boolean {
+    return this.open && (changed.has("open") || changed.has("category") || changed.has("scope"));
+  }
+
+  override willUpdate(changed: Map<string, unknown>): void {
+    if (this._reloadTriggered(changed)) this._beginLoad();
+  }
+
   override updated(changed: Map<string, unknown>): void {
-    if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
-      void this._load();
-    }
+    if (this._reloadTriggered(changed)) void this._fetch();
   }
 
   private _vkey(k: SimulateVerdictKnob): string {
     return `${k.condition}:${k.key}`;
   }
 
-  private async _load(): Promise<void> {
+  // Reset to a fresh loading state. Synchronous reactive writes only, so it is
+  // safe to run from willUpdate (folds into the current render).
+  private _beginLoad(): void {
     this._error = "";
     this._loading = true;
     this._result = null;
@@ -173,6 +186,11 @@ export class AmbienceSimulatorModal extends LitElement {
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
+  }
+
+  // Fetch the inputs. Every reactive write is post-await, so firing it from
+  // updated() never schedules a redundant update.
+  private async _fetch(): Promise<void> {
     try {
       const inputs = await simulateInputs(this.hass, this.scope, this.category);
       if (!this.isConnected) return;

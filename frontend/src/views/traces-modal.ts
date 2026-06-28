@@ -119,14 +119,25 @@ export class AmbienceTracesModal extends LitElement {
     }
   }
 
+  // A reopen / category-switch / scope-switch reloads this bucket. The
+  // synchronous reset to a loading state happens in willUpdate so it folds into
+  // the current render; the async fetch fires from updated. Splitting them keeps
+  // the reset from scheduling a redundant update as a side-effect of the
+  // completed one (Lit's change-in-update warning).
+  private _reloadTriggered(changed: Map<string, unknown>): boolean {
+    return this.open && (changed.has("open") || changed.has("category") || changed.has("scope"));
+  }
+
+  override willUpdate(changed: Map<string, unknown>): void {
+    if (this._reloadTriggered(changed)) this._beginLoad();
+  }
+
   override updated(changed: Map<string, unknown>): void {
     if (changed.has("open")) {
       if (this.open) this._startPoll();
       else this._stopPoll();
     }
-    if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
-      this._load();
-    }
+    if (this._reloadTriggered(changed)) void this._fetch();
   }
 
   // The buffered records belonging to this (scope, category) bucket, newest-first.
@@ -139,11 +150,19 @@ export class AmbienceTracesModal extends LitElement {
     );
   }
 
-  private async _load(): Promise<void> {
+  // Reset to a fresh loading state. Synchronous reactive writes only, so it is
+  // safe to run from willUpdate (folds into the current render) or an event
+  // handler.
+  private _beginLoad(): void {
     this._error = "";
     this._loading = true;
     this._hasNew = false; // refresh / reopen consumes the "new traces" signal
     this._expanded = new Set(); // every (re)open starts fully collapsed
+  }
+
+  // Fetch this bucket's records. Every reactive write is post-await, so firing
+  // it from updated() never schedules a redundant update.
+  private async _fetch(): Promise<void> {
     try {
       const all = await listTraces(this.hass);
       if (!this.isConnected) return;
@@ -156,6 +175,13 @@ export class AmbienceTracesModal extends LitElement {
       this._error = localizeWsError(this.hass, e);
       this._loading = false;
     }
+  }
+
+  // Event-handler entry point (Refresh button, post-clear reload): reset then
+  // fetch. Synchronous resets are fine here — not inside an update cycle.
+  private _load(): Promise<void> {
+    this._beginLoad();
+    return this._fetch();
   }
 
   // Fetch (and cache) the service schema for every distinct service referenced

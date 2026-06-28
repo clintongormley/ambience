@@ -69,6 +69,22 @@ describe("ambience-traces-modal", () => {
     expect(vi.mocked(api.listTraces).mock.calls.length).toBe(1);
   });
 
+  test("opening schedules no redundant update (lit change-in-update)", async () => {
+    // updateComplete resolves false iff a reactive property was set inside
+    // updated() — the exact condition Lit's change-in-update warning flags.
+    // The loading reset must happen in willUpdate (folded into the same render),
+    // not as a side-effect of the completed update.
+    vi.mocked(api.listTraces).mockResolvedValue([unit()]);
+    el = document.createElement("ambience-traces-modal");
+    el.hass = { callWS: vi.fn() };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.categoryName = "Evening";
+    el.open = true;
+    document.body.appendChild(el);
+    expect(await el.updateComplete).toBe(true);
+  });
+
   test("empty state when the category has no traces", async () => {
     el = await mount([unit({ scope_id: "hall" })]); // nothing for kitchen/g1
     expect(el.shadowRoot.textContent).toContain("No traces");

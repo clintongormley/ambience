@@ -132,9 +132,12 @@ export class AmbienceHelp extends LitElement {
     const vw = window.innerWidth || 1024;
     const vh = window.innerHeight || 768;
     const left = Math.max(8, Math.min(r.left, vw - maxW - 8));
+    // Flip above only when there isn't room below AND there's more room above.
     // translateY(-100%) anchors the popover's bottom to the trigger top, so we
     // can flip upward without knowing the popover's height in advance.
-    const openUp = r.bottom + 220 > vh && r.top > vh - r.bottom;
+    const spaceBelow = vh - r.bottom;
+    const spaceAbove = r.top;
+    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
     this._popStyle = openUp
       ? `top:${Math.round(r.top - 6)}px;left:${Math.round(left)}px;transform:translateY(-100%);`
       : `top:${Math.round(r.bottom + 6)}px;left:${Math.round(left)}px;`;
@@ -143,32 +146,41 @@ export class AmbienceHelp extends LitElement {
   private _openPopover(): void {
     this._positionPopover();
     this._open = true;
-    // Capture phase: the panel lives inside a modal whose `.modal` stops click
-    // propagation in the bubble phase, so a bubble-phase document listener never
-    // sees clicks elsewhere in the modal. Capturing fires before that
-    // stopPropagation, so click-outside-to-dismiss works inside the modal too.
-    document.addEventListener("click", this._onDocClick, true);
-    document.addEventListener("keydown", this._onKeydown);
-    window.addEventListener("scroll", this._onViewportChange, true);
-    window.addEventListener("resize", this._onViewportChange);
+    this._bindGlobals(true);
   }
 
   private _close(): void {
     if (!this._open) return;
     this._open = false;
-    document.removeEventListener("click", this._onDocClick, true);
-    document.removeEventListener("keydown", this._onKeydown);
-    window.removeEventListener("scroll", this._onViewportChange, true);
-    window.removeEventListener("resize", this._onViewportChange);
+    this._bindGlobals(false);
     (this.renderRoot.querySelector(".trigger") as HTMLElement | null)?.focus();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    document.removeEventListener("click", this._onDocClick, true);
-    document.removeEventListener("keydown", this._onKeydown);
-    window.removeEventListener("scroll", this._onViewportChange, true);
-    window.removeEventListener("resize", this._onViewportChange);
+    this._bindGlobals(false);
+  }
+
+  /** Add or remove the dismiss listeners as one set, so an add can never drift
+   *  from its matching remove. Capture phase: the panel lives inside a modal
+   *  whose `.modal` stops click propagation in the bubble phase, so a
+   *  bubble-phase document listener never sees clicks elsewhere in the modal —
+   *  capturing fires before that stopPropagation, so click-outside-to-dismiss
+   *  works inside the modal too. scroll is passive (it only dismisses). */
+  private _bindGlobals(add: boolean): void {
+    if (add) {
+      document.addEventListener("click", this._onDocClick, true);
+      document.addEventListener("keydown", this._onKeydown);
+      window.addEventListener("scroll", this._onViewportChange, { capture: true, passive: true });
+      window.addEventListener("resize", this._onViewportChange);
+    } else {
+      document.removeEventListener("click", this._onDocClick, true);
+      document.removeEventListener("keydown", this._onKeydown);
+      // removeEventListener matches on (type, callback, capture) only — passive
+      // is ignored — so { capture: true } correctly removes the passive add.
+      window.removeEventListener("scroll", this._onViewportChange, { capture: true });
+      window.removeEventListener("resize", this._onViewportChange);
+    }
   }
 
   override render() {

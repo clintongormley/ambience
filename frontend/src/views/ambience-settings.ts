@@ -266,6 +266,8 @@ export class AmbienceAmbienceSettings extends LitElement {
       ${this._error ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>` : ""}
 
       <div class="card">
+        <!-- Reuses .toggle-row purely for its section-header styling (bold label
+             + divider); this header has no toggle (switches are always created). -->
         <div class="row toggle-row">
           <label>
             ${localize(this.hass, "ui.settings_ambience_pause_card", "Scope-level pause switch")}

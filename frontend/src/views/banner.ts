@@ -47,9 +47,15 @@ export class AmbienceBanner extends LitElement {
   /** Tint the leading icon with the primary colour (the `.banner-hint` look). */
   @property({ type: Boolean }) hint = false;
 
+  // Lit binds event listeners with `this` set to the host element, so these
+  // method references can be used directly without a per-render arrow closure.
   private _onDismiss(e: Event): void {
     e.stopPropagation();
     this.dispatchEvent(new CustomEvent("banner-dismiss", { bubbles: true, composed: true }));
+  }
+
+  private _onCta(): void {
+    this.dispatchEvent(new CustomEvent("banner-cta", { bubbles: true, composed: true }));
   }
 
   private _renderCta() {
@@ -63,12 +69,9 @@ export class AmbienceBanner extends LitElement {
         rel="noopener noreferrer"
       >${this.ctaLabel}</a>`;
     }
-    return html`<button
-      class="banner-cta"
-      data-test="banner-cta"
-      @click=${() =>
-        this.dispatchEvent(new CustomEvent("banner-cta", { bubbles: true, composed: true }))}
-    >${this.ctaLabel}</button>`;
+    return html`<button class="banner-cta" data-test="banner-cta" @click=${this._onCta}>
+      ${this.ctaLabel}
+    </button>`;
   }
 
   override render() {
@@ -82,7 +85,7 @@ export class AmbienceBanner extends LitElement {
           data-test="banner-dismiss"
           title=${this.dismissLabel}
           aria-label=${this.dismissLabel}
-          @click=${(e: Event) => this._onDismiss(e)}
+          @click=${this._onDismiss}
         ><ha-icon icon="mdi:close"></ha-icon></button>
       </div>
     `;

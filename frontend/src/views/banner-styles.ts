@@ -31,13 +31,6 @@ export const bannerStyles = css`
     flex-direction: column;
     gap: 0.2rem;
   }
-  .banner-text strong {
-    font-weight: 600;
-  }
-  .banner-text span {
-    font-size: 0.9rem;
-    color: var(--secondary-text-color, #888);
-  }
   .banner-cta {
     flex: 0 0 auto;
     align-self: center;

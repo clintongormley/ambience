@@ -18,7 +18,6 @@ import {
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
-import { bannerStyles } from "./banner-styles.js";
 import "./banner.js";
 import "./language-banner.js";
 import { renderAggregateProblemFlag } from "./problem-flag.js";
@@ -77,7 +76,6 @@ function _pinPriority(above: number | undefined, below: number | undefined, all:
 @customElement("ambience-scopes-view")
 export class AmbienceScopesView extends LitElement {
   static override styles = [
-    bannerStyles,
     css`
       :host {
         display: block;

@@ -3,7 +3,6 @@ import { customElement, property, state } from "lit/decorators.js";
 import { isComponentLoaded } from "../ha-config.js";
 import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
 import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
-import { bannerStyles } from "./banner-styles.js";
 import "./banner.js";
 import "./ambience-help.js";
 
@@ -34,7 +33,6 @@ const FADO_HACS_URL =
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
   static override styles = [
-    bannerStyles,
     css`
     :host { display: block; }
     .card {

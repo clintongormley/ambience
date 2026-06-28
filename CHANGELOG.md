@@ -10,10 +10,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- Documentation help links throughout the panel: a small "open in new tab" icon
-  now sits beside each settings tab heading, each condition, and the "Apply on
-  every match" toggle, opening the matching page of the online documentation in
-  a new tab.
+- Documentation help links throughout the panel: each settings tab, condition,
+  and the "Apply on every match" toggle now shows a small **(?)** help icon —
+  where it has explanatory text the popover ends with a "Read more" link to the
+  matching online documentation page, and where it doesn't the (?) opens that
+  page directly in a new tab.
 
 ### Changed
 

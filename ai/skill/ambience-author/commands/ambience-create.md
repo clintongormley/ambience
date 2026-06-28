@@ -11,10 +11,10 @@ files (`reference/conditions-cookbook.md`, `reference/schema.md`,
 
 ## Step 1 — Get the AI bundle
 
-Ask the user to download it from the Ambience panel (Create with AI → **Download
-AI bundle**) and paste or upload it. You need it for real entity ids, exposed
-services, and the user's vocabulary (categories, periods, lux ranges, weather
-groups). Don't finalise ids without it.
+Ask the user to download it from the Ambience panel (Settings → **AI** tab →
+**Download AI bundle**) and paste or upload it. You need it for real entity ids,
+exposed services, and the user's vocabulary (categories, periods, lux ranges,
+weather groups). Don't finalise ids without it.
 
 ## Step 2 — Confirm intent and scope
 
@@ -70,10 +70,9 @@ scenes:
 
 Tell the user to:
 
-1. Open the Ambience panel → **Import** view.
+1. Open the Ambience panel → Settings → **AI** tab.
 2. Paste or upload the block.
-3. Preview (adds vs updates, new categories, the live dry-run of what matches
-   now) and **confirm**.
+3. Preview (adds / updates / removes, new vs unknown categories) and **confirm**.
 
 Remind them every import is reversible via the panel's undo/redo history. You do
 **not** apply anything yourself.

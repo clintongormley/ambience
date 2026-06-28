@@ -10,7 +10,7 @@ the cookbook for the corrected predicate).
 
 ## Step 1 — Get the AI bundle
 
-Ask the user to download it from the Ambience panel (Diagnose with AI →
+Ask the user to download it from the Ambience panel (Settings → **AI** tab →
 **Download AI bundle**). It carries the **current config** and **recent traces** —
 both needed to diagnose.
 

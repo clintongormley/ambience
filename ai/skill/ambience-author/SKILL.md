@@ -32,8 +32,8 @@ Within one `(scope, category)`, the **most specific matching scene wins**.
 ## The two things you need from the user
 
 1. **The AI bundle.** Ask the user to download it from the Ambience panel
-   ("Create with AI" / "Diagnose with AI" → Download AI bundle) and paste or
-   upload it. It contains their real **areas/floors/entities**, **exposed
+   (Settings → **AI** tab → Download AI bundle) and paste or upload it. It
+   contains their real **areas/floors/entities**, **exposed
    services + field schemas**, **custom periods / lux ranges / weather groups /
    categories**, their **current config**, and (for diagnosis) **recent traces**.
    Always author against the bundle so every id and vocabulary word is real.
@@ -80,8 +80,8 @@ In short:
 4. Wrap it in a **single-scope import block** with `mode: merge` and a declared
    `category` (so a new group is created, not coerced to General). One block per
    scope; emit multiple clearly-labelled blocks for multi-room requests.
-5. Tell the user to paste/upload the block into the panel's **Import** view,
-   preview (adds vs updates, new categories, dry-run), and confirm.
+5. Tell the user to paste/upload the block into the panel's **AI** tab,
+   preview (adds / updates / removes, new vs unknown categories), and confirm.
 
 ### Fixing
 

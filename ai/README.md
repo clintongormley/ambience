@@ -16,7 +16,7 @@ every release, so the pack never drifts from the integration.
 
 Whichever form you use, the workflow is the same:
 
-1. In the Ambience panel, open **Create with AI** or **Diagnose with AI** and
+1. In the Ambience panel, open Settings → the **AI** tab and
    **Download the AI bundle** (your real areas/entities, exposed services,
    vocabulary, config, and recent traces — person/location data redacted).
 2. Give the AI the bundle plus your request.

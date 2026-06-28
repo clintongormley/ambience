@@ -41,6 +41,17 @@ describe("ambience-lux-input", () => {
     el.remove();
   });
 
+  test("a band chosen before picking sensors survives adding sensors", async () => {
+    // The band/negate controls render with no sensors yet; a band picked there
+    // must not be discarded when the user then selects a sensor.
+    const el = await mount(null);
+    const got = capture(el);
+    el._setBand("bright");
+    el._setSensors(["sensor.a"]);
+    expect(got()).toEqual({ sensors: ["sensor.a"], range: "bright" });
+    el.remove();
+  });
+
   test("luxPredicateError rejects a non-integer inline bound (matches the backend)", () => {
     // The backend raises lux_not_integer; the FE save-gate must catch it inline
     // instead of letting it through to a generic save error.

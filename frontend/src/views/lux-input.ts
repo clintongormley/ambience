@@ -4,7 +4,7 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
-import { localize, luxLabel } from "../i18n.js";
+import { type HassLike, localize, luxLabel } from "../i18n.js";
 import type { LuxPredicate, LuxQuant, LuxRangeStoreView } from "../types.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
 import { effectiveDefIds } from "./named-def-config.js";
@@ -30,11 +30,14 @@ const CUSTOM = "__custom__";
  * pure check for never-opened slots. The backend rejects min >= max and
  * negative bounds. Returns a user-facing error or null.
  */
-export function luxPredicateError(pred: unknown, hass?: HassConnection): string | null {
-  if (pred == null || typeof pred !== "object") return null;
-  const p = pred as { range?: unknown; min?: unknown; max?: unknown };
-  if (typeof p.range === "string") return null; // named ranges validate server-side
-  const { min, max } = p;
+/**
+ * Localized error for a half-open lux band's numeric bounds — negative,
+ * non-integer, or min >= max — or null if valid. The single source of these
+ * rules for the frontend, shared by {@link luxPredicateError} (the save gate)
+ * and the lux-range edit modal, so they (and the backend's `lux_not_integer` /
+ * negative / order rules) can't drift.
+ */
+export function luxBoundsError(min: unknown, max: unknown, hass?: HassLike): string | null {
   if ((typeof min === "number" && min < 0) || (typeof max === "number" && max < 0)) {
     return localize(hass, "ui.lux_error_negative", "Bounds must be 0 or greater.");
   }
@@ -48,6 +51,13 @@ export function luxPredicateError(pred: unknown, hass?: HassConnection): string 
     return localize(hass, "ui.lux_error_order", "Min must be less than max.");
   }
   return null;
+}
+
+export function luxPredicateError(pred: unknown, hass?: HassConnection): string | null {
+  if (pred == null || typeof pred !== "object") return null;
+  const p = pred as { range?: unknown; min?: unknown; max?: unknown };
+  if (typeof p.range === "string") return null; // named ranges validate server-side
+  return luxBoundsError(p.min, p.max, hass);
 }
 
 @customElement("ambience-lux-input")
@@ -124,16 +134,17 @@ export class AmbienceLuxInput extends LitElement {
     return out;
   }
 
-  private _emit(value: LuxPredicate) {
-    // Empty sensors is a wildcard regardless of the range/band, so collapse to
-    // null (condition removed), mirroring the unavailable widget.
-    const next = value.sensors?.length ? value : null;
-    this.value = next;
-    emitValueChanged(this, next);
+  private _emit(value: LuxPredicate | null) {
+    this.value = value;
+    emitValueChanged(this, value);
   }
 
   _setSensors(sensors: string[]) {
-    this._emit(this._build({ sensors }));
+    // Clearing the picker drops the whole condition (empty sensors is a wildcard
+    // regardless of the band), like the unavailable widget. Other edits keep
+    // their partial predicate, so a band/bound chosen before a sensor is picked
+    // isn't lost.
+    this._emit(sensors.length ? this._build({ sensors }) : null);
   }
 
   _setQuant(quant: LuxQuant) {

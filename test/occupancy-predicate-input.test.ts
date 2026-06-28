@@ -90,6 +90,20 @@ describe("ambience-occupancy-predicate-input", () => {
     el.remove();
   });
 
+  test("polarity/duration set before picking sensors survives adding sensors", async () => {
+    // The negate/occupied/for controls render with no sensors yet; an edit made
+    // there must not be discarded when the user then picks a sensor.
+    const el = await mount(null);
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setOccupied(false); // "Clear" chosen before any sensor
+    el._setSensors(["binary_sensor.a"]);
+    expect(captured).toEqual({ sensors: ["binary_sensor.a"], occupied: false });
+    el.remove();
+  });
+
   test("toggling 'is not' emits negate:true; 'is' drops it", async () => {
     const el = await mount({ sensors: ["binary_sensor.a"], occupied: false });
     let captured: any;

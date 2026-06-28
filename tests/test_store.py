@@ -612,6 +612,28 @@ async def test_async_save_scope_rejects_unknown_kind(hass: HomeAssistant) -> Non
     assert exc.value.translation_key == "unknown_scope_kind"
 
 
+async def test_async_save_scope_dispatches_to_each_saver(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_scope("area", "lr", {"scenes": [{"category": "general", "actions": []}]})
+    await store.async_save_scope("floor", "f1", {"scenes": []})
+    await store.async_save_scope("house", None, {"scenes": []})
+    assert store.get_area("lr")["scenes"][0]["category"] == "general"
+    assert store.get_floor("f1")["scenes"] == []
+    assert store.get_house()["scenes"] == []
+
+
+async def test_async_save_scope_requires_scope_id_for_area_and_floor(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    for kind in ("area", "floor"):
+        with pytest.raises(ValueError):
+            await store.async_save_scope(kind, None, {"scenes": []})
+    # The None must never reach the per-kind saver and create a None-keyed entry.
+    assert None not in store.areas()
+    assert None not in store.floors()
+
+
 async def test_save_reapply_settings_rejects_non_bool_enabled(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()

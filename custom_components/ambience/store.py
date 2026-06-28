@@ -333,14 +333,21 @@ class AmbienceStore:
         """Persist a scope's config, dispatching to the per-kind saver — the
         unified writer mirroring `scope_config()`'s unified reader, behind the
         websocket scope-save handlers and the undo/redo restore."""
+        if scope_kind == "house":
+            await self.async_save_house(config)
+            return
+        if scope_kind not in ("area", "floor"):
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+        if scope_id is None:
+            # area/floor always carry an id (only house is id-less); the websocket
+            # schema requires it, so a None here is a caller bug, not user input —
+            # an internal contract error, not a translatable AmbienceError. This
+            # also narrows scope_id to `str` for the per-kind savers below.
+            raise ValueError(f"{scope_kind} scope requires a scope_id")
         if scope_kind == "area":
             await self.async_save_area(scope_id, config)
-        elif scope_kind == "floor":
-            await self.async_save_floor(scope_id, config)
-        elif scope_kind == "house":
-            await self.async_save_house(config)
         else:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+            await self.async_save_floor(scope_id, config)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.

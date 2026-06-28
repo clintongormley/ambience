@@ -2,8 +2,9 @@
 
 Open the Settings modal with the cogwheel (⚙) in the Ambience panel header. It
 has four tabs — **Categories**, **Conditions**, **Actions**, and **Advanced** —
-and every control has a `(?)` help button next to it that opens a short
-explanation in place.
+plus an optional fifth **AI** tab shown only when AI authoring is enabled (see
+[AI-assisted scenes](ai-assisted-scenes.md)). Every control has a `(?)` help
+button next to it that opens a short explanation in place.
 
 Almost everything the Settings modal configures is covered in context elsewhere
 in these docs; this page is a map to where.

@@ -6,7 +6,8 @@ actions** that are smarter than a plain service call. They appear in the
 
 **Turn on / Turn off**: A single on/off action that targets any mix of supported
 entities (lights, switches, fans, input booleans, and more) and skips any entity
-that is already in the target state, so scenes don't fire redundant commands.
+that is already in the target state, so scenes don't fire redundant commands. An
+entity whose current state can't be read is commanded anyway (it isn't skipped).
 
 **Safe cover actions**:
 

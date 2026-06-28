@@ -264,7 +264,7 @@ The panel runs `ambience/validate` (shape-only, no save) on import before
 preview. A block must satisfy all of:
 
 - `config` is an object; `scenes` a list; each scene an object.
-- Scene names unique (case-insensitive, trimmed) within a `(category, name)`.
+- Scene names unique (case-insensitive, trimmed) within a `(category, scope)`.
 - `description`/`category`, if present, are strings.
 - `when` is an object; each key a known condition; each non-null predicate passes
   that condition's validation (see the generated reference for per-field rules).

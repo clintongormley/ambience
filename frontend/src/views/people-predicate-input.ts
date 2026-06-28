@@ -3,10 +3,10 @@ import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
-import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
 import type { ForMode, PeoplePredicate, PeopleQuant } from "../types.js";
 import { type ForDurationValue, hasForDuration, persistedForMode } from "./for-duration.js";
+import { renderSelect } from "./form-controls.js";
 import { entitiesOfDomain } from "./hass-states.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
@@ -40,8 +40,9 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  *    negate?: boolean              // default false; true = NOT at `where`
  *    for?: {h,m,s}|null}
  *
- * Mirrors `state-expr-atom.ts` for the ha-form-with-native-fallback controls
- * and `day-predicate-input.ts` for the localize + emit-on-interaction pattern.
+ * The mode / "Is at" / location dropdowns use the shared `renderSelect` helper
+ * (like `occupancy-predicate-input.ts`); the editor follows
+ * `day-predicate-input.ts` for the localize + emit-on-interaction pattern.
  * Person/zone options are read straight from `hass.states`.
  *
  * Modes are distinguished by the PRESENCE of the `who` key, not its contents:
@@ -291,39 +292,14 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   }
 
   private _renderMode(mode: Mode) {
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        {
-          name: "mode",
-          required: true,
-          selector: {
-            select: {
-              mode: "dropdown",
-              options: MODES.map((m) => ({ value: m, label: this._modeLabel(m) })),
-            },
-          },
-        },
-      ];
-      return html`<ha-form
-        class="mode"
-        .hass=${this.hass}
-        .schema=${schema}
-        .data=${{ mode }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { mode?: Mode } }>) => {
-          e.stopPropagation();
-          if (e.detail.value.mode) this._setMode(e.detail.value.mode);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<select
-      class="mode"
-      @change=${(e: Event) => this._setMode((e.target as HTMLSelectElement).value as Mode)}
-    >
-      ${MODES.map((m) => html`<option value=${m} ?selected=${m === mode}>${this._modeLabel(m)}</option>`)}
-    </select>`;
+    return renderSelect(
+      this.hass,
+      "mode",
+      "mode",
+      mode,
+      MODES.map((m) => ({ value: m, label: this._modeLabel(m) })),
+      (v) => this._setMode(v as Mode),
+    );
   }
 
   private _renderPeople() {
@@ -351,75 +327,32 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   }
 
   private _renderNegate(negate: boolean) {
-    const options = [
-      { value: "false", label: localize(this.hass, "ui.people_is_at", "Is at") },
-      { value: "true", label: localize(this.hass, "ui.people_is_not_at", "Is not at") },
-    ];
-    const onChange = (v: string) => this._setNegate(v === "true");
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        {
-          name: "negate",
-          required: true,
-          selector: { select: { mode: "dropdown", options } },
-        },
-      ];
-      return html`<ha-form
-        class="negate"
-        .hass=${this.hass}
-        .schema=${schema}
-        .data=${{ negate: negate ? "true" : "false" }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { negate?: string } }>) => {
-          e.stopPropagation();
-          if (e.detail.value.negate != null) onChange(e.detail.value.negate);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<select
-      class="negate"
-      @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
-    >
-      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === (negate ? "true" : "false")}>${o.label}</option>`)}
-    </select>`;
+    return renderSelect(
+      this.hass,
+      "negate",
+      "negate",
+      negate ? "true" : "false",
+      [
+        { value: "false", label: localize(this.hass, "ui.people_is_at", "Is at") },
+        { value: "true", label: localize(this.hass, "ui.people_is_not_at", "Is not at") },
+      ],
+      (v) => this._setNegate(v === "true"),
+    );
   }
 
   private _renderWhere(where: string) {
     const zones = this._zones().filter((z) => z.id !== "zone.home");
-    const options = [
-      { value: "home", label: localize(this.hass, "ui.people_where_home", "Home") },
-      ...zones.map((z) => ({ value: z.id, label: z.name })),
-    ];
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        {
-          name: "where",
-          required: true,
-          selector: { select: { mode: "dropdown", options } },
-        },
-      ];
-      return html`<ha-form
-        class="where"
-        .hass=${this.hass}
-        .schema=${schema}
-        .data=${{ where }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { where?: string } }>) => {
-          e.stopPropagation();
-          if (e.detail.value.where) this._setWhere(e.detail.value.where);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<select
-      class="where"
-      @change=${(e: Event) => this._setWhere((e.target as HTMLSelectElement).value)}
-    >
-      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === where}>${o.label}</option>`)}
-    </select>`;
+    return renderSelect(
+      this.hass,
+      "where",
+      "where",
+      where,
+      [
+        { value: "home", label: localize(this.hass, "ui.people_where_home", "Home") },
+        ...zones.map((z) => ({ value: z.id, label: z.name })),
+      ],
+      (v) => this._setWhere(v),
+    );
   }
 
   private _renderFor() {

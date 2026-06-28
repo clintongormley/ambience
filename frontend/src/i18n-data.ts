@@ -78,6 +78,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       midnight: "Midnight",
     },
     ui: {
+      language_request: {
+        message: "Your Home Assistant language is {language}, but {product} isn't translated into it yet.",
+        action: "Request a translation →",
+        dismiss: "Dismiss",
+      },
       panel_title: "Ambience",
       card_load_failed: "Ambience card failed to load — check the connection and refresh.",
       tab_settings: "Settings",
@@ -644,6 +649,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       midnight: "Medianoche",
     },
     ui: {
+      language_request: {
+        message: "El idioma de tu Home Assistant es {language}, pero {product} aún no está traducido a ese idioma.",
+        action: "Solicitar una traducción →",
+        dismiss: "Descartar",
+      },
       panel_title: "Ambience",
       card_load_failed:
         "No se pudo cargar la tarjeta Ambience — comprueba la conexión y actualiza.",

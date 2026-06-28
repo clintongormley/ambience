@@ -13,6 +13,51 @@ function _localeOf(hass: HassLike | undefined): string {
   return lang && lang in AMBIENCE_STRINGS_BY_LOCALE ? lang : "en";
 }
 
+export interface LanguageSupport {
+  /** Whether Ambience ships UI strings for the user's language. */
+  available: boolean;
+  /** Full requested locale, e.g. "pt-BR". */
+  code: string;
+  /** Base language of `code`, e.g. "pt". */
+  baseCode: string;
+}
+
+/** Whether Ambience ships UI strings for the user's HA language. Reads
+ *  `hass.language` ONLY — the exact input {@link _localeOf} uses — so `available`
+ *  can never disagree with which catalogue `localize` actually loads. An
+ *  undeterminable language is treated as available (no nudge). The exact-match
+ *  arm is a harmless forward-compat superset (collapses to base-only with
+ *  today's base-only catalogue). */
+export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
+  const raw = hass?.language as string | undefined;
+  if (!raw) return { available: true, code: "", baseCode: "" };
+  const baseCode = raw.toLowerCase().split(/[-_]/)[0];
+  const available = !!(AMBIENCE_STRINGS_BY_LOCALE[raw] || AMBIENCE_STRINGS_BY_LOCALE[baseCode]);
+  return { available, code: raw, baseCode };
+}
+
+/** Native display name for a BCP-47 code ("fr" → "français", "pt-BR" →
+ *  "português (Brasil)"): native name → English name → raw code, every Intl call
+ *  guarded. NB Intl.DisplayNames defaults to fallback:"code", so an unknown tag
+ *  echoes the code back; the `!== code` guards stop that echo masquerading as a
+ *  real name. */
+export function languageDisplayName(code: string): string {
+  if (!code) return code;
+  try {
+    const native = new Intl.DisplayNames([code], { type: "language" }).of(code);
+    if (native && native !== code) return native;
+  } catch {
+    // Invalid locale for Intl — fall through to the English name.
+  }
+  try {
+    const english = new Intl.DisplayNames(["en"], { type: "language" }).of(code);
+    if (english && english !== code) return english;
+  } catch {
+    // Intl unavailable — fall through to the raw code.
+  }
+  return code;
+}
+
 function _interp(s: string, ph?: Record<string, string>): string {
   if (!ph) return s;
   return s.replace(/\{(\w+)\}/g, (m, k) => (k in ph ? ph[k] : m));

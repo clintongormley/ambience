@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
   actionLabel,
   anchorLabel,
@@ -6,6 +6,8 @@ import {
   conditionLabel,
   dayItemKindLabel,
   exposedActionLabel,
+  getLanguageSupport,
+  languageDisplayName,
   localize,
   monthLabel,
   periodLabel,
@@ -325,6 +327,52 @@ describe("weatherAttrUnit", () => {
       "Pa",
     );
     expect(weatherAttrUnit(hass, "pressure", undefined)).toBe("Pa");
+  });
+});
+
+describe("getLanguageSupport", () => {
+  it("covered base language → available", () => {
+    expect(getLanguageSupport({ language: "es" })).toEqual({
+      available: true, code: "es", baseCode: "es",
+    });
+  });
+  it("covered via base (region variant of a shipped base) → available", () => {
+    expect(getLanguageSupport({ language: "es-ES" })).toEqual({
+      available: true, code: "es-ES", baseCode: "es",
+    });
+  });
+  it("uncovered language → not available", () => {
+    expect(getLanguageSupport({ language: "fr" })).toEqual({
+      available: false, code: "fr", baseCode: "fr",
+    });
+  });
+  it("uncovered region variant keeps full code + base", () => {
+    expect(getLanguageSupport({ language: "pt-BR" })).toEqual({
+      available: false, code: "pt-BR", baseCode: "pt",
+    });
+  });
+  it("undeterminable language → available (no nudge)", () => {
+    expect(getLanguageSupport({}).available).toBe(true);
+    expect(getLanguageSupport(undefined).available).toBe(true);
+  });
+});
+
+describe("languageDisplayName", () => {
+  it("returns the native name for a known language", () => {
+    expect(languageDisplayName("fr").toLowerCase()).toContain("français");
+  });
+  it("includes the region for a region variant", () => {
+    expect(languageDisplayName("pt-BR").toLowerCase()).toContain("brasil");
+  });
+  it("falls back to the raw code for an unknown tag (no code echo)", () => {
+    // "qaa" is the ISO 639 tag reserved for local use — ICU has no name for it,
+    // so both the native and English Intl.DisplayNames steps echo the code back.
+    // Intl.DisplayNames defaults to fallback:"code"; the guard must return the
+    // raw code, not treat that echo as a real name.
+    expect(languageDisplayName("qaa")).toBe("qaa");
+  });
+  it("returns empty string for empty code", () => {
+    expect(languageDisplayName("")).toBe("");
   });
 });
 

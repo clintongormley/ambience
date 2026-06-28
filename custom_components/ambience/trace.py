@@ -260,9 +260,14 @@ def _scope_label(unit: UnitTrace) -> str:
 def _format_action(action: dict[str, Any]) -> str:
     """One dispatched action as `service [target, …] {params}`."""
     parts = [str(action.get("service", "?"))]
-    targets = action.get("entity_ids") or []
-    if targets:
-        parts.append(f"[{', '.join(targets)}]")
+    # Be tolerant of a hand-edited/malformed action: a bare-string entity_ids is
+    # wrapped (not char-split), non-string ids are coerced, and any other shape
+    # is skipped — so a bad action can't crash the trace log rendering.
+    targets = action.get("entity_ids")
+    if isinstance(targets, str):
+        targets = [targets]
+    if isinstance(targets, list) and targets:
+        parts.append(f"[{', '.join(str(t) for t in targets)}]")
     params = action.get("params")
     if isinstance(params, dict) and params:
         # Log param KEYS only, never their values — action params can carry

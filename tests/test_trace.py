@@ -306,6 +306,27 @@ def test_format_action_skips_non_dict_params_without_leaking():
     assert "SEKRIT-LIST-VALUE" not in text
 
 
+def test_format_action_tolerates_malformed_entity_ids():
+    # entity_ids that isn't a clean list of strings must not crash trace rendering
+    # or char-split a bare string into "l, i, g, h, t".
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        None,
+        winner_name="evening",
+        actions=[
+            {"service": "light.turn_on", "entity_ids": "light.solo"},  # bare string
+            {"service": "lock.lock", "entity_ids": [123, "lock.door"]},  # non-string element
+        ],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "[light.solo]" in text  # wrapped, not char-split
+    assert "lock.door" in text  # coerced, no TypeError
+
+
 def test_emit_trace_resolves_category_name_for_log(caplog):
     class StoreStub:
         def categories(self):

@@ -246,6 +246,41 @@ async def test_scope_diagnostics_house_scope(
     assert result["traces"][0]["scope_id"] is None
 
 
+async def test_scope_diagnostics_does_not_mutate_store(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """scope_diagnostics redacts the LIVE scope_config() reference (not a deep
+    copy, unlike the full-store dump), so it must build copies and never mutate
+    the store — the redacted output blanks secrets while the store keeps them."""
+    from custom_components.ambience.diagnostics import scope_diagnostics
+
+    await seeded_store.async_save_area(
+        "hallway",
+        {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "lock.unlock",
+                            "entity_ids": ["lock.front"],
+                            "params": {"code": "4321"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    result = scope_diagnostics(hass, "area", "hallway", "general")
+
+    assert result["scope"]["config"]["scenes"][0]["actions"][0]["params"]["code"] == REDACTED
+    # The live store still holds the real code — redaction copied, never mutated.
+    live = seeded_store.scope_config("area", "hallway")
+    assert live["scenes"][0]["actions"][0]["params"]["code"] == "4321"
+
+
 async def test_device_diagnostics_dumps_redacted_store(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
 ) -> None:

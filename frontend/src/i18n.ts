@@ -30,17 +30,17 @@ export interface LanguageSupport {
   baseCode: string;
 }
 
-/** Whether Ambience ships UI strings for the user's HA language. Reads
- *  `hass.language` ONLY — the exact input {@link _localeOf} uses — so `available`
- *  can never disagree with which catalogue `localize` actually loads. An
- *  undeterminable language is treated as available (no nudge). The exact-match
- *  arm is a harmless forward-compat superset (collapses to base-only with
- *  today's base-only catalogue). */
+/** Whether Ambience ships UI strings for the user's HA language. Resolves the
+ *  base code from `hass.language` and tests catalogue membership the SAME way
+ *  {@link _localeOf} does (`baseCode in catalogue`), so `available` can never
+ *  disagree with which catalogue `localize` loads — even if region-specific keys
+ *  are ever added, both would still key off the base. An undeterminable language
+ *  is treated as available (no nudge). */
 export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
   const raw = hass?.language as string | undefined;
   if (!raw) return { available: true, code: "", baseCode: "" };
   const baseCode = _baseCode(raw);
-  const available = !!(AMBIENCE_STRINGS_BY_LOCALE[raw] || AMBIENCE_STRINGS_BY_LOCALE[baseCode]);
+  const available = baseCode in AMBIENCE_STRINGS_BY_LOCALE;
   return { available, code: raw, baseCode };
 }
 

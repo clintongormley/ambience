@@ -8,6 +8,9 @@ export const GITHUB_REPO_URL = "https://github.com/clintongormley/ambience";
  * branch, so the body is blank until the template is merged — `?body=` prefills
  * immediately and injects the language. The translation_request.md template
  * still serves the manual "New issue" path.
+ *
+ * The title/body are intentionally English (not run through `localize`): they
+ * land in the project's GitHub issue tracker, which maintainers read in English.
  */
 export function buildTranslationRequestUrl(code: string, displayName: string): string {
   const params = new URLSearchParams({

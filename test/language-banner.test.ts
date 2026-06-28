@@ -23,6 +23,12 @@ describe("ambience-language-banner", () => {
     const el = await mount("fr");
     expect(innerBanner(el)).not.toBeNull();
     expect(el.shadowRoot.textContent.toLowerCase()).toContain("français");
+    // the language name and product are bolded (not just present as plain text)
+    const bolded = [...el.shadowRoot.querySelectorAll("strong")].map((s: Element) =>
+      s.textContent?.toLowerCase(),
+    );
+    expect(bolded).toContain("français");
+    expect(bolded).toContain("ambience");
   });
 
   it("hidden for a covered language", async () => {

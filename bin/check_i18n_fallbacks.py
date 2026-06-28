@@ -28,11 +28,14 @@ from bin._i18n_bundle import decode_string_body, parse_locales
 # localize(<hass>, "<key>", "<fallback>", ...) with either quote style for the
 # two string literals, tolerant of newlines between arguments. A non-literal
 # (variable) key or fallback simply doesn't match, so dynamic calls are skipped.
+# The string body is `\\.` (an escape) OR a char that is neither the delimiter
+# quote nor a backslash — the two alternatives are disjoint, which keeps matching
+# linear (no catastrophic backtracking).
 _LOCALIZE_RE = re.compile(
     r"localize\(\s*[^,]+?,\s*"
-    r"([\"'])((?:\\.|(?!\1).)*)\1"  # key:      group 1 quote, group 2 body
+    r"([\"'])((?:\\.|(?!\1)[^\\])*)\1"  # key:      group 1 quote, group 2 body
     r"\s*,\s*"
-    r"([\"'])((?:\\.|(?!\3).)*)\3",  # fallback: group 3 quote, group 4 body
+    r"([\"'])((?:\\.|(?!\3)[^\\])*)\3",  # fallback: group 3 quote, group 4 body
     re.DOTALL,
 )
 

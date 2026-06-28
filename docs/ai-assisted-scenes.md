@@ -11,7 +11,9 @@ write the scenes — conditions *and* actions — for your real entities. Or han
 diagnostic and ask **"why didn't my scene fire?"**: it reads the trace, explains
 what blocked the scene, and gives you a corrected version.
 
-Open it from the Ambience panel → **Settings → the AI tab**.
+The AI tab is hidden by default. Enable it in **Settings → Devices & services →
+Ambience → Configure → Enable the AI authoring tab (beta)**, then open the
+Ambience panel and find it under **Settings → the AI tab**.
 
 ## How it works — three steps
 

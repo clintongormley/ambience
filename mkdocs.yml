@@ -80,7 +80,6 @@ nav:
       - Using an action in a scene: actions/using-actions.md
       - Apply on every match: actions/apply-on-every-match.md
       - How actions run: actions/how-actions-run.md
-  - AI-assisted scenes (beta): ai-assisted-scenes.md
   - Settings reference: settings-reference.md
   - Panel & card: panel-and-card.md
   - Troubleshooting:

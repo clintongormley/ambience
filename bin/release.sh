@@ -121,6 +121,19 @@ if [ -n "$(git status --porcelain -- "$FRONTEND_DIR")" ]; then
   exit 1
 fi
 
+# Regenerate the AI knowledge pack and bail if the committed output is stale.
+# The pack ships with the integration (and as a plugin/skill an AI consults), so
+# a release must never ship authoring docs that lag the code.
+AI_DOCS_DIRS="docs/developers/ai-authoring ai/skill"
+AI_DOCS_CMD="${AI_DOCS_CMD:-python3 -m bin.gen_ai_docs}"
+eval "$AI_DOCS_CMD"
+if [ -n "$(git status --porcelain -- $AI_DOCS_DIRS)" ]; then
+  echo "error: regenerating the AI knowledge pack changed committed output" >&2
+  echo "  the committed AI docs were stale; the freshly generated docs are left in" >&2
+  echo "  your working tree — review them, commit them, then retry the release" >&2
+  exit 1
+fi
+
 git checkout -q -b "$BRANCH"
 
 # From here until the release commit lands, a failure — a bad bump or an
@@ -139,6 +152,11 @@ trap _abort_release ERR
 # Bump the version across manifest.json, package.json, and package-lock.json
 # (shared with the release workflow's next-minor bump so they can't drift).
 "$(dirname "$0")/bump-version.sh" "$VERSION"
+
+# Re-stamp the AI knowledge pack now that the version has bumped — the pack
+# records the Ambience version it was built for (so the skill can require a
+# matching plugin), so it must be regenerated AFTER the bump and committed below.
+eval "$AI_DOCS_CMD"
 
 # Promote the changelog's [Unreleased] section into a dated version section so
 # the chore/release commit — and the published Release notes — carry it. Invoked

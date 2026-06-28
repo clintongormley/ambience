@@ -140,6 +140,18 @@ export async function getInstallId(hass: HassConnection): Promise<string | null>
   return res.install_id;
 }
 
+/** Panel-relevant config-entry options the frontend gates UI on. */
+export interface AmbienceOptions {
+  /** Whether the AI authoring tab (beta) is enabled. Off by default; the user
+   *  opts in via the integration's options. */
+  enable_ai_tab: boolean;
+}
+
+/** Read the panel-relevant integration options (e.g. whether to show the AI tab). */
+export async function getOptions(hass: HassConnection): Promise<AmbienceOptions> {
+  return hass.callWS<AmbienceOptions>({ type: "ambience/options" });
+}
+
 /** Read-only list of the watches the engine derives from a scope's scenes,
  *  for the Auto-triggers display. `scope_id` is omitted for the house scope. */
 export async function listAutoTriggers(
@@ -490,18 +502,9 @@ export async function redoChange(hass: HassConnection): Promise<HistoryApplyResu
   return hass.callWS({ type: "ambience/history/redo" });
 }
 
-export async function downloadScopeDiagnostics(
-  hass: HassConnection,
-  scope: { scope_kind: string; scope_id: string | null },
-  category: string,
-): Promise<void> {
-  const data = await hass.callWS<unknown>({
-    type: "ambience/diagnostics/scope",
-    scope_kind: scope.scope_kind,
-    scope_id: scope.scope_id,
-    category,
-  });
-  const filename = `ambience-${scope.scope_kind}-${scope.scope_id ?? "house"}-${category}.json`;
+// Turn a JSON-serialisable payload into a downloaded file. Shared by the scope
+// diagnostics download and the AI bundle download.
+function triggerJsonDownload(data: unknown, filename: string): void {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -515,6 +518,68 @@ export async function downloadScopeDiagnostics(
   // Mobile browsers fetch the blob URL asynchronously after the click; revoking
   // it synchronously invalidates it before the download starts, so defer it.
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export async function downloadScopeDiagnostics(
+  hass: HassConnection,
+  scope: { scope_kind: string; scope_id: string | null },
+  category: string,
+): Promise<void> {
+  const data = await hass.callWS<unknown>({
+    type: "ambience/diagnostics/scope",
+    scope_kind: scope.scope_kind,
+    scope_id: scope.scope_id,
+    category,
+  });
+  triggerJsonDownload(
+    data,
+    `ambience-${scope.scope_kind}-${scope.scope_id ?? "house"}-${category}.json`,
+  );
+}
+
+// --- AI bundle + config import --------------------------------------------
+
+// One scope's identity, mirrored from the import envelope's `scope` field.
+export type ScopeRef =
+  | { kind: "area"; id: string }
+  | { kind: "floor"; id: string }
+  | { kind: "house" };
+
+/** Fetch the live AI bundle (catalog + actions + definitions + config + traces). */
+export async function getAiBundle(hass: HassConnection): Promise<unknown> {
+  return hass.callWS({ type: "ambience/ai_bundle" });
+}
+
+/** Download the AI bundle as a JSON file the user hands to an AI. */
+export async function downloadAiBundle(hass: HassConnection): Promise<void> {
+  triggerJsonDownload(await getAiBundle(hass), "ambience-ai-bundle.json");
+}
+
+/** Validate a ScopeConfig's shape without saving (throws on invalid config). */
+export async function validateScopeConfig(
+  hass: HassConnection,
+  config: ScopeConfig,
+): Promise<void> {
+  await hass.callWS({ type: "ambience/validate", config });
+}
+
+/** Read a scope's current config, dispatching by scope kind. */
+export async function getScopeConfig(hass: HassConnection, scope: ScopeRef): Promise<ScopeConfig> {
+  if (scope.kind === "area") return getArea(hass, scope.id);
+  if (scope.kind === "floor") return getFloor(hass, scope.id);
+  return getHouse(hass);
+}
+
+/** Save a scope's config, dispatching by scope kind. */
+export async function saveScopeConfig(
+  hass: HassConnection,
+  scope: ScopeRef,
+  config: ScopeConfig,
+  change?: ChangeDescriptor,
+): Promise<{ ok: true; config: ScopeConfig }> {
+  if (scope.kind === "area") return saveArea(hass, scope.id, config, change);
+  if (scope.kind === "floor") return saveFloor(hass, scope.id, config, change);
+  return saveHouse(hass, config, change);
 }
 
 export async function simulateInputs(

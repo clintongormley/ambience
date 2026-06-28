@@ -1,0 +1,20 @@
+{
+  "name": "ambience",
+  "description": "AI-assisted authoring and diagnosis for Ambience (Home Assistant) scene configuration. Bundles the ambience-author skill and the /ambience-create and /ambience-fix commands.",
+  "version": "0.31.0",
+  "author": {
+    "name": "clintongormley"
+  },
+  "homepage": "https://github.com/clintongormley/ambience",
+  "repository": "https://github.com/clintongormley/ambience",
+  "license": "MIT",
+  "keywords": [
+    "home-assistant",
+    "ambience",
+    "automation",
+    "scenes",
+    "lighting"
+  ],
+  "skills": "./ai/skill",
+  "commands": "./ai/skill/ambience-author/commands"
+}

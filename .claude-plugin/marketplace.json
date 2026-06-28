@@ -1,0 +1,14 @@
+{
+  "name": "ambience",
+  "owner": {
+    "name": "clintongormley"
+  },
+  "description": "Ambience for Home Assistant — AI-assisted scene authoring and diagnosis.",
+  "plugins": [
+    {
+      "name": "ambience",
+      "source": "./",
+      "description": "Author and diagnose Ambience (Home Assistant) scenes from plain English: the ambience-author skill plus /ambience-create and /ambience-fix commands."
+    }
+  ]
+}

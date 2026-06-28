@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ASSISTANT_FIELDS,
+    CONF_ENABLE_AI_TAB,
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
@@ -27,6 +28,7 @@ from .const import (
     DATA_STORE,
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
+    DEFAULT_ENABLE_AI_TAB,
     DOMAIN,
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_HISTORY_CHANGED,
@@ -211,6 +213,31 @@ async def _ws_install_id(
     per-browser hint-dismissal state by this, so deleting and recreating the
     integration (a new entry_id) re-shows the optional setup hints."""
     connection.send_result(msg["id"], {"install_id": _resolve_install_id(hass)})
+
+
+def _ai_tab_enabled(hass: HomeAssistant) -> bool:
+    """Whether the AI authoring tab (beta) is enabled. Off by default; the user
+    opts in via the integration's options. Falls back to the default when no entry
+    exists — a teardown-race guard (the ws command is unregistered without one)."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return DEFAULT_ENABLE_AI_TAB
+    return bool(entries[0].options.get(CONF_ENABLE_AI_TAB, DEFAULT_ENABLE_AI_TAB))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/options"})
+@websocket_api.async_response
+async def _ws_options(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the panel-relevant config-entry options the frontend gates on —
+    currently whether the AI authoring tab (beta) is enabled. The user opts in via
+    the integration's options (Settings → Devices & services → Ambience →
+    Configure)."""
+    connection.send_result(msg["id"], {"enable_ai_tab": _ai_tab_enabled(hass)})
 
 
 @websocket_api.require_admin
@@ -1382,6 +1409,21 @@ async def _ws_scope_diagnostics(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/ai_bundle"})
+@websocket_api.async_response
+async def _ws_ai_bundle(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The live AI bundle: the catalog + exposed actions + definitions + redacted
+    config + traces an external AI consults to author and diagnose scenes."""
+    from .ai_bundle import build_ai_bundle
+
+    connection.send_result(msg["id"], await build_ai_bundle(hass))
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/simulate/inputs",
@@ -1491,6 +1533,7 @@ _WS_HANDLERS = (
     _ws_floors_list,
     _ws_conditions_list,
     _ws_install_id,
+    _ws_options,
     _ws_services_list,
     _ws_services_get_schema,
     _ws_exposed_actions_list,
@@ -1536,6 +1579,7 @@ _WS_HANDLERS = (
     _ws_history_redo,
     _ws_live_subscribe,
     _ws_scope_diagnostics,
+    _ws_ai_bundle,
     _ws_simulate_inputs,
     _ws_simulate,
 )

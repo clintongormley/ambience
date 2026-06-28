@@ -37,13 +37,14 @@ def _clean_env(extra: dict | None = None) -> dict:
     *branch* data ("Can't combine statement coverage data with branch data").
     We don't measure changelog.py here, so scrub the bootstrap entirely.
 
-    BUILD_CMD defaults to a no-op so the frontend build guard passes without a
-    real toolchain; individual tests override it.
+    BUILD_CMD / AI_DOCS_CMD default to a no-op so the frontend-build and AI-docs
+    freshness guards pass without a real toolchain; individual tests override them.
     """
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
     }
     env.setdefault("BUILD_CMD", "true")
+    env.setdefault("AI_DOCS_CMD", "true")
     if extra:
         env.update(extra)
     return env
@@ -118,6 +119,10 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
     )
     # pyproject's [project] version is bumped too (a stale number misleads).
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "ambience"\nversion = "0.1.0"\n')
+    # The Claude plugin manifest version tracks the integration version.
+    plugin_dir = tmp_path / ".claude-plugin"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.json").write_text('{\n  "name": "ambience",\n  "version": "0.1.0"\n}\n')
     (tmp_path / "package-lock.json").write_text(
         "{\n"
         '  "name": "ambience-panel",\n'
@@ -197,6 +202,11 @@ def test_bump_version_bumps_all_files_and_verifies(tmp_path: Path):
     assert lock["packages"][""]["version"] == "0.2.0"
     assert lock["packages"]["node_modules/esbuild"]["version"] == "0.1.0"
     assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text()
+    # The Claude plugin manifest is bumped in lockstep so plugin users get the
+    # refreshed knowledge pack on a marketplace update.
+    assert json.loads((tmp_path / ".claude-plugin" / "plugin.json").read_text())["version"] == (
+        "0.2.0"
+    )
 
 
 def test_bump_version_rejects_invalid_semver(tmp_path: Path):

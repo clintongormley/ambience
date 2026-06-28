@@ -97,6 +97,14 @@ jobs:
           prerelease: ${{ steps.version.outputs.prerelease }}
           make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
 
+      - name: Advance the stable release channel
+        # The AI knowledge pack (Claude plugin / skill / docs) is installed from the
+        # `stable` branch so users get the pack matching their release — never main's
+        # unreleased dev work. Pre-releases don't move it (they aren't "latest"). The
+        # checkout is at the tag commit, so this points stable at the release.
+        if: steps.version.outputs.prerelease == 'false'
+        run: git push -f origin "HEAD:refs/heads/stable"
+
   bump:
     needs: publish
     # Only final releases roll main forward; pre-releases leave the version alone.
@@ -111,6 +119,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: main
+
+      # Needed to re-stamp the AI knowledge pack after the version bump (below).
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
 
       # The bump PR must be opened by a PAT/App token, NOT the default
       # GITHUB_TOKEN: GitHub deliberately does not trigger `on: pull_request`
@@ -157,6 +170,13 @@ jobs:
             echo "Next minor $NEXT is ahead of current manifest version $CURRENT; will open bump PR."
             # Same verified bump bin/release.sh uses, so the two can't drift.
             bin/bump-version.sh "$NEXT"
+            # Re-stamp the AI knowledge pack with the bumped version (release.sh
+            # does the same): the pack records the version it was built for, so
+            # without this the AI-docs drift gate would fail on the auto-bump PR
+            # and block its auto-merge. gen_ai_docs imports the conditions package,
+            # which needs Home Assistant.
+            python -m pip install --quiet homeassistant pyyaml
+            python -m bin.gen_ai_docs
           else
             echo "do_bump=false" >> "$GITHUB_OUTPUT"
             echo "Next minor $NEXT is not ahead of current manifest version $CURRENT (an old/patch tag was pushed); skipping bump."

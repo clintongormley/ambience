@@ -13,6 +13,12 @@ DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
 
+# Structure version of the AI bundle (see ai_bundle.py). Bump ONLY when the
+# bundle's shape changes incompatibly — the knowledge pack stamps this so the
+# skill can refuse a bundle it's too old to read. Independent of the release
+# version (which tracks features, not bundle shape).
+AI_BUNDLE_VERSION = 1
+
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"
@@ -119,6 +125,10 @@ GENERAL_CATEGORY = {
 # Options flow
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
+
+# The AI-assisted authoring tab (beta) is hidden unless the user opts in.
+CONF_ENABLE_AI_TAB = "enable_ai_tab"
+DEFAULT_ENABLE_AI_TAB = False
 
 # Voice-assistant exposure. The per-assistant on/off map is stored in the
 # Ambience store (store.DEFAULT_EXPOSED_ASSISTANTS) and edited on the panel's

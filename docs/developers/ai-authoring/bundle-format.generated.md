@@ -2,14 +2,14 @@
 
 # Pack compatibility
 
-This pack was built for **Ambience 0.31.x** and understands **AI bundle format 1**.
+This pack was built for **Ambience 0.32.x** and understands **AI bundle format 1**.
 
 **Before authoring or diagnosing, check the bundle against this pack:**
 
-1. **Version.** Take the bundle's `ambience_version` (e.g. `0.31.2`), drop the patch, and compare its major.minor to **0.31** — compare each part as an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):
-   - **newer than 0.31** → the user's Ambience is newer than this pack. **Stop. Do not author.** Update the plugin (below), then retry.
-   - **older than 0.31** → the user's Ambience is older than this pack. Ask them to update Ambience (HACS) and re-download the bundle.
-   - **same `0.31`** → compatible, continue.
+1. **Version.** Take the bundle's `ambience_version` (e.g. `0.32.2`), drop the patch, and compare its major.minor to **0.32** — compare each part as an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):
+   - **newer than 0.32** → the user's Ambience is newer than this pack. **Stop. Do not author.** Update the plugin (below), then retry.
+   - **older than 0.32** → the user's Ambience is older than this pack. Ask them to update Ambience (HACS) and re-download the bundle.
+   - **same `0.32`** → compatible, continue.
 2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater than **1**, also stop and update the plugin.
 
 ## Updating the plugin

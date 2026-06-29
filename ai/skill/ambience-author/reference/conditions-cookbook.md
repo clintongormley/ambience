@@ -659,3 +659,30 @@ everything beneath it, so you avoid a separate no-op scene.
 The gate still references `binary_sensor.lounge`, so the unit stays subscribed to it
 and re-evaluates on presence changes — don't strip the **last** reference to an
 entity you still need as a trigger (see the *`state`* subscription note).
+
+**A real before/after.** A terrace "Lights" group had grown to three actionless
+blockers guarding a catch-all — plus a "Lights on at night" scene that, despite its
+name, had **no actions** (a latent bug: it never turned anything on). Folding the
+blockers' conditions into one *acting* scene collapses it to two:
+
+```yaml
+# BEFORE — three blockers gate the catch-all; "Lights on at night" does nothing
+- { name: Block if anybody home,      when: { people: { quant: any, where: home } },                  actions: [] }
+- { name: Block if presence detected, when: { occupancy: { sensors: [binary_sensor.all_presence] } }, actions: [] }
+- { name: Lights on at night,         when: { time_of_day: [{ period: nighttime }] },                 actions: [] }   # no-op!
+- { name: Lights off,                 when: {},                                                        actions: [ <all lights → 0> ] }
+
+# AFTER — the positive case is a real scene (guards folded into its `when`); the blockers vanish
+- name: Lights on at night when nobody home
+  when:
+    time_of_day: [{ period: nighttime }]
+    occupancy: { sensors: [binary_sensor.all_presence], occupied: false }
+    people:    { quant: nobody, where: home }
+  actions: [ <lights → 25%> ]
+- { name: Lights off, when: {}, actions: [ <all lights → 0> ] }
+```
+
+The blockers existed only to stop the catch-all firing; once the positive case is a
+real acting scene carrying those guards in its own `when`, they have nothing left to
+block. Four scenes → two — and a "Lights on" scene that finally turns the lights on.
+(Full walkthrough: [examples/05-simplify-a-group.md](examples/05-simplify-a-group.md).)

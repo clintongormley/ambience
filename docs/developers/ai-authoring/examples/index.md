@@ -12,3 +12,4 @@ their downloaded bundle.
 2. [Away / nobody home](02-away-nobody-home.md) — presence with a `for` → turn things off.
 3. [Movie night across a category](03-movie-night.md) — a new category + a TV-state scene + a catch-all.
 4. [Diagnose & fix](04-diagnose-and-fix.md) — read a trace, emit a corrected block.
+5. [Simplify a group](05-simplify-a-group.md) — collapse a stack of actionless blockers (and a no-op) into one acting scene.

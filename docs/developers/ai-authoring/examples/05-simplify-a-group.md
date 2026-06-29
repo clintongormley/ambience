@@ -80,7 +80,11 @@ scenes:
 - **Resolution is unchanged in spirit.** The acting scene has conditions, so it's
   more *specific* than the empty-`when` catch-all and is evaluated first; when its
   conditions don't hold, `Lights off` wins. Four scenes → two, no pinning needed.
-- One caveat worth a thought (see the cookbook's *cap-and-hold* / `for:` notes): a
-  manual "on" while you're home now loses to `Lights off`. If you want manual
-  control to survive, add a guard (e.g. exclude a "terrace manually on" helper) or
-  keep a small blocker for that case.
+- **Manual overrides persist until a re-evaluation.** The terrace lights are only
+  *action targets*, never named in a `when`, so the unit isn't subscribed to them —
+  turning one on by hand doesn't wake this group. `Lights off` re-applies only on a
+  real re-evaluation (a presence / people / time-of-day change) **or** when the idle
+  *reapply* timer next re-asserts the winner (a `force` apply, which bypasses the
+  debounce). So a manual "on" while home survives until then rather than being
+  snapped off instantly; if you want it to hold indefinitely, gate the off-scene on
+  a "terrace manually on" helper (or turn reapply off for the scope).

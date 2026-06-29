@@ -78,10 +78,15 @@ trans_changed=$(printf '%s\n' "$changed" | grep -E 'strings\.json$|/translations
 # The AI knowledge pack's generated sections derive from the conditions, the
 # built-in services and the curated source docs — regen + diff when any change.
 ai_docs_src_changed=$(printf '%s\n' "$changed" | grep -E '^custom_components/ambience/conditions/|^custom_components/ambience/services\.yaml$|^custom_components/ambience/manifest\.json$|^docs/developers/ai-authoring/|^ai/skill/|^bin/gen_ai_docs\.py$' || true)
+# Hand-written Markdown only — the AI knowledge pack and generated AI-authoring
+# docs are owned by gen_ai_docs.py / the ai-docs gate, so mdformat skips them
+# (.mdformat.toml exclude) and a change there must not trigger this gate.
+md_changed=$(printf '%s\n' "$changed" | grep -E '\.md$|\.markdown$' | grep -vE '^(ai/|docs/developers/ai-authoring/)' || true)
 
 # --- Step 1: fast lint/format (fail fast — this is usually what breaks CI) ---
 if [ -n "$py_changed" ]; then echo "› ruff";       make lint-py; fi
 if [ -n "$js_changed" ]; then echo "› biome+tsc";   make lint-js; fi
+if [ -n "$md_changed" ]; then echo "› mdformat";    make lint-md; fi
 
 # --- Step 2: always-cheap i18n gates (parity, completeness, no-hardcoded) ---
 if [ -n "$py_changed$trans_changed$bundle_src_changed" ]; then echo "› i18n"; make i18n; fi

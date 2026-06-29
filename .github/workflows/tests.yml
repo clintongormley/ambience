@@ -95,6 +95,9 @@ jobs:
       - run: pip install ruff
       - run: ruff check .
       - run: ruff format --check .
+      # Markdown formatting (mdformat via uvx; toolchain pinned in the Makefile).
+      - run: pip install uv
+      - run: make lint-md
 
   frontend:
     runs-on: ubuntu-latest

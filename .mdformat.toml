@@ -1,0 +1,18 @@
+# mdformat — the canonical Markdown formatter for this repo. Apply with
+# `make format-md`; `make lint-md` checks it (also run by CI and the pre-push
+# hook). The toolchain is pinned in the Makefile (mdformat + mdformat-gfm +
+# mdformat-mkdocs, which gives the 4-space list indent + mdformat-frontmatter).
+
+# Hand-wrap prose at 80 columns — matches the docs house style (and the
+# .markdownlint MD013 line-length rule is off for the same reason).
+wrap = 80
+
+# Leave the AI knowledge pack and the generated AI-authoring docs alone: they're
+# produced/assembled by bin/gen_ai_docs.py and guarded by `make ai-docs-check`,
+# so reformatting them here would fight the generator. node_modules is excluded
+# so a stray bare `mdformat .` never recurses into vendored docs.
+exclude = [
+    "ai/**",
+    "docs/developers/ai-authoring/**",
+    "node_modules/**",
+]

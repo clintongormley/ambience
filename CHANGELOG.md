@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-06-29
+
 ### Added
 
 - A banner now nudges you to request a translation when your Home Assistant

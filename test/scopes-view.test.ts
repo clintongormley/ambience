@@ -922,6 +922,35 @@ describe("ambience-scopes-view", () => {
     expect(editor.scene.category).toBe("a"); // Awnings sorts before Blinds
   });
 
+  test("download-diagnostics passes the category id and its display name", async () => {
+    const scenes: Scene[] = [{ name: "X", when: {}, actions: [], category: "a" }];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    // A renamed category: stable id "a", display name "Awnings". The filename
+    // should reflect the name, so the view must look it up and pass it on.
+    el._store.categories = [{ id: "a", name: "Awnings" }];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-scenes-list")!.dispatchEvent(
+      new CustomEvent("download-diagnostics", {
+        detail: { category: "a" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(api.downloadScopeDiagnostics).toHaveBeenCalledWith(
+      expect.anything(),
+      { scope_kind: "area", scope_id: "living_room" },
+      "a",
+      "Awnings",
+    );
+  });
+
   test("duplicating a pinned scene drops the pin and its fixed priority", async () => {
     const scene: Scene = {
       name: "Pinned",
@@ -2134,6 +2163,7 @@ describe("ambience-scopes-view", () => {
 
   test("download-diagnostics event downloads for the area scope + category", async () => {
     el = await mount();
+    el._store.categories = [{ id: "lights", name: "Lights" }];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -2152,11 +2182,13 @@ describe("ambience-scopes-view", () => {
       el.hass,
       { scope_kind: "area", scope_id: "living_room" },
       "lights",
+      "Lights",
     );
   });
 
   test("download-diagnostics on the house scope sends scope_id null", async () => {
     el = await mount();
+    el._store.categories = [{ id: "lights", name: "Lights" }];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -2173,6 +2205,7 @@ describe("ambience-scopes-view", () => {
       el.hass,
       { scope_kind: "house", scope_id: null },
       "lights",
+      "Lights",
     );
   });
 

@@ -90,12 +90,12 @@ action from the scene:
 ```yaml
 # scene action — one exposed script that runs the timed sequence internally
 actions:
-  - { service: script.tv_on_then_hdmi3, entity_ids: [], params: {} }
+  - { service: script.tv_on_then_hdmi_3, entity_ids: [], params: {} }
 ```
 
 ```yaml
 # the user's HA script (scripts.yaml) — the delay lives here, not in Ambience
-tv_on_then_hdmi3:
+tv_on_then_hdmi_3:
   sequence:
     - { action: remote.turn_on, target: { entity_id: remote.lounge_tv } }
     - delay: { seconds: 3 }
@@ -106,7 +106,10 @@ tv_on_then_hdmi3:
 
 The same wrapping handles any multi-step action needing ordering guarantees or a
 settle time the built-in services can't express. (Remember the exposed-id rule
-above — reference the script by its real, slugified `script.*` id.)
+above — reference the script by its real, slugified `script.*` id. And note the
+script's internal steps use Home Assistant's own `action:` step syntax — that's the
+user's `scripts.yaml`, not an Ambience block; an Ambience action always uses the
+`service:` key shown in the scene above.)
 
 ## The built-in `ambience.*` safe services
 

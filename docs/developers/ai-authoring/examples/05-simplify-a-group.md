@@ -33,7 +33,7 @@ adjustment. Over time it had grown to four scenes, three of which do nothing but
 - name: Lights off
   when: {}
   actions:
-    - { service: fado.fade_lights, entity_ids: [light.terrace_floor_lights, light.terrace_perimeter_lights, light.terrace_step_lights], params: { brightness_pct: 0 } }
+    - { service: fado.fade_lights, entity_ids: [light.terrace_floor_lights, light.terrace_perimeter_lights, light.terrace_entrance_spots, light.terrace_step_lights], params: { brightness_pct: 0 } }
 ```
 
 The two blockers exist only so the `Lights off` catch-all doesn't fire while someone
@@ -72,7 +72,7 @@ scenes:
     category: general
     when: {}
     actions:
-      - { service: fado.fade_lights, entity_ids: [light.terrace_floor_lights, light.terrace_perimeter_lights, light.terrace_step_lights], params: { brightness_pct: 0 } }
+      - { service: fado.fade_lights, entity_ids: [light.terrace_floor_lights, light.terrace_perimeter_lights, light.terrace_entrance_spots, light.terrace_step_lights], params: { brightness_pct: 0 } }
 ```
 
 ## Why it's equivalent — and better

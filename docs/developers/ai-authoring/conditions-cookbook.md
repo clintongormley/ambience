@@ -64,7 +64,7 @@ attributes), with optional `for`.
 > scene. Three consequences:
 >
 > - You can add a trigger **deliberately** with an always-true atom — e.g.
->   `{ kind: is, entity_id: input_boolean.foo, states: [off, on] }` never
+>   `{ kind: is, entity_id: input_boolean.foo, states: ["off", "on"] }` never
 >   constrains the match (it's true whichever state `foo` is in) but ensures the
 >   unit re-evaluates the instant `foo` flips. It's the built-in-`state` analogue
 >   of the explicit `triggers:` on `script` / `template` — reach for it to react to
@@ -566,7 +566,7 @@ guard:
     occupancy: { sensors: [binary_sensor.bed_presence], for: { s: 50 } }   # in bed >= 50s
     state:
       kind: not
-      item: { kind: is, entity_id: binary_sensor.bed_presence, states: [on], for: { m: 1 } }  # but < 60s
+      item: { kind: is, entity_id: binary_sensor.bed_presence, states: ["on"], for: { m: 1 } }  # but < 60s
     time_of_day: [{ period: nighttime }]
   actions:
     - { service: fado.fade_lights, entity_ids: [light.bedroom_ceiling], params: { brightness_pct: 0 } }
@@ -676,7 +676,7 @@ and that can't be a positive action, so it stays a pure blocker. Four scenes →
 ```yaml
 # BEFORE — three blockers gate the catch-all; "Lights on at night" does nothing
 - { name: Block if anybody home,      when: { people: { quant: any, where: home } },                  actions: [] }
-- { name: Block if presence detected, when: { occupancy: { sensors: [binary_sensor.all_presence] } }, actions: [] }
+- { name: Block if presence detected, when: { occupancy: { sensors: [binary_sensor.all_presence_sensors] } }, actions: [] }
 - { name: Lights on at night,         when: { time_of_day: [{ period: nighttime }] },                 actions: [] }   # no-op!
 - { name: Lights off,                 when: {},                                                        actions: [ <all lights → 0> ] }
 
@@ -684,14 +684,14 @@ and that can't be a positive action, so it stays a pure blocker. Four scenes →
 - name: Lights on at night when nobody home
   when:
     time_of_day: [{ period: nighttime }]
-    occupancy: { sensors: [binary_sensor.all_presence], occupied: false }
+    occupancy: { sensors: [binary_sensor.all_presence_sensors], occupied: false }
     people:    { quant: nobody, where: home }
   actions: [ <lights → 25%> ]
 - { name: Leave alone when anybody's home, when: { people: { quant: any, where: home } }, actions: [] }   # blocker
 - { name: Lights off, when: {}, actions: [ <all lights → 0> ] }
 ```
 
-Two blockers folded in because their case leads to an action (away in the evening →
+Two blockers folded in because their case leads to an action (away at night →
 25 %); the third did **not** — "home" means *leave the lights alone*, and "do nothing"
 can't be a positive action, so it stays a pure blocker. **Fold guards that gate an
 action; keep a blocker for a guard that gates inaction** — drop that last blocker and

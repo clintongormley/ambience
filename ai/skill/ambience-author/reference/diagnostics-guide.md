@@ -259,9 +259,9 @@ scenes:
       - { service: script.cine_tv_on_hdmi_3, entity_ids: [], params: {} }   # exact exposed id
 ```
 
-The `unexposed_action` repair clears once a fresh evaluation runs with no scene
-referencing the missing id. See [actions.md](actions.md) → *Only EXPOSED services
-are valid*.
+The `unexposed_action` repair clears when you **re-import the corrected config** — a
+config save re-runs the health scan — not on a normal trigger evaluation. See
+[actions.md](actions.md) → *Only EXPOSED services are valid*.
 
 ## Producing the corrected block
 

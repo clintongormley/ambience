@@ -145,7 +145,12 @@ order — neither is your array order:
   earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
   close" sits on top, lower scenes needn't re-test the projector; once a pinned
   "closed dusk→sunrise" sits above the daytime scenes, those needn't gate on the
-  daytime window. Prefer that cascade over repeating a guard on every scene.
+  daytime window. Prefer that cascade over repeating a guard on every scene. Read
+  it **backwards**, too: a scene is reached only when every higher scene *failed*
+  to match, so below a gate you may assume the **opposite** of that gate's
+  condition and delete the repeated test — a cheap simplification pass over a
+  finished group (see *Simplify a finished group* in
+  [conditions-cookbook.md](conditions-cookbook.md)).
 - A final scene with an empty `when` is the catch-all default (it always sorts
   last).
 - **Only the winning scene's actions run** — there is no accumulation across

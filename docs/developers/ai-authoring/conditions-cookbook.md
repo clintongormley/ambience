@@ -595,3 +595,66 @@ winning scene's actions run, so every scene must stand alone; idempotent
   automations: each value's scene simply declares the world it wants, and the unit
   re-evaluates whenever `current_activity` changes (it's a `state` atom, so the
   unit is subscribed to it — see the *`state`* section above).
+
+### Simplify a finished group: hoist a repeated condition into a gate
+
+Once a group works, do a quick **ordering-and-simplification pass**. The tell-tale
+is **the same condition repeated across several scenes** — `occupancy: on` on every
+daytime/evening/night scene, "projector off" re-tested everywhere, the same daytime
+window gating each blind position. Because resolution is **first-match-wins**, a
+scene is reached only when **every higher scene failed to match** — so you can pull
+one repeated condition out into a single **gate** near the top and delete it from
+every scene below:
+
+- A **positive** gate ("presence detected → …", "projector on → …"): once the
+  cascade gets *past* it, that condition is **false** below — so lower scenes may
+  assume "no presence" / "projector off" and drop the test.
+- A **negative** gate ("room vacant → lights off"): past it, the room is occupied,
+  so the scenes below need only their own (e.g. time-of-day) condition.
+
+Two correctness points keep this honest:
+
+- **The gate has to actually sit on top.** A broad gate isn't more *specific* than
+  the scenes below, so containment won't float it up — the user must **pin** it
+  (see [schema.md](schema.md) → *How scenes are chosen*). Only a genuinely
+  more-specific (subset) gate rises on its own.
+- **The "opposite" is only as clean as the gate's match.** "Past the gate ⇒
+  opposite" is exact for a plain binary test, but fuzzy when the gate uses a `for:`
+  window (a grace period where neither side has settled) or when the entity can go
+  **unavailable** (an unobservable atom doesn't match, so "past the gate" also
+  covers "sensor down"). If that gap matters, keep a small explicit blocker for the
+  in-between case, or add an `unavailable` guard at the very top.
+
+**Prefer a gate that also does work.** It needn't have actions — a pure actionless
+blocker (like the *settle* blocker above) is right when the positive case has
+nothing to *do*. But it's tidier to let an **acting** scene double as the gate: a
+"vacant → lights off" scene both handles vacancy *and* establishes "occupied" for
+everything beneath it, so you avoid a separate no-op scene.
+
+```yaml
+# BEFORE — every scene re-tests occupancy
+- name: Vacant
+  when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
+  actions: [ <lights off> ]
+- name: Daytime
+  when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: daytime }] }
+  actions: [ <bright> ]
+- name: Evening
+  when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: evening }] }
+  actions: [ <dim> ]
+
+# AFTER — "Vacant" (pinned) is the gate; below it the room is occupied (bar the 1-min grace)
+- name: Vacant            # pin to top
+  when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
+  actions: [ <lights off> ]
+- name: Daytime
+  when: { time_of_day: [{ period: daytime }] }
+  actions: [ <bright> ]
+- name: Evening
+  when: { time_of_day: [{ period: evening }] }
+  actions: [ <dim> ]
+```
+
+The gate still references `binary_sensor.lounge`, so the unit stays subscribed to it
+and re-evaluates on presence changes — don't strip the **last** reference to an
+entity you still need as a trigger (see the *`state`* subscription note).

@@ -229,6 +229,40 @@ evaluated because the scope's Ambience **pause switch is off**. (Likewise
 config bug — there's nothing to fix in the scenes. Tell the user to turn the
 scope's Ambience switch back on (or re-enable the scope). No import block needed.
 
+## Worked walkthrough 4 — an action silently did nothing (unexposed)
+
+**Symptom:** "The scene fires, but one of its actions never happens." The trace
+shows `outcome: acted` (the scene won and dispatched) yet the effect is missing —
+and there's a Repairs issue `unexposed_action:<id>`.
+
+**Read it:** Ambience only calls **exposed** services; an action whose `service`
+isn't in the user's exposed list is **logged and skipped** (marked `unexposed` in
+the trace) while the scene and its other actions proceed. The usual cause is an
+id that **doesn't match the exposed one** — most often a `script.*` whose entity id
+was slugified from a friendly name (`script.cine_tv_on_hdmi_3`, not a guessed
+`…hdmi3`). The user *did* expose the script, but the scene calls a slightly
+different id, so it's unexposed *as written*.
+
+**Fix:** diff the `service` you used against the bundle's `actions.exposed[].id`
+and re-emit with the exact id (`mode: merge`, same scene name → upserts):
+
+```yaml
+ambience_import: 1
+scope: { kind: area, id: lounge }
+mode: merge
+scenes:
+  - name: Watch TV
+    category: media
+    when:
+      state: { kind: is, entity_id: remote.cine, attribute: current_activity, states: ["Nvidia (TV)"] }
+    actions:
+      - { service: script.cine_tv_on_hdmi_3, entity_ids: [], params: {} }   # exact exposed id
+```
+
+The `unexposed_action` repair clears when you **re-import the corrected config** — a
+config save re-runs the health scan — not on a normal trigger evaluation. See
+[actions.md](actions.md) → *Only EXPOSED services are valid*.
+
 ## Producing the corrected block
 
 Always:

@@ -57,6 +57,28 @@ attributes), with optional `for`.
   never matches and never inverts under `not` (so `not(light is on)` will not
   fire while the light is unavailable).
 
+> **A `state` atom also *subscribes* the unit to its entity.** The engine
+> re-evaluates a `(scope, category)` unit whenever any entity named in its scenes'
+> conditions changes (alongside clock / sun / `for`-timer ticks). So referencing
+> an entity in `state` is *also* how you make a change in that entity wake the
+> scene. Three consequences:
+>
+> - You can add a trigger **deliberately** with an always-true atom — e.g.
+>   `{ kind: is, entity_id: input_boolean.foo, states: ["off", "on"] }` never
+>   constrains the match (it's true whichever state `foo` is in) but ensures the
+>   unit re-evaluates the instant `foo` flips. It's the built-in-`state` analogue
+>   of the explicit `triggers:` on `script` / `template` — reach for it to react to
+>   a state your *other* conditions don't already watch (e.g. a helper that an
+>   external timer flips off).
+> - When **reviewing**, don't flag such a tautological atom as dead code: it's
+>   load-bearing as a trigger even though it never changes the match.
+> - The **dual** matters too: an entity a scene only *acts on* (an action target,
+>   never named in a `when`) does **not** subscribe the unit — so changing it by hand
+>   triggers no re-evaluation. The winning scene's actions re-assert only on a real
+>   re-eval (a subscribed entity / timer) or the idle **reapply** timer's `force`
+>   apply, so a **manual override of an action-only entity persists until then**, not
+>   instantly.
+
 **Intent → predicate**
 
 | Intent | Predicate (value of `when.state`) |
@@ -498,3 +520,180 @@ once every blind has **settled** in its final position:
   the top (Scopes view), per `schema.md` → *How scenes are chosen*.
 - Once every listed cover reaches `open`/`closed`, the blocker stops matching and
   the scene below it that fits the settled situation wins.
+
+### Cap-and-hold a cover without overriding a manual change
+
+When a position scene should **hold or cap** a cover at some level but **not
+force** it there — so a blind the user has deliberately opened stays open — gate
+the scene on the cover's **own current position**. A self-referential
+`current_position <= N` (or `>= N`) atom makes the scene match *only when the cover
+is already at or below the cap*, so it re-asserts a lowered blind but never pulls
+an open one down:
+
+```yaml
+- name: Hold blinds low against low sun
+  category: <blinds category>
+  when:
+    sun: { elevation: { max: 35 }, azimuth: { sectors: [E, SE] } }
+    state:
+      kind: and
+      items:
+        - { kind: "<=", entity_id: cover.lounge_left,  attribute: current_position, states: ["35"] }
+        - { kind: "<=", entity_id: cover.lounge_right, attribute: current_position, states: ["35"] }
+  actions:
+    - { service: ambience.cover_safe_set_position, entity_ids: [cover.lounge_left, cover.lounge_right], params: { position: 35 } }
+```
+
+- The action sets the same `35`, but the `<=` guard means it only engages once the
+  blind is already there or lower — so a `Daytime`/open scene that re-opens to 100%
+  is respected and this scene won't fight it.
+- Drop the guard if you *do* want unconditional lowering from any position.
+
+### Fire once on entry, then release (one-shot for `apply: always`)
+
+A **pinned** scene with `apply: always` re-applies on *every* re-evaluation while
+it stays the winner — handy for holding a state, but it also **re-asserts against
+the user's manual changes**. To make such a scene fire once shortly after a
+trigger and then *let go* (so the user can override afterwards), bracket a short
+window with a `for`-gated entry test plus a `NOT(… sustained past the window)`
+guard:
+
+```yaml
+- name: Dim once when I get into bed
+  category: <lights category>          # pin to top in the panel; apply: always
+  apply: always
+  when:
+    occupancy: { sensors: [binary_sensor.bed_presence], for: { s: 50 } }   # in bed >= 50s
+    state:
+      kind: not
+      item: { kind: is, entity_id: binary_sensor.bed_presence, states: ["on"], for: { m: 1 } }  # but < 60s
+    time_of_day: [{ period: nighttime }]
+  actions:
+    - { service: fado.fade_lights, entity_ids: [light.bedroom_ceiling], params: { brightness_pct: 0 } }
+```
+
+- The two `for`s bracket a ~50–60 s window after presence: the scene wins, applies
+  once, then `NOT(on for 1m)` flips false and it **releases** — so a later manual
+  brighten isn't snapped back. Without the upper-bound `NOT`, the pinned
+  `apply: always` scene would re-dim every time you touched the lights.
+
+### Mirror an external mode/selector (declarative truth table)
+
+To replace a pile of *reactive* "when X changes from A to B, do …" automations that
+all key off **one entity's state or attribute** (a media-remote activity, an
+`input_select`, a thermostat mode), model it as **one scene per value**, each
+carrying the **complete desired state** for that value — not a delta. Only the
+winning scene's actions run, so every scene must stand alone; idempotent
+`ambience.turn_on` / `ambience.turn_off` keep re-fires cheap:
+
+```yaml
+# category gated on remote.cine's current_activity — one scene per activity
+- name: Activity — PlayStation (TV)
+  category: media
+  when:
+    state: { kind: is, entity_id: remote.cine, attribute: current_activity, states: ["PlayStation 5 (TV)"] }
+  actions:
+    - { service: ambience.turn_on, entity_ids: [switch.ps5_power], params: {} }
+    - { service: ambience.turn_on, entity_ids: [remote.lounge_tv], params: {} }
+# ... one scene per other activity, each fully describing PS5 / TV / speakers / etc.
+```
+
+- This drops the brittle `from:`/`to:` transition lists of the original
+  automations: each value's scene simply declares the world it wants, and the unit
+  re-evaluates whenever `current_activity` changes (it's a `state` atom, so the
+  unit is subscribed to it — see the *`state`* section above).
+
+### Simplify a finished group: hoist a repeated condition into a gate
+
+Once a group works, do a quick **ordering-and-simplification pass**. The tell-tale
+is **the same condition repeated across several scenes** — `occupancy: on` on every
+daytime/evening/night scene, "projector off" re-tested everywhere, the same daytime
+window gating each blind position. Because resolution is **first-match-wins**, a
+scene is reached only when **every higher scene failed to match** — so you can pull
+one repeated condition out into a single **gate** near the top and delete it from
+every scene below:
+
+- A **positive** gate ("presence detected → …", "projector on → …"): once the
+  cascade gets *past* it, that condition is **false** below — so lower scenes may
+  assume "no presence" / "projector off" and drop the test.
+- A **negative** gate ("room vacant → lights off"): past it, the room is occupied,
+  so the scenes below need only their own (e.g. time-of-day) condition.
+
+Two correctness points keep this honest:
+
+- **The gate has to actually sit on top.** A broad gate isn't more *specific* than
+  the scenes below, so containment won't float it up — the user must **pin** it
+  (see [schema.md](schema.md) → *How scenes are chosen*). Only a genuinely
+  more-specific (subset) gate rises on its own.
+- **The "opposite" is only as clean as the gate's match.** "Past the gate ⇒
+  opposite" is exact for a plain binary test, but fuzzy when the gate uses a `for:`
+  window (a grace period where neither side has settled) or when the entity can go
+  **unavailable** (an unobservable atom doesn't match, so "past the gate" also
+  covers "sensor down"). If that gap matters, keep a small explicit blocker for the
+  in-between case, or add an `unavailable` guard at the very top.
+
+**Prefer a gate that also does work.** It needn't have actions — a pure actionless
+blocker (like the *settle* blocker above) is right when the positive case has
+nothing to *do*. But it's tidier to let an **acting** scene double as the gate: a
+"vacant → lights off" scene both handles vacancy *and* establishes "occupied" for
+everything beneath it, so you avoid a separate no-op scene.
+
+```yaml
+# BEFORE — every scene re-tests occupancy
+- name: Vacant
+  when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
+  actions: [ <lights off> ]
+- name: Daytime
+  when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: daytime }] }
+  actions: [ <bright> ]
+- name: Evening
+  when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: evening }] }
+  actions: [ <dim> ]
+
+# AFTER — "Vacant" (pinned) is the gate; below it the room is occupied (bar the 1-min grace)
+- name: Vacant            # pin to top
+  when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
+  actions: [ <lights off> ]
+- name: Daytime
+  when: { time_of_day: [{ period: daytime }] }
+  actions: [ <bright> ]
+- name: Evening
+  when: { time_of_day: [{ period: evening }] }
+  actions: [ <dim> ]
+```
+
+The gate still references `binary_sensor.lounge`, so the unit stays subscribed to it
+and re-evaluates on presence changes — don't strip the **last** reference to an
+entity you still need as a trigger (see the *`state`* subscription note).
+
+**A real before/after.** A terrace "Lights" group had grown to three actionless
+blockers guarding a catch-all — plus a "Lights on at night" scene that, despite its
+name, had **no actions** (a latent bug). The fix folds the guards that lead to an
+*action* into one acting scene and corrects the no-op — but **keeps** the one guard
+whose case is "do nothing": when someone's home you want to *leave the lights alone*,
+and that can't be a positive action, so it stays a pure blocker. Four scenes → three:
+
+```yaml
+# BEFORE — three blockers gate the catch-all; "Lights on at night" does nothing
+- { name: Block if anybody home,      when: { people: { quant: any, where: home } },                  actions: [] }
+- { name: Block if presence detected, when: { occupancy: { sensors: [binary_sensor.all_presence_sensors] } }, actions: [] }
+- { name: Lights on at night,         when: { time_of_day: [{ period: nighttime }] },                 actions: [] }   # no-op!
+- { name: Lights off,                 when: {},                                                        actions: [ <all lights → 0> ] }
+
+# AFTER — away+evening guards folded into a real acting scene; the "home" guard stays a blocker
+- name: Lights on at night when nobody home
+  when:
+    time_of_day: [{ period: nighttime }]
+    occupancy: { sensors: [binary_sensor.all_presence_sensors], occupied: false }
+    people:    { quant: nobody, where: home }
+  actions: [ <lights → 25%> ]
+- { name: Leave alone when anybody's home, when: { people: { quant: any, where: home } }, actions: [] }   # blocker
+- { name: Lights off, when: {}, actions: [ <all lights → 0> ] }
+```
+
+Two blockers folded in because their case leads to an action (away at night →
+25 %); the third did **not** — "home" means *leave the lights alone*, and "do nothing"
+can't be a positive action, so it stays a pure blocker. **Fold guards that gate an
+action; keep a blocker for a guard that gates inaction** — drop that last blocker and
+the `Lights off` catch-all reaches into the "home" case and clobbers manual changes.
+(Full walkthrough: [examples/05-simplify-a-group.md](examples/05-simplify-a-group.md).)

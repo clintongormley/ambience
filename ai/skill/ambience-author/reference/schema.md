@@ -145,9 +145,22 @@ order — neither is your array order:
   earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
   close" sits on top, lower scenes needn't re-test the projector; once a pinned
   "closed dusk→sunrise" sits above the daytime scenes, those needn't gate on the
-  daytime window. Prefer that cascade over repeating a guard on every scene.
+  daytime window. Prefer that cascade over repeating a guard on every scene. Read
+  it **backwards**, too: a scene is reached only when every higher scene *failed*
+  to match, so below a gate you may assume the **opposite** of that gate's
+  condition and delete the repeated test — a cheap simplification pass over a
+  finished group (see *Simplify a finished group* in
+  [conditions-cookbook.md](conditions-cookbook.md)).
 - A final scene with an empty `when` is the catch-all default (it always sorts
   last).
+- **Only the winning scene's actions run** — there is no accumulation across
+  scenes in a unit. So each scene must encode the **complete desired state** for
+  its situation, not a delta from another scene. When several values of one input
+  each want a whole world (a "truth table" of modes — a media-remote activity, an
+  `input_select`, a thermostat mode), give every value its own scene carrying the
+  full action set, and lean on idempotent `ambience.turn_on`/`ambience.turn_off`
+  so the already-correct parts are no-ops. See *Mirror an external mode/selector*
+  in [conditions-cookbook.md](conditions-cookbook.md).
 
 ---
 

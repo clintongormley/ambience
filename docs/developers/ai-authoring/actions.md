@@ -39,6 +39,18 @@ At execution time:
   services/actions list.** The bundle also carries each exposed service's field
   schema, telling you which `params` are valid and their types.
 
+**Match the exposed id exactly — never a guessed slug.** Copy the `service`
+verbatim from the bundle's `actions.exposed[].id`. This bites hardest with
+`script.*` and other helpers, because Home Assistant **slugifies the friendly
+name** to build the entity id: a script the user names *"Cine – TV on + HDMI 3"*
+becomes `script.cine_tv_on_hdmi_3` (note `hdmi_3`, not `hdmi3`). Author
+`script.cine_tv_on_hdmi3` and the action is treated as **unexposed** and silently
+skipped — even though the user really did expose the script. The signature
+symptom is a Repairs issue `unexposed_action:<id>` (and the action marked
+`unexposed` in the trace) *while the user insists it's exposed*: diff the id you
+used against `actions.exposed[].id`. See
+[diagnostics-guide.md](diagnostics-guide.md) → *an action silently did nothing*.
+
 ## How `params` merge with exposed-action defaults
 
 At execution, the params actually sent are:
@@ -64,6 +76,40 @@ That is: the exposed action's **defaults** are applied first, then the scene's
 from the AI bundle**, scoped to what makes sense for the scene's scope (e.g. an
 `area: living_room` scene typically targets that area's lights). There is no
 device/area/label targeting in an action — only `entity_ids`.
+
+## Sequencing and delays
+
+A scene's `actions` are a flat list of service calls with **no delay primitive**
+between them — there is no `wait`/`delay` step, and you should not depend on one
+action finishing before the next begins. When a real-world sequence genuinely
+needs a pause — e.g. *power the TV on, wait ~3 s for it to wake, then select an
+input* — **wrap the whole sequence in a Home Assistant `script`** (scripts support
+`delay:`), have the user **expose that script**, and call the single `script.*`
+action from the scene:
+
+```yaml
+# scene action — one exposed script that runs the timed sequence internally
+actions:
+  - { service: script.tv_on_then_hdmi_3, entity_ids: [], params: {} }
+```
+
+```yaml
+# the user's HA script (scripts.yaml) — the delay lives here, not in Ambience
+tv_on_then_hdmi_3:
+  sequence:
+    - { action: remote.turn_on, target: { entity_id: remote.lounge_tv } }
+    - delay: { seconds: 3 }
+    - action: media_player.select_source
+      target: { entity_id: media_player.lounge_tv }
+      data: { source: "HDMI 3" }
+```
+
+The same wrapping handles any multi-step action needing ordering guarantees or a
+settle time the built-in services can't express. (Remember the exposed-id rule
+above — reference the script by its real, slugified `script.*` id. And note the
+script's internal steps use Home Assistant's own `action:` step syntax — that's the
+user's `scripts.yaml`, not an Ambience block; an Ambience action always uses the
+`service:` key shown in the scene above.)
 
 ## The built-in `ambience.*` safe services
 

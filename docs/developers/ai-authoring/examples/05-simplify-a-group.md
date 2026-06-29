@@ -7,9 +7,11 @@ group* for the principle.
 
 ## The situation
 
-A terrace **Lights** group should keep the terrace lights **off**, except glow them
-at 25 % in the evening **while the house is empty** (away lighting). Over time it
-had grown to four scenes — three of which do nothing but *block*.
+A terrace **Lights** group should: glow the lights at 25 % in the evening **while the
+house is empty** (away lighting); turn them **off** otherwise when empty; and —
+crucially — **leave them alone when someone is home**, so it never fights a manual
+adjustment. Over time it had grown to four scenes, three of which do nothing but
+*block*.
 
 ## The starting group (the smell)
 
@@ -40,11 +42,12 @@ they are* at night — but nothing in the group ever switches them **on**.
 
 ## The simplified import block
 
-The positive case ("evening + nobody home + nothing present") becomes a single
-**acting** scene, with the two guards folded (as their complements) into its `when`.
-The blockers then have nothing left to block, so they're dropped. Because this
-*removes* scenes, use `mode: replace` (which replaces this category's scenes in the
-scope) rather than `merge` (which only upserts and would leave the blockers behind).
+Fold the guards that lead to an **action** into one acting scene (and correct the
+no-op so it actually turns the lights on) — but **keep** the "anybody home" guard as a
+pure **blocker**: when someone's home the right behaviour is to *do nothing* and leave
+manual control, and "do nothing" can't be folded into an acting scene. Four scenes →
+three. Because this *removes* scenes, use `mode: replace` (not `merge`, which only
+upserts and would leave the old blockers behind).
 
 ```yaml
 ambience_import: 1
@@ -61,6 +64,10 @@ scenes:
       people:    { quant: nobody, where: home }
     actions:
       - { service: fado.fade_lights, entity_ids: [light.terrace_floor_lights, light.terrace_perimeter_lights, light.terrace_entrance_spots], params: { brightness_pct: 25 } }
+  - name: Leave the lights alone when anybody's home
+    category: general
+    when: { people: { quant: any, where: home } }
+    actions: []                     # blocker: do nothing -> manual control is preserved
   - name: Lights off
     category: general
     when: {}
@@ -70,21 +77,24 @@ scenes:
 
 ## Why it's equivalent — and better
 
-- **The blockers were negative space.** `Block if anybody home` /
-  `Block if presence detected` only ever *prevented* the off-action. Their job is
-  done by stating the **opposite** as a positive condition on the one scene that
-  acts: `people: { quant: nobody, where: home }` and
-  `occupancy: { …, occupied: false }`.
+- **Fold guards that gate an action; keep a blocker for a guard that gates
+  inaction.** `Block if presence detected` and the evening window lead to an
+  *action* (away + evening → 25 %), so they fold into the acting scene's `when` as
+  their complements. `Block if anybody home` does **not**: when someone's home you
+  want to leave the lights alone, and there's no positive action for "leave alone" —
+  so it stays a pure actionless **blocker**.
+- **Don't over-fold.** Collapsing all the way to *two* scenes (dropping the home
+  blocker too) looks tidier but is wrong: with only the acting scene + catch-all,
+  `Lights off` wins whenever you're home, turning the terrace off and fighting any
+  manual change. That blocker was the one guard doing real work.
 - **The no-op is corrected.** "Lights on at night" finally turns the lights on
   (25 %) instead of silently doing nothing — its name now matches its behaviour.
-- **Resolution is unchanged in spirit.** The acting scene has conditions, so it's
-  more *specific* than the empty-`when` catch-all and is evaluated first; when its
-  conditions don't hold, `Lights off` wins. Four scenes → two, no pinning needed.
-- **Manual overrides persist until a re-evaluation.** The terrace lights are only
-  *action targets*, never named in a `when`, so the unit isn't subscribed to them —
-  turning one on by hand doesn't wake this group. `Lights off` re-applies only on a
-  real re-evaluation (a presence / people / time-of-day change) **or** when the idle
-  *reapply* timer next re-asserts the winner (a `force` apply, which bypasses the
-  debounce). So a manual "on" while home survives until then rather than being
-  snapped off instantly; if you want it to hold indefinitely, gate the off-scene on
-  a "terrace manually on" helper (or turn reapply off for the scope).
+- **Ordering needs no pinning.** Both the acting scene and the blocker carry
+  conditions, so both are more *specific* than the empty-`when` `Lights off` and sort
+  above it automatically; `Lights off` is reached only when you're away and outside
+  the evening window.
+- **Manual control while home is preserved** by the blocker. It leans on a general
+  rule worth knowing: an entity a scene only *acts on* — never named in a `when` —
+  doesn't subscribe the unit, so a manual change to it isn't even seen (see the
+  cookbook's *`state`* subscription note). The away-managed lights still re-assert on
+  the next re-evaluation or reapply — the intended automatic behaviour.

@@ -61,7 +61,7 @@ attributes), with optional `for`.
 > re-evaluates a `(scope, category)` unit whenever any entity named in its scenes'
 > conditions changes (alongside clock / sun / `for`-timer ticks). So referencing
 > an entity in `state` is *also* how you make a change in that entity wake the
-> scene. Two consequences:
+> scene. Three consequences:
 >
 > - You can add a trigger **deliberately** with an always-true atom — e.g.
 >   `{ kind: is, entity_id: input_boolean.foo, states: [off, on] }` never
@@ -72,6 +72,12 @@ attributes), with optional `for`.
 >   external timer flips off).
 > - When **reviewing**, don't flag such a tautological atom as dead code: it's
 >   load-bearing as a trigger even though it never changes the match.
+> - The **dual** matters too: an entity a scene only *acts on* (an action target,
+>   never named in a `when`) does **not** subscribe the unit — so changing it by hand
+>   triggers no re-evaluation. The winning scene's actions re-assert only on a real
+>   re-eval (a subscribed entity / timer) or the idle **reapply** timer's `force`
+>   apply, so a **manual override of an action-only entity persists until then**, not
+>   instantly.
 
 **Intent → predicate**
 
@@ -662,8 +668,10 @@ entity you still need as a trigger (see the *`state`* subscription note).
 
 **A real before/after.** A terrace "Lights" group had grown to three actionless
 blockers guarding a catch-all — plus a "Lights on at night" scene that, despite its
-name, had **no actions** (a latent bug: it never turned anything on). Folding the
-blockers' conditions into one *acting* scene collapses it to two:
+name, had **no actions** (a latent bug). The fix folds the guards that lead to an
+*action* into one acting scene and corrects the no-op — but **keeps** the one guard
+whose case is "do nothing": when someone's home you want to *leave the lights alone*,
+and that can't be a positive action, so it stays a pure blocker. Four scenes → three:
 
 ```yaml
 # BEFORE — three blockers gate the catch-all; "Lights on at night" does nothing
@@ -672,17 +680,20 @@ blockers' conditions into one *acting* scene collapses it to two:
 - { name: Lights on at night,         when: { time_of_day: [{ period: nighttime }] },                 actions: [] }   # no-op!
 - { name: Lights off,                 when: {},                                                        actions: [ <all lights → 0> ] }
 
-# AFTER — the positive case is a real scene (guards folded into its `when`); the blockers vanish
+# AFTER — away+evening guards folded into a real acting scene; the "home" guard stays a blocker
 - name: Lights on at night when nobody home
   when:
     time_of_day: [{ period: nighttime }]
     occupancy: { sensors: [binary_sensor.all_presence], occupied: false }
     people:    { quant: nobody, where: home }
   actions: [ <lights → 25%> ]
+- { name: Leave alone when anybody's home, when: { people: { quant: any, where: home } }, actions: [] }   # blocker
 - { name: Lights off, when: {}, actions: [ <all lights → 0> ] }
 ```
 
-The blockers existed only to stop the catch-all firing; once the positive case is a
-real acting scene carrying those guards in its own `when`, they have nothing left to
-block. Four scenes → two — and a "Lights on" scene that finally turns the lights on.
+Two blockers folded in because their case leads to an action (away in the evening →
+25 %); the third did **not** — "home" means *leave the lights alone*, and "do nothing"
+can't be a positive action, so it stays a pure blocker. **Fold guards that gate an
+action; keep a blocker for a guard that gates inaction** — drop that last blocker and
+the `Lights off` catch-all reaches into the "home" case and clobbers manual changes.
 (Full walkthrough: [examples/05-simplify-a-group.md](examples/05-simplify-a-group.md).)

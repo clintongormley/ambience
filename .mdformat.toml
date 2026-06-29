@@ -15,4 +15,7 @@ exclude = [
     "ai/**",
     "docs/developers/ai-authoring/**",
     "node_modules/**",
+    # GitHub issue/PR templates carry front matter and invisible <!-- hint -->
+    # comments; reflowing them wraps the hints onto indented lines for no gain.
+    ".github/ISSUE_TEMPLATE/**",
 ]

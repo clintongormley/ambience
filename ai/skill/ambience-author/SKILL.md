@@ -159,3 +159,25 @@ requests.
   upsert rather than duplicate.
 - Always end by telling the user to **import via the panel's Import view** — you
   do not apply anything yourself.
+
+## After authoring or fixing — help improve this pack
+
+These reference docs grow from real sessions. As a session wraps up, do a quick
+self-check and, if warranted, **offer** (never auto-file) to capture what you
+learned:
+
+- **Did we hit a pack gap?** A trap, a missing pattern, or a wrong assumption the
+  reference docs could have prevented. (Your *own* mistake counts only if a doc
+  line would have stopped it — e.g. flagging a load-bearing trigger atom as dead
+  code, or guessing a slugified `script.*` id.)
+- **Apply a high bar** so this stays signal, not noise. Capture only when the
+  learning is (a) **general** — about Ambience's model or a reusable idiom, not
+  this user's specific config; (b) **not already** covered in the reference docs;
+  and (c) something that would actually have **changed the outcome**.
+- If it clears the bar, **distil it to 1–3 sentences and offer** to open an issue
+  or a small PR. Learnings belong in the canonical source —
+  `docs/developers/ai-authoring/` in the Ambience repo, which regenerates these
+  `reference/` copies via `make ai-docs` — **not** the per-user AI bundle, which is
+  regenerated on every download and can't be added to.
+- The user decides. If nothing clears the bar, say nothing and end the session
+  normally — don't manufacture a "learning" to file.

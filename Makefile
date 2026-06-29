@@ -2,13 +2,28 @@
 # hook (.githooks/pre-push), and CI. Coverage thresholds live in their configs
 # (pyproject.toml fail_under for Python, vitest.config.ts for the frontend) so
 # raising them propagates here automatically.
-.PHONY: lint-py lint-js translations ui-strings i18n coverage-py coverage-js build-check ai-docs ai-docs-check install-hooks
+.PHONY: lint-py lint-js lint-md format-md translations ui-strings i18n coverage-py coverage-js build-check ai-docs ai-docs-check install-hooks
+
+# Markdown formatter, pinned for reproducible output (matches the editor venv).
+# Run via uvx so no local install/PATH setup is needed — only `uv`. The
+# mkdocs plugin is what gives the 4-space list-continuation indent.
+MDFORMAT := uvx --from mdformat==1.0.0 \
+	--with mdformat-gfm==1.0.0 \
+	--with mdformat-mkdocs==5.1.4 \
+	--with mdformat-frontmatter==2.1.2 \
+	mdformat
 
 lint-py:        ## Fast: ruff lint + format check
 	ruff check . && ruff format --check .
 
 lint-js:        ## Fast: biome lint+format check + tsc type-check
 	npm run ci && npm run check
+
+lint-md:        ## Fast: markdown format check (wrap/exclude from .mdformat.toml)
+	git ls-files -z '*.md' '*.markdown' | xargs -0 $(MDFORMAT) --check
+
+format-md:      ## Apply markdown formatting (AI/generated docs excluded via .mdformat.toml)
+	git ls-files -z '*.md' '*.markdown' | xargs -0 $(MDFORMAT)
 
 translations:   ## strings.json <-> translations key parity
 	python -m bin.check_translations

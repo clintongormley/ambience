@@ -22,15 +22,19 @@ catch almost everything CI would, so a red CI run should be rare. It inspects
 the commits you are about to push and runs only what is relevant:
 
 1. **Fast lint/format first** (this is what usually fails CI):
-   - Python changed → `make lint-py` (`ruff check` + `ruff format --check`)
-   - Frontend `.ts` changed → `make lint-js` (`npm run ci` Biome + `tsc`)
-2. **Cheap i18n gates:**
-   - `make i18n` — all five i18n checks: key parity, shipped-locale completeness, exceptions-key validation, and no-hardcoded lints (Python + TypeScript)
-3. **Tests for the changed language + coverage gates:**
-   - Python → `make coverage-py` (pytest + `fail_under` from `pyproject.toml`)
-   - Frontend → `make coverage-js` (vitest + thresholds from `vitest.config.ts`)
-   - `frontend/src` changed → `make build-check` (rebuilds the bundle and fails
-     if the committed output differs — **always commit the rebuilt bundle**)
+    - Python changed → `make lint-py` (`ruff check` + `ruff format --check`)
+    - Frontend `.ts` changed → `make lint-js` (`npm run ci` Biome + `tsc`)
+    - Markdown changed → `make lint-md` (`mdformat --check`; the AI knowledge
+        pack and generated AI-authoring docs are excluded)
+1. **Cheap i18n gates:**
+    - `make i18n` — all five i18n checks: key parity, shipped-locale
+        completeness, exceptions-key validation, and no-hardcoded lints (Python +
+        TypeScript)
+1. **Tests for the changed language + coverage gates:**
+    - Python → `make coverage-py` (pytest + `fail_under` from `pyproject.toml`)
+    - Frontend → `make coverage-js` (vitest + thresholds from `vitest.config.ts`)
+    - `frontend/src` changed → `make build-check` (rebuilds the bundle and fails
+        if the committed output differs — **always commit the rebuilt bundle**)
 
 Bypass in a genuine emergency with `git push --no-verify`.
 
@@ -59,19 +63,42 @@ entries).
 Every gate is a `make` target so humans, the hook, and CI all run the exact same
 command (see `Makefile`). Useful ones:
 
-| Target | What it does |
-| --- | --- |
-| `make lint-py` / `make lint-js` | Fast lint + format checks |
-| `make coverage-py` / `make coverage-js` | Tests with coverage gates |
-| `make i18n` | All i18n gates (parity, shipped-locale completeness, no-hardcoded lints) |
-| `make translations` | Translation key-parity check |
-| `make build-check` | Rebuild bundle, fail on drift |
+| Target                                  | What it does                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `make lint-py` / `make lint-js`         | Fast lint + format checks                                                |
+| `make lint-md` / `make format-md`       | Markdown format check / apply (mdformat)                                 |
+| `make coverage-py` / `make coverage-js` | Tests with coverage gates                                                |
+| `make i18n`                             | All i18n gates (parity, shipped-locale completeness, no-hardcoded lints) |
+| `make translations`                     | Translation key-parity check                                             |
+| `make build-check`                      | Rebuild bundle, fail on drift                                            |
+
+## Markdown formatting
+
+Markdown is formatted with [mdformat](https://mdformat.readthedocs.io/). The
+toolchain is pinned in the `Makefile` (`mdformat` + the `gfm`, `mkdocs`, and
+`frontmatter` plugins) and run via `uvx`, so the only prerequisite is
+[`uv`](https://docs.astral.sh/uv/). `make format-md` applies it and
+`make lint-md` checks it; both read `.mdformat.toml` (wrap at 80 columns; the
+`mkdocs` plugin gives the 4-space list-continuation indent).
+
+The AI knowledge pack (`ai/`) and the generated AI-authoring docs
+(`docs/developers/ai-authoring/`) are **excluded** — they're produced and
+assembled by `bin/gen_ai_docs.py` and guarded by `make ai-docs-check`, so
+formatting them here would fight the generator.
+
+For format-on-save in your editor, point an mdformat extension at a virtualenv
+that has those three plugins installed; with `.mdformat.toml` checked in, the
+wrap width and exclusions come from the repo automatically.
 
 ## Regenerating artifacts
 
 - **Frontend bundle:** after any `frontend/src` change run `npm run build` and
-  commit `custom_components/ambience/frontend/*.js`.
-- **Translations:** `strings.json` is the source of truth; `en` and `es` are shipped locales and must stay complete (the i18n checks enforce parity, shipped-locale completeness, that every exceptions key referenced in code exists, and that no user-facing string is hardcoded). `es` is machine-drafted pending native review.
+    commit `custom_components/ambience/frontend/*.js`.
+- **Translations:** `strings.json` is the source of truth; `en` and `es` are
+    shipped locales and must stay complete (the i18n checks enforce parity,
+    shipped-locale completeness, that every exceptions key referenced in code
+    exists, and that no user-facing string is hardcoded). `es` is
+    machine-drafted pending native review.
 
 ## CI
 

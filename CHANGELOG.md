@@ -21,261 +21,266 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Added
 
 - A banner now nudges you to request a translation when your Home Assistant
-  language isn't one Ambience ships yet. It opens a prefilled GitHub issue, and
-  dismissing it is remembered per language (region variants such as pt-BR are
-  treated separately), so you're never nagged twice for the same language.
+    language isn't one Ambience ships yet. It opens a prefilled GitHub issue,
+    and dismissing it is remembered per language (region variants such as pt-BR
+    are treated separately), so you're never nagged twice for the same language.
 - Documentation help links throughout the panel: each settings tab, condition,
-  and the "Apply on every match" toggle now shows a small **(?)** help icon —
-  where it has explanatory text the popover ends with a "Read more" link to the
-  matching online documentation page, and where it doesn't the (?) opens that
-  page directly in a new tab.
+    and the "Apply on every match" toggle now shows a small **(?)** help icon —
+    where it has explanatory text the popover ends with a "Read more" link to
+    the matching online documentation page, and where it doesn't the (?) opens
+    that page directly in a new tab.
 - A new **AI** tab in Settings (**beta**, off by default — turn it on in the
-  integration's options: Settings → Devices & services → Ambience → Configure)
-  lets you build and fix scenes by
-  describing what you want to an AI. *Download AI bundle* exports a snapshot of your areas,
-  entities, exposed actions and current config (presence/location data redacted)
-  to hand to an AI; upload the config file it returns back into the same tab to
-  preview and import it (new or updated scenes, with any new category created for
-  you). Imports go through the normal save path, so they're undoable. A matching
-  knowledge pack — a Claude skill, a Claude Code plugin, and a portable guide —
-  teaches any AI the Ambience schema and how to read a diagnostic, and stays in
-  sync with the integration automatically on each release.
+    integration's options: Settings → Devices & services → Ambience → Configure)
+    lets you build and fix scenes by describing what you want to an AI.
+    *Download AI bundle* exports a snapshot of your areas, entities, exposed
+    actions and current config (presence/location data redacted) to hand to an
+    AI; upload the config file it returns back into the same tab to preview and
+    import it (new or updated scenes, with any new category created for you).
+    Imports go through the normal save path, so they're undoable. A matching
+    knowledge pack — a Claude skill, a Claude Code plugin, and a portable guide
+    — teaches any AI the Ambience schema and how to read a diagnostic, and stays
+    in sync with the integration automatically on each release.
 
 ### Changed
 
 - Consolidated the WebSocket scope handling internally (one save dispatcher, a
-  shared scope-selector schema, and a single "scope not found" error contract
-  across the get / save / enable commands). The only user-visible effect: opening
-  an area or floor that no longer exists now shows the same "Unknown area/floor"
-  message as trying to save it did.
+    shared scope-selector schema, and a single "scope not found" error contract
+    across the get / save / enable commands). The only user-visible effect:
+    opening an area or floor that no longer exists now shows the same "Unknown
+    area/floor" message as trying to save it did.
 - **Download diagnostics** has moved out of the Traces viewer into each
-  category's **⋮** menu, alongside Run / View traces / Simulate / Auto-triggers.
-  It still downloads the same diagnostics bundle scoped to that one (scope,
-  category).
+    category's **⋮** menu, alongside Run / View traces / Simulate /
+    Auto-triggers. It still downloads the same diagnostics bundle scoped to that
+    one (scope, category).
 - Removed the "Set up an action to get started" banner. New installs now seed
-  default actions, so the prompt no longer applied.
+    default actions, so the prompt no longer applied.
 - Scene-update activity is now logged to the Home Assistant logbook against each
-  scope's switch, e.g. *Lounge Ambience 'Lights/Daytime Cloudy'*, so you can
-  filter the logbook by area (for area-scoped switches) to see only the activity
-  relevant to that space. The devices the scene changes are attributed to it —
-  each shows *triggered by 'Lights/Daytime Cloudy' (Lounge Ambience)*. The
-  `sensor.ambience_scene_updates` sensor has been removed — anything referencing
-  it (dashboards, automations, logbook filters) must be updated.
+    scope's switch, e.g. *Lounge Ambience 'Lights/Daytime Cloudy'*, so you can
+    filter the logbook by area (for area-scoped switches) to see only the
+    activity relevant to that space. The devices the scene changes are
+    attributed to it — each shows *triggered by 'Lights/Daytime Cloudy' (Lounge
+    Ambience)*. The `sensor.ambience_scene_updates` sensor has been removed —
+    anything referencing it (dashboards, automations, logbook filters) must be
+    updated.
 - Per-scope pause switches are now always created for every enabled scope. The
-  **Scope-level pause switch** toggle in the Advanced settings has been removed.
-  Installs that previously had the toggle off will see new switch entities and
-  devices appear after upgrading. The pause-and-auto-resume behaviour of those
-  switches is unchanged.
+    **Scope-level pause switch** toggle in the Advanced settings has been
+    removed. Installs that previously had the toggle off will see new switch
+    entities and devices appear after upgrading. The pause-and-auto-resume
+    behaviour of those switches is unchanged.
 
 ### Fixed
 
 - The optional "set up Workday & Weather" hint and the "install Fado Light
-  Fader" notice now reappear after you delete and recreate the Ambience
-  integration. Previously, dismissing either one hid it for good in that browser
-  — even on a brand-new install — because the dismissal wasn't tied to the
-  install. Each dismissal is now remembered per install, so a fresh setup starts
-  with a clean slate.
+    Fader" notice now reappear after you delete and recreate the Ambience
+    integration. Previously, dismissing either one hid it for good in that
+    browser — even on a brand-new install — because the dismissal wasn't tied to
+    the install. Each dismissal is now remembered per install, so a fresh setup
+    starts with a clean slate.
 - When a scene is skipped because its scope's pause switch is off, the trace
-  timeline now says *"Skipped — the scope's pause switch is off."* It previously
-  referred to a non-existent "category switch".
+    timeline now says *"Skipped — the scope's pause switch is off."* It
+    previously referred to a non-existent "category switch".
 - A negated group in a **state condition** (`NOT (… AND …)`) no longer loses its
-  negation when you change the group's AND/OR operator — that previously dropped
-  the NOT silently and inverted the condition's meaning.
+    negation when you change the group's AND/OR operator — that previously
+    dropped the NOT silently and inverted the condition's meaning.
 - A **category** add/edit that the server rejects now rolls back in the Settings
-  panel instead of continuing to show the rejected change as if it had saved.
+    panel instead of continuing to show the rejected change as if it had saved.
 - Scene **shadowing / ordering hints** for `occupancy` and `people` duration
-  gates are now correct for the "held for less than" mode, and no longer relate
-  two predicates that use different duration modes — either could surface a
-  spurious "this scene can never win" warning or mis-order the scene list.
+    gates are now correct for the "held for less than" mode, and no longer
+    relate two predicates that use different duration modes — either could
+    surface a spurious "this scene can never win" warning or mis-order the scene
+    list.
 - Clearing every sensor from an **occupancy** or **lux** condition now removes
-  the condition, instead of leaving behind a no-op "any sensor" row.
+    the condition, instead of leaving behind a no-op "any sensor" row.
 - The **lux** range min/max inputs now reject fractional values inline ("Bounds
-  must be whole numbers.") instead of letting them through to a generic save
-  error from the backend.
+    must be whole numbers.") instead of letting them through to a generic save
+    error from the backend.
 - A **people** condition whose `who` is a present-but-empty list (`who: []`) is
-  now rejected on save and on import / AI authoring, matching the editor —
-  previously it slipped through and silently ran as "all persons". Omit `who`
-  entirely to mean all tracked persons.
+    now rejected on save and on import / AI authoring, matching the editor —
+    previously it slipped through and silently ran as "all persons". Omit `who`
+    entirely to mean all tracked persons.
 
 ### Removed
 
 - `sensor.ambience_scene_updates` — replaced by per-scope logbook entries on
-  each scope's pause switch (see above).
+    each scope's pause switch (see above).
 - The **Scope-level pause switch** setting — scope switches are now always on.
 
 ### Security
 
 - The **diagnostics download** and the **AI bundle** now scrub more before they
-  leave Home Assistant — both are meant to be safe to paste into a GitHub issue
-  or an AI chat. Newly redacted: alarm/lock codes and other secrets in scene
-  action parameters; sensitive exposed-action defaults (push tokens, message
-  bodies, recipients); the rendered detail of a `state` condition that targets a
-  person or device-tracker; the zone label of a multi-person "for duration"
-  gate; and a person/device-tracker **entity id referenced directly by a scene's
-  conditions** in the exported config (e.g. a `state` rule that tests where
-  someone is, or an `unavailable` rule on a device-tracker) — previously the bare
-  entity id slipped through the config dump even though its trace detail was
-  already scrubbed.
+    leave Home Assistant — both are meant to be safe to paste into a GitHub
+    issue or an AI chat. Newly redacted: alarm/lock codes and other secrets in
+    scene action parameters; sensitive exposed-action defaults (push tokens,
+    message bodies, recipients); the rendered detail of a `state` condition that
+    targets a person or device-tracker; the zone label of a multi-person "for
+    duration" gate; and a person/device-tracker **entity id referenced directly
+    by a scene's conditions** in the exported config (e.g. a `state` rule that
+    tests where someone is, or an `unavailable` rule on a device-tracker) —
+    previously the bare entity id slipped through the config dump even though
+    its trace detail was already scrubbed.
 - The trace **debug log** now records only the *names* of a scene action's
-  parameters, never their values, so secrets such as alarm/lock codes or push
-  tokens can't leak into a log that gets pasted into a bug report. (Debug logging
-  is off by default; the full values remain available via the admin-only trace
-  view.)
+    parameters, never their values, so secrets such as alarm/lock codes or push
+    tokens can't leak into a log that gets pasted into a bug report. (Debug
+    logging is off by default; the full values remain available via the
+    admin-only trace view.)
 
 ## [0.30.0] - 2026-06-26
 
 ### Changed
 
 - Scene actions are once again targeted by picking specific entities, scoped to
-  the scene's area or floor. The entity/device/area/floor/label target picker
-  added in 0.29.0 has been removed — Home Assistant's native target picker could
-  not be limited to the scene's scope, which made it confusing to know what an
-  action would actually affect. Any action saved with the newer target format is
-  converted back to a plain entity list automatically the next time the
-  integration loads.
+    the scene's area or floor. The entity/device/area/floor/label target picker
+    added in 0.29.0 has been removed — Home Assistant's native target picker
+    could not be limited to the scene's scope, which made it confusing to know
+    what an action would actually affect. Any action saved with the newer target
+    format is converted back to a plain entity list automatically the next time
+    the integration loads.
 - The Unavailable condition now has the highest precedence of all conditions —
-  above Script and Template. When two scenes are otherwise equally specific, the
-  one that guards on an entity being unavailable, unknown, or missing now sorts
-  first and wins, because whether an entity is observable at all is the most
-  fundamental fact a scene can match on.
+    above Script and Template. When two scenes are otherwise equally specific,
+    the one that guards on an entity being unavailable, unknown, or missing now
+    sorts first and wins, because whether an entity is observable at all is the
+    most fundamental fact a scene can match on.
 
 ### Fixed
 
 - Ambience's built-in turn-on/turn-off and safe-cover services no longer log a
-  Home Assistant deprecation warning ("The deprecated argument hass was passed
-  to async_extract_entity_ids"). This also keeps those services working on Home
-  Assistant 2026.10, which removes the deprecated call.
+    Home Assistant deprecation warning ("The deprecated argument hass was passed
+    to async_extract_entity_ids"). This also keeps those services working on
+    Home Assistant 2026.10, which removes the deprecated call.
 
 ## [0.29.0] - 2026-06-26
 
 ### Added
 
 - The safe cover actions — Open cover, Close cover, Set cover position, and Set
-  cover tilt — are now seeded as default actions on new installs, so covers work
-  in scenes out of the box.
+    cover tilt — are now seeded as default actions on new installs, so covers
+    work in scenes out of the box.
 - The Actions settings page now shows a dismissible recommendation to install
-  the Fado Light Fader integration (smooth light fading with automatic
-  brightness restoration) when it isn't already installed.
+    the Fado Light Fader integration (smooth light fading with automatic
+    brightness restoration) when it isn't already installed.
 - The Lux condition now has an "is / is not" choice, so a scene can match when
-  your light sensors are *not* in a chosen range — for example, blocking a scene
-  until the room is no longer bright.
+    your light sensors are *not* in a chosen range — for example, blocking a
+    scene until the room is no longer bright.
 
 ### Changed
 
 - In the Lux and Occupancy conditions, the "Any of / All of" selector now sits
-  above the sensor list (and only appears when more than one sensor is chosen),
-  and their summaries read more naturally — e.g. "Any of (Lounge, Hall) is
-  bright", "All of (Lounge, Hall) are detected", "Lounge is unavailable".
+    above the sensor list (and only appears when more than one sensor is
+    chosen), and their summaries read more naturally — e.g. "Any of (Lounge,
+    Hall) is bright", "All of (Lounge, Hall) are detected", "Lounge is
+    unavailable".
 - The Advanced settings tab now has a clearer visual hierarchy. Section titles
-  stand out from their fields, the two setting groups are more obviously
-  separated, and the voice-assistant toggles are presented as a nested
-  sub-section of the scope-level pause switch (their switches still line up with
-  the fields above).
+    stand out from their fields, the two setting groups are more obviously
+    separated, and the voice-assistant toggles are presented as a nested
+    sub-section of the scope-level pause switch (their switches still line up
+    with the fields above).
 
 ### Removed
 
 - The admin-only `ambience.apply_scene` action — for calling Ambience from your
-  own automations and scripts — has been removed. Automatic scene application
-  (as conditions change) and the panel's Run / apply controls are unaffected;
-  only the standalone service is gone.
+    own automations and scripts — has been removed. Automatic scene application
+    (as conditions change) and the panel's Run / apply controls are unaffected;
+    only the standalone service is gone.
 
 ### Fixed
 
 - When overriding a built-in time-of-day period (e.g. "Dawn") or lux range, the
-  name field now defaults to the range's current name instead of starting blank
-  with only the "e.g. Wind down" placeholder. You can still rename it or clear
-  it.
+    name field now defaults to the range's current name instead of starting
+    blank with only the "e.g. Wind down" placeholder. You can still rename it or
+    clear it.
 
 ## [0.28.0] - 2026-06-25
 
 ### Added
 
 - In the Entity State condition, each AND/OR group now has a "(…)" button that
-  wraps all of that group's clauses in parentheses, so you can combine them with
-  another clause under a different operator — for example turning "a AND b" into
-  "(a AND b) OR c".
+    wraps all of that group's clauses in parentheses, so you can combine them
+    with another clause under a different operator — for example turning "a AND
+    b" into "(a AND b) OR c".
 
 ### Changed
 
 - Condition summaries now prefix each entity with its area (e.g. "Kitchen ·
-  Water pump Flow"), so clauses that reference similarly-named entities in
-  different areas are no longer ambiguous. The area is omitted when the entity's
-  name already contains it (e.g. an entity called "Zone Shower" in the "Shower"
-  area stays "Zone Shower").
+    Water pump Flow"), so clauses that reference similarly-named entities in
+    different areas are no longer ambiguous. The area is omitted when the
+    entity's name already contains it (e.g. an entity called "Zone Shower" in
+    the "Shower" area stays "Zone Shower").
 - In the Entity State condition, the buttons that add another comparison within
-  the same condition now read "Add clause" instead of "Add condition", to avoid
-  confusion with the main "Add condition" button that adds a new condition.
-- A blocking scene whose condition is an OR now reads as "Block while … OR
-  until …" instead of a hard-to-parse double negative. For example, a block that
-  read "Block while NOT (Zone Shower is Clear for ≥5s) OR Water pump Flow > 5"
-  now reads "Block while Water pump Flow > 5 OR until Zone Shower is Clear for
-  ≥5s".
+    the same condition now read "Add clause" instead of "Add condition", to
+    avoid confusion with the main "Add condition" button that adds a new
+    condition.
+- A blocking scene whose condition is an OR now reads as "Block while … OR until
+    …" instead of a hard-to-parse double negative. For example, a block that
+    read "Block while NOT (Zone Shower is Clear for ≥5s) OR Water pump Flow > 5"
+    now reads "Block while Water pump Flow > 5 OR until Zone Shower is Clear for
+    ≥5s".
 
 ### Fixed
 
 - In the Entity State condition, "Add clause" now works on a negated (NOT)
-  group. Previously, clicking it while NOT was enabled did nothing until you
-  turned NOT off.
+    group. Previously, clicking it while NOT was enabled did nothing until you
+    turned NOT off.
 - Config health now flags an entity referenced by a scene when that entity is
-  disabled (e.g. its device was disabled) rather than deleted. A disabled entity
-  stays in the entity registry but has no state, so it can never satisfy a
-  condition; it is now reported as missing in both the scene problem flag and
-  the Repairs issue, instead of being silently treated as present.
+    disabled (e.g. its device was disabled) rather than deleted. A disabled
+    entity stays in the entity registry but has no state, so it can never
+    satisfy a condition; it is now reported as missing in both the scene problem
+    flag and the Repairs issue, instead of being silently treated as present.
 
 ## [0.27.0] - 2026-06-24
 
 ### Changed
 
 - In the Simulate panel, an entity attribute that has a known set of values
-  (such as a remote's current activity) is now editable via a dropdown of those
-  values — matching the scene editor — instead of a free-text field.
+    (such as a remote's current activity) is now editable via a dropdown of
+    those values — matching the scene editor — instead of a free-text field.
 
 ### Fixed
 
 - The state value dropdown (in the scene editor and the simulator) now offers
-  both On and Off for remote, automation, script, siren, humidifier, update and
-  calendar entities, instead of only the entity's current state.
+    both On and Off for remote, automation, script, siren, humidifier, update
+    and calendar entities, instead of only the entity's current state.
 - On phones the Simulate panel no longer squashes the entity name into a narrow
-  column or scrolls sideways — each row's controls now wrap onto their own line.
+    column or scrolls sideways — each row's controls now wrap onto their own
+    line.
 - Deleting the Ambience integration now also removes its stored data (scenes,
-  scopes, switch and condition settings). Previously this data was kept on disk,
-  so removing and re-adding the integration silently restored all your old
-  settings instead of starting fresh. A reload or Home Assistant restart still
-  preserves your data as before — only an explicit delete clears it.
+    scopes, switch and condition settings). Previously this data was kept on
+    disk, so removing and re-adding the integration silently restored all your
+    old settings instead of starting fresh. A reload or Home Assistant restart
+    still preserves your data as before — only an explicit delete clears it.
 - When configuring an action's fields, each field's checkbox now lines up with
-  the field name at the top of the row instead of floating in the vertical
-  centre of multi-line descriptions.
+    the field name at the top of the row instead of floating in the vertical
+    centre of multi-line descriptions.
 
 ## [0.26.0] - 2026-06-23
 
 ### Added
 
 - Scenes can now have an optional description. Add one from the scene editor via
-  the "+ Add description" link below Scope. On the panel it appears as a "?"
-  tooltip next to the scene name, and inline beneath the scene when you expand
-  it.
+    the "+ Add description" link below Scope. On the panel it appears as a "?"
+    tooltip next to the scene name, and inline beneath the scene when you expand
+    it.
 - Undo / redo for scene changes: the panel now keeps the last 30 scene edits in
-  memory. Use the Undo and Redo buttons at the top of the panel — or Ctrl/⌘+Z and
-  Ctrl/⌘+Shift+Z — to step back and forward through add, edit, delete, reorder,
-  unpin and enable/disable changes. A caption beside the buttons always names
-  the next change. The history is shared across browser tabs (which refresh
-  automatically when you change scenes elsewhere) and clears when Home Assistant
-  restarts.
+    memory. Use the Undo and Redo buttons at the top of the panel — or Ctrl/⌘+Z
+    and Ctrl/⌘+Shift+Z — to step back and forward through add, edit, delete,
+    reorder, unpin and enable/disable changes. A caption beside the buttons
+    always names the next change. The history is shared across browser tabs
+    (which refresh automatically when you change scenes elsewhere) and clears
+    when Home Assistant restarts.
 
 ## [0.25.0] - 2026-06-22
 
 ### Added
 
 - Live scene indicator: each scene in the panel now shows a small dot for its
-  live state — a green dot on the scene that currently matches, and a hollow dot
-  on a scene whose actions are still applied but no longer match. It updates
-  automatically; tap a dot for an explanation.
+    live state — a green dot on the scene that currently matches, and a hollow
+    dot on a scene whose actions are still applied but no longer match. It
+    updates automatically; tap a dot for an explanation.
 
 ### Fixed
 
 - Long scene conditions and scope names now wrap inside the card on narrow and
-  mobile screens, instead of overflowing and pushing the toggle and menu off the
-  right edge.
+    mobile screens, instead of overflowing and pushing the toggle and menu off
+    the right edge.
 
 ## [0.24.0] - 2026-06-21
 

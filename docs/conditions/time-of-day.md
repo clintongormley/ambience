@@ -46,7 +46,7 @@ Select **Custom range** from the dropdown and the editor expands to show a
 
 1. A **kind** dropdown — choose **Time** for a fixed clock time, or **Sun** for
     a sun-relative anchor.
-2. The value itself:
+1. The value itself:
     - **Time**: a standard time-of-day picker (hh:mm in your local timezone,
         DST-aware).
     - **Sun**: an anchor dropdown (Dawn, Sunrise, Noon, Sunset, Dusk, or

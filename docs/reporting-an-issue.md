@@ -11,11 +11,11 @@ it, the most useful things to attach to a
 A diagnostics file is a JSON snapshot of your configuration and recent traces.
 There are two places to get one, depending on how much you want to share:
 
-- **Scoped to one category** — in the Ambience panel, open a category's
-    **⋮** menu and choose **Download diagnostics**. The file covers just
-    that (scope, category): its configuration, the relevant global context
-    (categories and conditions), and its recent traces. Best when you already
-    know which scene group is misbehaving.
+- **Scoped to one category** — in the Ambience panel, open a category's **⋮**
+    menu and choose **Download diagnostics**. The file covers just that (scope,
+    category): its configuration, the relevant global context (categories and
+    conditions), and its recent traces. Best when you already know which scene
+    group is misbehaving.
 - **The whole integration** — go to **Settings ▸ Devices & services ▸ Ambience**
     and use the **Download diagnostics** link. This dumps the full configuration
     *and* all buffered traces in a single file.
@@ -48,9 +48,9 @@ Home Assistant has built-in debug logging for any integration:
 
 1. Go to **Settings → Devices & services** and open the **Ambience**
     integration.
-2. From the **⋮** menu, choose **Enable debug logging**.
-3. Reproduce whatever you are investigating.
-4. Choose **Disable debug logging** — Home Assistant downloads the captured log
+1. From the **⋮** menu, choose **Enable debug logging**.
+1. Reproduce whatever you are investigating.
+1. Choose **Disable debug logging** — Home Assistant downloads the captured log
     automatically, ready to attach to an issue.
 
 This raises the `custom_components.ambience` logger, so it captures the

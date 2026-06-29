@@ -1,15 +1,16 @@
 # AI-assisted scenes
 
 !!! warning "Beta"
-    This feature is new and still evolving — the workflow and the knowledge pack
-    may change between releases. Everything an AI produces is **previewed and
-    imported by you**; nothing is written to Home Assistant automatically, and
-    every import is reversible with undo.
+
+    This feature is new and still evolving — the workflow and the knowledge pack may
+    change between releases. Everything an AI produces is **previewed and imported
+    by you**; nothing is written to Home Assistant automatically, and every import
+    is reversible with undo.
 
 Describe what you want in plain English to an AI (Claude, ChatGPT, …) and let it
-write the scenes — conditions *and* actions — for your real entities. Or hand it a
-diagnostic and ask **"why didn't my scene fire?"**: it reads the trace, explains
-what blocked the scene, and gives you a corrected version.
+write the scenes — conditions *and* actions — for your real entities. Or hand it
+a diagnostic and ask **"why didn't my scene fire?"**: it reads the trace,
+explains what blocked the scene, and gives you a corrected version.
 
 The AI tab is hidden by default. Enable it in **Settings → Devices & services →
 Ambience → Configure → Enable the AI authoring tab (beta)**, then open the
@@ -18,16 +19,18 @@ Ambience panel and find it under **Settings → the AI tab**.
 ## How it works — three steps
 
 1. **Install the skill or plugin** (see [below](#installing-the-ai-pack)) — once
-   per AI. This teaches the AI the Ambience schema and how to read a diagnostic.
-2. **Download your AI bundle.** In the AI tab, click **Download AI bundle**. It's a
-   snapshot of your areas, floors, entities, exposed actions and current config —
-   so the AI references *your* real ids, not made-up ones. Give the file to the AI
-   along with your request.
-3. **Upload the result.** The AI returns a small YAML (or JSON) file. Upload it in
-   the AI tab — Ambience **previews** exactly what it will add, update or remove
-   (and any new category it will create) before you confirm.
+    per AI. This teaches the AI the Ambience schema and how to read a
+    diagnostic.
+1. **Download your AI bundle.** In the AI tab, click **Download AI bundle**.
+    It's a snapshot of your areas, floors, entities, exposed actions and
+    current config — so the AI references *your* real ids, not made-up ones.
+    Give the file to the AI along with your request.
+1. **Upload the result.** The AI returns a small YAML (or JSON) file. Upload it
+    in the AI tab — Ambience **previews** exactly what it will add, update or
+    remove (and any new category it will create) before you confirm.
 
 !!! question "Can you do better than the AI?"
+
     This feature is only as good as the knowledge pack behind it — and **you can
     help make it better**. If the AI gives you bad advice, please
     [open a GitHub issue](https://github.com/clintongormley/ambience/issues/new)
@@ -75,32 +78,33 @@ Paste the single self-contained guide into your AI:
 (from the `stable` branch).
 
 !!! tip "Keep the pack in step with Ambience"
+
     Before authoring, the skill checks that the bundle's Ambience version matches
-    the pack. If your installed Ambience is **newer** than the pack, it asks you
-    to update the plugin first (so it isn't working from an out-of-date schema) —
+    the pack. If your installed Ambience is **newer** than the pack, it asks you to
+    update the plugin first (so it isn't working from an out-of-date schema) —
     update with `/plugin marketplace update ambience` then re-install, or enable
     auto-update as above.
 
 ## Privacy
 
 The AI bundle is a **local download** — you choose when and to whom to send it.
-Presence and location data is redacted before it leaves Home Assistant: person and
-device-tracker locations, the zones in your traces, your weather/workday entities,
-and the rendered output of `people`/`template` conditions. Secrets in your actions
-are scrubbed too — alarm/lock codes, and the default values of sensitive fields
-such as a notification's message, recipients or push token.
+Presence and location data is redacted before it leaves Home Assistant: person
+and device-tracker locations, the zones in your traces, your weather/workday
+entities, and the rendered output of `people`/`template` conditions. Secrets in
+your actions are scrubbed too — alarm/lock codes, and the default values of
+sensitive fields such as a notification's message, recipients or push token.
 
 Person *ids and names* do remain, so the AI can write presence conditions that
-reference the right people — a household member's name may therefore appear in the
-bundle — but their current location does not.
+reference the right people — a household member's name may therefore appear in
+the bundle — but their current location does not.
 
 ## What it's good at
 
-- **Building a scene group** from a description — e.g. *"in the evening, when it's
-  dark in the living room and someone's home, dim the lights and close the
-  blinds."*
+- **Building a scene group** from a description — e.g. *"in the evening, when
+    it's dark in the living room and someone's home, dim the lights and close
+    the blinds."*
 - **Diagnosing** a scene that didn't fire — it reads the recent traces in your
-  bundle, finds the condition that blocked it, and proposes a fix.
+    bundle, finds the condition that blocked it, and proposes a fix.
 
 The AI never changes Home Assistant directly: it produces a file, you review the
 preview, and you import it.

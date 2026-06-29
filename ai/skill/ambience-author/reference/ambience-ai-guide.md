@@ -181,6 +181,14 @@ order — neither is your array order:
   daytime window. Prefer that cascade over repeating a guard on every scene.
 - A final scene with an empty `when` is the catch-all default (it always sorts
   last).
+- **Only the winning scene's actions run** — there is no accumulation across
+  scenes in a unit. So each scene must encode the **complete desired state** for
+  its situation, not a delta from another scene. When several values of one input
+  each want a whole world (a "truth table" of modes — a media-remote activity, an
+  `input_select`, a thermostat mode), give every value its own scene carrying the
+  full action set, and lean on idempotent `ambience.turn_on`/`ambience.turn_off`
+  so the already-correct parts are no-ops. See *Mirror an external mode/selector*
+  in [conditions-cookbook.md](conditions-cookbook.md).
 
 ---
 
@@ -683,6 +691,21 @@ attributes), with optional `for`.
   never matches and never inverts under `not` (so `not(light is on)` will not
   fire while the light is unavailable).
 
+> **A `state` atom also *subscribes* the unit to its entity.** The engine
+> re-evaluates a `(scope, category)` unit whenever any entity named in its scenes'
+> conditions changes (alongside clock / sun / `for`-timer ticks). So referencing
+> an entity in `state` is *also* how you make a change in that entity wake the
+> scene. Two consequences:
+> - You can add a trigger **deliberately** with an always-true atom — e.g.
+>   `{ kind: is, entity_id: input_boolean.foo, states: [off, on] }` never
+>   constrains the match (it's true whichever state `foo` is in) but ensures the
+>   unit re-evaluates the instant `foo` flips. It's the built-in-`state` analogue
+>   of the explicit `triggers:` on `script` / `template` — reach for it to react to
+>   a state your *other* conditions don't already watch (e.g. a helper that an
+>   external timer flips off).
+> - When **reviewing**, don't flag such a tautological atom as dead code: it's
+>   load-bearing as a trigger even though it never changes the match.
+
 **Intent → predicate**
 
 | Intent | Predicate (value of `when.state`) |
@@ -1125,6 +1148,88 @@ once every blind has **settled** in its final position:
 - Once every listed cover reaches `open`/`closed`, the blocker stops matching and
   the scene below it that fits the settled situation wins.
 
+### Cap-and-hold a cover without overriding a manual change
+
+When a position scene should **hold or cap** a cover at some level but **not
+force** it there — so a blind the user has deliberately opened stays open — gate
+the scene on the cover's **own current position**. A self-referential
+`current_position <= N` (or `>= N`) atom makes the scene match *only when the cover
+is already at or below the cap*, so it re-asserts a lowered blind but never pulls
+an open one down:
+
+```yaml
+- name: Hold blinds low against low sun
+  category: <blinds category>
+  when:
+    sun: { elevation: { max: 35 }, azimuth: { sectors: [E, SE] } }
+    state:
+      kind: and
+      items:
+        - { kind: "<=", entity_id: cover.lounge_left,  attribute: current_position, states: ["35"] }
+        - { kind: "<=", entity_id: cover.lounge_right, attribute: current_position, states: ["35"] }
+  actions:
+    - { service: ambience.cover_safe_set_position, entity_ids: [cover.lounge_left, cover.lounge_right], params: { position: 35 } }
+```
+
+- The action sets the same `35`, but the `<=` guard means it only engages once the
+  blind is already there or lower — so a `Daytime`/open scene that re-opens to 100%
+  is respected and this scene won't fight it.
+- Drop the guard if you *do* want unconditional lowering from any position.
+
+### Fire once on entry, then release (one-shot for `apply: always`)
+
+A **pinned** scene with `apply: always` re-applies on *every* re-evaluation while
+it stays the winner — handy for holding a state, but it also **re-asserts against
+the user's manual changes**. To make such a scene fire once shortly after a
+trigger and then *let go* (so the user can override afterwards), bracket a short
+window with a `for`-gated entry test plus a `NOT(… sustained past the window)`
+guard:
+
+```yaml
+- name: Dim once when I get into bed
+  category: <lights category>          # pin to top in the panel; apply: always
+  apply: always
+  when:
+    occupancy: { sensors: [binary_sensor.bed_presence], for: { s: 50 } }   # in bed >= 50s
+    state:
+      kind: not
+      item: { kind: is, entity_id: binary_sensor.bed_presence, states: [on], for: { m: 1 } }  # but < 60s
+    time_of_day: [{ period: nighttime }]
+  actions:
+    - { service: fado.fade_lights, entity_ids: [light.bedroom_ceiling], params: { brightness_pct: 0 } }
+```
+
+- The two `for`s bracket a ~50–60 s window after presence: the scene wins, applies
+  once, then `NOT(on for 1m)` flips false and it **releases** — so a later manual
+  brighten isn't snapped back. Without the upper-bound `NOT`, the pinned
+  `apply: always` scene would re-dim every time you touched the lights.
+
+### Mirror an external mode/selector (declarative truth table)
+
+To replace a pile of *reactive* "when X changes from A to B, do …" automations that
+all key off **one entity's state or attribute** (a media-remote activity, an
+`input_select`, a thermostat mode), model it as **one scene per value**, each
+carrying the **complete desired state** for that value — not a delta. Only the
+winning scene's actions run, so every scene must stand alone; idempotent
+`ambience.turn_on` / `ambience.turn_off` keep re-fires cheap:
+
+```yaml
+# category gated on remote.cine's current_activity — one scene per activity
+- name: Activity — PlayStation (TV)
+  category: media
+  when:
+    state: { kind: is, entity_id: remote.cine, attribute: current_activity, states: ["PlayStation 5 (TV)"] }
+  actions:
+    - { service: ambience.turn_on, entity_ids: [switch.ps5_power], params: {} }
+    - { service: ambience.turn_on, entity_ids: [remote.lounge_tv], params: {} }
+# ... one scene per other activity, each fully describing PS5 / TV / speakers / etc.
+```
+
+- This drops the brittle `from:`/`to:` transition lists of the original
+  automations: each value's scene simply declares the world it wants, and the unit
+  re-evaluates whenever `current_activity` changes (it's a `state` atom, so the
+  unit is subscribed to it — see the *`state`* section above).
+
 # Actions
 
 # Actions
@@ -1168,6 +1273,18 @@ At execution time:
   services/actions list.** The bundle also carries each exposed service's field
   schema, telling you which `params` are valid and their types.
 
+**Match the exposed id exactly — never a guessed slug.** Copy the `service`
+verbatim from the bundle's `actions.exposed[].id`. This bites hardest with
+`script.*` and other helpers, because Home Assistant **slugifies the friendly
+name** to build the entity id: a script the user names *"Cine – TV on + HDMI 3"*
+becomes `script.cine_tv_on_hdmi_3` (note `hdmi_3`, not `hdmi3`). Author
+`script.cine_tv_on_hdmi3` and the action is treated as **unexposed** and silently
+skipped — even though the user really did expose the script. The signature
+symptom is a Repairs issue `unexposed_action:<id>` (and the action marked
+`unexposed` in the trace) *while the user insists it's exposed*: diff the id you
+used against `actions.exposed[].id`. See
+[diagnostics-guide.md](diagnostics-guide.md) → *an action silently did nothing*.
+
 ## How `params` merge with exposed-action defaults
 
 At execution, the params actually sent are:
@@ -1193,6 +1310,37 @@ That is: the exposed action's **defaults** are applied first, then the scene's
 from the AI bundle**, scoped to what makes sense for the scene's scope (e.g. an
 `area: living_room` scene typically targets that area's lights). There is no
 device/area/label targeting in an action — only `entity_ids`.
+
+## Sequencing and delays
+
+A scene's `actions` are a flat list of service calls with **no delay primitive**
+between them — there is no `wait`/`delay` step, and you should not depend on one
+action finishing before the next begins. When a real-world sequence genuinely
+needs a pause — e.g. *power the TV on, wait ~3 s for it to wake, then select an
+input* — **wrap the whole sequence in a Home Assistant `script`** (scripts support
+`delay:`), have the user **expose that script**, and call the single `script.*`
+action from the scene:
+
+```yaml
+# scene action — one exposed script that runs the timed sequence internally
+actions:
+  - { service: script.tv_on_then_hdmi3, entity_ids: [], params: {} }
+```
+
+```yaml
+# the user's HA script (scripts.yaml) — the delay lives here, not in Ambience
+tv_on_then_hdmi3:
+  sequence:
+    - { action: remote.turn_on, target: { entity_id: remote.lounge_tv } }
+    - delay: { seconds: 3 }
+    - action: media_player.select_source
+      target: { entity_id: media_player.lounge_tv }
+      data: { source: "HDMI 3" }
+```
+
+The same wrapping handles any multi-step action needing ordering guarantees or a
+settle time the built-in services can't express. (Remember the exposed-id rule
+above — reference the script by its real, slugified `script.*` id.)
 
 ## The built-in `ambience.*` safe services
 
@@ -1534,6 +1682,40 @@ evaluated because the scope's Ambience **pause switch is off**. (Likewise
 `skipped_scope_disabled` = the scope is permanently disabled.) This is **not** a
 config bug — there's nothing to fix in the scenes. Tell the user to turn the
 scope's Ambience switch back on (or re-enable the scope). No import block needed.
+
+## Worked walkthrough 4 — an action silently did nothing (unexposed)
+
+**Symptom:** "The scene fires, but one of its actions never happens." The trace
+shows `outcome: acted` (the scene won and dispatched) yet the effect is missing —
+and there's a Repairs issue `unexposed_action:<id>`.
+
+**Read it:** Ambience only calls **exposed** services; an action whose `service`
+isn't in the user's exposed list is **logged and skipped** (marked `unexposed` in
+the trace) while the scene and its other actions proceed. The usual cause is an
+id that **doesn't match the exposed one** — most often a `script.*` whose entity id
+was slugified from a friendly name (`script.cine_tv_on_hdmi_3`, not a guessed
+`…hdmi3`). The user *did* expose the script, but the scene calls a slightly
+different id, so it's unexposed *as written*.
+
+**Fix:** diff the `service` you used against the bundle's `actions.exposed[].id`
+and re-emit with the exact id (`mode: merge`, same scene name → upserts):
+
+```yaml
+ambience_import: 1
+scope: { kind: area, id: lounge }
+mode: merge
+scenes:
+  - name: Watch TV
+    category: media
+    when:
+      state: { kind: is, entity_id: remote.cine, attribute: current_activity, states: ["Nvidia (TV)"] }
+    actions:
+      - { service: script.cine_tv_on_hdmi_3, entity_ids: [], params: {} }   # exact exposed id
+```
+
+The `unexposed_action` repair clears once a fresh evaluation runs with no scene
+referencing the missing id. See [actions.md](actions.md) → *Only EXPOSED services
+are valid*.
 
 ## Producing the corrected block
 

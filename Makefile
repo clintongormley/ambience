@@ -19,6 +19,8 @@ ui-strings:     ## frontend ui.* localize keys <-> i18n-data.ts bundle parity
 i18n:           ## all i18n gates: key parity + shipped-locale completeness + no-hardcoded lints
 	python -m bin.check_translations
 	python -m bin.check_ui_strings
+	python -m bin.check_i18n_placeholders
+	python -m bin.check_i18n_fallbacks
 	python -m bin.check_exceptions_keys
 	python -m bin.check_no_hardcoded_py
 	python -m bin.check_no_hardcoded_ts

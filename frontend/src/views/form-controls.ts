@@ -10,10 +10,11 @@ import type { HaFormSchema } from "../ha-form.js";
  * point in one place.
  */
 
-/** A single-select dropdown (ha-form `select` → native `<select>` fallback). */
+/** A single-select dropdown (ha-form `select` → native `<select>` fallback). The
+ *  `field` doubles as the element's CSS class (every caller used the same string
+ *  for both), so styling/test hooks key off the field name. */
 export function renderSelect(
   hass: HassConnection | undefined,
-  cls: string,
   field: string,
   value: string,
   options: { value: string; label: string }[],
@@ -25,7 +26,7 @@ export function renderSelect(
       { name: field, required: true, selector: { select: { mode: "dropdown", options } } },
     ];
     return html`<ha-form
-      class=${cls}
+      class=${field}
       .hass=${hass}
       .schema=${schema}
       .data=${{ [field]: value }}
@@ -39,7 +40,7 @@ export function renderSelect(
   }
   /* v8 ignore stop */
   return html`<select
-    class=${cls}
+    class=${field}
     @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
   >
     ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === value}>${o.label}</option>`)}

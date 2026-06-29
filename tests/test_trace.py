@@ -251,6 +251,82 @@ def test_format_renders_actions_for_acted_unit():
     assert "brightness_pct" in text
 
 
+def test_format_action_omits_param_values_to_avoid_leaking_secrets():
+    # Action params can carry secrets (alarm/lock codes, push tokens, message
+    # bodies). Trace debug logs get pasted into issues, so the log renders param
+    # KEYS only — never values. The full values stay available via the
+    # admin-gated trace API / structured trace dump.
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        None,
+        winner_name="evening",
+        actions=[
+            {
+                "service": "alarm_control_panel.alarm_disarm",
+                "entity_ids": ["alarm_control_panel.home"],
+                "params": {"code": "1234"},
+            },
+            {
+                "service": "notify.mobile",
+                "params": {"message": "Door left open", "token": "SEKRIT"},
+            },
+        ],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    # The action, its targets and WHICH params it set stay visible for debugging…
+    assert "alarm_control_panel.alarm_disarm" in text
+    assert "code" in text
+    assert "message" in text and "token" in text
+    # …but no secret VALUES leak into the log.
+    assert "1234" not in text
+    assert "SEKRIT" not in text
+    assert "Door left open" not in text
+
+
+def test_format_action_skips_non_dict_params_without_leaking():
+    # A malformed action whose params isn't a dict must not leak its contents —
+    # only a dict is introspected (for its keys); any other shape is skipped, so
+    # the no-value-leak guarantee holds even off the normal path.
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        None,
+        winner_name="evening",
+        actions=[{"service": "notify.mobile", "params": ["SEKRIT-LIST-VALUE"]}],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "notify.mobile" in text
+    assert "SEKRIT-LIST-VALUE" not in text
+
+
+def test_format_action_tolerates_malformed_entity_ids():
+    # entity_ids that isn't a clean list of strings must not crash trace rendering
+    # or char-split a bare string into "l, i, g, h, t".
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        None,
+        winner_name="evening",
+        actions=[
+            {"service": "light.turn_on", "entity_ids": "light.solo"},  # bare string
+            {"service": "lock.lock", "entity_ids": [123, "lock.door"]},  # non-string element
+        ],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "[light.solo]" in text  # wrapped, not char-split
+    assert "lock.door" in text  # coerced, no TypeError
+
+
 def test_emit_trace_resolves_category_name_for_log(caplog):
     class StoreStub:
         def categories(self):

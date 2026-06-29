@@ -260,12 +260,23 @@ def _scope_label(unit: UnitTrace) -> str:
 def _format_action(action: dict[str, Any]) -> str:
     """One dispatched action as `service [target, …] {params}`."""
     parts = [str(action.get("service", "?"))]
-    targets = action.get("entity_ids") or []
-    if targets:
-        parts.append(f"[{', '.join(targets)}]")
-    params = action.get("params") or {}
-    if params:
-        parts.append(str(params))
+    # Be tolerant of a hand-edited/malformed action: a bare-string entity_ids is
+    # wrapped (not char-split), non-string ids are coerced, and any other shape
+    # is skipped — so a bad action can't crash the trace log rendering.
+    targets = action.get("entity_ids")
+    if isinstance(targets, str):
+        targets = [targets]
+    if isinstance(targets, list) and targets:
+        parts.append(f"[{', '.join(str(t) for t in targets)}]")
+    params = action.get("params")
+    if isinstance(params, dict) and params:
+        # Log param KEYS only, never their values — action params can carry
+        # secrets (alarm/lock codes, push tokens, message bodies) and trace debug
+        # logs get pasted into issues. The full values stay available via the
+        # admin-gated trace API. (redact.py can't be imported here — it imports
+        # this module — so this is a local, allowlist-free scrub.) Only a dict is
+        # introspected; any other (malformed) shape is skipped so it can't leak.
+        parts.append("{" + ", ".join(sorted(map(str, params))) + "}")
     if action.get("unexposed"):
         parts.append("(skipped — not exposed)")
     return " ".join(parts)

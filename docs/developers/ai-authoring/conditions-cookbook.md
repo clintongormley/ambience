@@ -62,6 +62,7 @@ attributes), with optional `for`.
 > conditions changes (alongside clock / sun / `for`-timer ticks). So referencing
 > an entity in `state` is *also* how you make a change in that entity wake the
 > scene. Two consequences:
+>
 > - You can add a trigger **deliberately** with an always-true atom — e.g.
 >   `{ kind: is, entity_id: input_boolean.foo, states: [off, on] }` never
 >   constrains the match (it's true whichever state `foo` is in) but ensures the

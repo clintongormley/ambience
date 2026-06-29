@@ -723,7 +723,10 @@ export class AmbienceScopesView extends LitElement {
 
   private _downloadDiagnostics(scope: Scope, category: string) {
     const wire = { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null };
-    return this._callApi(() => downloadScopeDiagnostics(this.hass, wire, category));
+    // Pass the display name so the filename reads "…-lights.json", not the
+    // internal id (e.g. a renamed "General" category keeps the id "general").
+    const name = this._store.categories.find((x) => x.id === category)?.name;
+    return this._callApi(() => downloadScopeDiagnostics(this.hass, wire, category, name));
   }
 
   private _showSimulator(scope: Scope, category: string) {

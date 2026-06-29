@@ -29,6 +29,84 @@ describe("downloadScopeDiagnostics", () => {
     expect(clicks[0].download).toBe("ambience-area-kitchen-g1.json");
   });
 
+  test("names the file from the slugified category label, not the id", async () => {
+    // A renamed "General" category keeps its id ("general") but shows a new
+    // name ("Lights"). The download must reflect the name, while the WS call
+    // still sends the id so the backend selects the right scenes.
+    const callWS = vi.fn(async () => ({ scope: { scope_id: "kitchen" }, traces: [] }));
+    const hass: any = { callWS };
+
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:x");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clicks: HTMLAnchorElement[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this);
+    });
+
+    await downloadScopeDiagnostics(
+      hass,
+      { scope_kind: "area", scope_id: "kitchen" },
+      "general",
+      "Lights",
+    );
+
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/diagnostics/scope",
+      scope_kind: "area",
+      scope_id: "kitchen",
+      category: "general",
+    });
+    expect(clicks[0].download).toBe("ambience-area-kitchen-lights.json");
+  });
+
+  test("slugifies multi-word and punctuated category labels", async () => {
+    const callWS = vi.fn(async () => ({}));
+    const hass: any = { callWS };
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:x");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clicks: HTMLAnchorElement[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this);
+    });
+
+    await downloadScopeDiagnostics(
+      hass,
+      { scope_kind: "area", scope_id: "kitchen" },
+      "abc123",
+      "Movie Night!",
+    );
+
+    expect(clicks[0].download).toBe("ambience-area-kitchen-movie-night.json");
+  });
+
+  test("falls back to the category id when the label slugifies to empty", async () => {
+    const callWS = vi.fn(async () => ({}));
+    const hass: any = { callWS };
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:x");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clicks: HTMLAnchorElement[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this);
+    });
+
+    // An emoji-only name has no slug-safe characters; fall back to the id so
+    // the filename is never "ambience-area-kitchen-.json".
+    await downloadScopeDiagnostics(
+      hass,
+      { scope_kind: "area", scope_id: "kitchen" },
+      "abc123",
+      "🎬",
+    );
+
+    expect(clicks[0].download).toBe("ambience-area-kitchen-abc123.json");
+  });
+
   test("anchor is connected to the document when clicked (mobile WebViews require it)", async () => {
     vi.useFakeTimers();
     try {

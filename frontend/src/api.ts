@@ -520,10 +520,23 @@ function triggerJsonDownload(data: unknown, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+// Filename-safe slug: lowercase, accents stripped, runs of non-alphanumerics
+// collapsed to single hyphens, no leading/trailing hyphens. "" if the input has
+// no slug-safe characters (e.g. an emoji-only category name).
+function slugify(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export async function downloadScopeDiagnostics(
   hass: HassConnection,
   scope: { scope_kind: string; scope_id: string | null },
   category: string,
+  categoryLabel?: string,
 ): Promise<void> {
   const data = await hass.callWS<unknown>({
     type: "ambience/diagnostics/scope",
@@ -531,9 +544,14 @@ export async function downloadScopeDiagnostics(
     scope_id: scope.scope_id,
     category,
   });
+  // The WS call selects scenes by the stable category id; the filename uses the
+  // human-readable name (slugified) so a renamed category — e.g. "General"
+  // renamed to "Lights" but still keyed `general` — reads correctly. Fall back
+  // to the id when no label is given or it slugifies to empty.
+  const label = slugify(categoryLabel ?? "") || category;
   triggerJsonDownload(
     data,
-    `ambience-${scope.scope_kind}-${scope.scope_id ?? "house"}-${category}.json`,
+    `ambience-${scope.scope_kind}-${scope.scope_id ?? "house"}-${label}.json`,
   );
 }
 

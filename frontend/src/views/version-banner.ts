@@ -43,8 +43,8 @@ export class AmbienceVersionBanner extends LitElement {
   @state() private _serverVersion: string | null = null;
   private _checked = false;
 
-  override willUpdate(): void {
-    if (this._checked || !this.hass) return;
+  override willUpdate(changed: Map<string, unknown>): void {
+    if (this._checked || !changed.has("hass") || !this.hass) return;
     this._checked = true;
     void this._check();
   }

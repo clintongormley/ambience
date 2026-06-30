@@ -8,13 +8,20 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- After you update Ambience, the panel now notices when your browser is still
+    running the previous version from its cache and shows a banner with a
+    **Reload** button to pick up the new one — avoiding the confusing errors a
+    stale panel can cause after an upgrade.
+
 ### Fixed
 
 - The diagnostics dump downloaded from a category's ⋮ menu now names the file
-  after the category's display name (e.g. `ambience-area-kitchen-lights.json`)
-  instead of its internal id. Previously a renamed category — such as the
-  built-in **General** renamed to **Lights** — kept its original id and so
-  downloaded as `…-general.json`.
+    after the category's display name (e.g. `ambience-area-kitchen-lights.json`)
+    instead of its internal id. Previously a renamed category — such as the
+    built-in **General** renamed to **Lights** — kept its original id and so
+    downloaded as `…-general.json`.
 
 ## [0.31.0] - 2026-06-29
 

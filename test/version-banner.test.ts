@@ -73,6 +73,11 @@ describe("ambience-version-banner", () => {
     expect(innerBanner(el)).toBeNull();
   });
 
+  it("hidden when the server hash is empty string", async () => {
+    const el = await mount("oldhash", { hash: "", version: "0.32.0" });
+    expect(innerBanner(el)).toBeNull();
+  });
+
   it("hidden (fail-open) when the WS call rejects", async () => {
     const el = await mount("oldhash", new Error("boom"));
     expect(innerBanner(el)).toBeNull();

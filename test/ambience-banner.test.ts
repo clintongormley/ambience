@@ -53,4 +53,14 @@ describe("ambience-banner", () => {
     expect(dismissed).toBe(true);
     expect(parentSawClick).toBe(false); // stopPropagation
   });
+
+  it("omits the dismiss button when dismissible is false", async () => {
+    const el = await mount({ dismissible: false });
+    expect(el.shadowRoot.querySelector('[data-test="banner-dismiss"]')).toBeNull();
+  });
+
+  it("renders the dismiss button by default", async () => {
+    const el = await mount({});
+    expect(el.shadowRoot.querySelector('[data-test="banner-dismiss"]')).not.toBeNull();
+  });
 });

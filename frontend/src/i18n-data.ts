@@ -501,6 +501,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       scene_live: "Live now — this scene currently matches and is applied",
       scene_applied_stale:
         "Still applied — this scene's actions are in effect but it no longer matches",
+      version_update: {
+        message: "Ambience {version} has been installed — reload to update.",
+        reload: "Reload",
+      },
     },
     blocker_summary: {
       block: "Block",
@@ -1077,6 +1081,10 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       scene_live: "Activa ahora — esta escena coincide y está aplicada",
       scene_applied_stale:
         "Sigue aplicada — las acciones de esta escena están en efecto pero ya no coincide",
+      version_update: {
+        message: "Se ha instalado Ambience {version}: recarga para actualizar.",
+        reload: "Recargar",
+      },
     },
     blocker_summary: {
       block: "Bloquear",

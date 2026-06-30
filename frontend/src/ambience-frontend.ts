@@ -19,6 +19,7 @@ import "./views/category-filter.js";
 import "./views/scopes-view.js";
 import "./views/settings-modal.js";
 import "./views/ambience-help.js";
+import "./views/version-banner.js";
 
 export class AmbienceFrontend extends LitElement {
   static override styles = css`
@@ -167,6 +168,7 @@ export class AmbienceFrontend extends LitElement {
       title: localize(this.hass, "ui.panel_title", "Ambience"),
     };
     return html`
+      <ambience-version-banner .hass=${this.hass}></ambience-version-banner>
       <header>
         <div class="bar">
           <h1 class="brand">

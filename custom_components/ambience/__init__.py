@@ -23,6 +23,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .builtin_services import (
     async_register_builtin_services,
@@ -50,6 +51,8 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_FRONTEND_HASH,
+    DATA_FRONTEND_VERSION,
     DATA_HISTORY,
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
@@ -268,6 +271,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.async_add_executor_job(_hash_bundle, card_path),
         hass.async_add_executor_job(_hash_bundle, frontend_path),
     )
+    domain_data[DATA_FRONTEND_HASH] = frontend_hash
+    # Stash the manifest version once (the integration is loaded by now, so this
+    # is a cached lookup) so the ws command needn't resolve it per call.
+    integration = await async_get_integration(hass, DOMAIN)
+    domain_data[DATA_FRONTEND_VERSION] = str(integration.version)
     module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}&fe={frontend_hash}"
     card_url = f"{_CARD_JS_URL}?hash={card_hash}&fe={frontend_hash}"
 

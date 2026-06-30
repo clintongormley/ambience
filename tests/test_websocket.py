@@ -181,6 +181,24 @@ async def test_options_reflects_enabled_ai_tab(
     assert resp["result"]["enable_ai_tab"] is True
 
 
+async def test_frontend_version_returns_hash_and_version(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """The panel reads the served chunk hash + version to detect a stale bundle."""
+    from homeassistant.loader import async_get_integration
+
+    from custom_components.ambience.const import DATA_FRONTEND_HASH, DOMAIN
+
+    resp = await _ws_send(hass_ws_client, type="ambience/frontend_version")
+    assert resp["success"] is True
+    result = resp["result"]
+    # hash is the value stashed at setup (the served chunk's content hash)
+    assert result["hash"] == hass.data[DOMAIN][DATA_FRONTEND_HASH]
+    assert result["hash"]  # non-empty: the bundle file ships in the repo
+    integration = await async_get_integration(hass, DOMAIN)
+    assert result["version"] == str(integration.version)
+
+
 async def test_ai_tab_enabled_defaults_off_without_entry(hass: HomeAssistant) -> None:
     """The helper falls back to the default (off) when no Ambience entry exists.
     The ws command can't reach this (unregistered without an entry), so it's

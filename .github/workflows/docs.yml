@@ -57,10 +57,8 @@ jobs:
         run: |
           if [ "$EVENT" = "release" ]; then
             REF="$REL_TAG"
-          elif [ "$EVENT" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
-            REF="$INPUT_TAG"
           elif [ "$EVENT" = "workflow_dispatch" ]; then
-            REF="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
+            REF="${INPUT_TAG:-$(gh release view --repo "$REPO" --json tagName --jq .tagName)}"
           else
             REF="$SHA"
           fi
@@ -71,6 +69,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
       - run: pip install -r docs/requirements.txt
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5

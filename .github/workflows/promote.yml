@@ -8,11 +8,19 @@ name: Promote
 #
 # This fires only for a human/PAT-initiated flip — a GITHUB_TOKEN-created release
 # event does not trigger workflows, which is why release.yml's initial publish
-# (a prerelease) never reaches here.
+# (a prerelease) never reaches here. The `workflow_dispatch` is a manual recovery
+# hatch: if a flip ever fails to emit the `released` event (e.g. done via the web
+# UI rather than the gh CLI), run this workflow to advance `stable` by hand.
 
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to advance `stable` to (blank = current latest release)"
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -23,9 +31,24 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Resolve the tag to promote
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "release" ]; then
+            REF="$REL_TAG"
+          else
+            REF="${INPUT_TAG:-$(gh release view --repo "$REPO" --json tagName --jq .tagName)}"
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
-      - name: Fast-forward stable to the released tag
+      - name: Fast-forward stable to the resolved tag
         run: git push -f origin "HEAD:refs/heads/stable"

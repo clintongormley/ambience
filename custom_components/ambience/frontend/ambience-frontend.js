@@ -5212,7 +5212,7 @@ var Qa=Object.defineProperty;var Ja=Object.getOwnPropertyDescriptor;var c=(t,r,e
       overflow: hidden;
     }
     .body > ambience-settings-view { flex: 1; min-height: 0; }
-  `,c([m({attribute:!1})],Xe.prototype,"hass",2),c([m({type:Boolean,reflect:!0})],Xe.prototype,"open",2),c([m({attribute:!1})],Xe.prototype,"initialTab",2),Xe=c([w("ambience-settings-modal")],Xe);function hh(t){let r=t.indexOf("?");return r===-1?"":new URLSearchParams(t.slice(r+1)).get("fe")??""}var Ya={runningFrontendHash(){return hh(import.meta.url)}};var ph={reload(){location.reload()}},pi=class extends b{constructor(){super(...arguments);this._visible=!1;this._checked=!1;this._serverVersion=""}static{this.styles=y`
+  `,c([m({attribute:!1})],Xe.prototype,"hass",2),c([m({type:Boolean,reflect:!0})],Xe.prototype,"open",2),c([m({attribute:!1})],Xe.prototype,"initialTab",2),Xe=c([w("ambience-settings-modal")],Xe);function hh(t){let r=t.indexOf("?");return r===-1?"":new URLSearchParams(t.slice(r+1)).get("fe")??""}var Ya={runningFrontendHash(){return hh(import.meta.url)}};var ph={reload(){location.reload()}},pi=class extends b{constructor(){super(...arguments);this._serverVersion=null;this._checked=!1}static{this.styles=y`
     :host {
       display: block;
     }
@@ -5221,7 +5221,7 @@ var Qa=Object.defineProperty;var Ja=Object.getOwnPropertyDescriptor;var c=(t,r,e
       line-height: 1.4;
       color: var(--primary-text-color, #212121);
     }
-  `}willUpdate(){this._checked||!this.hass||(this._checked=!0,this._check())}async _check(){let e=Ya.runningFrontendHash();if(!(!e||!this.hass))try{let{hash:i,version:n}=await Es(this.hass);if(!i||i==="missing"||i===e)return;this._serverVersion=n,this._visible=!0}catch{}}render(){if(!this._visible)return $;let e=a(this.hass,"ui.version_update.message","Ambience {version} has been installed \u2014 reload to update.",{version:this._serverVersion}),i=a(this.hass,"ui.version_update.reload","Reload");return l`
+  `}willUpdate(){this._checked||!this.hass||(this._checked=!0,this._check())}async _check(){let e=Ya.runningFrontendHash();if(!(!e||!this.hass))try{let{hash:i,version:n}=await Es(this.hass);if(!i||i==="missing"||i===e)return;this._serverVersion=n}catch{}}render(){if(this._serverVersion===null)return $;let e=a(this.hass,"ui.version_update.message","Ambience {version} has been installed \u2014 reload to update.",{version:this._serverVersion}),i=a(this.hass,"ui.version_update.reload","Reload");return l`
       <ambience-banner
         data-test="version-banner"
         icon="mdi:update"
@@ -5230,7 +5230,7 @@ var Qa=Object.defineProperty;var Ja=Object.getOwnPropertyDescriptor;var c=(t,r,e
         .ctaLabel=${i}
         @banner-cta=${()=>ph.reload()}
       ><span class="message">${e}</span></ambience-banner>
-    `}};c([m({attribute:!1})],pi.prototype,"hass",2),c([g()],pi.prototype,"_visible",2);Ci("ambience-version-banner",pi);var pt=class extends b{constructor(){super(...arguments);this._settingsOpen=!1;this._filterCategory=Pi();this._onOpenSettings=e=>{let i=e.detail?.tab;this._settingsTab=i,this._settingsOpen=!0};this._onFilterChanged=e=>{this._filterCategory=e.detail?.category??"",e.stopPropagation()}}static{this.styles=y`
+    `}};c([m({attribute:!1})],pi.prototype,"hass",2),c([g()],pi.prototype,"_serverVersion",2);Ci("ambience-version-banner",pi);var pt=class extends b{constructor(){super(...arguments);this._settingsOpen=!1;this._filterCategory=Pi();this._onOpenSettings=e=>{let i=e.detail?.tab;this._settingsTab=i,this._settingsOpen=!0};this._onFilterChanged=e=>{this._filterCategory=e.detail?.category??"",e.stopPropagation()}}static{this.styles=y`
     :host {
       display: block;
       height: 100%;

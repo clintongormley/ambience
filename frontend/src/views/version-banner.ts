@@ -37,9 +37,11 @@ export class AmbienceVersionBanner extends LitElement {
 
   @property({ attribute: false }) hass: HassConnection | undefined;
 
-  @state() private _visible = false;
+  // Null = hidden; a non-null string is the server version to show (and the
+  // show trigger). One reactive field instead of a separate _visible flag, so
+  // "are we visible" and "what do we show" can never drift apart.
+  @state() private _serverVersion: string | null = null;
   private _checked = false;
-  private _serverVersion = "";
 
   override willUpdate(): void {
     if (this._checked || !this.hass) return;
@@ -54,14 +56,13 @@ export class AmbienceVersionBanner extends LitElement {
       const { hash, version } = await getFrontendVersion(this.hass);
       if (!hash || hash === "missing" || hash === running) return;
       this._serverVersion = version;
-      this._visible = true;
     } catch {
       // Fail-open: leave the banner hidden on any WS/network error.
     }
   }
 
   override render() {
-    if (!this._visible) return nothing;
+    if (this._serverVersion === null) return nothing;
     const message = localize(
       this.hass,
       "ui.version_update.message",

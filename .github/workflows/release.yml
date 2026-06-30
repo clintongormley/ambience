@@ -30,7 +30,6 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -47,13 +46,6 @@ jobs:
           # so a hand-pushed bad tag can't slip through to a published release.
           bin/bump-version.sh --validate "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # Any semver pre-release (a hyphen) is a pre-release; matches the regex,
-          # which only permits -alpha/-beta/-rc.
-          if [[ "$VERSION" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Validate manifest version matches tag
         env:
@@ -87,32 +79,26 @@ jobs:
             echo "body_path=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (prerelease — promote to latest manually)
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: ${{ steps.notes.outputs.generate }}
           body_path: ${{ steps.notes.outputs.body_path }}
-          # Pre-releases (alpha/beta/rc) stay off "latest" until promoted via:
+          # Every release is published as a prerelease and is NOT made "latest".
+          # Soak it, then flip it to latest when ready:
           #   gh release edit v<version> --prerelease=false --latest=true
-          prerelease: ${{ steps.version.outputs.prerelease }}
-          make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
-
-      - name: Advance the stable release channel
-        # The AI knowledge pack (Claude plugin / skill / docs) is installed from the
-        # `stable` branch so users get the pack matching their release — never main's
-        # unreleased dev work. Pre-releases don't move it (they aren't "latest"). The
-        # checkout is at the tag commit, so this points stable at the release.
-        if: steps.version.outputs.prerelease == 'false'
-        run: git push -f origin "HEAD:refs/heads/stable"
+          # That fires the `released` event, which advances `stable` (promote.yml)
+          # and deploys the docs (docs.yml).
+          prerelease: true
+          make_latest: false
 
   bump:
     needs: publish
-    # Only final releases roll main forward; pre-releases leave the version alone.
-    if: needs.publish.outputs.prerelease == 'false'
+    # Bump-on-cut: roll main forward on every release tag so unreleased work no
+    # longer carries the just-cut version. The forward-only guard in "Compute next
+    # minor" prevents an old re-tag from regressing main.
     runs-on: ubuntu-latest
     name: Bump main to next minor
-    # GITHUB_TOKEN only needs to read for the checkout below — all PR/merge
-    # operations use RELEASE_PAT, not GITHUB_TOKEN.
     permissions:
       contents: read
     steps:

@@ -46,6 +46,8 @@ export class AmbienceBanner extends LitElement {
   @property() dismissLabel = "";
   /** Tint the leading icon with the primary colour (the `.banner-hint` look). */
   @property({ type: Boolean }) hint = false;
+  /** When false, the dismiss ✕ is not rendered (a persistent banner). */
+  @property({ type: Boolean }) dismissible = true;
 
   // Lit binds event listeners with `this` set to the host element, so these
   // method references can be used directly without a per-render arrow closure.
@@ -80,13 +82,15 @@ export class AmbienceBanner extends LitElement {
         <ha-icon class="banner-icon" icon=${this.icon}></ha-icon>
         <div class="banner-text"><slot></slot></div>
         ${this._renderCta()}
-        <button
-          class="banner-dismiss"
-          data-test="banner-dismiss"
-          title=${this.dismissLabel}
-          aria-label=${this.dismissLabel}
-          @click=${this._onDismiss}
-        ><ha-icon icon="mdi:close"></ha-icon></button>
+        ${this.dismissible
+          ? html`<button
+              class="banner-dismiss"
+              data-test="banner-dismiss"
+              title=${this.dismissLabel}
+              aria-label=${this.dismissLabel}
+              @click=${this._onDismiss}
+            ><ha-icon icon="mdi:close"></ha-icon></button>`
+          : nothing}
       </div>
     `;
   }

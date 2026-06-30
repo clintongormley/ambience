@@ -66,11 +66,14 @@ Releases follow a **cut → soak → flip** flow:
     minor.
 1. **Soak.** The prerelease is installable by HACS users who opt into betas, so
     you can check it live without affecting default installs.
-1. **Flip.** When you're happy, mark the release **latest** (GitHub "Set as
-    latest", or `gh release edit v<version> --prerelease=false --latest=true`).
-    That single action advances the `stable` branch (the AI knowledge pack) and
-    deploys the docs — which then reflect that release and show its version in
-    the navbar. Default HACS users get it at the same moment.
+1. **Flip.** When you're happy, promote the release to **latest** with:
+    `gh release edit v<version> --prerelease=false --latest=true`. That single
+    action advances the `stable` branch (the AI knowledge pack) and deploys the
+    docs — which then reflect that release and show its version in the navbar.
+    Default HACS users get it at the same moment. **Use the `gh` CLI rather
+    than the GitHub web UI "Set as latest" checkbox** — the checkbox may not
+    emit the `released` event the `promote`/`docs` workflows trigger on, so the
+    flip could silently fail to advance `stable` or deploy the docs.
 
 A manual `workflow_dispatch` on the **docs** workflow can redeploy the docs for
 a chosen tag (or the current latest) if you ever need to reseed the site.

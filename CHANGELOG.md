@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-06-30
+
 ### Added
 
 - After you update Ambience, the panel now notices when your browser is still

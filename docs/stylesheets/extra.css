@@ -218,3 +218,22 @@
 [data-md-color-scheme="slate"] .md-nav--primary .md-nav__item .md-nav {
   border-left-color: rgba(255, 255, 255, 0.14);
 }
+
+/* Released-version badge beside the wordmark. The version is injected as the
+   --ambience-version custom property by overrides/main.html (value from
+   manifest.json via mkdocs_hooks/version.py). When the property is unset (no
+   version), `content: var(--ambience-version)` is invalid and the ::after
+   pseudo-element is not generated — so no empty pill renders. */
+.md-header__button.md-logo::after {
+  content: var(--ambience-version);
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 1rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+  color: var(--md-primary-bg-color, #fff);
+  background: var(--md-accent-fg-color);
+}

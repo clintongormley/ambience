@@ -1,0 +1,31 @@
+name: Promote
+
+# When a release is flipped to "latest" (a prerelease changed to a release via
+# "Set as latest" / `gh release edit --prerelease=false --latest=true`), advance
+# the `stable` branch to that release's commit. `stable` feeds the AI knowledge
+# pack (Claude plugin / skill / docs), so users get the pack matching the latest
+# released version. The docs deploy off the same `released` event (docs.yml).
+#
+# This fires only for a human/PAT-initiated flip — a GITHUB_TOKEN-created release
+# event does not trigger workflows, which is why release.yml's initial publish
+# (a prerelease) never reaches here.
+
+on:
+  release:
+    types: [released]
+
+permissions: {}
+
+jobs:
+  advance-stable:
+    runs-on: ubuntu-latest
+    name: Advance the stable channel
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+      - name: Fast-forward stable to the released tag
+        run: git push -f origin "HEAD:refs/heads/stable"

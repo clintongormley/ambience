@@ -82,15 +82,17 @@ export class AmbienceBanner extends LitElement {
         <ha-icon class="banner-icon" icon=${this.icon}></ha-icon>
         <div class="banner-text"><slot></slot></div>
         ${this._renderCta()}
-        ${this.dismissible
-          ? html`<button
+        ${
+          this.dismissible
+            ? html`<button
               class="banner-dismiss"
               data-test="banner-dismiss"
               title=${this.dismissLabel}
               aria-label=${this.dismissLabel}
               @click=${this._onDismiss}
             ><ha-icon icon="mdi:close"></ha-icon></button>`
-          : nothing}
+            : nothing
+        }
       </div>
     `;
   }

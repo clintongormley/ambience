@@ -140,6 +140,15 @@ export async function getInstallId(hass: HassConnection): Promise<string | null>
   return res.install_id;
 }
 
+export interface FrontendVersion {
+  hash: string;
+  version: string;
+}
+
+export async function getFrontendVersion(hass: HassConnection): Promise<FrontendVersion> {
+  return hass.callWS<FrontendVersion>({ type: "ambience/frontend_version" });
+}
+
 /** Panel-relevant config-entry options the frontend gates UI on. */
 export interface AmbienceOptions {
   /** Whether the AI authoring tab (beta) is enabled. Off by default; the user

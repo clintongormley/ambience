@@ -7,7 +7,8 @@ from pathlib import Path
 
 def _load_hook():
     spec = importlib.util.spec_from_file_location(
-        "ambience_docs_version", Path("mkdocs_hooks/version.py")
+        "ambience_docs_version",
+        Path(__file__).resolve().parents[1] / "mkdocs_hooks/version.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

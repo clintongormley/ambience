@@ -13,7 +13,7 @@ _MANIFEST = Path("custom_components/ambience/manifest.json")
 def read_version(manifest_path: Path = _MANIFEST) -> str:
     """The integration version from *manifest_path*, or '' if unavailable."""
     try:
-        return str(json.loads(Path(manifest_path).read_text())["version"])
+        return str(json.loads(manifest_path.read_text())["version"])
     except (OSError, ValueError, KeyError, TypeError):
         return ""
 

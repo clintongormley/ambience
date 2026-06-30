@@ -53,6 +53,7 @@ jobs:
           REL_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
           if [ "$EVENT" = "release" ]; then
             REF="$REL_TAG"
@@ -61,7 +62,7 @@ jobs:
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             REF="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
           else
-            REF="${{ github.sha }}"
+            REF="$SHA"
           fi
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v6

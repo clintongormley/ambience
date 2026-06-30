@@ -152,6 +152,10 @@ DATA_CARD_RESOURCE_ID = "card_resource_id"
 # hass.data key holding the versioned card URL, needed by the add_extra_js_url
 # fallback's removal on unload.
 DATA_CARD_RESOURCE_URL = "card_resource_url"
+# hass.data key holding the served ambience-frontend.js content hash, used by
+# the ambience/frontend_version ws command so the panel can detect a stale
+# cached bundle after an upgrade.
+DATA_FRONTEND_HASH = "frontend_hash"
 
 
 def get_store(hass: HomeAssistant) -> AmbienceStore | None:

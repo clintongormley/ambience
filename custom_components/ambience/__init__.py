@@ -50,6 +50,7 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_FRONTEND_HASH,
     DATA_HISTORY,
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
@@ -268,6 +269,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.async_add_executor_job(_hash_bundle, card_path),
         hass.async_add_executor_job(_hash_bundle, frontend_path),
     )
+    domain_data[DATA_FRONTEND_HASH] = frontend_hash
     module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}&fe={frontend_hash}"
     card_url = f"{_CARD_JS_URL}?hash={card_hash}&fe={frontend_hash}"
 

@@ -14,6 +14,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -22,6 +23,7 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_FRONTEND_HASH,
     DATA_HISTORY,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -238,6 +240,28 @@ async def _ws_options(
     the integration's options (Settings → Devices & services → Ambience →
     Configure)."""
     connection.send_result(msg["id"], {"enable_ai_tab": _ai_tab_enabled(hass)})
+
+
+@websocket_api.websocket_command({vol.Required("type"): "ambience/frontend_version"})
+@websocket_api.async_response
+async def _ws_frontend_version(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the served frontend chunk's content hash and the integration
+    version. The panel compares the hash against the bundle it is actually
+    running (read from its own ?fe= URL) to detect a stale, cached bundle after
+    an upgrade and prompt a reload. Not admin-gated: the data is non-sensitive
+    and the card renders for non-admins too."""
+    integration = await async_get_integration(hass, DOMAIN)
+    connection.send_result(
+        msg["id"],
+        {
+            "hash": hass.data[DOMAIN].get(DATA_FRONTEND_HASH, ""),
+            "version": str(integration.version) if integration.version else "",
+        },
+    )
 
 
 @websocket_api.require_admin
@@ -1504,6 +1528,7 @@ _WS_HANDLERS = (
     _ws_conditions_list,
     _ws_install_id,
     _ws_options,
+    _ws_frontend_version,
     _ws_services_list,
     _ws_services_get_schema,
     _ws_exposed_actions_list,

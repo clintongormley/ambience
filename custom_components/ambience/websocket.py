@@ -14,7 +14,6 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -24,6 +23,7 @@ from .const import (
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_FRONTEND_HASH,
+    DATA_FRONTEND_VERSION,
     DATA_HISTORY,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -250,16 +250,15 @@ async def _ws_frontend_version(
     msg: dict[str, Any],
 ) -> None:
     """Return the served frontend chunk's content hash and the integration
-    version. The panel compares the hash against the bundle it is actually
-    running (read from its own ?fe= URL) to detect a stale, cached bundle after
-    an upgrade and prompt a reload. Not admin-gated: the data is non-sensitive
-    and the card renders for non-admins too."""
-    integration = await async_get_integration(hass, DOMAIN)
+    version (both stashed at setup). The panel compares the hash against the
+    bundle it is actually running (read from its own ?fe= URL) to detect a
+    stale, cached bundle after an upgrade and prompt a reload. Not admin-gated:
+    the data is non-sensitive and the card renders for non-admins too."""
     connection.send_result(
         msg["id"],
         {
             "hash": hass.data[DOMAIN].get(DATA_FRONTEND_HASH, ""),
-            "version": str(integration.version) if integration.version else "",
+            "version": hass.data[DOMAIN].get(DATA_FRONTEND_VERSION, ""),
         },
     )
 

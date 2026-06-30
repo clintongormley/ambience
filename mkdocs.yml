@@ -45,6 +45,7 @@ markdown_extensions:
   - pymdownx.highlight
   - toc:
       permalink: true
+      toc_depth: 3
 
 nav:
   - Introduction: index.md

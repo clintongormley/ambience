@@ -1,9 +1,9 @@
 # Ambience
 
-[![GitHub release](https://img.shields.io/github/v/release/clintongormley/ambience)](https://github.com/clintongormley/ambience/releases)
+[![GitHub release](https://img.shields.io/github/v/release/clintongormley/ambience?include_prereleases)](https://github.com/clintongormley/ambience/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.2.0%2B-blue.svg)](https://www.home-assistant.io/)
-[![License: MIT](https://img.shields.io/github/license/clintongormley/ambience)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/clintongormley/ambience)](https://github.com/clintongormley/ambience/blob/main/LICENSE)
 
 Ambience is a **condition-based scene engine** for Home Assistant. You describe
 scenes for a room — _"Room is empty"_, _"Movie time"_ — along with the
@@ -14,7 +14,7 @@ and applies the best-matching scene automatically.
 **Full documentation is published at
 [clintongormley.github.io/ambience](https://clintongormley.github.io/ambience/).**
 
-![Ambience scene management panel.](docs/images/readme-panel.png "Ambience scene management panel.")
+![Ambience scene management panel.](https://raw.githubusercontent.com/clintongormley/ambience/main/docs/images/readme-panel.png "Ambience scene management panel.")
 
 ## Installation
 
@@ -44,7 +44,8 @@ details.
 
 ## For developers
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — how Ambience works inside: the
-    engine, scene resolution, WebSocket API, and the frontend build pipeline.
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — dev environment setup, quality gates,
-    and how to run tests.
+- **[ARCHITECTURE.md](https://github.com/clintongormley/ambience/blob/main/ARCHITECTURE.md)**
+    — how Ambience works inside: the engine, scene resolution, WebSocket API,
+    and the frontend build pipeline.
+- **[CONTRIBUTING.md](https://github.com/clintongormley/ambience/blob/main/CONTRIBUTING.md)**
+    — dev environment setup, quality gates, and how to run tests.

@@ -16,7 +16,6 @@ exclude_docs: |
 
 theme:
   name: material
-  custom_dir: overrides
   logo: assets/logo-light.svg
   favicon: assets/icon-dark.svg
   features:

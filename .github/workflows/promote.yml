@@ -1,0 +1,57 @@
+name: Promote
+
+# When a release is flipped to "latest" (a prerelease changed to a release via
+# "Set as latest" / `gh release edit --prerelease=false --latest=true`), advance
+# the `stable` branch to that release's commit. `stable` feeds the AI knowledge
+# pack (Claude plugin / skill / docs), so users get the pack matching the latest
+# released version. The docs deploy off the same `released` event (docs.yml).
+#
+# This fires only for a human/PAT-initiated flip — a GITHUB_TOKEN-created release
+# event does not trigger workflows, which is why release.yml's initial publish
+# (a prerelease) never reaches here. The `workflow_dispatch` is a manual recovery
+# hatch: if a flip ever fails to emit the `released` event (e.g. done via the web
+# UI rather than the gh CLI), run this workflow to advance `stable` by hand.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to advance `stable` to (blank = current latest release)"
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  advance-stable:
+    runs-on: ubuntu-latest
+    name: Advance the stable channel
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the tag to promote
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "release" ]; then
+            REF="$REL_TAG"
+          else
+            REF="${INPUT_TAG:-$(gh release view --repo "$REPO" --json tagName --jq .tagName)}"
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+          fetch-depth: 0
+      - name: Fast-forward stable to the resolved tag
+        # No `-f`: a non-fast-forward push is rejected, so `stable` can only move
+        # forward. A dispatch with an older/divergent tag fails loudly here rather
+        # than silently rolling the AI-pack channel backwards.
+        run: git push origin "HEAD:refs/heads/stable"

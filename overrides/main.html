@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{#
+  Inject the released version (set on config.extra.version by
+  mkdocs_hooks/version.py) as a CSS custom property, consumed by the
+  .md-logo::after badge in stylesheets/extra.css. Only emitted when non-empty,
+  so an unknown version renders no badge. Uses the stable `extrahead` block to
+  avoid copying Material's header (the theme is unpinned).
+#}
+{% block extrahead %}
+  {{ super() }}
+  {% if config.extra.version %}
+  <style>:root { --ambience-version: "v{{ config.extra.version }}"; }</style>
+  {% endif %}
+{% endblock %}

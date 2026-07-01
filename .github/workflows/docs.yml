@@ -1,14 +1,37 @@
 name: docs
 
+# Build the docs on PRs / main pushes for validation; DEPLOY only when a release
+# is flipped to "latest" (the `released` event) or on a manual dispatch. The
+# deployed docs reflect the latest released version, sourced from the released
+# tag's commit. See promote.yml (advances `stable` on the same event).
+
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "overrides/**"
+      - "mkdocs_hooks/**"
+      - ".github/workflows/docs.yml"
   pull_request:
-    paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "overrides/**"
+      - "mkdocs_hooks/**"
+      - ".github/workflows/docs.yml"
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag/ref to deploy (blank = current latest release)"
+        required: false
+        default: ""
 
 # Least privilege at the top: the PR-triggered build runs untrusted code, so it
-# gets read-only. Pages/OIDC write capabilities live only on the main-only deploy job.
+# gets read-only. Pages/OIDC write capabilities live only on the deploy job.
 permissions:
   contents: read
 
@@ -22,21 +45,49 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Resolve the ref to build
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "release" ]; then
+            REF="$REL_TAG"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            REF="${INPUT_TAG:-$(gh release view --repo "$REPO" --json tagName --jq .tagName)}"
+          else
+            REF="$SHA"
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
       - run: pip install -r docs/requirements.txt
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         with:
           path: site
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
+    # Serialize Pages deploys across all runs (a fixed group, not per-ref) and
+    # never cancel one mid-flight, so two flips close together can't deploy
+    # out-of-order and overwrite Pages with the older tag's docs.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

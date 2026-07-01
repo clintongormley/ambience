@@ -4,6 +4,9 @@ site_url: https://clintongormley.github.io/ambience/
 repo_url: https://github.com/clintongormley/ambience
 docs_dir: docs
 
+hooks:
+  - mkdocs_hooks/version.py
+
 # Keep internal working docs out of the published site.
 exclude_docs: |
   superpowers/
@@ -13,6 +16,7 @@ exclude_docs: |
 
 theme:
   name: material
+  custom_dir: overrides
   logo: assets/logo-light.svg
   favicon: assets/icon-dark.svg
   features:

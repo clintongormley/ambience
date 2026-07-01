@@ -35,11 +35,19 @@ def test_read_version_malformed_is_empty(tmp_path):
     assert hook.read_version(m) == ""
 
 
-def test_on_config_sets_extra_version(tmp_path, monkeypatch):
+def test_on_config_appends_version_to_site_name(tmp_path, monkeypatch):
     hook = _load_hook()
     m = tmp_path / "manifest.json"
     m.write_text(json.dumps({"version": "9.9.9"}))
     monkeypatch.setattr(hook, "_MANIFEST", m)
-    config = {"extra": {}}
+    config = {"site_name": "Ambience"}
     hook.on_config(config)
-    assert config["extra"]["version"] == "9.9.9"
+    assert config["site_name"] == "Ambience v9.9.9"
+
+
+def test_on_config_leaves_site_name_when_version_unavailable(tmp_path, monkeypatch):
+    hook = _load_hook()
+    monkeypatch.setattr(hook, "_MANIFEST", tmp_path / "nope.json")
+    config = {"site_name": "Ambience"}
+    hook.on_config(config)
+    assert config["site_name"] == "Ambience"

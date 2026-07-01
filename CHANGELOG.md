@@ -8,6 +8,62 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-01
+
+The first stable release of Ambience — a **condition-based scene engine** for
+Home Assistant. You describe the scenes for a room ("Movie time", "Room empty")
+along with the conditions under which each should apply, and Ambience watches
+your home and applies the best-matching scene automatically. This section is a
+snapshot of what Ambience offers at 1.0; the per-version entries below record
+how it got here.
+
+### Highlights
+
+- **Conditions, not triggers.** Instead of wiring up "when someone enters the
+    room…" automations, you describe the conditions that define each scene.
+    Ambience re-evaluates the current context whenever anything relevant changes
+    and applies the single best-matching scene — so a room lands in the right
+    state even when nothing just "happened".
+- **A rich condition palette.** Build scenes from occupancy, people (who is home
+    and where, with duration gates), time of day, sun position, light level
+    (lux), weather, and day of week, plus arbitrary entity state — the last with
+    full AND/OR grouping, parentheses, and negation. Power users can drop to a
+    script or template condition, and an "unavailable" condition guards on an
+    entity being unknown or missing.
+- **Actions, not just target states.** You choose which actions apply a scene,
+    so you control *how* devices get there — including smooth fades via the
+    companion [Fado Light Fader](https://github.com/clintongormley/ha-fado)
+    integration. Expose only the actions and fields you care about; light,
+    switch, and safe cover actions are seeded out of the box.
+- **Scopes, categories, and a single winner.** Scenes belong to a scope (House,
+    Floor, or Area) and a category (e.g. lights vs. blinds). Exactly one scene
+    wins per scope-and-category group, ranked by priority and specificity, so
+    two rules can never clash over the same device.
+- **Auto-derived triggers.** Ambience reads your conditions and installs the
+    Home Assistant triggers needed to keep scenes current — you never wire
+    triggers by hand.
+- **Per-scope switches that cascade.** Every scope gets its own pause/resume
+    switch; the House and Floor switches cascade down to the areas beneath them,
+    and each can pause for a set number of minutes and then auto-resume. Add
+    them to a dashboard or expose them to a voice assistant ("turn off
+    Ambience").
+- **A visual editor built to be read.** Scenes render in a compact,
+    human-friendly format that's easy to compare side by side. The panel adds
+    undo/redo (shared across browser tabs), optional scene descriptions, live
+    indicators showing which scene currently matches, and inline help links —
+    and works on mobile.
+- **Debuggable and testable.** A tracer explains why the winning scene won and
+    why the others didn't; a simulator lets you change the time, weather, or any
+    condition to test your rules; and the editor flags unreachable scenes and
+    ordering problems before they bite. Config health surfaces missing or
+    disabled entities as Repairs issues, and scene activity is written to the
+    Home Assistant logbook per scope.
+- **Privacy-conscious diagnostics.** A one-click diagnostics download captures
+    what's needed to debug a scene while scrubbing presence data, location, and
+    secrets such as alarm and lock codes — safe to paste into a GitHub issue.
+- **Installable via HACS, and translatable** — English and Spanish today, with
+    an in-panel nudge to contribute your own language.
+
 ### Fixed
 
 - Entity names in scene condition summaries — and in the simulator and

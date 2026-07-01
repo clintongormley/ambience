@@ -2,9 +2,10 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listAutoTriggers } from "../api.js";
+import { type EntityAreaHass, entityDisplayName } from "../entity-area.js";
 import { anchorLabel, localize, localizeWsError } from "../i18n.js";
 import type { AutoTrigger, Scene, Scope } from "../types.js";
-import { DEFAULT_ENTITY_ICON, entityName, renderEntityIcon } from "./entity-row.js";
+import { DEFAULT_ENTITY_ICON, renderEntityIcon } from "./entity-row.js";
 
 // Representative icons for the derived non-entity trigger groups.
 const _GROUP_ICON: Record<string, string> = {
@@ -203,7 +204,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
   }
 
   private _entityName(entity_id: string): string {
-    return entityName(this.hass, entity_id);
+    return entityDisplayName(this.hass as unknown as EntityAreaHass | undefined, entity_id);
   }
 
   /** Entity rows sorted alphabetically by display name (case-insensitive), then

@@ -8,6 +8,7 @@ import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { scopeCategoryKey } from "../entities-for-scope.js";
+import { type EntityAreaHass, entityDisplayName } from "../entity-area.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import {
@@ -26,7 +27,6 @@ import type {
   SceneCategory,
   Scope,
 } from "../types.js";
-import { entityName, type HassWithStates } from "./entity-row.js";
 import type { KebabItem } from "./kebab-menu";
 import { renderAggregateProblemFlag } from "./problem-flag.js";
 
@@ -555,7 +555,7 @@ export class AmbienceScenesList extends LitElement {
 
   /** Render-friendly name for an entity: friendly_name attribute, else entity_id. */
   private _entityName(entity_id: string): string {
-    return entityName(this.hass as HassWithStates | undefined, entity_id);
+    return entityDisplayName(this.hass as unknown as EntityAreaHass | undefined, entity_id);
   }
 
   /** "Key: value, ..." string for the expanded action header. Keys use

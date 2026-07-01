@@ -2,6 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, simulate, simulateInputs } from "../api.js";
+import { type EntityAreaHass, entityDisplayName } from "../entity-area.js";
 import { humanizeId, localize, localizeWsError, stateValueLabel } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
@@ -16,7 +17,7 @@ import type {
   SimulateVerdicts,
   StateForDuration,
 } from "../types.js";
-import { entityName, entityRowStyles, renderEntityIcon } from "./entity-row.js";
+import { entityRowStyles, renderEntityIcon } from "./entity-row.js";
 import { statesMap } from "./hass-states.js";
 import { ModalDismissController } from "./modal-shell.js";
 
@@ -369,19 +370,28 @@ export class AmbienceSimulatorModal extends LitElement {
       </div>`;
   }
 
+  /** Display name for an entity — its live-state friendly_name, else the
+   *  registry name (like the picker), else the raw id. See entityDisplayName. */
+  private _entityName(entity_id: string): string {
+    return entityDisplayName(this.hass as unknown as EntityAreaHass | undefined, entity_id);
+  }
+
   private _renderEntity(k: SimulateEntityKnob) {
     const v = this._values[k.entity_id];
     const hasAttrs = k.attributes.length > 0;
+    // Resolve the name once — reused by the row title and the For control's
+    // per-part aria-labels.
+    const name = this._entityName(k.entity_id);
     return html`
       <div class="row ${hasAttrs ? "has-attrs" : ""}">
         ${renderEntityIcon(this.hass, k.entity_id)}
         <div class="row-text">
-          <div class="row-title">${entityName(this.hass, k.entity_id)}</div>
+          <div class="row-title">${name}</div>
           <div class="row-detail">${k.entity_id}</div>
         </div>
         <div class="row-ctrl">
           ${this._renderControl(k, v?.state ?? "")}
-          ${this._renderFor(k, v?.for ?? { h: 0, m: 0, s: 0 })}
+          ${this._renderFor(k, v?.for ?? { h: 0, m: 0, s: 0 }, name)}
           <button class="reset" data-reset=${k.entity_id} title=${localize(this.hass, "ui.reset_to_live", "Reset to live")}
             @click=${() => this._resetEntity(k)}>↺</button>
         </div>
@@ -439,11 +449,11 @@ export class AmbienceSimulatorModal extends LitElement {
 
   /** Inline "For h:m:s" control — how long the entity has held its state, so
    *  conditions with a `for:` duration evaluate as the user intends. */
-  private _renderFor(k: SimulateEntityKnob, dur: StateForDuration) {
+  private _renderFor(k: SimulateEntityKnob, dur: StateForDuration, name: string) {
     // Per-part aria-labels: without them screen readers announce three bare
-    // number fields. Scope each to the entity so rows stay distinguishable.
+    // number fields. Scope each to the entity (via its display name) so rows
+    // stay distinguishable.
     const unit: Record<"h" | "m" | "s", string> = { h: "hours", m: "minutes", s: "seconds" };
-    const name = entityName(this.hass, k.entity_id);
     const cell = (part: "h" | "m" | "s") => html`<input class="for-num" type="number" min="0"
       aria-label=${`${name} — held for, ${unit[part]}`}
       data-for=${`${k.entity_id}:${part}`} .value=${String(dur[part])}
@@ -457,7 +467,7 @@ export class AmbienceSimulatorModal extends LitElement {
   private _renderVerdict(k: SimulateVerdictKnob) {
     const vkey = this._vkey(k);
     const cur = this._verdicts[vkey] ?? k.live_value;
-    const label = k.entity_id ? entityName(this.hass, k.entity_id) : k.label;
+    const label = k.entity_id ? this._entityName(k.entity_id) : k.label;
     const icon = k.entity_id
       ? renderEntityIcon(this.hass, k.entity_id)
       : html`<ha-icon class="row-icon" icon="mdi:code-braces"></ha-icon>`;

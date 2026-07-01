@@ -95,6 +95,20 @@ describe("ambience-auto-triggers-modal", () => {
     expect(row.querySelector("ha-icon.row-icon")?.getAttribute("icon")).toBe("mdi:lightbulb");
   });
 
+  test("entity row falls back to the registry name for a state-less entity", async () => {
+    el = await mount({
+      open: true,
+      hass: {
+        states: {},
+        entities: { "light.kitchen": { entity_id: "light.kitchen", name: "Kitchen Lamp" } },
+      },
+      triggers: [{ key: "entity:light.kitchen", kind: "entity", entity_id: "light.kitchen" }],
+    });
+    const row = el.shadowRoot.querySelector("li[data-test='trigger-ro-entity:light.kitchen']");
+    expect(row.textContent).toContain("Kitchen Lamp"); // title = registry name
+    expect(row.textContent).toContain("light.kitchen"); // detail line keeps the id
+  });
+
   test("entity row prefers the entity's custom icon attribute", async () => {
     el = await mount({
       open: true,

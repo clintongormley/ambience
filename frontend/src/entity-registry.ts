@@ -3,12 +3,24 @@
  *  entities-for-scope.ts — don't pull UI dependencies into their bundle chunk.
  *  The display-layer area helpers live in entity-area.ts. */
 
-/** Structural view of the registry maps we read to resolve an entity's area —
- *  avoids depending on the full HomeAssistant interface (mirrors the pattern in
- *  entities-for-scope.ts / scope-icon.ts). */
+/** Structural view of the registry maps we read to resolve an entity's area and
+ *  its display name (entity/device `name`, `original_name`) — avoids depending on
+ *  the full HomeAssistant interface (mirrors the pattern in entities-for-scope.ts
+ *  / scope-icon.ts). Not a pure area-registry type despite the name. */
 export type AreaRegistry = {
-  entities?: Record<string, { area_id?: string | null; device_id?: string | null }>;
-  devices?: Record<string, { area_id?: string | null }>;
+  entities?: Record<
+    string,
+    {
+      area_id?: string | null;
+      device_id?: string | null;
+      name?: string | null;
+      original_name?: string | null;
+    }
+  >;
+  devices?: Record<
+    string,
+    { area_id?: string | null; name?: string | null; name_by_user?: string | null }
+  >;
   areas?: Record<string, { name?: string | null }>;
 };
 

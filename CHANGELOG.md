@@ -8,6 +8,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- Entity names in scene condition summaries — and in the simulator and
+    auto-triggers lists — now fall back to the entity's registered name (from
+    the entity or its device) when it has no live state, matching what the
+    entity picker shows. Previously they leaked the raw entity id (for example
+    `remote.cine` instead of **Cine**) whenever the entity was unavailable or
+    not yet loaded.
+
 ## [1.0.0-rc.1] - 2026-06-30
 
 ### Added

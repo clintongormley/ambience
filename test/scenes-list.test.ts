@@ -922,6 +922,34 @@ describe("ambience-scenes-list", () => {
     expect(items[1].textContent).toContain("light.kitchen");
   });
 
+  test("expanded action falls back to the registry name for a state-less entity", async () => {
+    // A target entity with no live state but a registry name must show that name
+    // (like the entity picker), not leak the raw entity_id.
+    const scene: Scene = {
+      name: "reg",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.ghost"], params: {} }],
+    };
+    const el2: any = document.createElement("ambience-scenes-list");
+    el2.scenes = [scene];
+    el2.periods = periods;
+    el2.conditions = conditions;
+    el2.availableActions = [];
+    el2.hass = {
+      ...testHass,
+      states: {},
+      entities: { "light.ghost": { entity_id: "light.ghost", name: "Ghost Lamp" } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    el = el2;
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items[0].textContent).toContain("Ghost Lamp");
+    expect(items[0].textContent).not.toContain("light.ghost");
+  });
+
   test("clicking the summary again collapses the scene", async () => {
     el = await mount([movieScene]);
     (el.shadowRoot.querySelector(".summary") as HTMLElement).click();

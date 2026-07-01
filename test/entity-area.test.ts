@@ -13,6 +13,12 @@ const hass: any = {
     "sensor.orphan": { attributes: { friendly_name: "Lonely" } },
     "sensor.stateonly": { attributes: { friendly_name: "State Only" } },
     "sensor.noname": { attributes: { friendly_name: "Mystery" } },
+    // A live state whose friendly_name must win over the registry name below.
+    "sensor.bothnames": { attributes: { friendly_name: "Friendly Wins" } },
+    // remote.cine / remote.origonly / remote.deviceonly deliberately have NO
+    // state — they model an entity that's in the registry but not currently in
+    // hass.states (unavailable / not loaded), the case that used to leak the
+    // raw entity_id into the summary.
   },
   entities: {
     "sensor.flow": { entity_id: "sensor.flow", area_id: "kitchen" },
@@ -22,13 +28,32 @@ const hass: any = {
     "sensor.raw": { entity_id: "sensor.raw", area_id: "kitchen" },
     "sensor.orphan": { entity_id: "sensor.orphan", area_id: null, device_id: null },
     "sensor.noname": { entity_id: "sensor.noname", area_id: "ghost" },
+    "sensor.bothnames": {
+      entity_id: "sensor.bothnames",
+      area_id: "kitchen",
+      name: "Registry Name",
+    },
+    "remote.cine": { entity_id: "remote.cine", area_id: "lounge", name: "Cine" },
+    "remote.origonly": {
+      entity_id: "remote.origonly",
+      area_id: "lounge",
+      original_name: "Origin Remote",
+    },
+    "remote.deviceonly": { entity_id: "remote.deviceonly", area_id: "lounge", device_id: "hub1" },
+    "remote.renamed": { entity_id: "remote.renamed", area_id: "lounge", device_id: "hub2" },
   },
-  devices: { dev1: { id: "dev1", area_id: "kitchen" } },
+  devices: {
+    dev1: { id: "dev1", area_id: "kitchen" },
+    hub1: { id: "hub1", area_id: "lounge", name: "Harmony Hub" },
+    // A user-renamed device: HA stores the rename in name_by_user.
+    hub2: { id: "hub2", area_id: "lounge", name: "Original Hub", name_by_user: "Renamed Hub" },
+  },
   areas: {
     kitchen: { area_id: "kitchen", name: "Kitchen" },
     shower: { area_id: "shower", name: "Shower" },
     guest_bath: { area_id: "guest_bath", name: "Guest Bath" },
     ghost: { area_id: "ghost" },
+    lounge: { area_id: "lounge", name: "Lounge" },
   },
 };
 
@@ -92,7 +117,25 @@ describe("entityNameWithArea", () => {
   test("orphan entity → bare name", () => {
     expect(entityNameWithArea(hass, "sensor.orphan")).toBe("Lonely");
   });
-  test("no friendly_name → prefixed entity_id", () => {
+  test("no state → registry override name (matches the entity picker)", () => {
+    // The reported regression: remote.cine has no live state, so friendly_name
+    // is unavailable. The registry knows it as "Cine" (same source the picker
+    // and the area prefix read) — the summary must use that, not the raw id.
+    expect(entityNameWithArea(hass, "remote.cine")).toBe("Lounge · Cine");
+  });
+  test("no state, no override → registry original_name", () => {
+    expect(entityNameWithArea(hass, "remote.origonly")).toBe("Lounge · Origin Remote");
+  });
+  test("no state, no entity name → device name", () => {
+    expect(entityNameWithArea(hass, "remote.deviceonly")).toBe("Lounge · Harmony Hub");
+  });
+  test("device name uses the user's rename (name_by_user) over the original name", () => {
+    expect(entityNameWithArea(hass, "remote.renamed")).toBe("Lounge · Renamed Hub");
+  });
+  test("live friendly_name wins over the registry name", () => {
+    expect(entityNameWithArea(hass, "sensor.bothnames")).toBe("Kitchen · Friendly Wins");
+  });
+  test("no friendly_name and no registry name → prefixed entity_id (honest last resort)", () => {
     expect(entityNameWithArea(hass, "sensor.raw")).toBe("Kitchen · sensor.raw");
   });
   test("area exists but has no name → bare name", () => {

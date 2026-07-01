@@ -1152,6 +1152,29 @@ test("summariseState humanises attribute values via formatEntityAttributeValue",
   ).toBe("remote.cine.Current activity is Nvidia (TV)");
 });
 
+test("summariseState uses the registry name (area-prefixed) when the entity has no live state", () => {
+  // Regression: the user's remote.cine had no live state, so friendly_name was
+  // unavailable and the summary leaked "Lounge · remote.cine". The registry
+  // knows it as "Cine" (same source the picker + area prefix read) — the summary
+  // must show "Lounge · Cine.Current activity …" like the picker does.
+  const hass = {
+    states: {},
+    entities: { "remote.cine": { entity_id: "remote.cine", area_id: "lounge", name: "Cine" } },
+    areas: { lounge: { area_id: "lounge", name: "Lounge" } },
+  } as any;
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "remote.cine",
+        attribute: "current_activity",
+        states: ["Nvidia (Projector)"],
+      },
+      { hass },
+    ),
+  ).toBe("Lounge · Cine.Current activity is Nvidia (Projector)");
+});
+
 test("summariseState humanises a multi-word attribute name (matches the editor's Where dropdown)", () => {
   expect(
     summariseState(

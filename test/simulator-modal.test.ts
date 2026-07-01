@@ -233,6 +233,43 @@ describe("ambience-simulator-modal", () => {
     expect(args[4]["calendar.work"].attributes.description).toBe("xxx");
   });
 
+  test("row title falls back to the registry name for a state-less entity", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "entity",
+          entity_id: "remote.cine",
+          control: "select",
+          options: ["on", "off"],
+          live_state: "on",
+          attributes: [],
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = {
+      callWS: vi.fn(),
+      states: {},
+      entities: { "remote.cine": { entity_id: "remote.cine", name: "Cine" } },
+    };
+    el.scope = { scope_kind: "area", scope_id: "lounge" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const title = el.shadowRoot.querySelector(".row-title");
+    expect(title?.textContent).toContain("Cine");
+    // ...and the title must NOT leak the raw id (proves the fallback ran).
+    expect(title?.textContent).not.toContain("remote.cine");
+    // The muted detail line still surfaces the raw entity_id.
+    expect(el.shadowRoot.querySelector(".row-detail")?.textContent).toContain("remote.cine");
+  });
+
   test("select attribute renders a dropdown of its known values and sends the pick", async () => {
     const inputs = {
       has_time: false,

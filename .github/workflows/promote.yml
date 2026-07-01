@@ -51,4 +51,7 @@ jobs:
           ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
       - name: Fast-forward stable to the resolved tag
-        run: git push -f origin "HEAD:refs/heads/stable"
+        # No `-f`: a non-fast-forward push is rejected, so `stable` can only move
+        # forward. A dispatch with an older/divergent tag fails loudly here rather
+        # than silently rolling the AI-pack channel backwards.
+        run: git push origin "HEAD:refs/heads/stable"

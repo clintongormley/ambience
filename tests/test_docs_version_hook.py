@@ -10,6 +10,7 @@ def _load_hook():
         "ambience_docs_version",
         Path(__file__).resolve().parents[1] / "mkdocs_hooks/version.py",
     )
+    assert spec and spec.loader, "could not load mkdocs_hooks/version.py"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

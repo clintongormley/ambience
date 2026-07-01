@@ -82,6 +82,12 @@ jobs:
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
+    # Serialize Pages deploys across all runs (a fixed group, not per-ref) and
+    # never cancel one mid-flight, so two flips close together can't deploy
+    # out-of-order and overwrite Pages with the older tag's docs.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

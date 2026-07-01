@@ -553,7 +553,9 @@ export class AmbienceScenesList extends LitElement {
     this._expanded = next;
   }
 
-  /** Render-friendly name for an entity: friendly_name attribute, else entity_id. */
+  /** Render-friendly name for an entity: its live-state friendly_name, else the
+   *  entity/device registry name (like the picker), else the raw entity_id.
+   *  See {@link entityDisplayName}. */
   private _entityName(entity_id: string): string {
     return entityDisplayName(this.hass as unknown as EntityAreaHass | undefined, entity_id);
   }

@@ -7,22 +7,25 @@ docs_dir: docs
 hooks:
   - mkdocs_hooks/version.py
 
-# Keep internal working docs out of the published site.
+# Keep internal working docs and the not-yet-published AI-authoring reference
+# out of the site. The AI-authoring reference moves under Reference in a later
+# task.
 exclude_docs: |
   superpowers/
   handoffs/
-  reference/
-  developers/
+  developers/ai-authoring/
 
 theme:
   name: material
   logo: assets/logo-light.svg
   favicon: assets/icon-dark.svg
   features:
+    - navigation.tabs
     - navigation.sections
+    - navigation.indexes
     - navigation.top
+    - toc.follow
     - content.code.copy
-    - toc.integrate
   palette:
     - scheme: default
       primary: white

@@ -17,15 +17,15 @@ describe("docUrl", () => {
 
 describe("conditionDocPath", () => {
   it("maps an identity-named condition kind to its conditions/ page", () => {
-    expect(conditionDocPath("lux")).toBe("conditions/lux");
+    expect(conditionDocPath("lux")).toBe("reference/conditions/lux");
   });
 
   it("maps the entity-state kind 'state' to the entity-state slug", () => {
-    expect(conditionDocPath("state")).toBe("conditions/entity-state");
+    expect(conditionDocPath("state")).toBe("reference/conditions/entity-state");
   });
 
   it("maps the underscored 'time_of_day' kind to the hyphenated slug", () => {
-    expect(conditionDocPath("time_of_day")).toBe("conditions/time-of-day");
+    expect(conditionDocPath("time_of_day")).toBe("reference/conditions/time-of-day");
   });
 
   it("returns undefined for an unknown condition kind", () => {

@@ -22,7 +22,7 @@ import type { SceneCategory } from "../types.js";
 
 // The user guide for the AI feature (install steps + workflow), shown as a link
 // in the AI tab. Points at the published docs, not a branch, so it can't go stale.
-const AI_DOCS_URL = "https://clintongormley.github.io/ambience/ai-assisted-scenes/";
+const AI_DOCS_URL = "https://clintongormley.github.io/ambience/reference/ai-assisted-scenes/";
 
 // Where to send "the AI got it wrong, here's a better answer" feedback — used to
 // improve the cookbook the AI learns from.

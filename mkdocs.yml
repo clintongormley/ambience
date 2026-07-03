@@ -97,3 +97,8 @@ nav:
       - Reporting an issue: reference/reporting-an-issue.md
   - Recipes:
       - recipes/index.md
+  - Developer:
+      - developers/index.md
+      - Architecture: developers/architecture.md
+      - Code layout: developers/code-layout.md
+      - Contributing: developers/contributing.md

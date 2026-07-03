@@ -156,8 +156,22 @@
    theme-following in both schemes. Desktop only — below 76.25em the primary nav
    is an off-canvas drawer. */
 @media screen and (min-width: 76.25em) {
+  /* Body/.md-container are a flex column, so .md-main already fills the space
+     above the footer (a sticky footer). But Material sizes .md-main__inner with
+     height:100%, which a flex-grown parent doesn't always resolve — so on a page
+     whose nav is taller than its content the inner collapses to the content
+     height and the rail (the ::before below, bounded by this box) stops short,
+     leaving the lower nav on bare white. Make .md-main a column and let the inner
+     flex-grow to fill it: the rail then reaches the footer exactly, with no
+     min-height guess and no viewport overflow pushing the footer past the fold. */
+  .md-main {
+    display: flex;
+    flex-direction: column;
+  }
+
   .md-main__inner {
     position: relative;
+    flex-grow: 1;
   }
 
   .md-main__inner::before {
@@ -184,8 +198,18 @@
   /* The sticky nav title sits over the rail — match its fill so it blends and
      stays opaque, masking nav items that scroll beneath it. Material masks that
      scroll with a box-shadow tinted to the page background (white); recolour it
-     to the rail fill too, or it shows as a white bar under the title. */
-  .md-nav--primary .md-nav__title {
+     to the rail fill too, or it shows as a white bar under the title.
+
+     Two elements act as that title: the plain `.md-nav__title` (single-book
+     nav) and — with navigation.tabs — the "lifted" active section's link, which
+     Material paints with the page background (white) plus a same-white
+     box-shadow. `.md-nav__title` is display:none in lifted mode, so the lifted
+     link needs the same treatment or the whole top strip shows up white. */
+  .md-nav--primary .md-nav__title,
+  .md-nav--primary.md-nav--lifted
+    > .md-nav__list
+    > .md-nav__item--active
+    > .md-nav__link {
     background-color: color-mix(
       in srgb,
       var(--md-default-fg-color) 4%,

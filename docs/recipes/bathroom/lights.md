@@ -10,7 +10,7 @@ These lights should be:
 - at 60% when the bathroom is occupied between 8:00 am and sunset,
 - at 30% when the bathroom is occupied during the evening (sunset to dusk),
 - at 12% when the bathroom is occupied from dusk to 8:00 am,
-- at 1% when the bathroom is occupied between 22:00 and 7:00 am, when the
+- at 1% when the bathroom is occupied between 22:00 and 7:30 am, when the
     adjoining bedroom is in "bed mode", to avoid waking up the person in bed (or
     waking yourself up with too bright lights in the middle of the night).
 
@@ -59,15 +59,15 @@ brighter, or to turn on the mirror light, they can do so manually. There is no
 trigger that will reset the lights until the bathroom becomes vacant again.
 
 **Note**: we've manually moved the **Vacant** scene above the **Person present,
-in bed mode** scene because it's **Occupancy** condition gates all of the other
+in bed mode** scene because its **Occupancy** condition gates all of the other
 scenes.
 
 ## Lifecycle
 
-| Trigger                                                           | Matched Scene               | Action                      |
-| ----------------------------------------------------------------- | --------------------------- | --------------------------- |
-| Bathroom becomes vacant for 2 seconds                             | Vacant                      | Lights fade off             |
-| Person enters bathroom at 9:00 am                                 | Daytime                     | Lights fade to 60%          |
-| Person enters bathroom at sunset                                  | Evening                     | Lights fade to 30%          |
-| Person enters bathroom at 23:00, bedroom Ceiling light is **on**  | Night                       | Lights fade to 12%          |
-| Person enters bathroom at 23:00, bedroom Ceiling light is **off** | Person present, in bed mode | Bathroom lights fades to 1% |
+| Trigger                                                           | Matched Scene               | Action                     |
+| ----------------------------------------------------------------- | --------------------------- | -------------------------- |
+| Bathroom becomes vacant for 2 seconds                             | Vacant                      | Lights fade off            |
+| Person enters bathroom at 9:00 am                                 | Daytime                     | Lights fade to 60%         |
+| Person enters bathroom at sunset                                  | Evening                     | Lights fade to 30%         |
+| Person enters bathroom at 23:00, bedroom Ceiling light is **on**  | Nighttime                   | Lights fade to 12%         |
+| Person enters bathroom at 23:00, bedroom Ceiling light is **off** | Person present, in bed mode | Bathroom light fades to 1% |

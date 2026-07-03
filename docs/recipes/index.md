@@ -31,6 +31,9 @@ wins. For the full model, see
 - [**Extractor fan**](bathroom/fan.md) — turn the extractor fan on when someone
     uses the shower or toilet, and off again once the bathroom has been vacant
     for a while.
+- [**Lights**](bathroom/lights.md) — dim the bathroom lights to suit the time of
+    day, switch them off when the room is vacant, and drop to 1% at night when
+    the adjoining bedroom is in bed mode.
 - [**Towel rack**](bathroom/towel-rack.md) — dry the towels after a shower by
     running the heated rack for a couple of hours, even when a second person
     showers before it finishes.

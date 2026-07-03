@@ -11,7 +11,8 @@ Ambience to close the blind automatically again.
 
 ## Requirements
 
-- **Bathroom blind** - Cover entity exposing the current position of the blind.
+- **Bathroom blind** - Cover entity to control the blind and which exposes the
+    current position of the blind.
 
 ## Scene: Nighttime
 

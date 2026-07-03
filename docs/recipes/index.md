@@ -25,6 +25,9 @@ wins. For the full model, see
 
 ### Bathroom
 
+- [**Blind**](bathroom/blind.md) — open and close the bathroom blind by time of
+    day, and ease it open on bright mornings without overriding a manual
+    adjustment.
 - [**Extractor fan**](bathroom/fan.md) — turn the extractor fan on when someone
     uses the shower or toilet, and off again once the bathroom has been vacant
     for a while.

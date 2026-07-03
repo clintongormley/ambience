@@ -98,6 +98,7 @@ nav:
   - Recipes:
       - recipes/index.md
       - Bathroom:
+          - Blind: recipes/bathroom/blind.md
           - Extractor fan: recipes/bathroom/fan.md
           - Towel rack: recipes/bathroom/towel-rack.md
   - Developer:

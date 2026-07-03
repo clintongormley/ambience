@@ -95,3 +95,5 @@ nav:
       - AI-assisted scenes: reference/ai-assisted-scenes.md
       - Config health: reference/config-health.md
       - Reporting an issue: reference/reporting-an-issue.md
+  - Recipes:
+      - recipes/index.md

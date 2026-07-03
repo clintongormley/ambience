@@ -4,7 +4,7 @@ You will notice that the **Movie** scene has jumped to the top of the list. This
 is because the **Entity state** condition has a higher priority than conditions
 like **Time of day: Daytime**.
 
-![Scene order matters.](../images/getting-started/step-6/scene_order.png "Scene order matters.")
+![Scene order matters.](images/step-6/scene_order.png "Scene order matters.")
 
 !!! info "Sorting by range specificity"
 
@@ -26,7 +26,7 @@ vacant. If we wanted to change the logic so that the **Vacant** scene should be
 more important than the **Movie** scene, then all we need to do is to use the
 **⠿** drag handles to drag the **Vacant** scene above the **Movie** scene:
 
-![Vacant scene manually ordered above the Movie scene.](../images/getting-started/step-6/manual_priority.png "Vacant scene manually ordered above the Movie scene.")
+![Vacant scene manually ordered above the Movie scene.](images/step-6/manual_priority.png "Vacant scene manually ordered above the Movie scene.")
 
 The red pin shows that the scene has been manually reordered, and clicking the
 pin will restore automatic ordering.

@@ -4,7 +4,7 @@ Open the Ambience panel from the Home Assistant sidebar. The panel lists every
 **scope** in your home: a **House** row at the top, followed by any **floors**
 you have defined (if any), and then any **areas**.
 
-![Empty panel.](../images/getting-started/step-1/empty_panel.png "Empty panel.")
+![Empty panel.](images/step-1/empty_panel.png "Empty panel.")
 
 !!! tip "Optional: set up Workday & Weather"
 
@@ -21,7 +21,7 @@ of the screen.
 This link takes you to the **Categories** tab under **Settings**. Then click the
 **+ Add category** button on this page and fill out the form as shown below:
 
-![Add a category called Lights.](../images/getting-started/step-1/lights_category.png "Add a category called Lights.")
+![Add a category called Lights.](images/step-1/lights_category.png "Add a category called Lights.")
 
 Click **Save**, then close the settings page with the **X** in the top right
 corner.
@@ -29,7 +29,7 @@ corner.
 Select the **Lights** category from the **Category filter** at the top of the
 page.
 
-![Lights category selected.](../images/getting-started/step-1/category_selector.png "Lights category selected.")
+![Lights category selected.](images/step-1/category_selector.png "Lights category selected.")
 
 ## Scope/category scene groups
 

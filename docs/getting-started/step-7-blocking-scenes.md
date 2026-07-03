@@ -25,13 +25,13 @@ actions:
     **is** to **is not** (and the default **Detected**).
 - Click **Save scene**.
 
-![Blocking scene.](../images/getting-started/step-7/blocking_scene.png "Blocking scene.")
+![Blocking scene.](images/step-7/blocking_scene.png "Blocking scene.")
 
 By default, this scene sorts below the **Movie** scene, so you may want to drag
 it to just after the **Vacant** scene instead, to make sure that all scenes
 except **Vacant** are gated on actual occupancy.
 
-![Blocking order.](../images/getting-started/step-7/blocking_order.png "Blocking order.")
+![Blocking order.](images/step-7/blocking_order.png "Blocking order.")
 
 !!! tip "Writing blocking conditions"
 
@@ -47,7 +47,7 @@ When a blocking scene is the current best matching scene, then it is marked with
 the winning scene **green dot**. However, it has no actions to apply, so the
 last scene with actions that were applied is marked with a **grey hollow dot**.
 
-![Grey dot shows last-applied actions.](../images/getting-started/step-7/grey_dot.png "Grey dot shows last-applied actions.")
+![Grey dot shows last-applied actions.](images/step-7/grey_dot.png "Grey dot shows last-applied actions.")
 
 If the scene with the grey dot wins again directly after a blocking scene, then
 the actions are not re-applied because we assume that they are still in force
@@ -56,7 +56,7 @@ from the previous time this scene won.
 This can be seen in detail by clicking the **⋮** icon to the right of the
 **Lights** header and selecting **View traces**:
 
-![Trace of blocking scenes.](../images/getting-started/step-7/traces.png "Trace of blocking scenes.")
+![Trace of blocking scenes.](images/step-7/traces.png "Trace of blocking scenes.")
 
 ## No match
 

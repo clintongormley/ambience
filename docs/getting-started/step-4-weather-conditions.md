@@ -32,7 +32,7 @@ Now that we have a weather integration set up, we need to configure the
 - Click on the **Weather** condition to expand it.
 - Click **Select an entity** and select your newly created weather forecast.
 
-!["Configuring the Weather condition."](../images/getting-started/step-4/weather_condition.png "Configuring the Weather condition.")
+!["Configuring the Weather condition."](images/step-4/weather_condition.png "Configuring the Weather condition.")
 
 You can see that the Weather condition comes preconfigured with various groups.
 For instance the **Dim** group includes **Cloudy, Partly cloudy, and Rainy**.
@@ -52,7 +52,7 @@ Sunny** scene — set the lights to 40% when it is sunny:
     **Brightness pct** to **40%**.
 - Click **Save scene**.
 
-![Daytime Sunny scene.](../images/getting-started/step-4/daytime_sunny.png "Daytime Sunny scene.")
+![Daytime Sunny scene.](images/step-4/daytime_sunny.png "Daytime Sunny scene.")
 
 ## Duplicating a scene
 
@@ -62,7 +62,7 @@ just duplicate that one and edit it:
 - Click the **⋮** icon to the right of the **Daytime Sunny** scene and select
     **Duplicate**.
 
-![Duplicate Daytime Sunny scene.](../images/getting-started/step-4/duplicate.png "Duplicate Daytime Sunny scene.")
+![Duplicate Daytime Sunny scene.](images/step-4/duplicate.png "Duplicate Daytime Sunny scene.")
 
 !!! info "Duplicating to other scene groups"
 
@@ -79,7 +79,7 @@ Then:
     **60%**.
 - Click **Save scene**.
 
-![Daytime Cloudy scene.](../images/getting-started/step-4/daytime_cloudy.png "Daytime Cloudy scene.")
+![Daytime Cloudy scene.](images/step-4/daytime_cloudy.png "Daytime Cloudy scene.")
 
 ______________________________________________________________________
 

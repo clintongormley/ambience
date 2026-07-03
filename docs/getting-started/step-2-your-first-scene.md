@@ -7,7 +7,7 @@ when the room has been vacant for at least 1 minute.
 
 First, click the **Lounge** header to expand that scope:
 
-![Expand the Lounge scope.](../images/getting-started/step-2/lounge_scope.png "Expand the Lounge scope.")
+![Expand the Lounge scope.](images/step-2/lounge_scope.png "Expand the Lounge scope.")
 
 Then:
 
@@ -18,7 +18,7 @@ Then:
 
 ## Add the Occupancy condition
 
-![Adding a new scene.](../images/getting-started/step-2/add_vacant_1.png "Adding a new scene.")
+![Adding a new scene.](images/step-2/add_vacant_1.png "Adding a new scene.")
 
 We want this scene to apply when the lounge has been vacant for at least one
 minute. So, under **When**:
@@ -29,12 +29,12 @@ minute. So, under **When**:
 - Change **Detected** to **Clear**.
 - and set **For** to **00:01:00** (i.e. one minute).
 
-![Setup occupancy condition.](../images/getting-started/step-2/add_vacant_2.png "Setup occupancy condition.")
+![Setup occupancy condition.](images/step-2/add_vacant_2.png "Setup occupancy condition.")
 
 As soon as you click away from the condition you've just added, the form gets
 replaced by an easy-to-read summary of the condition you have specified:
 
-![Occupancy condition summary.](../images/getting-started/step-2/add_vacant_3.png "Occupancy condition summary.")
+![Occupancy condition summary.](images/step-2/add_vacant_3.png "Occupancy condition summary.")
 
 ## Specify the actions
 
@@ -45,13 +45,13 @@ All that is left to do is to specify what should happen when this scene matches.
 - Under **Target**, select the entity **Lounge Lights**.
 - Click **Save scene**.
 
-![Adding an action.](../images/getting-started/step-2/add_vacant_4.png "Adding an action.")
+![Adding an action.](images/step-2/add_vacant_4.png "Adding an action.")
 
 ## Completed scene
 
 This takes you back to the scene manager and shows you a summary of the scene:
 
-![Scene summary](../images/getting-started/step-2/add_vacant_5.png "Scene summary")
+![Scene summary](images/step-2/add_vacant_5.png "Scene summary")
 
 !!! tip "Disabling scenes"
 
@@ -60,7 +60,7 @@ This takes you back to the scene manager and shows you a summary of the scene:
 
 Click on the scene name to see the full details:
 
-![Scene details](../images/getting-started/step-2/add_vacant_6.png "Scene summary")
+![Scene details](images/step-2/add_vacant_6.png "Scene summary")
 
 !!! info "Green dot"
 

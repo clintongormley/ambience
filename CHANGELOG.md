@@ -8,6 +8,18 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- People conditions now resolve correctly for anyone tracked by a **non-GPS
+    presence scanner** (router, `ping`, `nmap`, UniFi, many Bluetooth setups).
+    Home Assistant only fills a person's `in_zones` attribute from GPS
+    coordinates, so a scanner-tracked person who is *home* reports an empty
+    `in_zones` — which Ambience was reading as "in no zone", seeing them as
+    away. As a result "someone home" scenes never fired for these households,
+    and — more seriously — "nobody home" scenes could fire while someone was
+    actually home. Ambience now falls back to the person's `state` whenever
+    `in_zones` is empty, so home/away and zone matches are correct again.
+
 ## [1.0.0] - 2026-07-01
 
 The first stable release of Ambience — a **condition-based scene engine** for

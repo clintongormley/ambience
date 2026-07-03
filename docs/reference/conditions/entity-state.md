@@ -3,7 +3,7 @@
 !!! tip "Worked example"
 
     For a worked example of the Entity-state condition, see
-    [Step 5 of Getting started](../getting-started/step-5-entity-state-conditions.md).
+    [Step 5 of Getting started](../../getting-started/step-5-entity-state-conditions.md).
 
 Checks the state (or an attribute) of an entity, compares it to a value that you
 specify, and returns `true` or `false`. Multiple **clauses** can be combined
@@ -23,7 +23,7 @@ For text comparisons, you can list multiple values:
 | `is`     | the state or attribute matches **any** of the values you list  |
 | `is not` | the state or attribute matches **none** of the values you list |
 
-![Text value comparison.](../images/conditions/entity-state/text-values.png "Text value comparison.")
+![Text value comparison.](images/entity-state/text-values.png "Text value comparison.")
 
 ## Numeric comparisons
 
@@ -37,7 +37,7 @@ numeric operators:
 | `<`      | less than                        |
 | `≤`      | at most (less than or equal)     |
 
-![Numeric value comparison.](../images/conditions/entity-state/numeric-values.png "Numeric value comparison.")
+![Numeric value comparison.](images/entity-state/numeric-values.png "Numeric value comparison.")
 
 ## Boolean operators
 
@@ -52,7 +52,7 @@ In the following example, we want to turn on the Power Shower when the water
 flow is over 5L/min and somebody has been present in at least one of the showers
 for at least 3 seconds.
 
-![Boolean logic example.](../images/conditions/entity-state/boolean-1.png "Boolean logic example.")
+![Boolean logic example.](images/entity-state/boolean-1.png "Boolean logic example.")
 
 !!! tip "Drag handles"
 
@@ -69,7 +69,7 @@ The following is a complicated example where we want a **blocking scene** to
 prevent us turning off the power shower until either the water flow is under
 5L/min or all of the showers have been vacant for at least 5 seconds.
 
-![Complicated blocking scene with entity state condition.](../images/conditions/entity-state/boolean-2.png "Complicated blocking scene with entity state condition.")
+![Complicated blocking scene with entity state condition.](images/entity-state/boolean-2.png "Complicated blocking scene with entity state condition.")
 
 The "raw" description of the condition reads as follows:
 

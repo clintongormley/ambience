@@ -9,7 +9,7 @@ lights to a particular brightness:
 - Click the cogwheel (⚙) in the top right corner of the **Ambience** panel.
 - Select the **Actions** tab.
 
-![Default actions.](../images/getting-started/step-3/default_actions.png "Default actions.")
+![Default actions.](images/step-3/default_actions.png "Default actions.")
 
 ## Built-in actions
 
@@ -37,7 +37,7 @@ you. We will do this for the **Turn light on** (`light.turn_on`) action:
 - The only field that we need is **Brightness pct**, so select just that one.
 - Close the settings by clicking the **X** in the top right corner.
 
-![Adding Turn On Lights action.](../images/getting-started/step-3/add_action.png "Adding Turn On Lights action.")
+![Adding Turn On Lights action.](images/step-3/add_action.png "Adding Turn On Lights action.")
 
 !!! tip "Fado Light Fader"
 
@@ -61,7 +61,7 @@ you. We will do this for the **Turn light on** (`light.turn_on`) action:
     **Brightness pct** to 25%.
 - Click **Save scene**
 
-![Nighttime scene added.](../images/getting-started/step-3/nighttime_scene.png "Nighttime scene added.")
+![Nighttime scene added.](images/step-3/nighttime_scene.png "Nighttime scene added.")
 
 ## Why no occupancy condition?
 

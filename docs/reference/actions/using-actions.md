@@ -6,7 +6,7 @@ entities to act on, if the service requires one. The target picker lists only
 entities relevant to the scene's scope (House, Floor, or Area) and to the
 action's domain. (e.g. `Fado.fade_lights` will only list lights.)
 
-![Using an exposed action in a scene.](../images/actions/using-actions/using.png "Using an exposed action in a scene.")
+![Using an exposed action in a scene.](images/using-actions/using.png "Using an exposed action in a scene.")
 
 ______________________________________________________________________
 

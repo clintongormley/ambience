@@ -10,6 +10,7 @@ import {
   saveScopeConfig,
   validateScopeConfig,
 } from "../api.js";
+import { docUrl } from "../docs.js";
 import { GITHUB_REPO_URL } from "../github.js";
 import { localize, localizeWsError } from "../i18n.js";
 import {
@@ -21,8 +22,9 @@ import {
 import type { SceneCategory } from "../types.js";
 
 // The user guide for the AI feature (install steps + workflow), shown as a link
-// in the AI tab. Points at the published docs, not a branch, so it can't go stale.
-const AI_DOCS_URL = "https://clintongormley.github.io/ambience/ai-assisted-scenes/";
+// in the AI tab. Built from DOCS_BASE_URL via docUrl() so it tracks the docs
+// origin in one place and can't drift; points at the published docs, not a branch.
+const AI_DOCS_URL = docUrl("reference/ai-assisted-scenes");
 
 // Where to send "the AI got it wrong, here's a better answer" feedback — used to
 // improve the cookbook the AI learns from.

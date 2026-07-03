@@ -56,7 +56,7 @@ This produces `True` or `False`. `True` is truthy, so the scene matches when
 both tests pass. If either entity is unavailable the template returns `False`
 and the condition does not match.
 
-![Example of Template condition.](../images/conditions/template/template.png "Example of Template condition.")
+![Example of Template condition.](images/template/template.png "Example of Template condition.")
 
 The Template condition extracts a list of entities from the template to use as
 **Auto-triggers**.

@@ -89,7 +89,7 @@ In the scene editor you add a Script condition, select
 that sensor changes, calling the script each time and activating the scene only
 while the battery is above 80 %.
 
-![Example of a script condition.](../images/conditions/script/script.png "Example of a script condition.")
+![Example of a script condition.](images/script/script.png "Example of a script condition.")
 
 ______________________________________________________________________
 

@@ -7,22 +7,25 @@ docs_dir: docs
 hooks:
   - mkdocs_hooks/version.py
 
-# Keep internal working docs out of the published site.
+# Keep internal working docs and the not-yet-published AI-authoring reference
+# out of the site. The AI-authoring reference moves under Reference in a later
+# task.
 exclude_docs: |
   superpowers/
   handoffs/
-  reference/
-  developers/
+  developers/ai-authoring/
 
 theme:
   name: material
   logo: assets/logo-light.svg
   favicon: assets/icon-dark.svg
   features:
+    - navigation.tabs
     - navigation.sections
+    - navigation.indexes
     - navigation.top
+    - toc.follow
     - content.code.copy
-    - toc.integrate
   palette:
     - scheme: default
       primary: white
@@ -51,10 +54,11 @@ markdown_extensions:
       toc_depth: 3
 
 nav:
-  - Introduction: index.md
-  - Installation: installation.md
+  - Introduction:
+      - index.md
+      - Installation: introduction/installation.md
   - Getting started:
-      - Overview: getting-started/index.md
+      - getting-started/index.md
       - "1. Scopes and categories": getting-started/step-1-scopes-and-categories.md
       - "2. Your first scene": getting-started/step-2-your-first-scene.md
       - "3. Exposing actions": getting-started/step-3-exposing-actions.md
@@ -64,28 +68,37 @@ nav:
       - "7. Blocking scenes": getting-started/step-7-blocking-scenes.md
       - "8. Pausing & disabling scopes": getting-started/step-8-pausing-and-disabling-scopes.md
       - "9. Debugging scenes": getting-started/step-9-debugging-scenes.md
-  - Conditions:
-      - Overview: conditions/index.md
-      - Day: conditions/day.md
-      - Entity state: conditions/entity-state.md
-      - Lux: conditions/lux.md
-      - Occupancy: conditions/occupancy.md
-      - People: conditions/people.md
-      - Script: conditions/script.md
-      - Sun: conditions/sun.md
-      - Template: conditions/template.md
-      - Time of day: conditions/time-of-day.md
-      - Unavailable: conditions/unavailable.md
-      - Weather: conditions/weather.md
-  - Actions:
-      - Overview: actions/index.md
-      - Exposed actions: actions/exposed-actions.md
-      - Built-in actions: actions/built-in-actions.md
-      - Using an action in a scene: actions/using-actions.md
-      - Apply on every match: actions/apply-on-every-match.md
-      - How actions run: actions/how-actions-run.md
-  - Settings reference: settings-reference.md
-  - Panel & card: panel-and-card.md
-  - Troubleshooting:
-      - Config health: concepts/config-health.md
-      - Reporting an issue: reporting-an-issue.md
+  - Reference:
+      - reference/index.md
+      - Conditions:
+          - reference/conditions/index.md
+          - Day: reference/conditions/day.md
+          - Entity state: reference/conditions/entity-state.md
+          - Lux: reference/conditions/lux.md
+          - Occupancy: reference/conditions/occupancy.md
+          - People: reference/conditions/people.md
+          - Script: reference/conditions/script.md
+          - Sun: reference/conditions/sun.md
+          - Template: reference/conditions/template.md
+          - Time of day: reference/conditions/time-of-day.md
+          - Unavailable: reference/conditions/unavailable.md
+          - Weather: reference/conditions/weather.md
+      - Actions:
+          - reference/actions/index.md
+          - Exposed actions: reference/actions/exposed-actions.md
+          - Built-in actions: reference/actions/built-in-actions.md
+          - Using an action in a scene: reference/actions/using-actions.md
+          - Apply on every match: reference/actions/apply-on-every-match.md
+          - How actions run: reference/actions/how-actions-run.md
+      - Settings reference: reference/settings-reference.md
+      - Panel & card: reference/panel-and-card.md
+      - AI-assisted scenes: reference/ai-assisted-scenes.md
+      - Config health: reference/config-health.md
+      - Reporting an issue: reference/reporting-an-issue.md
+  - Recipes:
+      - recipes/index.md
+  - Developer:
+      - developers/index.md
+      - Architecture: developers/architecture.md
+      - Code layout: developers/code-layout.md
+      - Contributing: developers/contributing.md

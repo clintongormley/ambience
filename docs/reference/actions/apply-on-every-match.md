@@ -15,7 +15,7 @@ every match. For instance, imagine a Power Shower function which we switch on
 when somebody is in the shower and the water is flowing. We can create a scene
 such as this:
 
-![Power shower on when somebody is showering.](../images/actions/apply-on-every-match/power-shower-1.png "Power shower on when somebody is showering.")
+![Power shower on when somebody is showering.](images/apply-on-every-match/power-shower-1.png "Power shower on when somebody is showering.")
 
 But the Power Shower has an internal timer which switches it off automatically
 every 5 minutes. That automatic off-switch is outside our control. To Ambience
@@ -29,7 +29,7 @@ We can solve this in two steps:
     state condition.
 1. Turn the scene's **Apply on every match** toggle to **On**.
 
-![Apply on every match.](../images/actions/apply-on-every-match/power-shower-2.png "Apply on every match.")
+![Apply on every match.](images/apply-on-every-match/power-shower-2.png "Apply on every match.")
 
 This way, the scene will match when somebody is in the shower and the water is
 flowing, **and** will turn the Power Shower back on whenever it turns itself
@@ -48,7 +48,7 @@ all scene groups after a period of inactivity, to get things back into sync.
 This feature can be enabled and the timeout configured in the **Settings →
 Advanced** tab.
 
-![Re-run all scenes after inactivity settings.](../images/actions/apply-on-every-match/rerun.png "Re-run all scenes after inactivity settings.")
+![Re-run all scenes after inactivity settings.](images/apply-on-every-match/rerun.png "Re-run all scenes after inactivity settings.")
 
 When the feature is enabled and the timeout elapses for a scene group, Ambience
 re-evaluates and re-dispatches that group's winning scene (even if the winner

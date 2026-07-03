@@ -2,8 +2,9 @@
  *  place so every in-app help link points at the same origin. */
 export const DOCS_BASE_URL = "https://clintongormley.github.io/ambience";
 
-/** Build an absolute docs URL from a site-relative path like "conditions/lux".
- *  mkdocs serves directory-style URLs, so the result always ends in a slash. */
+/** Build an absolute docs URL from a site-relative path like
+ *  "reference/conditions/lux". mkdocs serves directory-style URLs, so the
+ *  result always ends in a slash. */
 export function docUrl(path: string): string {
   const clean = path.replace(/^\/+|\/+$/g, "");
   return clean ? `${DOCS_BASE_URL}/${clean}/` : `${DOCS_BASE_URL}/`;
@@ -28,5 +29,5 @@ const CONDITION_DOC_SLUGS: Record<string, string> = {
 /** Site-relative docs path for a condition kind, or undefined if none maps. */
 export function conditionDocPath(name: string): string | undefined {
   const slug = CONDITION_DOC_SLUGS[name];
-  return slug ? `conditions/${slug}` : undefined;
+  return slug ? `reference/conditions/${slug}` : undefined;
 }

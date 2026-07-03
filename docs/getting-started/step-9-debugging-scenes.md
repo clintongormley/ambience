@@ -17,14 +17,14 @@ trace a device's change back to the scene that caused it. Entries persist for as
 long as Home Assistant's Logbook retains history; there is no separate Ambience
 limit.
 
-![Ambience in the activity log.](../images/getting-started/step-9/activity-log.png "Ambience in the activity log.")
+![Ambience in the activity log.](images/step-9/activity-log.png "Ambience in the activity log.")
 
 ## The category menu
 
 The rest of the debugging tools live in the menu behind the **⋮** icon to the
 right of the **Lights** category header.
 
-![Category menu.](../images/getting-started/step-9/menu.png "Category menu.")
+![Category menu.](images/step-9/menu.png "Category menu.")
 
 ## Auto-triggers and Run
 
@@ -34,7 +34,7 @@ are specific to the scenes in the scope/category group. Whenever any of the
 triggers is fired, all of the scenes in the scope/category group are reassessed
 to determine the new winning scene (if any).
 
-![Auto-triggers.](../images/getting-started/step-9/autotriggers.png "Auto-triggers.")
+![Auto-triggers.](images/step-9/autotriggers.png "Auto-triggers.")
 
 You can force the scenes to be reassessed without waiting for a trigger by
 clicking the **Run** option.
@@ -47,7 +47,7 @@ out. Click **View traces** in the category menu to browse these recent
 evaluations without leaving the panel. A **Refresh** button appears highlighted
 when Ambience has recorded newer entries since you opened the viewer.
 
-![Summary traces view.](../images/getting-started/step-9/traces.png "Summary traces view.")
+![Summary traces view.](images/step-9/traces.png "Summary traces view.")
 
 ### Reading a trace entry
 
@@ -55,7 +55,7 @@ Each entry has a coloured **outcome bar**:
 
 - **applied** (the winning scene's actions ran, also when triggered by **Run**
     or a
-    [**Re-run**](../actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity)),
+    [**Re-run**](../reference/actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity)),
 
 - **blocked** (a scene won but has no actions to run — a pure blocker),
 
@@ -88,7 +88,7 @@ expansion adds two sections:
     entities targeted. An action whose service is no longer exposed is tagged
     *skipped (not exposed)*.
 
-![Trace details.](../images/getting-started/step-9/trace_detail.png "Trace details.")
+![Trace details.](images/step-9/trace_detail.png "Trace details.")
 
 ## Simulate
 
@@ -98,7 +98,7 @@ invented inputs and shows the result using the same trace-detail view as the
 traces above. It opens pre-filled with live values from your home, so the first
 run (before you change anything) shows what Ambience would decide right now.
 
-![Simulate tool.](../images/getting-started/step-9/simulate.png "Simulate tool.")
+![Simulate tool.](images/step-9/simulate.png "Simulate tool.")
 
 You can change:
 
@@ -119,7 +119,7 @@ card you can expand to see which conditions passed and which actions would have
 run. It describes what *would* happen, not what actually happened in your home
 (so it never shows **unchanged**).
 
-![Simulate tool with trace details.](../images/getting-started/step-9/simulate_result.png "Simulate tool with trace details.")
+![Simulate tool with trace details.](images/step-9/simulate_result.png "Simulate tool with trace details.")
 
 ## Download diagnostics
 
@@ -127,13 +127,14 @@ The **Download diagnostics** option saves a JSON snapshot scoped to that one
 (scope, category): its configuration, the global context needed to read it
 (categories and conditions), and its recent traces. It is the quickest thing to
 attach to a bug report when you already know which scene group is misbehaving.
-See [Reporting an issue](../reporting-an-issue.md#downloading-diagnostics) for
-what the file contains and for the whole-integration alternative.
+See
+[Reporting an issue](../reference/reporting-an-issue.md#downloading-diagnostics)
+for what the file contains and for the whole-integration alternative.
 
 ______________________________________________________________________
 
 If a problem still has you stuck, see
-[Reporting an issue](../reporting-an-issue.md) for how to capture diagnostics
-and debug logs.
+[Reporting an issue](../reference/reporting-an-issue.md) for how to capture
+diagnostics and debug logs.
 
-Next: [Conditions](../conditions/index.md).
+Next: [Conditions](../reference/conditions/index.md).

@@ -12,7 +12,7 @@ list and any scenes in a disabled scope will be ignored. This is useful to move
 scopes which won't have any scenes out of the way, or to disable an entire scope
 while you set up the scenes.
 
-![Toggle to disable a scope.](../images/getting-started/step-8/disable.png "Toggle to disable a scope.")
+![Toggle to disable a scope.](images/step-8/disable.png "Toggle to disable a scope.")
 
 ## Pausing a scope
 
@@ -23,7 +23,7 @@ Every enabled scope has its own pause switch: a `switch` entity named after the
 scope, such as **Lounge Ambience**. The pause/resume timer button on the scope
 row toggles the switch.
 
-![The scope-pause switch.](../images/getting-started/step-8/pause.png "The scope-pause switch.")
+![The scope-pause switch.](images/step-8/pause.png "The scope-pause switch.")
 
 While a scope is paused, Ambience stops applying scenes there and leaves your
 devices exactly as they are. When you resume — manually, or automatically once
@@ -42,7 +42,7 @@ By default a scope stays paused until you resume it. To auto-resume after a set
 time, to rename the switches, or to expose them to voice assistants, see the
 **Advanced** tab in the **Settings**.
 
-![Scope-pause switch settings.](../images/getting-started/step-8/settings.png "Scope-pause switch settings.")
+![Scope-pause switch settings.](images/step-8/settings.png "Scope-pause switch settings.")
 
 ______________________________________________________________________
 

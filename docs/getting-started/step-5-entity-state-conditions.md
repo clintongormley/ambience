@@ -23,14 +23,14 @@ To add the scene:
 - Click **+ Add condition** and select the **Entity state** condition.
 - Click the **+ Add clause** button.
 
-![Adding a clause to the Entity State condition](../images/getting-started/step-5/add_clause.png "Adding a clause to the Entity State condition")
+![Adding a clause to the Entity State condition](images/step-5/add_clause.png "Adding a clause to the Entity State condition")
 
 - Click **Select an entity** and search for the **Cine** remote control.
 - Change the **Where** field from **State** to the attribute **Current
     activity**.
 - Set the **Value** to **Nvidia (Projector)**.
 
-![Checking Current Activity.](../images/getting-started/step-5/current_activity.png "Checking Current Activity.")
+![Checking Current Activity.](images/step-5/current_activity.png "Checking Current Activity.")
 
 Finally, configure the actions to take:
 
@@ -40,7 +40,7 @@ Finally, configure the actions to take:
 - Target the **Lounge Sidetable Lights** and set **Brightness pct** to **10%**.
 - Click **Save scene**.
 
-![Movie scene added.](../images/getting-started/step-5/movie_scene.png "Movie scene added.")
+![Movie scene added.](images/step-5/movie_scene.png "Movie scene added.")
 
 ______________________________________________________________________
 

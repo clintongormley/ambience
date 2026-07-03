@@ -1,8 +1,8 @@
 # Reporting an issue
 
 If something isn't behaving as you expect and the
-[debugging tools](getting-started/step-9-debugging-scenes.md) haven't explained
-it, the most useful things to attach to a
+[debugging tools](../getting-started/step-9-debugging-scenes.md) haven't
+explained it, the most useful things to attach to a
 [GitHub issue](https://github.com/clintongormley/ambience/issues) are a
 **diagnostics** file and, for trickier problems, a **debug log**.
 

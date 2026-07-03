@@ -23,7 +23,7 @@ When you add a Lux condition to a scene, the editor shows (top to bottom):
     `min ≤ reading < max`. Either bound may be left empty for an open-ended
     range.
 
-![Adding a Lux condition.](../images/conditions/lux/lux-condition.png "Adding a Lux condition.")
+![Adding a Lux condition.](images/lux/lux-condition.png "Adding a Lux condition.")
 
 A sensor reporting `unavailable`, `unknown`, or a non-numeric value never counts
 as inside *or* outside a range — it is treated as unobservable, so neither
@@ -55,6 +55,6 @@ You can change these, hide them, or add your own in the panel's **Settings** →
 **Conditions** tab → **Lux ranges**. Scenes that reference a named range pick up
 any later edits to it automatically.
 
-![Configuring the Lux named ranges.](../images/conditions/lux/named-ranges.png "Configuring the Lux named ranges.")
+![Configuring the Lux named ranges.](images/lux/named-ranges.png "Configuring the Lux named ranges.")
 
 Next: [Occupancy](occupancy.md).

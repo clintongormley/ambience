@@ -1,4 +1,4 @@
-# Towel rack
+# Bathroom towel rack
 
 This recipe is about how to use the towel rack in the bathroom to dry the towels
 after somebody has showered, so that the towels are ready for use for the next

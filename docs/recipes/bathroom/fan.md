@@ -1,4 +1,4 @@
-# Extractor fan
+# Bathroom extractor fan
 
 This simple recipe controls the extractor fan in the bathroom. The fan should be
 turned on when somebody uses the shower or the toilet.

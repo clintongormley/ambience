@@ -96,7 +96,7 @@ export class AmbienceHelp extends LitElement {
   /** When true, the popover preserves line breaks (white-space: pre-wrap) so a
    *  multi-line value (e.g. a scene description) renders with its newlines. */
   @property({ type: Boolean }) multiline = false;
-  /** Optional site-relative docs path, e.g. "conditions/lux". With no `text`, the
+  /** Optional site-relative docs path, e.g. "reference/conditions/lux". With no `text`, the
    *  (?) trigger is itself a direct external link to that page. Alongside `text`,
    *  the popover ends with a "Read more →" link. Bind with `.docPath=${…}` (the
    *  default attribute would be the lower-cased `docpath`). */

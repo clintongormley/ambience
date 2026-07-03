@@ -19,7 +19,7 @@ It matches as soon as **any one** of the entities you picked is unavailable,
 unknown, or absent (deleted or not yet loaded). You must pick at least one
 entity.
 
-![Example of Unavailable condition.](../images/conditions/unavailable/unavailable.png "Example of Unavailable condition.")
+![Example of Unavailable condition.](images/unavailable/unavailable.png "Example of Unavailable condition.")
 
 ## Using it as a fallback guard
 
@@ -27,7 +27,7 @@ The Unavailable condition is the condition with the highest precedence as it
 would normally be used to block the evaluation of all scenes, but it can be
 manually dragged to a new position if required.
 
-![The Unavailable condition has the highest precedence.](../images/conditions/unavailable/priority.png "The Unavailable condition has the highest precedence.")
+![The Unavailable condition has the highest precedence.](images/unavailable/priority.png "The Unavailable condition has the highest precedence.")
 
 !!! note "When entities go missing"
 

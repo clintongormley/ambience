@@ -11,7 +11,7 @@ ______________________________________________________________________
 The condition has two independent parts: **elevation** and **azimuth**. You must
 set at least one of them.
 
-![Example of the Sun condition.](../images/conditions/sun/sun.png "Example of the Sun condition.")
+![Example of the Sun condition.](images/sun/sun.png "Example of the Sun condition.")
 
 ## Elevation
 

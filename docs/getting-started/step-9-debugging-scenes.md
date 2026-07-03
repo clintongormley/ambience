@@ -55,7 +55,7 @@ Each entry has a coloured **outcome bar**:
 
 - **applied** (the winning scene's actions ran, also when triggered by **Run**
     or a
-    [**Re-run**](../actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity)),
+    [**Re-run**](../reference/actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity)),
 
 - **blocked** (a scene won but has no actions to run — a pure blocker),
 
@@ -127,13 +127,14 @@ The **Download diagnostics** option saves a JSON snapshot scoped to that one
 (scope, category): its configuration, the global context needed to read it
 (categories and conditions), and its recent traces. It is the quickest thing to
 attach to a bug report when you already know which scene group is misbehaving.
-See [Reporting an issue](../reporting-an-issue.md#downloading-diagnostics) for
-what the file contains and for the whole-integration alternative.
+See
+[Reporting an issue](../reference/reporting-an-issue.md#downloading-diagnostics)
+for what the file contains and for the whole-integration alternative.
 
 ______________________________________________________________________
 
 If a problem still has you stuck, see
-[Reporting an issue](../reporting-an-issue.md) for how to capture diagnostics
-and debug logs.
+[Reporting an issue](../reference/reporting-an-issue.md) for how to capture
+diagnostics and debug logs.
 
-Next: [Conditions](../conditions/index.md).
+Next: [Conditions](../reference/conditions/index.md).

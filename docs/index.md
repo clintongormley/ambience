@@ -175,4 +175,4 @@ to be solved.
 
 ![An unreachable scene.](images/index/unreachable.png "An unreachable scene.")
 
-Ready to try it? Start with [Installation](installation.md).
+Ready to try it? Start with [Installation](introduction/installation.md).

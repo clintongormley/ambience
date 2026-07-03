@@ -37,7 +37,7 @@ Beneath the **Who** field, you will find:
     resets when someone actually comes home. This prevents a scene from firing
     the moment someone briefly crosses a zone boundary.
 
-![People condition.](../images/conditions/people/people.png "People condition.")
+![People condition.](images/people/people.png "People condition.")
 
 ### Examples
 

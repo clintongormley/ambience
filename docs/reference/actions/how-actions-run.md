@@ -8,7 +8,7 @@ If you want to test a scene's actions without waiting for its conditions to
 match, use the **Run actions** option in the scene's action menu. This runs that
 scene's actions once, independently of the normal evaluation cycle.
 
-![Run actions.](../images/actions/how-actions-run/run.png "Run actions.")
+![Run actions.](images/how-actions-run/run.png "Run actions.")
 
 ## Action execution model
 

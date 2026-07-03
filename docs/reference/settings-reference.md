@@ -13,7 +13,7 @@ in these docs; this page is a map to where.
 
 - **Categories** — add, rename, recolour, and delete the categories you group
     scenes under. See
-    [Scopes and categories](getting-started/step-1-scopes-and-categories.md).
+    [Scopes and categories](../getting-started/step-1-scopes-and-categories.md).
 - **Conditions** — global settings for the few conditions that have them (the
     rest are configured per-scene). See
     [Time of day](conditions/time-of-day.md), [Day](conditions/day.md#settings),
@@ -21,11 +21,11 @@ in these docs; this page is a map to where.
     [Lux](conditions/lux.md#named-lux-ranges).
 - **Actions** — choose which Home Assistant services are exposed as actions in
     the scene editor. See
-    [Exposing actions](getting-started/step-3-exposing-actions.md) and the
+    [Exposing actions](../getting-started/step-3-exposing-actions.md) and the
     [Actions](actions/index.md) reference.
 - **Advanced → Scope switches** — the per-scope pause switches and their
     settings (switch name, auto-resume delay, and voice-assistant exposure). See
-    [Pausing & disabling scopes](getting-started/step-8-pausing-and-disabling-scopes.md).
+    [Pausing & disabling scopes](../getting-started/step-8-pausing-and-disabling-scopes.md).
 - **Advanced → Re-run** — periodically re-apply a unit's winning scene to
     recover dropped commands. See
     [Re-run all scenes after inactivity](actions/apply-on-every-match.md#re-run-all-scenes-after-inactivity).

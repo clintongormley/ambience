@@ -25,7 +25,7 @@ When you add an Occupancy condition to a scene, the editor shows:
     tracks the combined test, so it keeps running through a handover from one
     sensor to another as long as *some* chosen sensor stays in the wanted state.
 
-![Occupancy condition.](../images/conditions/occupancy/occupancy.png "Occupancy condition.")
+![Occupancy condition.](images/occupancy/occupancy.png "Occupancy condition.")
 
 ### Examples
 

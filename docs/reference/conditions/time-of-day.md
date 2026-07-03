@@ -37,7 +37,7 @@ You can also define your own periods — for example a "Wind down" period from
 21:00 to 23:00 — via **Settings → Conditions**. Once saved, custom periods
 appear in the same dropdown alongside the built-ins.
 
-![Configuring the Time of Day condition.](../images/conditions/time-of-day/config.png "Configuring the Time of Day condition.")
+![Configuring the Time of Day condition.](images/time-of-day/config.png "Configuring the Time of Day condition.")
 
 ## Using a custom range
 
@@ -83,7 +83,7 @@ drift to a fixed clock time. Pick a direction and a time (leave the direction on
 The clamp time is read in your local timezone and is applied **after** the
 offset, so it bounds the already-offset anchor.
 
-![Example of Time of Day condition.](../images/conditions/time-of-day/time-of-day.png "Example of Time of Day condition.")
+![Example of Time of Day condition.](images/time-of-day/time-of-day.png "Example of Time of Day condition.")
 
 ## Adding multiple time windows
 

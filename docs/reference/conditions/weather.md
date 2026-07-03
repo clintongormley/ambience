@@ -8,13 +8,13 @@ numeric attributes such as temperature, humidity, and wind speed.
 
     Before the weather condition can do anything, you need to tell Ambience which
     weather entity to reference, as explained in
-    [Add a Weather integration](../getting-started/step-4-weather-conditions.md#add-a-weather-integration).
+    [Add a Weather integration](../../getting-started/step-4-weather-conditions.md#add-a-weather-integration).
 
 In the scene editor, click **+ Add condition…** and choose **Weather**. The
 condition panel has two independent sections — **Groups** and **Thresholds** —
 and you can use either, both, or neither.
 
-![Example of the Weather condition.](../images/conditions/weather/weather.png "Example of the Weather condition.")
+![Example of the Weather condition.](images/weather/weather.png "Example of the Weather condition.")
 
 ## Groups
 
@@ -37,7 +37,7 @@ tab. Each custom group has a label and a list of individual weather states drawn
 from the full set that Home Assistant defines. Once saved, your custom groups
 appear alongside the built-ins in every scene's weather condition picker.
 
-![Configuration of Weather condition.](../images/conditions/weather/config.png "Configuration of Weather condition.")
+![Configuration of Weather condition.](images/weather/config.png "Configuration of Weather condition.")
 
 ## Thresholds
 
@@ -62,7 +62,7 @@ wet *and* the temperature is at least 5 degrees. Neither check alone is
 sufficient.
 
 For a worked example that builds a weather-based scene, see
-[Step 4 of Getting started](../getting-started/step-4-weather-conditions.md).
+[Step 4 of Getting started](../../getting-started/step-4-weather-conditions.md).
 
 ______________________________________________________________________
 

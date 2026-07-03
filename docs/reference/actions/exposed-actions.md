@@ -24,7 +24,7 @@ exposed action might:
 - but set **Transition time** to `3` as a default, so every scene using this
     action gets a three-second fade.
 
-![Configuring the Fade Lights action.](../images/actions/exposed-actions/fado.png "Configuring the Fade Lights action.")
+![Configuring the Fade Lights action.](images/exposed-actions/fado.png "Configuring the Fade Lights action.")
 
 !!! note "Hidden defaults"
 
@@ -32,7 +32,8 @@ exposed action might:
     leave the field unchecked. The default parameter will always be passed, but you
     won't be able to override it in the scene's action list.
 
-See [Step 3 of Getting started](../getting-started/step-3-exposing-actions.md)
+See
+[Step 3 of Getting started](../../getting-started/step-3-exposing-actions.md)
 for a worked example.
 
 ______________________________________________________________________

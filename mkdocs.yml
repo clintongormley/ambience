@@ -43,6 +43,9 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/lightbox.js
+
 markdown_extensions:
   - md_in_html
   - admonition

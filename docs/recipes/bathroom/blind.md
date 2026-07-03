@@ -1,4 +1,4 @@
-# Blind
+# Bathroom blind
 
 This recipe describes the lifecycle of the window blind in the bathroom. I want
 the blind to be open between 8:30 am and dusk and closed between dusk and 8:30
@@ -9,9 +9,14 @@ blinding, so I want the blind to open gradually, especially when it is sunny.
 However, if I decide to open the blind manually before time, then I don't want
 Ambience to close the blind automatically again.
 
+## Requirements
+
+- **Bathroom blind** - Cover entity exposing the current position of the blind.
+
 ## Scene: Nighttime
 
-The clearest scene is that the blind should be shut between dusk and 8:30 am:
+The clearest condition is the **Nighttime** scene where the blind should be
+closed between dusk and 8:30 am:
 
 ![Nighttime.](../images/bathroom/blind/nighttime.png "Nighttime.")
 
@@ -23,13 +28,15 @@ The clearest scene is that the blind should be shut between dusk and 8:30 am:
 
 ## Scene: Daytime
 
-The second scene is that the blind should be open between 8:30 am and dusk.
+The second scene specifies that the blind should be open between 8:30 am and
+dusk.
 
 ![Daytime.](../images/bathroom/blind/daytime.png "Daytime.")
 
 Note that the **Daytime** scene doesn't specify a time-of-day. That's because we
 know that if the **Nighttime** scene (which only matches between dusk and 8:30
-am) doesn't match, then we are guaranteed to be in the daytime range.
+am) doesn't match, then any scenes after that are guaranteed to be in the
+daytime range.
 
 ## Scenes: Sun low in East, Sun mid-low in East
 
@@ -60,7 +67,7 @@ weather is sunny or dim, and if the weather is **dark** then neither matches.
 ## Problem: Don't override manual opening
 
 If somebody opens the blind manually then we don't want either scene to match,
-otherwise Ambience would immediately close the blind to 35% or 50% again. To
+otherwise Ambience would immediately close the blind to 30% or 50% again. To
 accomplish this we add an **entity state** condition to check that the blind
 position is lower than the position we're about to open to (i.e. 30% or 50%).
 
@@ -74,8 +81,8 @@ daytime scenes, so we manually move it to the highest priority.
 ## Problem: Opening the blind triggers reevaluation
 
 Because we check the blind position in **Sun low/mid-low in East**, if we were
-to open the blind manually, then it would trigger reevaluation of the scenes and
-potentially stop opening at 35% or 50%. To avoid this we can add a scene that
+to open the blind manually then it would trigger reevaluation of the scenes and
+potentially stop opening at 30% or 50%. To avoid this we can add a scene that
 blocks evaluation while the blind is opening or closing:
 
 ![Block evaluation while blind in motion.](../images/bathroom/blind/block.png "Block evaluation while blind in motion.")

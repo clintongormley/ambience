@@ -31,7 +31,7 @@ The AI never writes to Home Assistant directly — you review and import its out
 ---
 
 > **User-facing guide:** the install + workflow docs live at
-> <https://clintongormley.github.io/ambience/ai-assisted-scenes/>. This README is
+> <https://clintongormley.github.io/ambience/reference/ai-assisted-scenes/>. This README is
 > the in-repo reference.
 
 **Always install from `@stable`**, not the default branch — `stable` tracks the

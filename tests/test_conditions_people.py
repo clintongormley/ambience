@@ -266,6 +266,53 @@ def test_matches_in_zones_unavailable_still_unobservable() -> None:
     assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is False
 
 
+# --- scanner-sourced persons: empty in_zones falls back to state ----------
+# HA populates `in_zones` only from GPS coordinates. A person tracked by a
+# non-GPS presence scanner (router/ping/nmap/unifi/BLE) reports state "home"
+# (or a zone name via location_name) but in_zones=[] (empty, NOT None). An
+# empty list must therefore be treated as "no usable zone info" and fall back
+# to `state` — otherwise a person who is home is read as away.
+
+
+def test_matches_scanner_home_empty_in_zones_falls_back_to_state() -> None:
+    m = PeopleCondition()
+    # state="home" but in_zones=[] (a router/scanner-tracked person at home).
+    snap = _snap({"person.a": _p("home")}, in_zones={"person.a": []})
+    assert m.matches({"quant": "any", "where": "home"}, snap) is True
+    # ...and "nobody home" must NOT fire while they are home (the dangerous case).
+    assert m.matches({"quant": "nobody", "where": "home"}, snap) is False
+
+
+def test_matches_scanner_named_zone_empty_in_zones_falls_back_to_state() -> None:
+    m = PeopleCondition()
+    # A scanner person in a named zone: state is the zone label, in_zones=[].
+    snap = _snap(
+        {"person.a": _p("Work")},
+        in_zones={"person.a": []},
+        zone_labels={"zone.work": "Work"},
+    )
+    assert m.matches({"quant": "any", "where": "zone.work"}, snap) is True
+
+
+def test_matches_gps_away_empty_in_zones_stays_away() -> None:
+    m = PeopleCondition()
+    # Safety guard: a GPS person genuinely away also has in_zones=[], but
+    # state="not_home" — the state fallback must keep resolving them as away.
+    snap = _snap({"person.a": _p("not_home")}, in_zones={"person.a": []})
+    assert m.matches({"quant": "any", "where": "home"}, snap) is False
+
+
+def test_describe_counts_scanner_home_empty_in_zones_as_home() -> None:
+    m = PeopleCondition()
+    # _is_home() must also fall back to state on empty in_zones.
+    snap = _snap(
+        {"person.a": _p("home"), "person.b": _p("not_home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+        in_zones={"person.a": [], "person.b": []},
+    )
+    assert m.describe(snap) == "1 of 2 home (Alice)"
+
+
 def test_describe_counts_in_zones_overlap_as_home() -> None:
     m = PeopleCondition()
     # State "Work" but in_zones includes zone.home -> counts as home.

@@ -45,9 +45,11 @@ class PeopleSnapshot:
     zone_labels: dict[str, str] = field(default_factory=dict)
     # person entity_id -> the `in_zones` attribute: a list of zone entity_ids
     # the person is currently inside (e.g. ["zone.work", "zone.home"]), or None
-    # when the attribute is absent (e.g. router/non-GPS trackers). Zones can
-    # overlap, so this can name several zones at once where `state` resolves to
-    # only one. Preferred over `state` for location matching.
+    # when the attribute is absent. Zones can overlap, so this can name several
+    # zones at once where `state` resolves to only one. Preferred over `state`
+    # ONLY when non-empty: HA populates `in_zones` from GPS coords only, so a
+    # non-GPS presence scanner (router/ping/nmap/unifi/BLE) reports an empty
+    # list even while home — an empty (or None) list defers to `state`.
     in_zones: dict[str, list[str] | None] = field(default_factory=dict)
     # Engine-injected per-gate tenure: gate fingerprint -> the time the
     # predicate's instant test last became true. When present, a `for:` clause
@@ -276,17 +278,21 @@ class PeopleCondition:
     ) -> bool | None:
         """Pure (un-negated) location test.
 
-        True/False if observable, None if unobservable. Prefers the `in_zones`
-        attribute (handles overlapping zones); falls back to `state` when the
-        attribute is absent. `where`: 'home' or a 'zone.*' id. Caller applies
-        any `negate` inversion.
+        True/False if observable, None if unobservable. Prefers a NON-EMPTY
+        `in_zones` attribute (handles overlapping zones); falls back to `state`
+        when it is absent (None) OR empty ([]). HA only populates `in_zones`
+        from GPS coordinates, so a non-GPS presence scanner (router/ping/nmap/
+        unifi/BLE) reports state "home"/a zone name but in_zones=[] — an empty
+        list must therefore defer to `state`, not be read as "in no zone".
+        `where`: 'home' or a 'zone.*' id. Caller applies any `negate` inversion.
         """
         if state in UNAVAILABLE:
             return None  # unobservable
-        if in_zones is not None:
-            # Attribute present: authoritative membership (overlaps included).
+        if in_zones:
+            # Non-empty attribute: authoritative membership (overlaps included).
             return cls._target_zone(where) in in_zones
-        # Fallback to state (e.g. router/non-GPS trackers, no in_zones).
+        # Fallback to state: attribute absent (non-GPS trackers) or empty (a
+        # scanner-sourced person whose location lives only in `state`).
         if where == _HOME:
             return state == _HOME
         label = snapshot.zone_labels.get(where)
@@ -296,8 +302,10 @@ class PeopleCondition:
 
     @classmethod
     def _is_home(cls, state: str, in_zones: list[str] | None) -> bool:
-        """Whether a person is home, preferring `in_zones` over `state`."""
-        if in_zones is not None:
+        """Whether a person is home, preferring a NON-EMPTY `in_zones` over
+        `state`. An absent (None) or empty ([]) list defers to `state` — see
+        `_loc_match` for why an empty list must not be read as "in no zone"."""
+        if in_zones:
             return "zone.home" in in_zones
         return state == _HOME
 

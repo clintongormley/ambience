@@ -237,9 +237,11 @@ def test_matches_in_zones_not_home() -> None:
     assert m.matches({"quant": "any", "where": "zone.work"}, snap) is True
 
 
-def test_matches_in_zones_empty_is_in_no_zone() -> None:
+def test_matches_in_zones_empty_falls_back_to_state_away() -> None:
     m = PeopleCondition()
-    # in_zones=[] -> in no zone at all.
+    # in_zones=[] defers to `state` (see the scanner-source note below). Here
+    # state="not_home", so an away person stays away — the safety guard proving
+    # the empty-list fallback doesn't wrongly flip a genuinely-away person home.
     snap = _snap({"person.a": _p("not_home")}, in_zones={"person.a": []})
     assert m.matches({"quant": "any", "where": "home"}, snap) is False
     assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is True
@@ -292,14 +294,27 @@ def test_matches_scanner_named_zone_empty_in_zones_falls_back_to_state() -> None
         zone_labels={"zone.work": "Work"},
     )
     assert m.matches({"quant": "any", "where": "zone.work"}, snap) is True
-
-
-def test_matches_gps_away_empty_in_zones_stays_away() -> None:
-    m = PeopleCondition()
-    # Safety guard: a GPS person genuinely away also has in_zones=[], but
-    # state="not_home" — the state fallback must keep resolving them as away.
-    snap = _snap({"person.a": _p("not_home")}, in_zones={"person.a": []})
+    # ...and a non-home named-zone state must NOT leak into a home match.
     assert m.matches({"quant": "any", "where": "home"}, snap) is False
+
+
+def test_matches_scanner_home_empty_in_zones_for_duration_via_tenure() -> None:
+    m = PeopleCondition()
+    # The headline danger case through the engine `for:` clock: a scanner person
+    # is home now (state="home", in_zones=[]), so "nobody home for 30m" must be
+    # instantly false even with a stale tenure entry — the empty-list fallback
+    # has to flow through the tenure path's instant test, not just the plain one.
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("home", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=60)},  # stale — must not win
+    )
+    assert m.matches(pred, snap) is False
 
 
 def test_describe_counts_scanner_home_empty_in_zones_as_home() -> None:
@@ -311,6 +326,19 @@ def test_describe_counts_scanner_home_empty_in_zones_as_home() -> None:
         in_zones={"person.a": [], "person.b": []},
     )
     assert m.describe(snap) == "1 of 2 home (Alice)"
+
+
+def test_describe_does_not_count_unavailable_person_as_home() -> None:
+    m = PeopleCondition()
+    # _is_home must mirror _loc_match: an unavailable person with a STALE
+    # non-empty in_zones=["zone.home"] is unobservable, not home — so the
+    # snapshot summary agrees with matches() (which excludes them).
+    snap = _snap(
+        {"person.a": _p("unavailable"), "person.b": _p("home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+        in_zones={"person.a": ["zone.home"], "person.b": ["zone.home"]},
+    )
+    assert m.describe(snap) == "1 of 2 home (Bob)"
 
 
 def test_describe_counts_in_zones_overlap_as_home() -> None:

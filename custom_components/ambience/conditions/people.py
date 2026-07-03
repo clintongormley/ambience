@@ -279,20 +279,17 @@ class PeopleCondition:
         """Pure (un-negated) location test.
 
         True/False if observable, None if unobservable. Prefers a NON-EMPTY
-        `in_zones` attribute (handles overlapping zones); falls back to `state`
-        when it is absent (None) OR empty ([]). HA only populates `in_zones`
-        from GPS coordinates, so a non-GPS presence scanner (router/ping/nmap/
-        unifi/BLE) reports state "home"/a zone name but in_zones=[] — an empty
-        list must therefore defer to `state`, not be read as "in no zone".
-        `where`: 'home' or a 'zone.*' id. Caller applies any `negate` inversion.
+        `in_zones` (handles overlapping zones); falls back to `state` when it is
+        absent (None) or empty ([]) — see `PeopleSnapshot.in_zones` for why an
+        empty list must defer to `state`. `where`: 'home' or a 'zone.*' id.
+        Caller applies any `negate` inversion.
         """
         if state in UNAVAILABLE:
             return None  # unobservable
         if in_zones:
             # Non-empty attribute: authoritative membership (overlaps included).
             return cls._target_zone(where) in in_zones
-        # Fallback to state: attribute absent (non-GPS trackers) or empty (a
-        # scanner-sourced person whose location lives only in `state`).
+        # Fallback to state: in_zones absent or empty.
         if where == _HOME:
             return state == _HOME
         label = snapshot.zone_labels.get(where)
@@ -302,9 +299,13 @@ class PeopleCondition:
 
     @classmethod
     def _is_home(cls, state: str, in_zones: list[str] | None) -> bool:
-        """Whether a person is home, preferring a NON-EMPTY `in_zones` over
-        `state`. An absent (None) or empty ([]) list defers to `state` — see
-        `_loc_match` for why an empty list must not be read as "in no zone"."""
+        """Whether a person is home. Unobservable (unavailable/unknown) states
+        are never counted home, mirroring `_loc_match`. Otherwise prefers a
+        NON-EMPTY `in_zones` over `state`; an absent (None) or empty ([]) list
+        defers to `state` — see `_loc_match` for why an empty list must not be
+        read as "in no zone"."""
+        if state in UNAVAILABLE:
+            return False
         if in_zones:
             return "zone.home" in in_zones
         return state == _HOME

@@ -301,6 +301,10 @@ export class AmbienceSimulatorModal extends LitElement {
    *  undefined at the date/location or not yet fetched. Shared by the readout and
    *  _run so the previewed time is exactly the simulated one. */
   private _resolvedInstant(): number | null {
+    // Anchors are fetched per date; during a date change's in-flight refetch,
+    // _anchors still holds the previous date's instants. Guard so neither the
+    // readout nor _run() uses a stale-date anchor.
+    if (this._anchorsDate !== this._date) return null;
     const iso = this._anchors?.[this._anchor];
     if (!iso) return null;
     return new Date(iso).getTime() + this._offset * 60000;
@@ -391,7 +395,7 @@ export class AmbienceSimulatorModal extends LitElement {
       // Resolve the sun anchor ± offset to the exact instant previewed. A null
       // means the anchor is undefined here or not yet fetched.
       const instant = this._resolvedInstant();
-      if (instant === null) {
+      if (instant === null || Number.isNaN(new Date(instant).getTime())) {
         this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
         return;
       }

@@ -94,6 +94,26 @@ describe("simulator When control — Sun mode", () => {
     expect(el.shadowRoot.textContent?.toLowerCase()).toContain("no");
   });
 
+  test("_resolvedInstant returns null when cached anchors are for a stale date", async () => {
+    const { hass } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el); // _anchorsDate === _date === "2026-07-04", anchors loaded
+    el._date = "2026-12-21"; // simulate a date change whose refetch hasn't landed
+    el._anchor = "sunset";
+    await el.updateComplete;
+    expect(el._resolvedInstant()).toBeNull();
+  });
+
+  test("readout includes the date when the resolved instant lands on another day", async () => {
+    const { hass } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    el._offset = 2880; // +2 days — resolved date differs from picked date in any TZ
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
   test("changing the date refetches anchors", async () => {
     const { hass, calls } = makeHass();
     el = await mount(hass);

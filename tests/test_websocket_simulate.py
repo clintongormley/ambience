@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -263,8 +263,9 @@ def test_sun_anchors_returns_six_iso_strings(hass: HomeAssistant) -> None:
     # A London midsummer date has every anchor defined.
     for name, iso in result.items():
         assert iso is not None, name
-        # Parseable, tz-aware.
+        # Parseable, tz-aware, and expressed in UTC.
         assert datetime.fromisoformat(iso).tzinfo is not None
+        assert datetime.fromisoformat(iso).utcoffset() == timedelta(0), name
 
 
 def test_sun_anchors_nulls_undefined_anchors_in_polar_day(hass: HomeAssistant) -> None:

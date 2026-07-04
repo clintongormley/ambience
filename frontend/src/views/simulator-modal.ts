@@ -287,6 +287,9 @@ export class AmbienceSimulatorModal extends LitElement {
       this._anchors = anchors;
       this._anchorsDate = date;
     } catch (e) {
+      // Same stale/detached guard as the success path: a late-rejecting fetch for
+      // a superseded date must not wipe the current date's anchors or show its error.
+      if (!this.isConnected || this._date !== date) return;
       this._anchors = null;
       this._anchorsError = localizeWsError(this.hass, e);
     }
@@ -309,13 +312,20 @@ export class AmbienceSimulatorModal extends LitElement {
     if (this._anchorsError) {
       return html`<span class="hint err">${this._anchorsError}</span>`;
     }
+    // Nothing to show until the current date's anchors have landed (initial load
+    // or an in-flight refetch after a date change) — mirrors _resolvedInstant's
+    // freshness guard so a stale date can't drive the readout (e.g. a stale polar
+    // "no sunset" note against a newly-picked non-polar date).
+    if (!this._anchors || this._anchorsDate !== this._date) return nothing;
     // Loaded but this anchor is undefined here (polar day/night).
-    if (this._anchors && this._anchors[this._anchor] === null) {
+    if (this._anchors[this._anchor] === null) {
       return html`<span class="hint">${localize(this.hass, "ui.simulate_sun_undefined", "no {anchor} on this date", { anchor: anchorLabel(this.hass, this._anchor) })}</span>`;
     }
     const instant = this._resolvedInstant();
-    if (instant === null) return nothing; // still fetching
-    const anchorIso = this._anchors![this._anchor]!;
+    // null = still fetching / undefined anchor; NaN = an absurd offset overflowed
+    // Date's range (Simulate refuses it too — keep the readout consistent, no NaN).
+    if (instant === null || Number.isNaN(new Date(instant).getTime())) return nothing;
+    const anchorIso = this._anchors[this._anchor]!;
     const resolved = new Date(instant);
     // Include the date when the resolved instant lands on a different day than
     // the one picked (large offset, solar midnight).

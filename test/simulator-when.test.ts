@@ -179,4 +179,28 @@ describe("simulator When control — Sun mode", () => {
     const sim = calls.find((c) => c.type === "ambience/simulate");
     expect(sim.now).toBe(new Date("2026-07-04T17:30").toISOString());
   });
+
+  test("an absurd offset renders no NaN readout and Simulate refuses it", async () => {
+    const { hass, calls } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    el._offset = 999999999999999; // anchor + offset overflows Date's range
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).not.toContain("NaN");
+    (el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).click();
+    await tick();
+    expect(calls.some((c) => c.type === "ambience/simulate")).toBe(false);
+    expect(el._error).toBeTruthy();
+  });
+
+  test("no stale polar note while a date-change refetch is in flight", async () => {
+    const { hass } = makeHass({ ...ANCHORS, sunset: null });
+    el = await mount(hass);
+    await switchToSun(el); // _anchorsDate === _date, with sunset null (polar)
+    el._anchor = "sunset";
+    el._date = "2026-12-21"; // date changed; _anchorsDate now stale, refetch pending
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).not.toContain("on this date");
+  });
 });

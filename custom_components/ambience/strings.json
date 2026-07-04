@@ -148,6 +148,7 @@
     "category_name_empty": { "message": "Category {cid} name must be a non-empty string." },
     "duplicate_category_name": { "message": "Duplicate category name: {name}" },
     "unparseable_now": { "message": "Unparseable now: {now}" },
+    "unparseable_date": { "message": "Unparseable date: {date}" },
     "now_not_timezone_aware": { "message": "`now` must be timezone-aware: {now}" }
   },
   "services": {

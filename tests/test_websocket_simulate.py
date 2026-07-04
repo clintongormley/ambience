@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -10,6 +11,8 @@ from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
+from custom_components.ambience.simulate import sun_anchors
 
 
 @pytest.fixture
@@ -249,3 +252,34 @@ async def test_simulate_rejects_naive_now(hass: HomeAssistant, hass_ws_client, s
     )
     assert not resp["success"]
     assert resp["error"]["code"] == "validation_error"
+
+
+def test_sun_anchors_returns_six_iso_strings(hass: HomeAssistant) -> None:
+    hass.config.latitude = 51.5
+    hass.config.longitude = -0.12
+    hass.config.elevation = 0
+    result = sun_anchors(hass, "2026-07-04")
+    assert set(result) == {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
+    # A London midsummer date has every anchor defined.
+    for name, iso in result.items():
+        assert iso is not None, name
+        # Parseable, tz-aware.
+        assert datetime.fromisoformat(iso).tzinfo is not None
+
+
+def test_sun_anchors_nulls_undefined_anchors_in_polar_day(hass: HomeAssistant) -> None:
+    # Above the Arctic circle at midsummer the sun never sets: sunrise/sunset
+    # are undefined and come back as None; solar noon/midnight still exist.
+    hass.config.latitude = 78.0
+    hass.config.longitude = 15.0
+    hass.config.elevation = 0
+    result = sun_anchors(hass, "2026-06-21")
+    assert result["sunrise"] is None
+    assert result["sunset"] is None
+    assert result["noon"] is not None
+
+
+def test_sun_anchors_rejects_bad_date(hass: HomeAssistant) -> None:
+    with pytest.raises(AmbienceError) as exc:
+        sun_anchors(hass, "not-a-date")
+    assert exc.value.translation_key == "unparseable_date"

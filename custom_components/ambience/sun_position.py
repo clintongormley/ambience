@@ -28,8 +28,8 @@ _ANCHORS = {
     "dusk": ("next_dusk", dusk),
 }
 
-# The six anchor names in `_ANCHORS`' order — the single source consumers import
-# instead of re-listing the names (keeps frontend/backend anchor sets in sync).
+# The six anchor names in `_ANCHORS`' order — the single source simulate.py's
+# sun_anchors() iterates instead of hand-listing the names.
 ANCHOR_NAMES = tuple(_ANCHORS)
 
 

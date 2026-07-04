@@ -159,7 +159,8 @@ describe("simulator When control — Sun mode", () => {
     (el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).click();
     await tick();
     expect(calls.some((c) => c.type === "ambience/simulate")).toBe(false);
-    expect(el._error).toBeTruthy();
+    // Sun mode reports a sun-specific message, not the generic date/time one.
+    expect(el._error).toContain("sun time");
   });
 
   test("Time mode still sends a wall-clock now", async () => {

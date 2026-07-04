@@ -413,7 +413,17 @@ export class AmbienceSimulatorModal extends LitElement {
     this._error = "";
     const now = this._resolveNow();
     if (now === null) {
-      this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
+      // Sun mode has no date/time field to "fix"; the readout already names the
+      // specific reason (undefined anchor, still loading, fetch error), so keep
+      // the top-level error accurate to the mode.
+      this._error =
+        this._whenMode === "sun"
+          ? localize(
+              this.hass,
+              "ui.simulate_sun_unresolved",
+              "This sun time can't be resolved for the selected date.",
+            )
+          : localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
       return;
     }
     try {

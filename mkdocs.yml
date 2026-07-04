@@ -105,6 +105,8 @@ nav:
           - Extractor fan: recipes/bathroom/fan.md
           - Lights: recipes/bathroom/lights.md
           - Towel rack: recipes/bathroom/towel-rack.md
+      - House:
+          - Power Shower: recipes/house/power-shower.md
   - Developer:
       - developers/index.md
       - Architecture: developers/architecture.md

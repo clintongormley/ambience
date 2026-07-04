@@ -37,3 +37,9 @@ wins. For the full model, see
 - [**Towel rack**](bathroom/towel-rack.md) — dry the towels after a shower by
     running the heated rack for a couple of hours, even when a second person
     showers before it finishes.
+
+### House
+
+- [**Power Shower**](house/power-shower.md) — run the pump's high-pressure mode
+    while someone's in a shower, then bleed the pressure back to normal through
+    the garden irrigation once they leave.

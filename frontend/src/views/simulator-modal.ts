@@ -386,15 +386,26 @@ export class AmbienceSimulatorModal extends LitElement {
 
   private async _run(): Promise<void> {
     this._error = "";
-    // The native date/time inputs can be cleared; an Invalid Date's
-    // toISOString() throws, which used to die as an unhandled rejection
-    // (the Simulate button silently did nothing).
-    const parsed = new Date(`${this._date}T${this._time}`);
-    if (!this._date || !this._time || Number.isNaN(parsed.getTime())) {
-      this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
-      return;
+    let now: string;
+    if (this._whenMode === "sun") {
+      // Resolve the sun anchor ± offset to the exact instant previewed. A null
+      // means the anchor is undefined here or not yet fetched.
+      const instant = this._resolvedInstant();
+      if (instant === null) {
+        this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
+        return;
+      }
+      now = new Date(instant).toISOString();
+    } else {
+      // The native date/time inputs can be cleared; an Invalid Date's
+      // toISOString() throws, which used to die as an unhandled rejection.
+      const parsed = new Date(`${this._date}T${this._time}`);
+      if (!this._date || !this._time || Number.isNaN(parsed.getTime())) {
+        this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
+        return;
+      }
+      now = parsed.toISOString();
     }
-    const now = parsed.toISOString();
     try {
       this._result = await simulate(
         this.hass,

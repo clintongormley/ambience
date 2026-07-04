@@ -107,4 +107,56 @@ describe("simulator When control — Sun mode", () => {
       calls.some((c) => c.type === "ambience/simulate/sun_anchors" && c.date === "2026-12-21"),
     ).toBe(true);
   });
+
+  test("Sun-mode Simulate sends the resolved instant as now", async () => {
+    const { hass, calls } = makeHass();
+    // Reject the simulate call so _result never renders (isolates the payload).
+    (hass.callWS as any).mockImplementation(async (msg: any) => {
+      calls.push(msg);
+      if (msg.type === "ambience/simulate/inputs") return { knobs: [], has_time: true };
+      if (msg.type === "ambience/simulate/sun_anchors") return { anchors: ANCHORS };
+      if (msg.type === "ambience/simulate") throw new Error("stop");
+      return {};
+    });
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    el._offset = -30;
+    await el.updateComplete;
+    (el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).click();
+    await tick();
+    const sim = calls.find((c) => c.type === "ambience/simulate");
+    const expected = new Date(Date.parse("2026-07-04T20:21:00+00:00") - 30 * 60000).toISOString();
+    expect(sim.now).toBe(expected);
+  });
+
+  test("Sun-mode Simulate on an undefined anchor errors and sends nothing", async () => {
+    const { hass, calls } = makeHass({ ...ANCHORS, sunset: null });
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    await el.updateComplete;
+    (el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).click();
+    await tick();
+    expect(calls.some((c) => c.type === "ambience/simulate")).toBe(false);
+    expect(el._error).toBeTruthy();
+  });
+
+  test("Time mode still sends a wall-clock now", async () => {
+    const { hass, calls } = makeHass();
+    (hass.callWS as any).mockImplementation(async (msg: any) => {
+      calls.push(msg);
+      if (msg.type === "ambience/simulate/inputs") return { knobs: [], has_time: true };
+      if (msg.type === "ambience/simulate") throw new Error("stop");
+      return {};
+    });
+    el = await mount(hass);
+    el._date = "2026-07-04";
+    el._time = "17:30";
+    await el.updateComplete;
+    (el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).click();
+    await tick();
+    const sim = calls.find((c) => c.type === "ambience/simulate");
+    expect(sim.now).toBe(new Date("2026-07-04T17:30").toISOString());
+  });
 });

@@ -1,0 +1,110 @@
+import { afterEach, describe, expect, test, vi } from "vitest";
+import "../frontend/src/views/simulator-modal";
+import type { SunAnchors } from "../frontend/src/types";
+
+const ANCHORS: SunAnchors = {
+  sunrise: "2026-07-04T03:47:00+00:00",
+  sunset: "2026-07-04T20:21:00+00:00",
+  noon: "2026-07-04T12:04:00+00:00",
+  midnight: "2026-07-04T00:04:00+00:00",
+  dawn: "2026-07-04T03:02:00+00:00",
+  dusk: "2026-07-04T21:06:00+00:00",
+};
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+function makeHass(anchors: SunAnchors | Record<string, string | null> = ANCHORS) {
+  const calls: any[] = [];
+  const callWS = vi.fn(async (msg: any) => {
+    calls.push(msg);
+    if (msg.type === "ambience/simulate/inputs") return { knobs: [], has_time: true };
+    if (msg.type === "ambience/simulate/sun_anchors") return { anchors };
+    if (msg.type === "ambience/simulate") return { result: { category: "g1", outcome: "acted" } };
+    return {};
+  });
+  return { hass: { callWS } as any, calls };
+}
+
+async function mount(hass: any): Promise<any> {
+  const el: any = document.createElement("ambience-simulator-modal");
+  el.hass = hass;
+  el.scope = { scope_kind: "area", scope_id: "kitchen" };
+  el.category = "g1";
+  el.open = true;
+  document.body.appendChild(el);
+  await el.updateComplete;
+  await tick(); // flush async _fetch (simulate/inputs)
+  await el.updateComplete;
+  return el;
+}
+
+async function switchToSun(el: any): Promise<void> {
+  el._date = "2026-07-04";
+  const modeSel = el.shadowRoot.querySelector("select.whenmode") as HTMLSelectElement;
+  modeSel.value = "sun";
+  modeSel.dispatchEvent(new Event("change"));
+  await el.updateComplete;
+  await tick(); // flush async _fetchAnchors
+  await el.updateComplete;
+}
+
+describe("simulator When control — Sun mode", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("switching to Sun mode fetches that date's anchors", async () => {
+    const { hass, calls } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    expect(
+      calls.some((c) => c.type === "ambience/simulate/sun_anchors" && c.date === "2026-07-04"),
+    ).toBe(true);
+    expect(el.shadowRoot.querySelector("select.anchor")).toBeTruthy();
+  });
+
+  test("_resolvedInstant applies the offset to the anchor instant", async () => {
+    const { hass } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    el._offset = -30;
+    await el.updateComplete;
+    const expected = Date.parse("2026-07-04T20:21:00+00:00") - 30 * 60000;
+    expect(el._resolvedInstant()).toBe(expected);
+  });
+
+  test("readout shows the resolved-time arrow", async () => {
+    const { hass } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    el._offset = -30;
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("→");
+  });
+
+  test("an undefined anchor shows the note and _resolvedInstant is null", async () => {
+    const polar = { ...ANCHORS, sunset: null };
+    const { hass } = makeHass(polar);
+    el = await mount(hass);
+    await switchToSun(el);
+    el._anchor = "sunset";
+    await el.updateComplete;
+    expect(el._resolvedInstant()).toBeNull();
+    expect(el.shadowRoot.textContent?.toLowerCase()).toContain("no");
+  });
+
+  test("changing the date refetches anchors", async () => {
+    const { hass, calls } = makeHass();
+    el = await mount(hass);
+    await switchToSun(el);
+    const dateInput = el.shadowRoot.querySelector('input[type="date"]') as HTMLInputElement;
+    dateInput.value = "2026-12-21";
+    dateInput.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    await tick();
+    expect(
+      calls.some((c) => c.type === "ambience/simulate/sun_anchors" && c.date === "2026-12-21"),
+    ).toBe(true);
+  });
+});

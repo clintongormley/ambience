@@ -115,7 +115,7 @@ export class AmbienceTimeEndpoint extends LitElement {
   }
 
   private _renderSun(v: { anchor: SunAnchor; offset_min: number; clamp?: SunClamp | null }) {
-    const hint = _formatOffsetHint(v.offset_min, this.hass);
+    const hint = formatOffsetHint(v.offset_min, this.hass);
     const clampDir = v.clamp?.dir ?? "";
     const clampTime = v.clamp
       ? `${String(v.clamp.hh).padStart(2, "0")}:${String(v.clamp.mm).padStart(2, "0")}`
@@ -171,7 +171,7 @@ function _nowClock(): { hh: number; mm: number } {
   return { hh: d.getHours(), mm: d.getMinutes() };
 }
 
-function _formatOffsetHint(
+export function formatOffsetHint(
   offset_min: number,
   hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown },
 ): string {

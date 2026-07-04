@@ -1,9 +1,9 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { type HassConnection, simulate, simulateInputs } from "../api.js";
+import { type HassConnection, simulate, simulateInputs, simulateSunAnchors } from "../api.js";
 import { type EntityAreaHass, entityDisplayName } from "../entity-area.js";
-import { humanizeId, localize, localizeWsError, stateValueLabel } from "../i18n.js";
+import { anchorLabel, humanizeId, localize, localizeWsError, stateValueLabel } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
@@ -16,10 +16,13 @@ import type {
   SimulateVerdictKnob,
   SimulateVerdicts,
   StateForDuration,
+  SunAnchor,
+  SunAnchors,
 } from "../types.js";
 import { entityRowStyles, renderEntityIcon } from "./entity-row.js";
 import { statesMap } from "./hass-states.js";
 import { ModalDismissController } from "./modal-shell.js";
+import { formatOffsetHint } from "./time-endpoint.js";
 
 // Display label for a raw option value (the sent value stays raw).
 function optionLabel(hass: HassConnection | undefined, value: string): string {
@@ -55,6 +58,9 @@ function localTime(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Anchors in the order the picker lists them (mirrors time-endpoint.ts).
+const SUN_ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
+
 /**
  * Per-category what-if simulator. Loads the category's editable inputs (pre-filled
  * live), lets the user bend a date+time, entity controls, and opaque-predicate
@@ -82,6 +88,8 @@ export class AmbienceSimulatorModal extends LitElement {
         letter-spacing: 0.05em; color: var(--primary-text-color, #fff); margin: 0.9rem 0 0.4rem; }
       .when { display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0 0.4rem; }
       .when .hint { color: var(--secondary-text-color, #999); font-size: 0.8em; }
+      .when .hint.err { color: var(--error-color, #c00); }
+      .when input.num { width: 5rem; text-align: right; }
       /* Top-align so the icon and control line up with the entity name (first
          line), not floating between the name and the entity_id subtitle. */
       .row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.55rem 0;
@@ -147,6 +155,12 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _verdicts: Record<string, boolean> = {};
   @state() private _date = "";
   @state() private _time = "";
+  @state() private _whenMode: "time" | "sun" = "time";
+  @state() private _anchor: SunAnchor = "sunset";
+  @state() private _offset = 0;
+  @state() private _anchors: SunAnchors | null = null;
+  @state() private _anchorsDate = "";
+  @state() private _anchorsError = "";
   @state() private _result: BufferedUnit | null = null;
   @state() private _expanded = false;
 
@@ -187,6 +201,12 @@ export class AmbienceSimulatorModal extends LitElement {
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
+    this._whenMode = "time";
+    this._anchor = "sunset";
+    this._offset = 0;
+    this._anchors = null;
+    this._anchorsDate = "";
+    this._anchorsError = "";
   }
 
   // Fetch the inputs. Every reactive write is post-await, so firing it from
@@ -238,6 +258,74 @@ export class AmbienceSimulatorModal extends LitElement {
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
+    this._whenMode = "time";
+  }
+
+  private _setWhenMode(mode: "time" | "sun"): void {
+    if (mode === this._whenMode) return;
+    this._whenMode = mode;
+    if (mode === "sun") void this._fetchAnchors(this._date);
+  }
+
+  private _setDate(value: string): void {
+    this._date = value;
+    if (this._whenMode === "sun") void this._fetchAnchors(value);
+  }
+
+  private _onOffsetInput(raw: string): void {
+    // Blank = no offset (0), so the placeholder shows through for the common case.
+    const t = raw.trim();
+    const n = t === "" ? 0 : parseInt(t, 10);
+    if (Number.isNaN(n)) return;
+    this._offset = n;
+  }
+
+  // Fetch the six anchors for `date`. Cached by date; stale/late responses
+  // (date changed, element detached) are dropped — mirrors _fetch's guards.
+  private async _fetchAnchors(date: string): Promise<void> {
+    if (!date) return;
+    if (this._anchorsDate === date && this._anchors) return;
+    this._anchorsError = "";
+    try {
+      const anchors = await simulateSunAnchors(this.hass, date);
+      if (!this.isConnected || this._date !== date) return;
+      this._anchors = anchors;
+      this._anchorsDate = date;
+    } catch (e) {
+      this._anchors = null;
+      this._anchorsError = localizeWsError(this.hass, e);
+    }
+  }
+
+  /** The resolved Sun-mode instant (ms epoch), or null when the chosen anchor is
+   *  undefined at the date/location or not yet fetched. Shared by the readout and
+   *  _run so the previewed time is exactly the simulated one. */
+  private _resolvedInstant(): number | null {
+    const iso = this._anchors?.[this._anchor];
+    if (!iso) return null;
+    return new Date(iso).getTime() + this._offset * 60000;
+  }
+
+  private _renderSunReadout() {
+    if (this._anchorsError) {
+      return html`<span class="hint err">${this._anchorsError}</span>`;
+    }
+    // Loaded but this anchor is undefined here (polar day/night).
+    if (this._anchors && this._anchors[this._anchor] === null) {
+      return html`<span class="hint">${localize(this.hass, "ui.simulate_sun_undefined", "no {anchor} on this date", { anchor: anchorLabel(this.hass, this._anchor) })}</span>`;
+    }
+    const instant = this._resolvedInstant();
+    if (instant === null) return nothing; // still fetching
+    const anchorIso = this._anchors![this._anchor]!;
+    const resolved = new Date(instant);
+    // Include the date when the resolved instant lands on a different day than
+    // the one picked (large offset, solar midnight).
+    const resolvedLocal =
+      localDate(resolved) === this._date
+        ? localTime(resolved)
+        : `${localDate(resolved)} ${localTime(resolved)}`;
+    const hint = formatOffsetHint(this._offset, this.hass);
+    return html`<span class="hint">${anchorLabel(this.hass, this._anchor)} ${localTime(new Date(anchorIso))}${hint ? html` ${hint}` : ""} ${localize(this.hass, "ui.simulate_sun_resolved", "→ {time}", { time: resolvedLocal })}</span>`;
   }
 
   private _resetEntity(k: SimulateEntityKnob): void {
@@ -346,12 +434,33 @@ export class AmbienceSimulatorModal extends LitElement {
               <p class="sec-title">${localize(this.hass, "ui.when_heading", "When")}</p>
               <div class="when">
                 <input type="date" .value=${this._date}
-                  @change=${(e: Event) => (this._date = (e.target as HTMLInputElement).value)} />
-                <input type="time" .value=${this._time}
-                  @change=${(e: Event) => (this._time = (e.target as HTMLInputElement).value)} />
+                  @change=${(e: Event) => this._setDate((e.target as HTMLInputElement).value)} />
+                <select class="whenmode" .value=${this._whenMode}
+                  @change=${(e: Event) => this._setWhenMode((e.target as HTMLSelectElement).value as "time" | "sun")}>
+                  <option value="time" ?selected=${this._whenMode === "time"}>${localize(this.hass, "ui.endpoint_time", "Time")}</option>
+                  <option value="sun" ?selected=${this._whenMode === "sun"}>${localize(this.hass, "ui.endpoint_sun", "Sun")}</option>
+                </select>
+                ${
+                  this._whenMode === "time"
+                    ? html`<input type="time" .value=${this._time}
+                        @change=${(e: Event) => (this._time = (e.target as HTMLInputElement).value)} />`
+                    : html`
+                      <select class="anchor"
+                        @change=${(e: Event) => (this._anchor = (e.target as HTMLSelectElement).value as SunAnchor)}>
+                        ${SUN_ANCHORS.map((a) => html`<option value=${a} ?selected=${a === this._anchor}>${anchorLabel(this.hass, a)}</option>`)}
+                      </select>
+                      <input class="num" type="number" step="1"
+                        placeholder=${localize(this.hass, "ui.offset_placeholder", "Offset")}
+                        .value=${this._offset === 0 ? "" : String(this._offset)}
+                        @input=${(e: Event) => this._onOffsetInput((e.target as HTMLInputElement).value)} />`
+                }
                 <button class="reset" title=${localize(this.hass, "ui.reset_to_now", "Reset to now")} aria-label=${localize(this.hass, "ui.reset_to_now", "Reset to now")}
                   @click=${() => this._resetWhen()}>↺</button>
-                <span class="hint">${localize(this.hass, "ui.simulate_when_hint", "drives sun, time-of-day, weekday & workday")}</span>
+                ${
+                  this._whenMode === "sun"
+                    ? this._renderSunReadout()
+                    : html`<span class="hint">${localize(this.hass, "ui.simulate_when_hint", "drives sun, time-of-day, weekday & workday")}</span>`
+                }
               </div>`
                 : nothing
             }

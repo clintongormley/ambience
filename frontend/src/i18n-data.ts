@@ -356,6 +356,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       invalid_datetime: "Enter a valid date and time.",
       simulate_title: "Simulate",
       simulate_when_hint: "drives sun, time-of-day, weekday & workday",
+      simulate_sun_resolved: "→ {time}",
+      simulate_sun_undefined: "no {anchor} on this date",
       simulate_inputs_heading: "Inputs this category depends on",
       simulate_button: "Simulate",
       reset_to_now: "Reset to now",
@@ -938,6 +940,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       simulate_title: "Simular",
       simulate_when_hint:
         "controla el sol, la hora del día, el día de la semana y los días laborables",
+      simulate_sun_resolved: "→ {time}",
+      simulate_sun_undefined: "sin {anchor} en esta fecha",
       simulate_inputs_heading: "Entradas de las que depende esta categoría",
       simulate_button: "Simular",
       reset_to_now: "Restablecer a ahora",

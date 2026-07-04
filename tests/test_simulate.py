@@ -21,6 +21,7 @@ from custom_components.ambience.simulate import (
     _is_number,
     _record_attr,
     _safe_category_name,
+    _simulate_outcome,
     _SimulatedHass,
     _SimulatedStates,
     _verdict_snapshot,
@@ -1060,3 +1061,46 @@ async def test_run_simulation_unavailable_condition_matches_when_entity_unavaila
     assert result["outcome"] == "no_op"
     assert result["winner_name"] == "Sensor down"
     assert result["explanation"]["scenes"][0]["matched"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task 1: _simulate_outcome debounce decision helper
+# ---------------------------------------------------------------------------
+
+
+def test_simulate_outcome_first_win_acts_and_remembers():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(None, 5, True, None) == (Outcome.ACTED, 5)
+
+
+def test_simulate_outcome_no_match_forgets():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, None, False, None) == (Outcome.NO_MATCH, None)
+
+
+def test_simulate_outcome_blocker_is_no_op_and_transparent():
+    from custom_components.ambience.trace import Outcome
+
+    # winner with no actions leaves prev_applied untouched
+    assert _simulate_outcome(5, 2, False, None) == (Outcome.NO_OP, 5)
+
+
+def test_simulate_outcome_same_winner_debounces():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 5, True, None) == (Outcome.DEBOUNCED, 5)
+    assert _simulate_outcome(5, 5, True, "once") == (Outcome.DEBOUNCED, 5)
+
+
+def test_simulate_outcome_apply_always_reasserts():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 5, True, "always") == (Outcome.ACTED, 5)
+
+
+def test_simulate_outcome_new_winner_acts():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 2, True, None) == (Outcome.ACTED, 2)

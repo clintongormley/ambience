@@ -477,6 +477,31 @@ def _safe_category_name(hass: HomeAssistant, category: str) -> str | None:
         return None
 
 
+def _simulate_outcome(
+    prev_applied: int | None,
+    winner_index: int | None,
+    has_actions: bool,
+    apply_mode: str | None,
+) -> tuple[Outcome, int | None]:
+    """Decide the outcome + the next last-applied index for one simulate step,
+    mirroring the production debounce in trigger_engine._resolve_and_apply.
+
+    prev_applied is the winning scene index the previous step *acted* on (None if
+    none). Rules, in order:
+      - no winner            -> NO_MATCH, forget (next = None)
+      - winner has no actions -> NO_OP, transparent (next = prev_applied)
+      - winner == prev_applied and apply != "always" -> DEBOUNCED (next = prev_applied)
+      - otherwise            -> ACTED (next = winner)
+    """
+    if winner_index is None:
+        return Outcome.NO_MATCH, None
+    if not has_actions:
+        return Outcome.NO_OP, prev_applied
+    if winner_index == prev_applied and apply_mode != "always":
+        return Outcome.DEBOUNCED, prev_applied
+    return Outcome.ACTED, winner_index
+
+
 async def run_simulation(
     hass: HomeAssistant,
     scope_kind: str,

@@ -148,6 +148,41 @@ async def test_simulate_inputs_returns_panel_shape(
     assert motion["options"] == ["on", "off"]
 
 
+async def test_simulate_returns_applied_index_and_accepts_prev_applied(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """The response carries applied_index; replaying it as prev_applied debounces
+    the re-won scene (no actions), mirroring production's last_applied."""
+    first = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"binary_sensor.motion": {"state": "on"}},
+    )
+    assert first["success"] is True
+    assert first["result"]["result"]["outcome"] == "acted"
+    applied = first["result"]["applied_index"]
+    assert isinstance(applied, int)
+
+    second = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"binary_sensor.motion": {"state": "on"}},
+        prev_applied=applied,
+    )
+    assert second["success"] is True
+    assert second["result"]["result"]["outcome"] == "debounced"
+    assert second["result"]["result"]["actions"] == []
+    assert second["result"]["applied_index"] == applied
+
+
 async def test_simulate_accepts_verdicts(hass: HomeAssistant, hass_ws_client, seeded_area) -> None:
     resp = await _ws_send(
         hass_ws_client,

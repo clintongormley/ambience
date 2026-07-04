@@ -283,3 +283,24 @@ def test_sun_anchors_rejects_bad_date(hass: HomeAssistant) -> None:
     with pytest.raises(AmbienceError) as exc:
         sun_anchors(hass, "not-a-date")
     assert exc.value.translation_key == "unparseable_date"
+
+
+async def test_ws_sun_anchors_returns_anchors(
+    hass: HomeAssistant, hass_ws_client, installed
+) -> None:
+    hass.config.latitude = 51.5
+    hass.config.longitude = -0.12
+    hass.config.elevation = 0
+    resp = await _ws_send(hass_ws_client, type="ambience/simulate/sun_anchors", date="2026-07-04")
+    assert resp["success"] is True
+    anchors = resp["result"]["anchors"]
+    assert set(anchors) == {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
+    assert anchors["sunset"] is not None
+
+
+async def test_ws_sun_anchors_rejects_bad_date(
+    hass: HomeAssistant, hass_ws_client, installed
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/simulate/sun_anchors", date="nope")
+    assert resp["success"] is False
+    assert resp["error"]["translation_key"] == "unparseable_date"

@@ -52,7 +52,7 @@ from .service import (
     category_config,
     live_state,
 )
-from .simulate import SimulatedWorld, run_simulation, simulate_inputs
+from .simulate import SimulatedWorld, run_simulation, simulate_inputs, sun_anchors
 from .sorting import condition_priority
 from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
@@ -1511,6 +1511,29 @@ async def _ws_simulate(
     connection.send_result(msg["id"], {"result": result})
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/simulate/sun_anchors",
+        vol.Required("date"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_simulate_sun_anchors(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The six sun anchors for a date, so the simulator's Sun-mode 'When' can
+    resolve an anchor ± offset to a concrete instant (read-only)."""
+    try:
+        anchors = sun_anchors(hass, msg["date"])
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        return
+    connection.send_result(msg["id"], {"anchors": anchors})
+
+
 def async_unregister_commands(hass: HomeAssistant) -> None:
     """Remove Ambience WS commands from HA's websocket_api handler registry."""
     handlers = hass.data.get(websocket_api.const.DOMAIN, {})
@@ -1576,4 +1599,5 @@ _WS_HANDLERS = (
     _ws_ai_bundle,
     _ws_simulate_inputs,
     _ws_simulate,
+    _ws_simulate_sun_anchors,
 )

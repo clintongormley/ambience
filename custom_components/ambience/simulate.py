@@ -533,9 +533,9 @@ async def run_simulation(
 
     winner = explanation.winner_index
     scene = candidates[winner] if winner is not None else None
-    has_actions = bool(scene.get("actions")) if scene is not None else False
+    actions = scene.get("actions", []) if scene is not None else []
     apply_mode = scene.get("apply") if scene is not None else None
-    outcome, next_applied = _simulate_outcome(prev_applied, winner, has_actions, apply_mode)
+    outcome, next_applied = _simulate_outcome(prev_applied, winner, bool(actions), apply_mode)
 
     if scene is None:
         unit = UnitTrace(
@@ -550,11 +550,11 @@ async def run_simulation(
         )
     else:
         # Only an ACTED step records its actions; DEBOUNCED and NO_OP carry none —
-        # exactly what production records when a scene is not (re)applied.
-        actions = scene.get("actions", [])
+        # exactly what production records when a scene is not (re)applied. (ACTED is
+        # only returned when the winner has actions, so no extra emptiness check.)
         recorded = (
             hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
-            if (outcome is Outcome.ACTED and actions)
+            if outcome is Outcome.ACTED
             else []
         )
         unit = UnitTrace(

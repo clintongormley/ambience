@@ -111,6 +111,7 @@ export class AmbienceSimulatorModal extends LitElement {
       .attr .row-text { padding-left: 34px; color: var(--secondary-text-color, #777); }
       .runbtn { padding: 0.45rem 1.1rem; background: var(--primary-color, #03a9f4); color: #fff;
         border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+      .runbtn[disabled] { opacity: 0.6; cursor: default; }
       .run-row { display: flex; justify-content: flex-end; margin-top: 0.6rem; }
       .error { color: var(--error-color, #c00); font-size: 0.9rem; }
       .result { margin-top: 1rem; }
@@ -168,6 +169,10 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _appliedIndex: number | null = null;
   // Per-result expand state, keyed by chronological run index ("sim-<i>").
   @state() private _expanded: Set<string> = new Set();
+  // True while a simulate call is in flight. Guards against a double-click firing
+  // two concurrent runs that both read the same stale _appliedIndex and so record
+  // a debounce sequence that never happened.
+  @state() private _running = false;
 
   constructor() {
     super();
@@ -201,9 +206,7 @@ export class AmbienceSimulatorModal extends LitElement {
   private _beginLoad(): void {
     this._error = "";
     this._loading = true;
-    this._results = [];
-    this._appliedIndex = null;
-    this._expanded = new Set();
+    this._resetResults();
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
@@ -419,6 +422,9 @@ export class AmbienceSimulatorModal extends LitElement {
   }
 
   private async _run(): Promise<void> {
+    // Re-entrancy guard: a run already in flight owns _appliedIndex until it
+    // resolves; a second concurrent run would carry stale context.
+    if (this._running) return;
     this._error = "";
     const now = this._resolveNow();
     if (now === null) {
@@ -435,6 +441,7 @@ export class AmbienceSimulatorModal extends LitElement {
           : localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
       return;
     }
+    this._running = true;
     try {
       const res = await simulate(
         this.hass,
@@ -449,10 +456,18 @@ export class AmbienceSimulatorModal extends LitElement {
       this._appliedIndex = res.applied_index;
     } catch (e) {
       this._error = localizeWsError(this.hass, e);
+    } finally {
+      this._running = false;
     }
   }
 
   private _clearHistory(): void {
+    this._resetResults();
+  }
+
+  // Clear the accumulated run history + carried debounce context + expand state.
+  // Shared by Clear and the reopen/category/scope reset so the three stay in sync.
+  private _resetResults(): void {
     this._results = [];
     this._appliedIndex = null;
     this._expanded = new Set();
@@ -531,7 +546,7 @@ export class AmbienceSimulatorModal extends LitElement {
               ${this._knobs.map((k) => (k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k)))}`
                 : nothing
             }
-            <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
+            <div class="run-row"><button class="runbtn" ?disabled=${this._running} @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
             ${
               this._results.length
                 ? html`<div class="results">${this._results

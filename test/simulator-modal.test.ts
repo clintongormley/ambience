@@ -902,6 +902,31 @@ describe("ambience-simulator-modal", () => {
     await el.updateComplete;
     expect(vi.mocked(api.simulate).mock.calls[1][6]).toBeNull();
   });
+
+  test("a re-entrant Simulate is ignored while a run is in flight", async () => {
+    el = await mount();
+    // First run stays pending so we can click again mid-flight.
+    let resolveFirst: (v: unknown) => void = () => {};
+    vi.mocked(api.simulate).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveFirst = r;
+      }) as any,
+    );
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    // Button is disabled while in flight.
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(true);
+    // A second click while pending must be a no-op — no second simulate call.
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    expect(vi.mocked(api.simulate).mock.calls.length).toBe(1);
+    // Resolving the first run re-enables the button and records exactly one result.
+    resolveFirst({ result: RESULT, applied_index: 0 });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(false);
+    expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(1);
+  });
 });
 
 describe("review fixes", () => {

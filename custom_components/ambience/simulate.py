@@ -508,9 +508,17 @@ async def run_simulation(
     scope_id: str | None,
     category: str,
     world: SimulatedWorld,
-) -> dict[str, Any]:
-    """Resolve one category against the simulated world and return a BufferedUnit
-    dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
+    *,
+    prev_applied: int | None = None,
+) -> tuple[dict[str, Any], int | None]:
+    """Resolve one category against the simulated world and return
+    (BufferedUnit dict, next applied index).
+
+    `prev_applied` is the winning scene index the previous simulate step acted on
+    (None to start). The outcome + next index follow production's debounce
+    (see `_simulate_outcome`), so repeated steps reproduce ACTED/NO_OP/DEBOUNCED/
+    NO_MATCH exactly as the live engine would. A `simulated` cause is used.
+    """
     conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     candidates = _category_config(hass, scope_kind, scope_id, category)["scenes"]
     # Narrow each condition's snapshot to the entities the simulated category's
@@ -524,38 +532,43 @@ async def run_simulation(
     category_name = _safe_category_name(hass, category)
 
     winner = explanation.winner_index
-    if winner is None:
+    scene = candidates[winner] if winner is not None else None
+    has_actions = bool(scene.get("actions")) if scene is not None else False
+    apply_mode = scene.get("apply") if scene is not None else None
+    outcome, next_applied = _simulate_outcome(prev_applied, winner, has_actions, apply_mode)
+
+    if scene is None:
         unit = UnitTrace(
             scope_kind,
             scope_id,
             category,
             switch_state,
-            Outcome.NO_MATCH,
+            outcome,
             explanation,
             category_name=category_name,
             scope_name=scope_name,
         )
     else:
-        scene = candidates[winner]
+        # Only an ACTED step records its actions; DEBOUNCED and NO_OP carry none —
+        # exactly what production records when a scene is not (re)applied.
         actions = scene.get("actions", [])
-        # A winner with no actions (a pure blocker) is a NO_OP, not an ACTED —
-        # mirror the engine so the preview matches what production would record.
+        recorded = (
+            hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
+            if (outcome is Outcome.ACTED and actions)
+            else []
+        )
         unit = UnitTrace(
             scope_kind,
             scope_id,
             category,
             switch_state,
-            Outcome.ACTED if actions else Outcome.NO_OP,
+            outcome,
             explanation,
             winner_name=scene.get("name"),
-            actions=(
-                hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
-                if actions
-                else actions
-            ),
+            actions=recorded,
             category_name=category_name,
             scope_name=scope_name,
         )
     cause = TriggerCause(kind=CauseKind.SIMULATED, detail=world.now.isoformat())
     record = BufferedUnit(event_id=None, timestamp=world.now.isoformat(), cause=cause, unit=unit)
-    return buffered_unit_to_dict(record)
+    return buffered_unit_to_dict(record), next_applied

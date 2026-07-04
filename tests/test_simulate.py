@@ -345,13 +345,15 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
     assert result["explanation"]["scenes"][0]["matched"] is True
+    # first win acts and remembers its scene index (0)
+    assert _applied == 0
 
 
 @pytest.mark.asyncio
@@ -371,7 +373,7 @@ async def test_run_simulation_marks_unexposed_action():
     # fan.toggle is not in the exposed set → flagged.
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["actions"][0]["unexposed"] is True
@@ -393,7 +395,7 @@ async def test_run_simulation_reports_no_op_for_no_action_winner():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "no_op"
     assert result["winner_name"] == "Blocker"
@@ -412,9 +414,97 @@ async def test_run_simulation_reports_no_match():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
     assert result["outcome"] == "no_match"
     assert result["winner_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_debounces_same_winner():
+    """Re-winning the same scene (prev_applied == winner) is DEBOUNCED with no
+    actions recorded — matching production's non-reapply."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "debounced"
+    assert result["winner_name"] == "Motion on"
+    assert result["actions"] == []
+    assert applied == 0
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_apply_always_reasserts_on_same_winner():
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Always on",
+            "apply": "always",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "acted"
+    assert result["actions"]  # actions re-asserted
+    assert applied == 0
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_blocker_is_transparent_to_applied():
+    """A pure blocker (no-action winner) reports NO_OP and leaves prev_applied
+    untouched, so a later re-win of the prior scene still debounces."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Blocker",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=7)
+
+    assert result["outcome"] == "no_op"
+    assert applied == 7  # transparent
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_no_match_forgets_applied():
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off -> no match
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "no_match"
+    assert applied is None  # forgotten
 
 
 # ---------------------------------------------------------------------------
@@ -1055,7 +1145,7 @@ async def test_run_simulation_unavailable_condition_matches_when_entity_unavaila
 
     # Override the entity to "unavailable" in the simulated world.
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.x": {"state": "unavailable"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     # The guard wins (no_op because it has no actions), confirming the condition matched.
     assert result["outcome"] == "no_op"

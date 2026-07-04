@@ -29,7 +29,7 @@ from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
 from .service import _switch_state, category_config
 from .state_options import known_attribute_values_for, known_states_for
-from .sun_position import anchor_datetimes, synthetic_sun_state
+from .sun_position import ANCHOR_NAMES, anchor_datetimes, synthetic_sun_state
 from .trace import (
     BufferedUnit,
     CauseKind,
@@ -439,11 +439,6 @@ async def simulate_inputs(
     return {"knobs": knobs, "has_time": has_time}
 
 
-# The six sun anchors served to the simulator's Sun-mode "When", in the order
-# the picker lists them. Must match sun_position._ANCHORS' keys.
-_SUN_ANCHOR_NAMES = ("sunrise", "sunset", "noon", "midnight", "dawn", "dusk")
-
-
 def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
     """The six sun anchors for `date_str` (YYYY-MM-DD) at the home's location.
 
@@ -461,8 +456,7 @@ def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
     now = parsed.replace(hour=12, tzinfo=dt_util.DEFAULT_TIME_ZONE)
     resolved = anchor_datetimes(hass, now, allow_missing=True)
     return {
-        name: (resolved[name].isoformat() if name in resolved else None)
-        for name in _SUN_ANCHOR_NAMES
+        name: (resolved[name].isoformat() if name in resolved else None) for name in ANCHOR_NAMES
     }
 
 

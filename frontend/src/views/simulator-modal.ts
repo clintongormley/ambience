@@ -22,7 +22,7 @@ import type {
 import { entityRowStyles, renderEntityIcon } from "./entity-row.js";
 import { statesMap } from "./hass-states.js";
 import { ModalDismissController } from "./modal-shell.js";
-import { formatOffsetHint } from "./time-endpoint.js";
+import { formatOffsetHint, parseOffsetMinutes, ANCHORS as SUN_ANCHORS } from "./time-endpoint.js";
 
 // Display label for a raw option value (the sent value stays raw).
 function optionLabel(hass: HassConnection | undefined, value: string): string {
@@ -57,9 +57,6 @@ function localDate(d: Date): string {
 function localTime(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
-// Anchors in the order the picker lists them (mirrors time-endpoint.ts).
-const SUN_ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
 /**
  * Per-category what-if simulator. Loads the category's editable inputs (pre-filled
@@ -273,10 +270,8 @@ export class AmbienceSimulatorModal extends LitElement {
   }
 
   private _onOffsetInput(raw: string): void {
-    // Blank = no offset (0), so the placeholder shows through for the common case.
-    const t = raw.trim();
-    const n = t === "" ? 0 : parseInt(t, 10);
-    if (Number.isNaN(n)) return;
+    const n = parseOffsetMinutes(raw);
+    if (n === null) return;
     this._offset = n;
   }
 
@@ -388,27 +383,28 @@ export class AmbienceSimulatorModal extends LitElement {
     return out;
   }
 
+  /** Resolve the "When" section to an ISO instant, or null when the inputs are
+   *  incomplete/invalid. Sun mode resolves the previewed anchor ± offset (null
+   *  when undefined/unfetched, or an absurd offset that overflows Date); Time
+   *  mode reads the wall-clock date+time (an Invalid Date's toISOString() throws,
+   *  which used to die as an unhandled rejection). */
+  private _resolveNow(): string | null {
+    if (this._whenMode === "sun") {
+      const instant = this._resolvedInstant();
+      if (instant === null || Number.isNaN(new Date(instant).getTime())) return null;
+      return new Date(instant).toISOString();
+    }
+    const parsed = new Date(`${this._date}T${this._time}`);
+    if (!this._date || !this._time || Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  }
+
   private async _run(): Promise<void> {
     this._error = "";
-    let now: string;
-    if (this._whenMode === "sun") {
-      // Resolve the sun anchor ± offset to the exact instant previewed. A null
-      // means the anchor is undefined here or not yet fetched.
-      const instant = this._resolvedInstant();
-      if (instant === null || Number.isNaN(new Date(instant).getTime())) {
-        this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
-        return;
-      }
-      now = new Date(instant).toISOString();
-    } else {
-      // The native date/time inputs can be cleared; an Invalid Date's
-      // toISOString() throws, which used to die as an unhandled rejection.
-      const parsed = new Date(`${this._date}T${this._time}`);
-      if (!this._date || !this._time || Number.isNaN(parsed.getTime())) {
-        this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
-        return;
-      }
-      now = parsed.toISOString();
+    const now = this._resolveNow();
+    if (now === null) {
+      this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
+      return;
     }
     try {
       this._result = await simulate(

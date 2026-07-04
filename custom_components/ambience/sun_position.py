@@ -28,6 +28,10 @@ _ANCHORS = {
     "dusk": ("next_dusk", dusk),
 }
 
+# The six anchor names in `_ANCHORS`' order — the single source consumers import
+# instead of re-listing the names (keeps frontend/backend anchor sets in sync).
+ANCHOR_NAMES = tuple(_ANCHORS)
+
 
 def _observer(hass: HomeAssistant) -> Observer:
     return Observer(

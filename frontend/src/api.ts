@@ -27,6 +27,7 @@ import type {
   SimulateOverrides,
   SimulateScope,
   SimulateVerdicts,
+  SunAnchors,
   SwitchDefaults,
   WeatherConfig,
   WeatherGroup,
@@ -620,6 +621,14 @@ export async function simulateInputs(
     scope_id: scope.scope_id,
     category,
   });
+}
+
+export async function simulateSunAnchors(hass: HassConnection, date: string): Promise<SunAnchors> {
+  const res = await hass.callWS<{ anchors: SunAnchors }>({
+    type: "ambience/simulate/sun_anchors",
+    date,
+  });
+  return res.anchors;
 }
 
 export async function simulate(

@@ -114,6 +114,10 @@ export class AmbienceSimulatorModal extends LitElement {
       .run-row { display: flex; justify-content: flex-end; margin-top: 0.6rem; }
       .error { color: var(--error-color, #c00); font-size: 0.9rem; }
       .result { margin-top: 1rem; }
+      .results { display: flex; flex-direction: column; gap: 0.75rem; }
+      .clear { padding: 0.25rem 0.75rem; cursor: pointer;
+        border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+        background: none; color: inherit; font-size: 0.85rem; }
       /* Narrow screens (HA mobile app): the state/For controls otherwise crush
          the entity name into a one-character-wide column. Let the row wrap and
          drop the controls onto their own full-width line, indented under the
@@ -158,8 +162,12 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _anchors: SunAnchors | null = null;
   @state() private _anchorsDate = "";
   @state() private _anchorsError = "";
-  @state() private _result: BufferedUnit | null = null;
-  @state() private _expanded = false;
+  @state() private _results: BufferedUnit[] = [];
+  // The winning scene index the previous run acted on, carried into the next run
+  // so a re-won scene debounces. null starts a fresh sequence.
+  @state() private _appliedIndex: number | null = null;
+  // Per-result expand state, keyed by chronological run index ("sim-<i>").
+  @state() private _expanded: Set<string> = new Set();
 
   constructor() {
     super();
@@ -193,8 +201,9 @@ export class AmbienceSimulatorModal extends LitElement {
   private _beginLoad(): void {
     this._error = "";
     this._loading = true;
-    this._result = null;
-    this._expanded = false;
+    this._results = [];
+    this._appliedIndex = null;
+    this._expanded = new Set();
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
@@ -427,18 +436,33 @@ export class AmbienceSimulatorModal extends LitElement {
       return;
     }
     try {
-      this._result = await simulate(
+      const res = await simulate(
         this.hass,
         this.scope,
         this.category,
         now,
         this._buildOverrides(),
         this._buildVerdicts(),
+        this._appliedIndex,
       );
-      this._expanded = false;
+      this._results = [...this._results, res.result];
+      this._appliedIndex = res.applied_index;
     } catch (e) {
       this._error = localizeWsError(this.hass, e);
     }
+  }
+
+  private _clearHistory(): void {
+    this._results = [];
+    this._appliedIndex = null;
+    this._expanded = new Set();
+  }
+
+  private _toggle(key: string): void {
+    const next = new Set(this._expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._expanded = next;
   }
 
   private _onClose(): void {
@@ -451,6 +475,11 @@ export class AmbienceSimulatorModal extends LitElement {
       <div class="modal" role="dialog" aria-modal="true" @click=${(e: Event) => e.stopPropagation()}>
         <div class="header">
           <h3>${localize(this.hass, "ui.simulate_title", "Simulate")} · ${this.categoryName ?? this.category}</h3>
+          ${
+            this._results.length
+              ? html`<button class="clear" @click=${() => this._clearHistory()}>${localize(this.hass, "ui.clear_traces", "Clear")}</button>`
+              : nothing
+          }
           <button class="close" @click=${this._onClose} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">
@@ -503,7 +532,25 @@ export class AmbienceSimulatorModal extends LitElement {
                 : nothing
             }
             <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
-            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass, undefined, this.periods?.custom ?? {}, this.exposedActions)}</div>` : nothing}
+            ${
+              this._results.length
+                ? html`<div class="results">${this._results
+                    .map((u, i) => ({ u, key: `sim-${i}` }))
+                    .reverse()
+                    .map(
+                      ({ u, key }) =>
+                        html`<div class="result">${renderEvaluation(
+                          u,
+                          this._expanded.has(key),
+                          () => this._toggle(key),
+                          this.hass,
+                          undefined,
+                          this.periods?.custom ?? {},
+                          this.exposedActions,
+                        )}</div>`,
+                    )}</div>`
+                : nothing
+            }
           `
           }
         </div>

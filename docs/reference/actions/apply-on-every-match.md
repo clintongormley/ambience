@@ -19,7 +19,7 @@ when it first becomes the winner.
 
 For a full worked example — keeping a water pump's _Power Shower_ mode on
 despite its own 5-minute auto-off timer — see the
-[Power Shower recipe](../../recipes/house/power-shower.md).
+[Power Shower recipe](../../recipes/bathroom/power-shower.md).
 
 ## Re-run all scenes after inactivity
 

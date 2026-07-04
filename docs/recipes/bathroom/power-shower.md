@@ -34,7 +34,7 @@ When the pump is moving more than 5 litres per minute and someone is in one of
 the three showers, turn on the Power Shower `input_boolean`, which starts Power
 Shower mode on the pump for 5 minutes:
 
-![On when somebody is in the shower.](../images/house/power-shower/somebody-in-shower.png "On when somebody is in the shower.")
+![On when somebody is in the shower.](../images/bathroom/power-shower/somebody-in-shower.png "On when somebody is in the shower.")
 
 !!! note "House scope"
 
@@ -48,7 +48,7 @@ We don't want to open the Gardena valve until the person has finished, so we
 block until every shower reads clear for at least 5 seconds (to absorb
 occupancy-sensor jitter) or the water flow drops below 5 litres per minute:
 
-![Block until showers clear for 5 seconds.](../images/house/power-shower/block.png "Block until showers clear for 5 seconds.")
+![Block until showers clear for 5 seconds.](../images/bathroom/power-shower/block.png "Block until showers clear for 5 seconds.")
 
 **Note:** the **On when somebody is in the shower** scene has to be moved to the
 top of the list manually to beat the Block scene.
@@ -58,7 +58,7 @@ top of the list manually to beat the Block scene.
 Once the water stops flowing or every shower is vacant, turn off the Power
 Shower and open the Gardena irrigation valve:
 
-![Open Gardena after powershower.](../images/house/power-shower/Gardena-on.png "Open Gardena after powershower.")
+![Open Gardena after powershower.](../images/bathroom/power-shower/Gardena-on.png "Open Gardena after powershower.")
 
 ## Scene: Close Gardena
 
@@ -67,7 +67,7 @@ it. We also check that the Power Shower `input_boolean` was turned off less than
 two minutes ago, so this scene doesn't interfere with the normal Gardena
 irrigation schedule:
 
-![Close Gardena.](../images/house/power-shower/Gardena-off.png "Close Gardena.")
+![Close Gardena.](../images/bathroom/power-shower/Gardena-off.png "Close Gardena.")
 
 ## Problem: The 5 minute timer on the Power Shower
 
@@ -86,7 +86,7 @@ somebody is in the shower** scene, but that creates a loop:
 Instead, we match **Power Shower is (off or on)**. That triggers reevaluation
 when the timer turns it off, but keeps matching while it's on.
 
-![Power shower is on or off.](../images/house/power-shower/power-shower-on-off.png "Power shower is on or off.")
+![Power shower is on or off.](../images/bathroom/power-shower/power-shower-on-off.png "Power shower is on or off.")
 
 ## Problem: The Power Shower isn't turned on after it goes off
 
@@ -105,7 +105,7 @@ irrigation system open at the same time.
 
 Once we have everything in place, the Power Shower scene group looks like this:
 
-![Final Power Shower scene group.](../images/house/power-shower/final.png "Final Power Shower scene group.")
+![Final Power Shower scene group.](../images/bathroom/power-shower/final.png "Final Power Shower scene group.")
 
 ## Lifecycle
 

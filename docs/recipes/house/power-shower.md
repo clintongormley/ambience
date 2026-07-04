@@ -103,6 +103,10 @@ on if it's currently off.
 close the Gardena water control, as we don't want the Power Shower on and the
 irrigation system open at the same time.
 
+Once we have everything in place, the Power Shower scene group looks like this:
+
+![Final Power Shower scene group.](../images/house/power-shower/final.png "Final Power Shower scene group.")
+
 ## Lifecycle
 
 | Trigger                                                                                                                    | Matched Scene                           | Action                                                           |

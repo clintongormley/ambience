@@ -8,6 +8,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- **Sun-relative times in the Simulate screen.** The "When" control now offers a
+    **Sun** mode alongside the clock: pick a solar anchor (dawn, sunrise, noon,
+    sunset, dusk, or midnight) with an optional ± offset in minutes, and
+    Ambience shows the resolved wall-clock time and simulates at that instant.
+    This makes it easy to test scenes keyed off sun events — e.g. "30 minutes
+    before sunset" — without having to work out when sunset actually falls on
+    the chosen date.
+
 ### Fixed
 
 - People conditions now resolve correctly for anyone tracked by a **non-GPS

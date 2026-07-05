@@ -143,6 +143,11 @@ export type SunAnchor = "sunrise" | "sunset" | "noon" | "midnight" | "dawn" | "d
 
 export type SunClamp = { dir: "not_before" | "not_after"; hh: number; mm: number };
 
+/** The six sun anchors for a date, as UTC ISO strings (null where undefined at
+ *  the date/location — polar day/night). Served by ambience/simulate/sun_anchors;
+ *  the simulator resolves `anchor ± offset` against these. */
+export type SunAnchors = Record<SunAnchor, string | null>;
+
 export type TimeEndpoint =
   | { kind: "time"; hh: number; mm: number }
   | { kind: "sun"; anchor: SunAnchor; offset_min: number; clamp?: SunClamp | null };

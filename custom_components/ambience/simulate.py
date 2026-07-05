@@ -16,6 +16,7 @@ from typing import Any
 
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
+from homeassistant.util import dt as dt_util
 
 from .conditions._common import dur_seconds
 from .conditions.script import ScriptSnapshot
@@ -28,7 +29,7 @@ from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
 from .service import _switch_state, category_config
 from .state_options import known_attribute_values_for, known_states_for
-from .sun_position import synthetic_sun_state
+from .sun_position import ANCHOR_NAMES, anchor_datetimes, synthetic_sun_state
 from .trace import (
     BufferedUnit,
     CauseKind,
@@ -436,6 +437,27 @@ async def simulate_inputs(
     knobs.extend(await _verdict_knobs(hass, conditions, category_cfg))
     has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
     return {"knobs": knobs, "has_time": has_time}
+
+
+def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
+    """The six sun anchors for `date_str` (YYYY-MM-DD) at the home's location.
+
+    Each value is that solar event's occurrence on the given local date as a UTC
+    ISO string, or None where the anchor is undefined at the date/location (polar
+    day/night). The simulator's Sun-mode "When" resolves `anchor ± offset` against
+    these to build the instant it sends to `ambience/simulate`.
+    """
+    try:
+        parsed = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError as exc:
+        raise AmbienceError("unparseable_date", date=date_str) from exc
+    # anchor_datetimes reads only now's local *date*; a tz-aware local noon
+    # materialises the date unambiguously (no DST-fold edge at noon).
+    now = parsed.replace(hour=12, tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    resolved = anchor_datetimes(hass, now, allow_missing=True)
+    return {
+        name: (resolved[name].isoformat() if name in resolved else None) for name in ANCHOR_NAMES
+    }
 
 
 def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:

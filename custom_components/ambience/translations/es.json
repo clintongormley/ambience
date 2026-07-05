@@ -148,6 +148,7 @@
     "category_name_empty": { "message": "El nombre de la categoría {cid} debe ser una cadena no vacía." },
     "duplicate_category_name": { "message": "Nombre de categoría duplicado: {name}" },
     "unparseable_now": { "message": "No se puede analizar now: {now}" },
+    "unparseable_date": { "message": "No se puede analizar la fecha: {date}" },
     "now_not_timezone_aware": { "message": "`now` debe ser consciente de la zona horaria: {now}" }
   },
   "services": {

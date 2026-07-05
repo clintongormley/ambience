@@ -4,7 +4,15 @@ import { emitValueChanged } from "../dom.js";
 import { anchorLabel, localize } from "../i18n.js";
 import type { SunAnchor, SunClamp, TimeEndpoint } from "../types.js";
 
-const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
+export const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
+
+/** Parse an offset-minutes field: blank → 0 (so the placeholder shows through
+ *  for the common zero case), an unparseable value → null (caller ignores it). */
+export function parseOffsetMinutes(raw: string): number | null {
+  const t = raw.trim();
+  const n = t === "" ? 0 : parseInt(t, 10);
+  return Number.isNaN(n) ? null : n;
+}
 
 /**
  * Editor for one TimeEndpoint. Renders a kind dropdown (Time | Sun) and the
@@ -81,11 +89,8 @@ export class AmbienceTimeEndpoint extends LitElement {
 
   private _onOffsetChange(e: Event) {
     if (this.value.kind !== "sun") return;
-    // A blank field means "no offset" → 0, so the placeholder can show through
-    // for the common zero case.
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const offset_min = raw === "" ? 0 : parseInt(raw, 10);
-    if (Number.isNaN(offset_min)) return;
+    const offset_min = parseOffsetMinutes((e.target as HTMLInputElement).value);
+    if (offset_min === null) return;
     this._emit({ ...this.value, offset_min });
   }
 
@@ -115,7 +120,7 @@ export class AmbienceTimeEndpoint extends LitElement {
   }
 
   private _renderSun(v: { anchor: SunAnchor; offset_min: number; clamp?: SunClamp | null }) {
-    const hint = _formatOffsetHint(v.offset_min, this.hass);
+    const hint = formatOffsetHint(v.offset_min, this.hass);
     const clampDir = v.clamp?.dir ?? "";
     const clampTime = v.clamp
       ? `${String(v.clamp.hh).padStart(2, "0")}:${String(v.clamp.mm).padStart(2, "0")}`
@@ -171,7 +176,7 @@ function _nowClock(): { hh: number; mm: number } {
   return { hh: d.getHours(), mm: d.getMinutes() };
 }
 
-function _formatOffsetHint(
+export function formatOffsetHint(
   offset_min: number,
   hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown },
 ): string {

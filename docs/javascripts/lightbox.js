@@ -23,7 +23,6 @@
 
     imgEl = document.createElement("img");
     imgEl.className = "lightbox-img";
-    imgEl.alt = "";
 
     overlay.appendChild(imgEl);
     document.body.appendChild(overlay);
@@ -59,7 +58,7 @@
     imgEl.removeAttribute("src");
     document.body.classList.remove("lightbox-open");
     if (lastFocused && typeof lastFocused.focus === "function") {
-      lastFocused.focus();
+      lastFocused.focus({ preventScroll: true });
     }
   }
 
@@ -71,8 +70,7 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && overlay && !overlay.hidden) {
-      close();
-    }
+    // close() is a no-op when the viewer isn't open, so no extra guard needed.
+    if (event.key === "Escape") close();
   });
 })();

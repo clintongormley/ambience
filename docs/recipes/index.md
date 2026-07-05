@@ -25,6 +25,8 @@ wins. For the full model, see
 
 ### Bathroom
 
+The devices we automate in our bathroom (see the [overview](bathroom/index.md)):
+
 - [**Blind**](bathroom/blind.md) — open and close the bathroom blind by time of
     day, and ease it open on bright mornings without overriding a manual
     adjustment.

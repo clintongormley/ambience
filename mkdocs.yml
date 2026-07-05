@@ -101,6 +101,7 @@ nav:
   - Recipes:
       - recipes/index.md
       - Bathroom:
+          - recipes/bathroom/index.md
           - Blind: recipes/bathroom/blind.md
           - Extractor fan: recipes/bathroom/fan.md
           - Lights: recipes/bathroom/lights.md

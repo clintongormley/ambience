@@ -17,6 +17,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     This makes it easy to test scenes keyed off sun events — e.g. "30 minutes
     before sunset" — without having to work out when sunset actually falls on
     the chosen date.
+- The per-category **Simulate** tool now keeps a running history instead of
+    replacing the previous result. Each click is added to the list and carries
+    the previous run's outcome forward, so a sequence of runs reproduces what
+    Ambience does live — a scene that wins again shows as *unchanged* (its
+    actions are **not** re-applied) rather than re-acting, exactly as the real
+    debounce would. A **Clear** button resets the history.
 
 ### Fixed
 

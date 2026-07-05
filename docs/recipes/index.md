@@ -52,3 +52,8 @@ the [overview](kitchen-dining/index.md)):
 - [**Kitchen**](kitchen-dining/kitchen.md) — low light when you step up to the
     island, brighter once you settle in to cook, off quickly when the
     projector's on.
+
+### Security
+
+- [**House alarm**](alarm/index.md) — lock the front door when the alarm arms,
+    and disarm the alarm when someone unlocks the door.

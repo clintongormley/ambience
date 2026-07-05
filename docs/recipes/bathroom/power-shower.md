@@ -88,7 +88,7 @@ when the timer turns it off, but keeps matching while it's on.
 
 ![Power shower is on or off.](../images/bathroom/power-shower/power-shower-on-off.png "Power shower is on or off.")
 
-## Problem: The Power Shower isn't turned on after it goes off
+## Problem: The Power Shower stays off
 
 The **On when somebody is in the shower** scene now matches correctly, but it
 doesn't turn the Power Shower back on: because it never stops matching, its

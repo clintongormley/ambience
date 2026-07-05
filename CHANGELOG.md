@@ -26,6 +26,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- In the **Simulate** screen, an entity that is currently *unavailable* (e.g. a
+    remote whose hub is off the network) now shows **Unavailable** as its state
+    and offers it as a choice, instead of displaying a normal state while
+    silently simulating it as unavailable. Previously that mismatch made any
+    attribute you set on it (such as a remote's *current activity*) quietly have
+    no effect — the entity read as unobservable, so scenes that depend on it
+    never matched — until you changed the state control by hand. Pick a real
+    state to simulate the entity as available.
+
 - People conditions now resolve correctly for anyone tracked by a **non-GPS
     presence scanner** (router, `ping`, `nmap`, UniFi, many Bluetooth setups).
     Home Assistant only fills a person's `in_zones` attribute from GPS

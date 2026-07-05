@@ -340,6 +340,17 @@ def _entity_knob(
         "attributes": [_attribute_knob(hass, entity_id, live, spec) for spec in attr_specs],
     }
     if options is not None:
+        # The live state can be one known_states_for won't offer — e.g. an
+        # off-network entity reading `unavailable`, which it omits (the scene
+        # editor can't author `is unavailable`). But the panel seeds the control
+        # from live_state, so that seed must be selectable here; otherwise the
+        # <select> shows a real state while the field still holds `unavailable`
+        # and sends it, and the engine then treats the entity as unobservable —
+        # silently ignoring every attribute override on it (a remote's
+        # current_activity never matches until the user picks a real state).
+        # Surface the live state so the control's value matches what it displays.
+        if isinstance(live_state, str) and live_state and live_state not in options:
+            options = [*options, live_state]
         knob["options"] = options
     return knob
 

@@ -17,6 +17,7 @@ from custom_components.ambience.simulate import (
     SimulatedWorld,
     _build_override_states,
     _collect_state_attributes,
+    _entity_knob,
     _in_domain,
     _is_number,
     _record_attr,
@@ -219,6 +220,24 @@ def _inputs_hass(scenes, states, weather_entity=None):
         DATA_STORE: _Store(scenes, weather_entity),
     }
     return hass
+
+
+def test_entity_knob_surfaces_unavailable_live_state_as_option():
+    """An off-network entity reads `unavailable`, which known_states_for omits
+    from a domain's option list. The simulator seeds the state control from the
+    live state, so that value must still be selectable — otherwise the <select>
+    shows one value (a real state) while the component holds `unavailable` and
+    sends it, which the engine treats as unobservable and so silently ignores
+    every attribute override on the entity (e.g. a remote's current_activity)."""
+    hass = _Hass([_State("remote.cine", "unavailable")])
+    knob = _entity_knob(hass, "remote.cine", [], weather_entity=None)
+    assert knob["control"] == "select"
+    assert knob["live_state"] == "unavailable"
+    # The seeded value (live_state) is one of the offered options, so the
+    # control's displayed value matches what it sends.
+    assert "unavailable" in knob["options"]
+    # The normal states are still offered so the user can pick a real one.
+    assert "on" in knob["options"]
 
 
 @pytest.mark.asyncio

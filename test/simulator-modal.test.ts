@@ -927,6 +927,37 @@ describe("ambience-simulator-modal", () => {
     expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(false);
     expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(1);
   });
+
+  test("a reset mid-flight (category switch) discards the stale result", async () => {
+    el = await mount();
+    // Run stays pending; we switch category before it resolves.
+    let resolveRun: (v: unknown) => void = () => {};
+    vi.mocked(api.simulate).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveRun = r;
+      }) as any,
+    );
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(true);
+
+    // Switch category — triggers _beginLoad → _resetResults (bumps the run token,
+    // frees the button) and re-fetches the new category's inputs.
+    el.category = "g2";
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The stale run now resolves against a view that no longer exists.
+    resolveRun({ result: RESULT, applied_index: 9 });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Stale result is discarded, carried context stays reset, button is usable.
+    expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(0);
+    expect(el._appliedIndex).toBeNull();
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(false);
+  });
 });
 
 describe("review fixes", () => {

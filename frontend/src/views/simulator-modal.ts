@@ -173,6 +173,12 @@ export class AmbienceSimulatorModal extends LitElement {
   // two concurrent runs that both read the same stale _appliedIndex and so record
   // a debounce sequence that never happened.
   @state() private _running = false;
+  // Bumped on every history reset (reopen / category / scope switch / Clear). A
+  // run captures the token at its start; if a reset moves it on before the WS
+  // call resolves, the run's result is discarded — so a pending call from the old
+  // category/scope can't append a stale result into the freshly reset view. Not
+  // reactive: it never affects the render.
+  private _runToken = 0;
 
   constructor() {
     super();
@@ -442,6 +448,7 @@ export class AmbienceSimulatorModal extends LitElement {
       return;
     }
     this._running = true;
+    const token = this._runToken;
     try {
       const res = await simulate(
         this.hass,
@@ -452,12 +459,18 @@ export class AmbienceSimulatorModal extends LitElement {
         this._buildVerdicts(),
         this._appliedIndex,
       );
+      // A reset (reopen / category / scope / Clear) happened while this call was
+      // in flight: its result belongs to a view that no longer exists — discard.
+      if (token !== this._runToken) return;
       this._results = [...this._results, res.result];
       this._appliedIndex = res.applied_index;
     } catch (e) {
+      if (token !== this._runToken) return;
       this._error = localizeWsError(this.hass, e);
     } finally {
-      this._running = false;
+      // Only the still-current run owns _running; a superseded run must not clear
+      // it out from under the reset view (which already freed it).
+      if (token === this._runToken) this._running = false;
     }
   }
 
@@ -471,6 +484,11 @@ export class AmbienceSimulatorModal extends LitElement {
     this._results = [];
     this._appliedIndex = null;
     this._expanded = new Set();
+    // Invalidate any in-flight run (its result would be stale) and free the
+    // button for the freshly reset view — the abandoned run won't clear _running
+    // itself, since the token has moved on.
+    this._runToken++;
+    this._running = false;
   }
 
   private _toggle(key: string): void {

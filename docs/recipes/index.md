@@ -43,6 +43,12 @@ The devices we automate in our bathroom (see the [overview](bathroom/index.md)):
     running the heated rack for a couple of hours, even when a second person
     showers before it finishes.
 
+### Bedroom
+
+- [**Lights**](bedroom/lights.md) — turn the lights on by time of day when
+    someone enters, drop to reading mode when they get into bed, and lean on
+    time buffers to survive flaky presence sensors.
+
 ### Kitchen / Dining Room
 
 An open-plan kitchen and dining room split into separate lighting spaces (see

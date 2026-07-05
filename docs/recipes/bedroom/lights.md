@@ -33,8 +33,15 @@ in the morning.
 
 ## Requirements
 
+- **Main Bedroom Presence** - an occupancy sensor which covers the main bedroom.
+- **Main Bedroom Bed Presence** - an occupancy sensor which covers the bed in
+    the main bedroom.
 - **Main Bedroom Suite Presence** - an occupancy sensor group which covers the
     main bedroom and the main bathroom.
+- **Ceiling Light**, **Painting Spot**, **Window Spots** - main lights in the
+    bedroom.
+- **Left Reading Light**, **Right Reading Light** - reading lights next to the
+    bed.
 
 ## Scene: Vacant
 
@@ -62,8 +69,8 @@ sleeping in bed, then they turn over, the presence sensor detects them, and
 wants to turn the lights on.
 
 To reduce the chance of this happening, we will require that a person must enter
-through the **Master Bedroom Entrances** zone (i.e. the doors to the bedroom),
-and the **Master Bedroom Presence** must be occupied for less than 10 seconds.
+through the **Main Bedroom Entrances** zone (i.e. the doors to the bedroom), and
+the **Main Bedroom Presence** must be occupied for less than 10 seconds.
 
 ![Block until somebody enters empty room.](../images/bedroom/lights/somebody-enters.png "Block until somebody enters empty room.")
 
@@ -86,11 +93,13 @@ the reading lights should be set to 10%. We can't rely just on the **Main
 Bedroom Bed Presence** as it loses sleeping people. When it finds the person
 again it would turn the reading lights back on.
 
-Instead, we use the main lights as a gate: we only enter reading mode if the
-main lights are still on. Also, we want the occupant to be able to turn the
-lights back on in the morning and not have Ambience try to reset reading mode,
-so we only enter reading mode when the bed has been occupied for between 45
-seconds and one minute:
+Instead, we use the reading lights as a gate: we only enter reading mode if BOTH
+the reading lights are still on; if only one reading light is on then maybe one
+partner has gone to sleep already, so we don't make changes.
+
+Also, we want the occupant to be able to turn the lights back on in the morning
+and not have Ambience try to reset reading mode, so we only enter reading mode
+when the bed has been occupied for between 45 seconds and one minute:
 
 ![Person in bed, reading mode.](../images/bedroom/lights/reading-mode.png "Person in bed, reading mode.")
 

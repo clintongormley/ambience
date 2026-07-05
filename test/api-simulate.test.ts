@@ -18,7 +18,7 @@ describe("simulate api", () => {
 
   test("simulate unwraps the result", async () => {
     const unit = { category: "g1", outcome: "acted" };
-    const callWS = vi.fn().mockResolvedValue({ result: unit });
+    const callWS = vi.fn().mockResolvedValue({ result: unit, applied_index: 3 });
     const hass: any = { callWS };
     const res = await simulate(
       hass,
@@ -27,6 +27,7 @@ describe("simulate api", () => {
       "2026-12-21T17:30:00.000Z",
       { "binary_sensor.motion": { state: "on" } },
       {},
+      null,
     );
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/simulate",
@@ -36,12 +37,14 @@ describe("simulate api", () => {
       now: "2026-12-21T17:30:00.000Z",
       overrides: { "binary_sensor.motion": { state: "on" } },
       verdicts: {},
+      prev_applied: null,
     });
-    expect(res).toEqual(unit);
+    expect(res.result).toEqual(unit);
+    expect(res.applied_index).toBe(3);
   });
 
   test("simulate sends verdicts alongside overrides", async () => {
-    const callWS = vi.fn().mockResolvedValue({ result: { category: "g1" } });
+    const callWS = vi.fn().mockResolvedValue({ result: { category: "g1" }, applied_index: null });
     const hass: any = { callWS };
     await simulate(
       hass,
@@ -50,6 +53,7 @@ describe("simulate api", () => {
       "2026-12-21T17:30:00.000Z",
       { "binary_sensor.motion": { state: "on" } },
       { script: { k: true } },
+      2,
     );
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/simulate",
@@ -59,6 +63,7 @@ describe("simulate api", () => {
       now: "2026-12-21T17:30:00.000Z",
       overrides: { "binary_sensor.motion": { state: "on" } },
       verdicts: { script: { k: true } },
+      prev_applied: 2,
     });
   });
 

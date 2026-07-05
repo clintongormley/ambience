@@ -1468,6 +1468,9 @@ async def _ws_simulate_inputs(
         vol.Optional("verdicts", default=dict): vol.All(
             {str: {str: bool}}, vol.Length(max=MAX_SIMULATE_ENTRIES)
         ),
+        # The winning scene index the previous simulate step acted on, carried
+        # forward so a re-won scene debounces (None to start a fresh sequence).
+        vol.Optional("prev_applied"): vol.Any(int, None),
     }
 )
 @websocket_api.async_response
@@ -1502,13 +1505,18 @@ async def _ws_simulate(
         verdicts=msg.get("verdicts") or {},
     )
     try:
-        result = await run_simulation(
-            hass, msg["scope_kind"], msg.get("scope_id"), msg["category"], world
+        result, applied_index = await run_simulation(
+            hass,
+            msg["scope_kind"],
+            msg.get("scope_id"),
+            msg["category"],
+            world,
+            prev_applied=msg.get("prev_applied"),
         )
     except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
-    connection.send_result(msg["id"], {"result": result})
+    connection.send_result(msg["id"], {"result": result, "applied_index": applied_index})
 
 
 @websocket_api.require_admin

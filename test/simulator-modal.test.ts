@@ -73,7 +73,7 @@ const RESULT = {
 
 async function mount(): Promise<any> {
   vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
-  vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+  vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
   const el: any = document.createElement("ambience-simulator-modal");
   el.hass = {
     callWS: vi.fn(),
@@ -101,7 +101,7 @@ describe("ambience-simulator-modal", () => {
     // loading reset must happen in willUpdate, not as a side-effect of the
     // completed update.
     vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
-    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
     el = document.createElement("ambience-simulator-modal");
     el.hass = { callWS: vi.fn(), states: {} };
     el.scope = { scope_kind: "area", scope_id: "kitchen" };
@@ -248,7 +248,7 @@ describe("ambience-simulator-modal", () => {
       ],
     };
     vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
-    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = {
       callWS: vi.fn(),
@@ -292,7 +292,7 @@ describe("ambience-simulator-modal", () => {
       ],
     };
     vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
-    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = { callWS: vi.fn(), states: {} };
     el.scope = { scope_kind: "area", scope_id: "lounge" };
@@ -344,8 +344,11 @@ describe("ambience-simulator-modal", () => {
   test("result action uses the configured exposed-action label (exposedActions threaded through)", async () => {
     vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
     vi.mocked(api.simulate).mockResolvedValue({
-      ...RESULT,
-      actions: [{ service: "fado.fade_lights", entity_ids: ["light.k"], params: {} }],
+      result: {
+        ...RESULT,
+        actions: [{ service: "fado.fade_lights", entity_ids: ["light.k"], params: {} }],
+      },
+      applied_index: null,
     } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = { callWS: vi.fn(), states: {} };
@@ -369,8 +372,11 @@ describe("ambience-simulator-modal", () => {
   test("result entities are clickable and friendly-named (hass passed through)", async () => {
     vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
     vi.mocked(api.simulate).mockResolvedValue({
-      ...RESULT,
-      actions: [{ service: "light.turn_on", entity_ids: ["binary_sensor.motion"], params: {} }],
+      result: {
+        ...RESULT,
+        actions: [{ service: "light.turn_on", entity_ids: ["binary_sensor.motion"], params: {} }],
+      },
+      applied_index: null,
     } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = {
@@ -693,7 +699,7 @@ describe("ambience-simulator-modal", () => {
       ],
     };
     vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
-    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = { callWS: vi.fn(), states: {} };
     el.scope = { scope_kind: "area", scope_id: "k" };
@@ -731,7 +737,7 @@ describe("ambience-simulator-modal", () => {
       ],
     };
     vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
-    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    vi.mocked(api.simulate).mockResolvedValue({ result: RESULT, applied_index: null } as any);
     el = document.createElement("ambience-simulator-modal") as any;
     el.hass = { callWS: vi.fn(), states: {} };
     el.scope = { scope_kind: "area", scope_id: "k" };
@@ -844,9 +850,122 @@ describe("ambience-simulator-modal", () => {
     // No error, and the element should still have empty knobs (_load bailed out)
     expect(el._knobs).toEqual([]);
   });
+
+  // --- accumulation, carried debounce context, and Clear -------------------
+
+  test("results accumulate across runs, newest on top", async () => {
+    el = await mount();
+    vi.mocked(api.simulate).mockResolvedValueOnce({
+      result: { ...RESULT, winner_name: "Vacant", outcome: "acted" },
+      applied_index: 0,
+    } as any);
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    vi.mocked(api.simulate).mockResolvedValueOnce({
+      result: { ...RESULT, winner_name: "Vacant", outcome: "debounced", actions: [] },
+      applied_index: 0,
+    } as any);
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const evals = el.shadowRoot.querySelectorAll(".eval");
+    expect(evals.length).toBe(2);
+    // second run carried the first run's applied_index forward as prev_applied (7th arg, index 6)
+    expect(vi.mocked(api.simulate).mock.calls[1][6]).toBe(0);
+    // newest (debounced) renders first; oldest (acted) last
+    expect(evals[0].querySelector(".outcome.debounced")).toBeTruthy();
+    expect(evals[1].querySelector(".outcome.acted")).toBeTruthy();
+  });
+
+  test("Clear empties the history and resets carried context", async () => {
+    el = await mount();
+    vi.mocked(api.simulate).mockResolvedValueOnce({
+      result: RESULT,
+      applied_index: 4,
+    } as any);
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".eval")).toBeTruthy();
+
+    el.shadowRoot.querySelector(".clear").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".eval")).toBeNull();
+
+    // next run starts a fresh sequence (prev_applied null again)
+    vi.mocked(api.simulate).mockResolvedValueOnce({ result: RESULT, applied_index: 1 } as any);
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(vi.mocked(api.simulate).mock.calls[1][6]).toBeNull();
+  });
+
+  test("a re-entrant Simulate is ignored while a run is in flight", async () => {
+    el = await mount();
+    // First run stays pending so we can click again mid-flight.
+    let resolveFirst: (v: unknown) => void = () => {};
+    vi.mocked(api.simulate).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveFirst = r;
+      }) as any,
+    );
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    // Button is disabled while in flight.
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(true);
+    // A second click while pending must be a no-op — no second simulate call.
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    expect(vi.mocked(api.simulate).mock.calls.length).toBe(1);
+    // Resolving the first run re-enables the button and records exactly one result.
+    resolveFirst({ result: RESULT, applied_index: 0 });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(false);
+    expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(1);
+  });
+
+  test("a reset mid-flight (category switch) discards the stale result", async () => {
+    el = await mount();
+    // Run stays pending; we switch category before it resolves.
+    let resolveRun: (v: unknown) => void = () => {};
+    vi.mocked(api.simulate).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveRun = r;
+      }) as any,
+    );
+    el.shadowRoot.querySelector(".runbtn").click();
+    await el.updateComplete;
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(true);
+
+    // Switch category — triggers _beginLoad → _resetResults (bumps the run token,
+    // frees the button) and re-fetches the new category's inputs.
+    el.category = "g2";
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The stale run now resolves against a view that no longer exists.
+    resolveRun({ result: RESULT, applied_index: 9 });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Stale result is discarded, carried context stays reset, button is usable.
+    expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(0);
+    expect(el._appliedIndex).toBeNull();
+    expect((el.shadowRoot.querySelector(".runbtn") as HTMLButtonElement).disabled).toBe(false);
+  });
 });
 
 describe("review fixes", () => {
+  // The prior describe's last tests (accumulate/Clear) call api.simulate and
+  // leave call history behind — clear it so this block's assertions on
+  // api.simulate's call state aren't order-dependent on what ran before it.
+  beforeEach(() => vi.clearAllMocks());
+
   test("an invalid/cleared date surfaces an error instead of an unhandled rejection", async () => {
     vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as never);
     const el: any = document.createElement("ambience-simulator-modal");

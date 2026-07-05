@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.const import STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
@@ -340,7 +340,24 @@ def _entity_knob(
         "attributes": [_attribute_knob(hass, entity_id, live, spec) for spec in attr_specs],
     }
     if options is not None:
+        # The control seeds from live_state, so that value must be one of the
+        # offered options — otherwise the <select> shows one state while the
+        # field holds (and sends) another. An off-network entity needs this: it
+        # either reads `unavailable`/`unknown` (present but offline), which
+        # known_states_for omits (the scene editor can't author `is
+        # unavailable`), or it's absent entirely (live_state None) — its
+        # integration removed it while the hub is offline — so there's no live
+        # value at all. Both mean "not observable": an absent entity is shown as
+        # `unavailable` too, consistent with a present-but-unavailable one,
+        # rather than silently seeding an empty state the engine then treats as
+        # unknown while the <select> displays a real one. The real states stay
+        # offered so the user can simulate the entity as available; until then it
+        # reads Unavailable and its attribute overrides (correctly) don't match.
+        seed = live_state if isinstance(live_state, str) and live_state else STATE_UNAVAILABLE
+        if seed not in options:
+            options = [*options, seed]
         knob["options"] = options
+        knob["live_state"] = seed
     return knob
 
 
@@ -477,15 +494,48 @@ def _safe_category_name(hass: HomeAssistant, category: str) -> str | None:
         return None
 
 
+def _simulate_outcome(
+    prev_applied: int | None,
+    winner_index: int | None,
+    has_actions: bool,
+    apply_mode: str | None,
+) -> tuple[Outcome, int | None]:
+    """Decide the outcome + the next last-applied index for one simulate step,
+    mirroring the production debounce in trigger_engine._resolve_and_apply.
+
+    prev_applied is the winning scene index the previous step *acted* on (None if
+    none). Rules, in order:
+      - no winner            -> NO_MATCH, forget (next = None)
+      - winner has no actions -> NO_OP, transparent (next = prev_applied)
+      - winner == prev_applied and apply != "always" -> DEBOUNCED (next = prev_applied)
+      - otherwise            -> ACTED (next = winner)
+    """
+    if winner_index is None:
+        return Outcome.NO_MATCH, None
+    if not has_actions:
+        return Outcome.NO_OP, prev_applied
+    if winner_index == prev_applied and apply_mode != "always":
+        return Outcome.DEBOUNCED, prev_applied
+    return Outcome.ACTED, winner_index
+
+
 async def run_simulation(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
     category: str,
     world: SimulatedWorld,
-) -> dict[str, Any]:
-    """Resolve one category against the simulated world and return a BufferedUnit
-    dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
+    *,
+    prev_applied: int | None = None,
+) -> tuple[dict[str, Any], int | None]:
+    """Resolve one category against the simulated world and return
+    (BufferedUnit dict, next applied index).
+
+    `prev_applied` is the winning scene index the previous simulate step acted on
+    (None to start). The outcome + next index follow production's debounce
+    (see `_simulate_outcome`), so repeated steps reproduce ACTED/NO_OP/DEBOUNCED/
+    NO_MATCH exactly as the live engine would. A `simulated` cause is used.
+    """
     conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     candidates = _category_config(hass, scope_kind, scope_id, category)["scenes"]
     # Narrow each condition's snapshot to the entities the simulated category's
@@ -499,38 +549,43 @@ async def run_simulation(
     category_name = _safe_category_name(hass, category)
 
     winner = explanation.winner_index
-    if winner is None:
+    scene = candidates[winner] if winner is not None else None
+    actions = scene.get("actions", []) if scene is not None else []
+    apply_mode = scene.get("apply") if scene is not None else None
+    outcome, next_applied = _simulate_outcome(prev_applied, winner, bool(actions), apply_mode)
+
+    if scene is None:
         unit = UnitTrace(
             scope_kind,
             scope_id,
             category,
             switch_state,
-            Outcome.NO_MATCH,
+            outcome,
             explanation,
             category_name=category_name,
             scope_name=scope_name,
         )
     else:
-        scene = candidates[winner]
-        actions = scene.get("actions", [])
-        # A winner with no actions (a pure blocker) is a NO_OP, not an ACTED —
-        # mirror the engine so the preview matches what production would record.
+        # Only an ACTED step records its actions; DEBOUNCED and NO_OP carry none —
+        # exactly what production records when a scene is not (re)applied. (ACTED is
+        # only returned when the winner has actions, so no extra emptiness check.)
+        recorded = (
+            hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
+            if outcome is Outcome.ACTED
+            else []
+        )
         unit = UnitTrace(
             scope_kind,
             scope_id,
             category,
             switch_state,
-            Outcome.ACTED if actions else Outcome.NO_OP,
+            outcome,
             explanation,
             winner_name=scene.get("name"),
-            actions=(
-                hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
-                if actions
-                else actions
-            ),
+            actions=recorded,
             category_name=category_name,
             scope_name=scope_name,
         )
     cause = TriggerCause(kind=CauseKind.SIMULATED, detail=world.now.isoformat())
     record = BufferedUnit(event_id=None, timestamp=world.now.isoformat(), cause=cause, unit=unit)
-    return buffered_unit_to_dict(record)
+    return buffered_unit_to_dict(record), next_applied

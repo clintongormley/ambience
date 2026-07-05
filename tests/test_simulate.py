@@ -17,10 +17,12 @@ from custom_components.ambience.simulate import (
     SimulatedWorld,
     _build_override_states,
     _collect_state_attributes,
+    _entity_knob,
     _in_domain,
     _is_number,
     _record_attr,
     _safe_category_name,
+    _simulate_outcome,
     _SimulatedHass,
     _SimulatedStates,
     _verdict_snapshot,
@@ -220,6 +222,38 @@ def _inputs_hass(scenes, states, weather_entity=None):
     return hass
 
 
+def test_entity_knob_surfaces_unavailable_live_state_as_option():
+    """An off-network entity reads `unavailable`, which known_states_for omits
+    from a domain's option list. The simulator seeds the state control from the
+    live state, so that value must still be selectable — otherwise the <select>
+    shows one value (a real state) while the component holds `unavailable` and
+    sends it, which the engine treats as unobservable and so silently ignores
+    every attribute override on the entity (e.g. a remote's current_activity)."""
+    hass = _Hass([_State("remote.cine", "unavailable")])
+    knob = _entity_knob(hass, "remote.cine", [], weather_entity=None)
+    assert knob["control"] == "select"
+    assert knob["live_state"] == "unavailable"
+    # The seeded value (live_state) is one of the offered options, so the
+    # control's displayed value matches what it sends.
+    assert "unavailable" in knob["options"]
+    # The normal states are still offered so the user can pick a real one.
+    assert "on" in knob["options"]
+
+
+def test_entity_knob_absent_entity_reads_as_unavailable():
+    """A referenced entity can be absent entirely (its integration removes it
+    while the hub is offline), not merely `unavailable` — hass.states.get is
+    None. It must still read as Unavailable, consistent with a present-but-
+    unavailable entity, instead of seeding an empty value the <select> renders
+    as a real state while the engine treats it as unknown."""
+    hass = _Hass([])  # remote.cine not present at all
+    knob = _entity_knob(hass, "remote.cine", [], weather_entity=None)
+    assert knob["control"] == "select"
+    assert knob["live_state"] == "unavailable"
+    assert "unavailable" in knob["options"]
+    assert "on" in knob["options"]
+
+
 @pytest.mark.asyncio
 async def test_simulate_inputs_lists_entity_knobs_for_the_category():
     scenes = [
@@ -344,13 +378,15 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
     assert result["explanation"]["scenes"][0]["matched"] is True
+    # first win acts and remembers its scene index (0)
+    assert _applied == 0
 
 
 @pytest.mark.asyncio
@@ -370,7 +406,7 @@ async def test_run_simulation_marks_unexposed_action():
     # fan.toggle is not in the exposed set → flagged.
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["actions"][0]["unexposed"] is True
@@ -392,7 +428,7 @@ async def test_run_simulation_reports_no_op_for_no_action_winner():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     assert result["outcome"] == "no_op"
     assert result["winner_name"] == "Blocker"
@@ -411,9 +447,97 @@ async def test_run_simulation_reports_no_match():
     ]
     hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
     assert result["outcome"] == "no_match"
     assert result["winner_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_debounces_same_winner():
+    """Re-winning the same scene (prev_applied == winner) is DEBOUNCED with no
+    actions recorded — matching production's non-reapply."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "debounced"
+    assert result["winner_name"] == "Motion on"
+    assert result["actions"] == []
+    assert applied == 0
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_apply_always_reasserts_on_same_winner():
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Always on",
+            "apply": "always",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "acted"
+    assert result["actions"]  # actions re-asserted
+    assert applied == 0
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_blocker_is_transparent_to_applied():
+    """A pure blocker (no-action winner) reports NO_OP and leaves prev_applied
+    untouched, so a later re-win of the prior scene still debounces."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Blocker",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=7)
+
+    assert result["outcome"] == "no_op"
+    assert applied == 7  # transparent
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_no_match_forgets_applied():
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off -> no match
+    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+
+    assert result["outcome"] == "no_match"
+    assert applied is None  # forgotten
 
 
 # ---------------------------------------------------------------------------
@@ -1054,9 +1178,52 @@ async def test_run_simulation_unavailable_condition_matches_when_entity_unavaila
 
     # Override the entity to "unavailable" in the simulated world.
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.x": {"state": "unavailable"}})
-    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
 
     # The guard wins (no_op because it has no actions), confirming the condition matched.
     assert result["outcome"] == "no_op"
     assert result["winner_name"] == "Sensor down"
     assert result["explanation"]["scenes"][0]["matched"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task 1: _simulate_outcome debounce decision helper
+# ---------------------------------------------------------------------------
+
+
+def test_simulate_outcome_first_win_acts_and_remembers():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(None, 5, True, None) == (Outcome.ACTED, 5)
+
+
+def test_simulate_outcome_no_match_forgets():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, None, False, None) == (Outcome.NO_MATCH, None)
+
+
+def test_simulate_outcome_blocker_is_no_op_and_transparent():
+    from custom_components.ambience.trace import Outcome
+
+    # winner with no actions leaves prev_applied untouched
+    assert _simulate_outcome(5, 2, False, None) == (Outcome.NO_OP, 5)
+
+
+def test_simulate_outcome_same_winner_debounces():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 5, True, None) == (Outcome.DEBOUNCED, 5)
+    assert _simulate_outcome(5, 5, True, "once") == (Outcome.DEBOUNCED, 5)
+
+
+def test_simulate_outcome_apply_always_reasserts():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 5, True, "always") == (Outcome.ACTED, 5)
+
+
+def test_simulate_outcome_new_winner_acts():
+    from custom_components.ambience.trace import Outcome
+
+    assert _simulate_outcome(5, 2, True, None) == (Outcome.ACTED, 2)

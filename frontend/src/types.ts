@@ -485,3 +485,8 @@ export type SimulateOverrides = Record<
   }
 >;
 export type SimulateVerdicts = Record<string, Record<string, boolean>>;
+
+export interface SimulateResult {
+  result: BufferedUnit;
+  applied_index: number | null;
+}

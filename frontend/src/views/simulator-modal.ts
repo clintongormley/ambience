@@ -87,6 +87,11 @@ export class AmbienceSimulatorModal extends LitElement {
       .when .hint { color: var(--secondary-text-color, #999); font-size: 0.8em; }
       .when .hint.err { color: var(--error-color, #c00); }
       .when input.num { width: 5rem; text-align: right; }
+      /* Native date/time inputs render a touch taller than <select>/text controls
+         (their picker chrome), so the centred row grew when toggling Time↔Sun.
+         Pin every When control to one border-box height so the row height is the
+         same in both modes. */
+      .when input, .when select { box-sizing: border-box; height: 30px; }
       /* Top-align so the icon and control line up with the entity name (first
          line), not floating between the name and the entity_id subtitle. */
       .row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.55rem 0;
@@ -111,9 +116,14 @@ export class AmbienceSimulatorModal extends LitElement {
       .attr .row-text { padding-left: 34px; color: var(--secondary-text-color, #777); }
       .runbtn { padding: 0.45rem 1.1rem; background: var(--primary-color, #03a9f4); color: #fff;
         border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+      .runbtn[disabled] { opacity: 0.6; cursor: default; }
       .run-row { display: flex; justify-content: flex-end; margin-top: 0.6rem; }
       .error { color: var(--error-color, #c00); font-size: 0.9rem; }
       .result { margin-top: 1rem; }
+      .results { display: flex; flex-direction: column; gap: 0.75rem; }
+      .clear { padding: 0.25rem 0.75rem; cursor: pointer;
+        border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+        background: none; color: inherit; font-size: 0.85rem; }
       /* Narrow screens (HA mobile app): the state/For controls otherwise crush
          the entity name into a one-character-wide column. Let the row wrap and
          drop the controls onto their own full-width line, indented under the
@@ -158,8 +168,22 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _anchors: SunAnchors | null = null;
   @state() private _anchorsDate = "";
   @state() private _anchorsError = "";
-  @state() private _result: BufferedUnit | null = null;
-  @state() private _expanded = false;
+  @state() private _results: BufferedUnit[] = [];
+  // The winning scene index the previous run acted on, carried into the next run
+  // so a re-won scene debounces. null starts a fresh sequence.
+  @state() private _appliedIndex: number | null = null;
+  // Per-result expand state, keyed by chronological run index ("sim-<i>").
+  @state() private _expanded: Set<string> = new Set();
+  // True while a simulate call is in flight. Guards against a double-click firing
+  // two concurrent runs that both read the same stale _appliedIndex and so record
+  // a debounce sequence that never happened.
+  @state() private _running = false;
+  // Bumped on every history reset (reopen / category / scope switch / Clear). A
+  // run captures the token at its start; if a reset moves it on before the WS
+  // call resolves, the run's result is discarded — so a pending call from the old
+  // category/scope can't append a stale result into the freshly reset view. Not
+  // reactive: it never affects the render.
+  private _runToken = 0;
 
   constructor() {
     super();
@@ -193,8 +217,7 @@ export class AmbienceSimulatorModal extends LitElement {
   private _beginLoad(): void {
     this._error = "";
     this._loading = true;
-    this._result = null;
-    this._expanded = false;
+    this._resetResults();
     const now = new Date();
     this._date = localDate(now);
     this._time = localTime(now);
@@ -410,6 +433,9 @@ export class AmbienceSimulatorModal extends LitElement {
   }
 
   private async _run(): Promise<void> {
+    // Re-entrancy guard: a run already in flight owns _appliedIndex until it
+    // resolves; a second concurrent run would carry stale context.
+    if (this._running) return;
     this._error = "";
     const now = this._resolveNow();
     if (now === null) {
@@ -426,19 +452,55 @@ export class AmbienceSimulatorModal extends LitElement {
           : localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
       return;
     }
+    this._running = true;
+    const token = this._runToken;
     try {
-      this._result = await simulate(
+      const res = await simulate(
         this.hass,
         this.scope,
         this.category,
         now,
         this._buildOverrides(),
         this._buildVerdicts(),
+        this._appliedIndex,
       );
-      this._expanded = false;
+      // A reset (reopen / category / scope / Clear) happened while this call was
+      // in flight: its result belongs to a view that no longer exists — discard.
+      if (token !== this._runToken) return;
+      this._results = [...this._results, res.result];
+      this._appliedIndex = res.applied_index;
     } catch (e) {
+      if (token !== this._runToken) return;
       this._error = localizeWsError(this.hass, e);
+    } finally {
+      // Only the still-current run owns _running; a superseded run must not clear
+      // it out from under the reset view (which already freed it).
+      if (token === this._runToken) this._running = false;
     }
+  }
+
+  private _clearHistory(): void {
+    this._resetResults();
+  }
+
+  // Clear the accumulated run history + carried debounce context + expand state.
+  // Shared by Clear and the reopen/category/scope reset so the three stay in sync.
+  private _resetResults(): void {
+    this._results = [];
+    this._appliedIndex = null;
+    this._expanded = new Set();
+    // Invalidate any in-flight run (its result would be stale) and free the
+    // button for the freshly reset view — the abandoned run won't clear _running
+    // itself, since the token has moved on.
+    this._runToken++;
+    this._running = false;
+  }
+
+  private _toggle(key: string): void {
+    const next = new Set(this._expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._expanded = next;
   }
 
   private _onClose(): void {
@@ -451,6 +513,11 @@ export class AmbienceSimulatorModal extends LitElement {
       <div class="modal" role="dialog" aria-modal="true" @click=${(e: Event) => e.stopPropagation()}>
         <div class="header">
           <h3>${localize(this.hass, "ui.simulate_title", "Simulate")} · ${this.categoryName ?? this.category}</h3>
+          ${
+            this._results.length
+              ? html`<button class="clear" @click=${() => this._clearHistory()}>${localize(this.hass, "ui.clear_traces", "Clear")}</button>`
+              : nothing
+          }
           <button class="close" @click=${this._onClose} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">
@@ -502,8 +569,26 @@ export class AmbienceSimulatorModal extends LitElement {
               ${this._knobs.map((k) => (k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k)))}`
                 : nothing
             }
-            <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
-            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass, undefined, this.periods?.custom ?? {}, this.exposedActions)}</div>` : nothing}
+            <div class="run-row"><button class="runbtn" ?disabled=${this._running} @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
+            ${
+              this._results.length
+                ? html`<div class="results">${this._results
+                    .map((u, i) => ({ u, key: `sim-${i}` }))
+                    .reverse()
+                    .map(
+                      ({ u, key }) =>
+                        html`<div class="result">${renderEvaluation(
+                          u,
+                          this._expanded.has(key),
+                          () => this._toggle(key),
+                          this.hass,
+                          undefined,
+                          this.periods?.custom ?? {},
+                          this.exposedActions,
+                        )}</div>`,
+                    )}</div>`
+                : nothing
+            }
           `
           }
         </div>

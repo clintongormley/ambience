@@ -25,6 +25,7 @@ import type {
   ServiceSchema,
   SimulateInputs,
   SimulateOverrides,
+  SimulateResult,
   SimulateScope,
   SimulateVerdicts,
   SunAnchors,
@@ -638,8 +639,9 @@ export async function simulate(
   now: string,
   overrides: SimulateOverrides,
   verdicts: SimulateVerdicts,
-): Promise<BufferedUnit> {
-  const res = await hass.callWS<{ result: BufferedUnit }>({
+  prevApplied: number | null,
+): Promise<SimulateResult> {
+  return hass.callWS<SimulateResult>({
     type: "ambience/simulate",
     scope_kind: scope.scope_kind,
     scope_id: scope.scope_id,
@@ -647,6 +649,6 @@ export async function simulate(
     now,
     overrides,
     verdicts,
+    prev_applied: prevApplied,
   });
-  return res.result;
 }

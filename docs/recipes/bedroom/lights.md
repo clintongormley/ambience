@@ -10,8 +10,11 @@ by a presence sensor.
 
     The Aqara FP2 loses people in bed for 15-20 minutes at a time, and the
     Everything Presence Pro is even worse, losing sleeping people for over an hour
-    at a time. While presence sensors are very useful at detecting when people enter
-    specific zones, they can't be relied upon to keep track of them when still.
+    at a time. (To compensate, the Everything Presence Pro sees far fewer ghosts
+    than the Aqara FP2).
+
+    While presence sensors are very useful at detecting when people enter specific
+    zones, they can't be relied upon to keep track of them when still.
 
     I'm waiting for my bed sensors from
     [Elevated Sensors](https://www.elevatedsensors.com/store) to arrive, which will

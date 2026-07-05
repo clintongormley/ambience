@@ -15,7 +15,7 @@ lock:
 
 When the alarm is armed then lock the front door:
 
-![Door locked when alarm armed](../images/alarm/armed.png "Door locked when alarm armed.")
+![Door locked when alarm armed](../images/security/alarm/armed.png "Door locked when alarm armed.")
 
 **Note:** added custom action `lock.lock`.
 
@@ -24,7 +24,7 @@ When the alarm is armed then lock the front door:
 When the door starts unlocking then disarm the alarm. This assumes that the
 front door lock cannot be opened without a key or code.
 
-![Alarm off when front door unlocks.](../images/alarm/unlock.png "Alarm off when front door unlocks.")
+![Alarm off when front door unlocks.](../images/security/alarm/unlock.png "Alarm off when front door unlocks.")
 
 **Note:** added custom action `alarm.disarm`.
 
@@ -37,7 +37,7 @@ the match and makes the door lock itself again.
 We can fix this by manually moving the **Alarm off when front door unlocks**
 scene to the top of the priority list:
 
-![Alarm off when front door unlocks as first scene.](../images/alarm/priority.png "Alarm off when front door unlocks as first scene.")
+![Alarm off when front door unlocks as first scene.](../images/security/alarm/priority.png "Alarm off when front door unlocks as first scene.")
 
 ## Lifecycle
 

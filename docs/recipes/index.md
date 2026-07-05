@@ -57,5 +57,5 @@ the [overview](kitchen-dining/index.md)):
 
 ### Security
 
-- [**House alarm**](alarm/index.md) — lock the front door when the alarm arms,
-    and disarm the alarm when someone unlocks the door.
+- [**House alarm**](security/alarm.md) — lock the front door when the alarm
+    arms, and disarm the alarm when someone unlocks the door.

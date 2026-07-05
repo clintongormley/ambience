@@ -19,17 +19,15 @@ by a presence sensor.
     I'm using an Aqara FP2 and lots of time buffers to make sure that we don't get
     woken up by the lights coming on in the middle of the night.
 
-All of the lights should turn on when somebody enters the room for the first
-time, the brightness will depend on the time of day. However, if somebody is
-already in the room then we shouldn't alter the lighting, especially if that
-person is in bed asleep.
+When somebody first enters the room, all the lights should turn on at a
+brightness that depends on the time of day. But if somebody is already there, we
+shouldn't change the lighting, especially if they're asleep in bed.
 
-At night when the main lights are on, and somebody climbs into bed, we should
-turn off all the lights and fade the reading lights down to 10%.
+At night, when the main lights are on and somebody climbs into bed, we enter
+*"reading mode"*: turn the main lights off and fade the reading lights to 10%.
 
-When the occupant wants to go to sleep they can turn the lights of manually or
-with voice control. The lights should remain off until they turn them on again
-in the morning.
+When they want to sleep, they turn the lights off manually or by voice, and the
+lights stay off until they turn them back on in the morning.
 
 ## Requirements
 
@@ -45,9 +43,9 @@ in the morning.
 
 ## Scene: Vacant
 
-When the **Main Bedroom Suite Presence** is clear for 2 minutes, turn off all of
-the lights. We use the Suite presence here so that the occupant can go into the
-en-suite bathroom without the lights resetting.
+When the **Main Bedroom Suite Presence** is clear for 2 minutes, turn all the
+lights off. Using the Suite presence means the occupant can use the en-suite
+bathroom without the lights resetting.
 
 ![Vacant.](../images/bedroom/lights/vacant.png "Vacant")
 
@@ -63,56 +61,53 @@ comes after the **Daytime** and **Evening** scenes.
 
 ## Scene: Block until somebody enters empty room
 
-It is really important that we don't turn the lights on when somebody is asleep
-in bed. It is quite possible for the presence sensor to lose track of a person
-sleeping in bed, then they turn over, the presence sensor detects them, and
-wants to turn the lights on.
+It's really important not to turn the lights on when somebody is asleep. The
+presence sensor can easily lose a sleeping person, then re-detect them when they
+turn over — and try to turn the lights on again.
 
-To reduce the chance of this happening, we will require that a person must enter
-through the **Main Bedroom Entrances** zone (i.e. the doors to the bedroom), and
-the **Main Bedroom Presence** must be occupied for less than 10 seconds.
+To reduce the chance of this, we require that a person entered through the
+**Main Bedroom Entrances** zone (the bedroom doors) and that **Main Bedroom
+Presence** has been occupied for less than 10 seconds.
 
 ![Block until somebody enters empty room.](../images/bedroom/lights/somebody-enters.png "Block until somebody enters empty room.")
 
 ## Scene: Block changes until bed is vacant for 20 minutes
 
-The **Vacant** scene only has a buffer of 2 minutes of vacancy. While we want
-the lights to turn off soon after somebody leaves the room, the presence sensor
-could easily lose somebody reading in bed after 2 minutes and turn the lights
-off.
+The **Vacant** scene waits only 2 minutes. We want the lights off soon after
+somebody leaves, but the sensor could just as easily lose somebody reading in
+bed after 2 minutes and turn the lights off.
 
-To prevent this we'll add a blocker that prevents any actions until the bed has
+To prevent this, we add a blocker that holds off any changes until the bed has
 been vacant for at least 20 minutes:
 
 ![Block changes until bed is vacant for 20 minutes.](../images/bedroom/lights/bed-vacant.png "Block changes until bed is vacant for 20 minutes.")
 
 ## Scene: Person in bed, reading mode
 
-Finally, when somebody climbs into bed at night, the lights should fade off and
-the reading lights should be set to 10%. We can't rely just on the **Main
-Bedroom Bed Presence** as it loses sleeping people. When it finds the person
-again it would turn the reading lights back on.
+Finally, when somebody climbs into bed at night, the main lights should fade off
+and the reading lights drop to 10%. We can't rely on **Main Bedroom Bed
+Presence** alone: it loses sleeping people, then turns the reading lights back
+on when it re-detects them.
 
-Instead, we use the reading lights as a gate: we only enter reading mode if BOTH
-the reading lights are still on; if only one reading light is on then maybe one
-partner has gone to sleep already, so we don't make changes.
+Instead, we gate on the reading lights: we only enter reading mode if **both**
+are still on. If only one is on, a partner may already be asleep, so we leave
+things alone.
 
-Also, we want the occupant to be able to turn the lights back on in the morning
-and not have Ambience try to reset reading mode, so we only enter reading mode
-when the bed has been occupied for between 45 seconds and one minute:
+We also want the occupant to turn the lights back on in the morning without
+Ambience resetting reading mode, so we only enter reading mode when the bed has
+been occupied for between 45 seconds and one minute:
 
 ![Person in bed, reading mode.](../images/bedroom/lights/reading-mode.png "Person in bed, reading mode.")
 
 !!! tip "Apply on every match"
 
     You may have noticed that the **Person in bed, reading mode** actions are marked
-    as **Apply on every match**. The reason for this is that presence sensors are
-    not very accurate, so sometimes reading mode is triggered when somebody is near
-    the bed and not in the bed. They manually turn the lights back on, and go to the
-    bathroom. After 15 minutes, they climb into bed, **Person in bed, reading mode**
-    matches, but the lights aren't dimmed because the scene group had blocked on
-    **Block changes until bed is vacant for 20 minutes**, and it thinks that reading
-    mode has already been applied.
+    **Apply on every match**. Because presence sensors aren't very accurate, reading
+    mode sometimes triggers when somebody is near the bed rather than in it: they
+    turn the lights back on manually and go to the bathroom, and 15 minutes later
+    they climb into bed. **Person in bed, reading mode** matches again, but the
+    lights aren't dimmed — the scene group blocked on **Block changes until bed is
+    vacant for 20 minutes** and thinks reading mode has already been applied.
 
     By enabling **Apply on every match**, reading mode actions will be applied even
     if they have been applied before.

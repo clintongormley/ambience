@@ -145,7 +145,12 @@ async def test_simulate_inputs_returns_panel_shape(
     motion = next(k for k in result["knobs"] if k.get("entity_id") == "binary_sensor.motion")
     assert motion["kind"] == "entity"
     assert motion["control"] == "select"
-    assert motion["options"] == ["on", "off"]
+    # binary_sensor.motion is referenced by the seeded scene but never given a
+    # state here, so it is absent (hass.states.get -> None). The simulator reads
+    # an absent entity as `unavailable` and offers it as a choice, alongside the
+    # domain's real states, so the control's seeded value matches what it sends.
+    assert motion["options"] == ["on", "off", "unavailable"]
+    assert motion["live_state"] == "unavailable"
 
 
 async def test_simulate_returns_applied_index_and_accepts_prev_applied(

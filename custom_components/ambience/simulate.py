@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.const import STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
@@ -340,18 +340,24 @@ def _entity_knob(
         "attributes": [_attribute_knob(hass, entity_id, live, spec) for spec in attr_specs],
     }
     if options is not None:
-        # The live state can be one known_states_for won't offer — e.g. an
-        # off-network entity reading `unavailable`, which it omits (the scene
-        # editor can't author `is unavailable`). But the panel seeds the control
-        # from live_state, so that seed must be selectable here; otherwise the
-        # <select> shows a real state while the field still holds `unavailable`
-        # and sends it, and the engine then treats the entity as unobservable —
-        # silently ignoring every attribute override on it (a remote's
-        # current_activity never matches until the user picks a real state).
-        # Surface the live state so the control's value matches what it displays.
-        if isinstance(live_state, str) and live_state and live_state not in options:
-            options = [*options, live_state]
+        # The control seeds from live_state, so that value must be one of the
+        # offered options — otherwise the <select> shows one state while the
+        # field holds (and sends) another. An off-network entity needs this: it
+        # either reads `unavailable`/`unknown` (present but offline), which
+        # known_states_for omits (the scene editor can't author `is
+        # unavailable`), or it's absent entirely (live_state None) — its
+        # integration removed it while the hub is offline — so there's no live
+        # value at all. Both mean "not observable": an absent entity is shown as
+        # `unavailable` too, consistent with a present-but-unavailable one,
+        # rather than silently seeding an empty state the engine then treats as
+        # unknown while the <select> displays a real one. The real states stay
+        # offered so the user can simulate the entity as available; until then it
+        # reads Unavailable and its attribute overrides (correctly) don't match.
+        seed = live_state if isinstance(live_state, str) and live_state else STATE_UNAVAILABLE
+        if seed not in options:
+            options = [*options, seed]
         knob["options"] = options
+        knob["live_state"] = seed
     return knob
 
 

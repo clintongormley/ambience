@@ -240,6 +240,20 @@ def test_entity_knob_surfaces_unavailable_live_state_as_option():
     assert "on" in knob["options"]
 
 
+def test_entity_knob_absent_entity_reads_as_unavailable():
+    """A referenced entity can be absent entirely (its integration removes it
+    while the hub is offline), not merely `unavailable` — hass.states.get is
+    None. It must still read as Unavailable, consistent with a present-but-
+    unavailable entity, instead of seeding an empty value the <select> renders
+    as a real state while the engine treats it as unknown."""
+    hass = _Hass([])  # remote.cine not present at all
+    knob = _entity_knob(hass, "remote.cine", [], weather_entity=None)
+    assert knob["control"] == "select"
+    assert knob["live_state"] == "unavailable"
+    assert "unavailable" in knob["options"]
+    assert "on" in knob["options"]
+
+
 @pytest.mark.asyncio
 async def test_simulate_inputs_lists_entity_knobs_for_the_category():
     scenes = [

@@ -87,6 +87,11 @@ export class AmbienceSimulatorModal extends LitElement {
       .when .hint { color: var(--secondary-text-color, #999); font-size: 0.8em; }
       .when .hint.err { color: var(--error-color, #c00); }
       .when input.num { width: 5rem; text-align: right; }
+      /* Native date/time inputs render a touch taller than <select>/text controls
+         (their picker chrome), so the centred row grew when toggling Time↔Sun.
+         Pin every When control to one border-box height so the row height is the
+         same in both modes. */
+      .when input, .when select { box-sizing: border-box; height: 30px; }
       /* Top-align so the icon and control line up with the entity name (first
          line), not floating between the name and the entity_id subtitle. */
       .row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.55rem 0;

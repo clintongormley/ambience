@@ -40,3 +40,15 @@ wins. For the full model, see
 - [**Towel rack**](bathroom/towel-rack.md) — dry the towels after a shower by
     running the heated rack for a couple of hours, even when a second person
     showers before it finishes.
+
+### Kitchen / Dining Room
+
+An open-plan kitchen and dining room split into separate lighting spaces (see
+the [overview](kitchen-dining/index.md)):
+
+- [**Dining room**](kitchen-dining/dining-room.md) — fade the table light by
+    time of day while someone's seated, and drop it quickly when the projector's
+    on.
+- [**Kitchen**](kitchen-dining/kitchen.md) — low light when you step up to the
+    island, brighter once you settle in to cook, off quickly when the
+    projector's on.

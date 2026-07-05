@@ -106,6 +106,10 @@ nav:
           - Lights: recipes/bathroom/lights.md
           - Power Shower: recipes/bathroom/power-shower.md
           - Towel rack: recipes/bathroom/towel-rack.md
+      - Kitchen / Dining Room:
+          - recipes/kitchen-dining/index.md
+          - Dining room: recipes/kitchen-dining/dining-room.md
+          - Kitchen: recipes/kitchen-dining/kitchen.md
   - Developer:
       - developers/index.md
       - Architecture: developers/architecture.md

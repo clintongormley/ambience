@@ -155,6 +155,13 @@ requests.
   Then drop any guard a higher/pinned scene already guarantees (don't re-test the
   projector, or re-gate the daytime window, on every scene). See
   `reference/schema.md` → *How scenes are chosen*.
+- **Buffer flaky presence.** Occupancy/presence sensors lose still or sleeping
+  people and jitter on entry — never let one dropout flip a scene. Put a `for:`
+  buffer on "vacant → off", hold uncertain windows with a no-op blocker, and anchor
+  on a steadier proxy (a bed sensor, a light's own state) where you can. A
+  `for:`-gated vacancy gate also misfires for its first `for` after a Home Assistant
+  restart — guard it with a blocker. See `reference/conditions-cookbook.md` →
+  *Patterns*.
 - Keep `mode: merge` and reuse the **exact scene name** when fixing, so you
   upsert rather than duplicate.
 - Always end by telling the user to **import via the panel's Import view** — you

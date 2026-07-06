@@ -1160,6 +1160,108 @@ once every blind has **settled** in its final position:
 - Once every listed cover reaches `open`/`closed`, the blocker stops matching and
   the scene below it that fits the settled situation wins.
 
+### Ride out flaky presence sensors
+
+Presence / occupancy sensors are unreliable at seeing a **still** person — asleep
+in bed, seated at a desk, soaking in the bath. They drop the person for minutes at
+a time (an mmWave sensor routinely loses a sleeper for 15–20 min, some for over an
+hour) and only re-detect them on the next movement; they also **jitter** (a
+one-frame false clear or false occupied). Author so that a single dropout or jitter
+spike can't flip a scene:
+
+- **Buffer the vacancy.** Put a `for:` on the "vacant → off" test long enough to
+  outlast the sensor's worst stationary dropout; a dropout that's re-detected by
+  movement resets the clock, so only a genuinely empty room ever accrues the full
+  duration.
+- **Quick-off + a holding blocker (the responsive version).** A single large
+  vacancy buffer also makes the *common* case — a room someone actually left — slow
+  to go dark. Prefer a **short** vacancy `for` for a snappy off, plus a **no-op
+  blocker above it** that matches while a *steadier* signal says a still person
+  might remain (a bed sensor gone vacant only recently, the room's own lights still
+  on). The blocker wins through the uncertain window so the quick-off can't fire
+  under a sleeper, yet a truly empty room still turns off promptly.
+- **Small entry delay to absorb jitter.** Gate "occupied → on" with a small `for`
+  (a few seconds) so a one-frame false positive doesn't flash the lights.
+- **Debounce a two-level dwell.** When a short-vs-long dwell drives two brightness
+  levels, briefly stepping out of the zone drops the "long" scene and re-triggers
+  "short" — a visible dip. Add a **"recently vacated" blocker** gated on the light
+  being on plus a short `for`, so a brief exit-and-return holds the brighter level.
+- **Anchor on a reliable proxy.** Where a steadier signal exists, gate on it
+  instead of trusting the fragile sensor: a bed-occupancy sensor for "in bed", the
+  ceiling light being **off** for "the room's in bed mode", **both** reading lights
+  still on for "still reading". A proxy the sensor can't lose beats a sensor that
+  loses the person.
+
+```yaml
+# Snappy off, but HELD while the bed may still be occupied (flaky room sensor).
+# The time-of-day "on" scenes and reading mode sit elsewhere in this group.
+- name: Hold off while the bed was recently occupied   # no-op blocker; pin above "Vacant"
+  category: bedroom_lights
+  when:
+    # bed vacant, but for LESS than 20 min ⇒ someone may still be in it (or the
+    # sensor is mid-dropout) ⇒ block the quick-off below from firing.
+    occupancy: { sensors: [binary_sensor.bed_presence], occupied: false, for: { m: 20 }, for_mode: less_than }
+  actions: []
+- name: Vacant                                         # snappy off once truly empty
+  category: bedroom_lights
+  when:
+    occupancy: { sensors: [binary_sensor.suite_presence], occupied: false, for: { m: 2 } }
+  actions:
+    - { service: ambience.turn_off, entity_ids: [light.bedroom_ceiling, light.reading_left, light.reading_right] }
+```
+
+- The blocker matches only while the bed is *currently vacant but became so under
+  20 min ago* — the window in which a still sleeper is most likely to be mis-read as
+  gone — so the 2-min quick-off can't strip the lights during a dropout. Once the
+  bed's been vacant a real 20 min the blocker releases and `Vacant` clears the room.
+- A blocker isn't more *specific* than the scenes it guards, so containment won't
+  float it up on its own — **pin it to the top** (see [schema.md](schema.md) → *How
+  scenes are chosen*).
+
+### Survive a Home Assistant restart (a `for:` gate is briefly immature)
+
+After a Home Assistant restart, presence / occupancy sensors are re-created and
+their `last_changed` usually resets to boot time (HA doesn't restore it for most of
+them). Ambience seeds a `for:` gate's clock from that anchor (`last_changed`) on
+startup — the best provable lower bound — but when the anchor *is* boot time, a
+**"vacant for N" gate can't mature until N minutes after the restart**.
+
+That breaks the **gate-hoisting simplification** (see *Simplify a finished group*,
+below): if you dropped an occupancy test from a lower scene because a "vacant → off"
+gate above it *guarantees* the room is occupied, that guarantee is temporarily
+**false** at boot — the gate hasn't matured, so it doesn't match, and the lower
+"present → on" scene wins on an actually-empty, freshly-booted room, snapping the
+lights on for up to N minutes.
+
+Guard it with a **no-op blocker** that re-tests the *instant* (no-`for`) occupancy
+the lower scene dropped, sitting below the "vacant → off" gate and above the
+"present" scene:
+
+```yaml
+- name: Vacant                    # "vacant for 5m → off" — immature for 5 min after a restart
+  when: { occupancy: { sensors: [binary_sensor.island], occupied: false, for: { m: 5 } } }
+  actions: [ <lights off> ]
+- name: Block until the island is occupied     # no-op; catches the cold-boot window
+  when: { occupancy: { sensors: [binary_sensor.island], occupied: false } }   # instant, no for
+  actions: []
+- name: Present — low light       # no occupancy test (it leaned on the Vacant gate)
+  when: { time_of_day: [ { period: daytime } ] }
+  actions: [ <lights low> ]
+```
+
+On a cold boot the empty room falls *through* the immature `Vacant`, hits the
+blocker (instant "vacant" → matches, does nothing), and never reaches `Present` — so
+the lights stay off. Once someone's really there the blocker's "vacant" test fails
+and the cascade runs normally; once `Vacant` matures (N minutes post-boot) it
+resumes handling the empty room directly. The blocker's `occupancy` match-set is a
+*superset* of `Vacant`'s and a *subset* of the catch-all `Present`, so containment
+usually orders it correctly on its own — but confirm the order (and pin if needed)
+per [schema.md](schema.md) → *How scenes are chosen*.
+
+> This only bites a `for:` gate whose entity resets `last_changed` on restart. A
+> sensor that restores its timestamp, or a `for`-less test, matures immediately and
+> needs no guard.
+
 ### Cap-and-hold a cover without overriding a manual change
 
 When a position scene should **hold or cap** a cover at some level but **not
@@ -1216,6 +1318,36 @@ guard:
   brighten isn't snapped back. Without the upper-bound `NOT`, the pinned
   `apply: always` scene would re-dim every time you touched the lights.
 
+### Re-assert a scene held between wins (`apply: always`)
+
+The dual of the pattern above. `apply: once` (the default) applies a scene's
+actions when it **becomes** the winner, then debounces identical re-fires while it
+*stays* the winner. That's usually right — but two situations leave a scene "still
+applied" when it should re-fire, and `once` then silently skips it:
+
+- **A holding blocker sat between the wins.** A scene wins and applies; a no-op
+  blocker (e.g. the flaky-presence *holding blocker* above) then wins for a while;
+  the scene wins **again**. Because no other *acting* scene applied in between,
+  `once` treats the second win as the same already-applied state and does nothing —
+  e.g. reading-mode dims once, the user brightens the lights and steps out, the
+  *bed-vacant* blocker holds, they return to bed, reading-mode re-wins but the
+  lights **don't** re-dim.
+- **An external timer or manual change moved the device out from under a scene that
+  never stopped winning.** A "sticky" scene (its `when` keeps matching) applies
+  once; a 5-minute hardware timer or a manual tap then flips the device; the scene
+  is still the winner, so `once` won't re-assert the intended state.
+
+Set **`apply: always`** on such a scene so it re-applies on every re-evaluation
+while it wins. Idempotent `ambience.turn_on` / `ambience.turn_off` and the safe
+cover services keep this cheap and flicker-free — an entity already in the target
+state is skipped — so re-asserting every match costs nothing when nothing changed.
+
+> `apply: always` re-asserts against **manual** changes too. That's the point in
+> the sticky/held cases here (you *want* the state re-imposed); it's a nuisance when
+> you'd rather the user's override stick — for that, bracket the scene into a
+> one-shot with a `for`-window (see *Fire once on entry, then release*, above).
+> Choose by whether a re-win should re-impose the scene or yield to the user.
+
 ### Mirror an external mode/selector (declarative truth table)
 
 To replace a pile of *reactive* "when X changes from A to B, do …" automations that
@@ -1268,8 +1400,11 @@ Two correctness points keep this honest:
   opposite" is exact for a plain binary test, but fuzzy when the gate uses a `for:`
   window (a grace period where neither side has settled) or when the entity can go
   **unavailable** (an unobservable atom doesn't match, so "past the gate" also
-  covers "sensor down"). If that gap matters, keep a small explicit blocker for the
-  in-between case, or add an `unavailable` guard at the very top.
+  covers "sensor down"). The sharpest version of the `for:` gap is a **Home
+  Assistant restart**, which resets the gate's clock so it stays immature — and
+  therefore unmatched — for its whole `for` after boot (see *Survive a Home
+  Assistant restart*, above). If any of these gaps matter, keep a small explicit
+  blocker for the in-between case, or add an `unavailable` guard at the very top.
 
 **Prefer a gate that also does work.** It needn't have actions — a pure actionless
 blocker (like the *settle* blocker above) is right when the positive case has

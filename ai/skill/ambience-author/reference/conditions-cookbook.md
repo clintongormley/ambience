@@ -484,8 +484,10 @@ evaluates the more **specific** one first — the scene matching a *subset* of
 situations — so a narrower scene beats a broader one, and a catch-all (empty
 `when`, which matches everything) always sorts last. You do **not** control this
 with list order. A broad rule that must beat more-specific scenes (an
-override/blocker) instead needs the user to **pin** it to the top in the panel —
-see `schema.md` → *How scenes are chosen*.
+override/blocker) instead needs an explicit **`priority`** number higher than the
+scenes it must beat — the block sets its own order, no hand-pinning required (see
+`import-format.md` → *Ordering*, and `schema.md` → *How scenes are chosen* to
+predict the containment order and avoid needless pins).
 
 ---
 
@@ -516,8 +518,10 @@ once every blind has **settled** in its final position:
 - `actions: []` makes it a **pure blocker** — while it wins, nothing else in the
   group runs, so no decision is made until the move finishes.
 - It must sit **above** the deciding scenes. A blocker is not more *specific* than
-  them, so containment won't float it up on its own — have the user **pin** it to
-  the top (Scopes view), per `schema.md` → *How scenes are chosen*.
+  them, so containment won't float it up on its own — give it a higher **`priority`**
+  than the deciding scenes so the block orders it itself (see `import-format.md` →
+  *Ordering*; `schema.md` → *How scenes are chosen* explains why containment leaves
+  it low).
 - Once every listed cover reaches `open`/`closed`, the blocker stops matching and
   the scene below it that fits the settled situation wins.
 
@@ -662,7 +666,7 @@ guard:
 
 ```yaml
 - name: Dim once when I get into bed
-  category: <lights category>          # pin to top in the panel; apply: always
+  category: <lights category>          # priority above the others; apply: always
   apply: always
   when:
     occupancy: { sensors: [binary_sensor.bed_presence], for: { s: 50 } }   # in bed >= 50s
@@ -754,9 +758,10 @@ every scene below:
 Two correctness points keep this honest:
 
 - **The gate has to actually sit on top.** A broad gate isn't more *specific* than
-  the scenes below, so containment won't float it up — the user must **pin** it
-  (see [schema.md](schema.md) → *How scenes are chosen*). Only a genuinely
-  more-specific (subset) gate rises on its own.
+  the scenes below, so containment won't float it up — give it a higher **`priority`**
+  than them so the block orders it itself (see [import-format.md](import-format.md)
+  → *Ordering*; [schema.md](schema.md) → *How scenes are chosen* for why containment
+  leaves it low). Only a genuinely more-specific (subset) gate rises on its own.
 - **The "opposite" is only as clean as the gate's match.** "Past the gate ⇒
   opposite" is exact for a plain binary test, but fuzzy when the gate uses a `for:`
   window (a grace period where neither side has settled) or when the entity can go
@@ -785,8 +790,8 @@ everything beneath it, so you avoid a separate no-op scene.
   when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: evening }] }
   actions: [ <dim> ]
 
-# AFTER — "Vacant" (pinned) is the gate; below it the room is occupied (bar the 1-min grace)
-- name: Vacant            # pin to top
+# AFTER — "Vacant" (higher priority) is the gate; below it the room is occupied (bar the 1-min grace)
+- name: Vacant            # priority above Daytime/Evening
   when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
   actions: [ <lights off> ]
 - name: Daytime

@@ -142,11 +142,21 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 | `actions` | array | yes | List of [ActionSpec](#5-actionspec). May be empty (a pure "blocker" scene that matches but does nothing). |
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |
 
-**Fields you don't author** (backend-owned / response-only): `priority`,
-`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`. `pinned`
-is a real, persisted field, but **you can't usefully set it from an import** (a
-freshly-imported pinned scene with no priority sorts to the *bottom*) — leave it
-off and have the user pin in the panel (see below).
+**Fields you don't author** (backend-owned / response-only):
+`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`.
+
+**`priority` — author it only to set order** (integer, optional). Higher number =
+evaluated earlier. **Presence of a `priority` marks the scene pinned on import**,
+so numbering a category's scenes descending (`4·1024, 3·1024, …`) sets their exact
+evaluation order. On save the backend **auto-unpins** every scene the natural
+containment order (below) already places correctly, so stored configs keep pins
+**only** where they genuinely override that order — the resolved order is always
+the one you numbered. You usually **don't** need it: author the order via
+containment and only add `priority` where you must force an order containment
+wouldn't produce. (`pinned` is a real persisted field too, but you don't set it —
+the `priority` number carries the pin.) See
+[*How scenes are chosen*](#how-scenes-are-chosen) and
+[import-format.md](import-format.md#ordering).
 
 ### How scenes are chosen
 
@@ -163,17 +173,29 @@ order — neither is your array order:
    "projector is on" vs "it's mid-morning and the blind is low") are ordered by
    which higher-priority *conditions* they constrain; the one you think of as the
    "override" is **not** promoted for being broad.
-2. **Pinning (manual, in the panel).** A pinned scene holds a fixed priority that
-   bypasses the containment order. This is the **only** reliable way to force a
-   broad rule above more-specific ones.
+2. **Priority (you set it, on import).** A scene carrying a `priority` number
+   holds that fixed priority and **bypasses** the containment order — this is the
+   way to force a broad rule above more-specific ones. Number a category's scenes
+   descending in the order you want. On save the backend drops the numbers that
+   were redundant (the ones containment already agreed with) and keeps only the
+   pins that genuinely override it, so you get your order with a minimal, clean
+   stored config. (A user can still pin/drag manually in the panel's Scopes view;
+   that's the same mechanism.)
 
 **Consequences for authoring:**
 
 - A broad **override or blocker** (few conditions, must beat everything — e.g.
   "projector on → close the blind", or an empty-`when` "block while moving" no-op)
   will **not** float to the top on its own; containment sorts it *below* the
-  specific scenes. Author it, then tell the user to **pin it to the top** in the
-  panel (Scopes view → pin/drag). Don't rely on array order.
+  specific scenes. Give it a **higher `priority`** than the scenes it must beat
+  (item 2 above) — the block now sets its own order; the user needn't pin by hand.
+  Don't rely on array order.
+- **Order incomparable scenes the way containment already would**, so no needless
+  pin is created. When two scenes are incomparable and you don't care about their
+  relative order, number them constrained- / higher-condition-priority-first (what
+  containment produces) — the backend will then auto-unpin both. Only deviate
+  deliberately (e.g. pulling a naturally-high `state` scene *below* a
+  time/occupancy gate), which correctly leaves that one scene pinned.
 - Because evaluation is a first-match cascade, a scene may **omit any condition an
   earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
   close" sits on top, lower scenes needn't re-test the projector; once a pinned
@@ -455,12 +477,50 @@ fields: `name`, `description?`, `category`, `when`, `actions`, `apply?` — see
 
 > **Ordering & overrides.** List order does **not** set which scene wins — on save
 > the engine re-derives the evaluation order from each scene's conditions (more
-> specific, i.e. matching a *subset* of situations, evaluated first) and from any
-> pinning. So a broad **override/blocker** (e.g. "projector on → close", a "block
-> while moving" no-op) won't beat the more-specific scenes just by being listed
-> first or last; after importing, the user must **pin it to the top** in the panel.
-> You can't reliably set `pinned`/`priority` through the block. See
+> specific, i.e. matching a *subset* of situations, evaluated first). To **force**
+> an order that differs from that — e.g. floating a broad **override/blocker**
+> ("projector on → close", a "block while moving" no-op) above the more-specific
+> scenes — give the scenes explicit **`priority`** numbers (see
+> [Ordering](#ordering) below). The user no longer has to pin by hand. See also
 > [schema.md → How scenes are chosen](schema.md#how-scenes-are-chosen).
+
+## Ordering
+
+Add an integer **`priority`** to a scene to place it explicitly in its category's
+evaluation order. **Higher number = evaluated earlier.** Numbers only need to
+compare *within one category* — categories resolve independently.
+
+Presence of a `priority` marks the scene **pinned** on import (you don't set
+`pinned` yourself — the number carries it). On save the backend **auto-unpins**
+every scene the natural containment order already places correctly, so the stored
+config keeps pins **only** where your order genuinely overrides containment. The
+resolved order is always exactly the one you numbered. Two recipes:
+
+- **Replace a category** (`mode: replace`, or a fresh category): number the scenes
+  **cleanly descending** with a gap between each — `N·1024, (N-1)·1024, …, 1·1024`
+  (e.g. four scenes → `4096, 3072, 2048, 1024`). Self-contained and portable; the
+  gap leaves room to insert later.
+
+  ```yaml
+  scenes:
+    - { name: Projector override, category: living, priority: 3072, when: { state: {…} }, actions: [ … ] }
+    - { name: Evening dim,        category: living, priority: 2048, when: { time_of_day: [{ period: evening }] }, actions: [ … ] }
+    - { name: Daytime default,    category: living, priority: 1024, when: {}, actions: [ … ] }
+  ```
+
+- **Edit an existing category** (`mode: merge`): read the **current `priority`
+  numbers from the AI bundle** (each scene exposes its `priority`) and
+  **interpolate** — to slot a scene between neighbours numbered `2048` and `1024`,
+  give it the midpoint `1536`; to put it on top, use `existing_max + 1024`. This is
+  the same midpoint math the panel's drag-to-reorder uses, so your inserts land
+  where you expect without renumbering the untouched scenes.
+
+**Only number what needs it.** Where you don't care about two *incomparable*
+scenes' relative order, order them the way containment already would (the
+constrained / higher-condition-priority scene first — see
+[schema.md → How scenes are chosen](schema.md#how-scenes-are-chosen)); the backend
+then auto-unpins both and nothing is stored as pinned. Reserve `priority` for the
+deliberate overrides.
 
 ## What the import does
 
@@ -1123,8 +1183,10 @@ evaluates the more **specific** one first — the scene matching a *subset* of
 situations — so a narrower scene beats a broader one, and a catch-all (empty
 `when`, which matches everything) always sorts last. You do **not** control this
 with list order. A broad rule that must beat more-specific scenes (an
-override/blocker) instead needs the user to **pin** it to the top in the panel —
-see `schema.md` → *How scenes are chosen*.
+override/blocker) instead needs an explicit **`priority`** number higher than the
+scenes it must beat — the block sets its own order, no hand-pinning required (see
+`import-format.md` → *Ordering*, and `schema.md` → *How scenes are chosen* to
+predict the containment order and avoid needless pins).
 
 ---
 
@@ -1155,8 +1217,10 @@ once every blind has **settled** in its final position:
 - `actions: []` makes it a **pure blocker** — while it wins, nothing else in the
   group runs, so no decision is made until the move finishes.
 - It must sit **above** the deciding scenes. A blocker is not more *specific* than
-  them, so containment won't float it up on its own — have the user **pin** it to
-  the top (Scopes view), per `schema.md` → *How scenes are chosen*.
+  them, so containment won't float it up on its own — give it a higher **`priority`**
+  than the deciding scenes so the block orders it itself (see `import-format.md` →
+  *Ordering*; `schema.md` → *How scenes are chosen* explains why containment leaves
+  it low).
 - Once every listed cover reaches `open`/`closed`, the blocker stops matching and
   the scene below it that fits the settled situation wins.
 
@@ -1301,7 +1365,7 @@ guard:
 
 ```yaml
 - name: Dim once when I get into bed
-  category: <lights category>          # pin to top in the panel; apply: always
+  category: <lights category>          # priority above the others; apply: always
   apply: always
   when:
     occupancy: { sensors: [binary_sensor.bed_presence], for: { s: 50 } }   # in bed >= 50s
@@ -1393,9 +1457,10 @@ every scene below:
 Two correctness points keep this honest:
 
 - **The gate has to actually sit on top.** A broad gate isn't more *specific* than
-  the scenes below, so containment won't float it up — the user must **pin** it
-  (see [schema.md](schema.md) → *How scenes are chosen*). Only a genuinely
-  more-specific (subset) gate rises on its own.
+  the scenes below, so containment won't float it up — give it a higher **`priority`**
+  than them so the block orders it itself (see [import-format.md](import-format.md)
+  → *Ordering*; [schema.md](schema.md) → *How scenes are chosen* for why containment
+  leaves it low). Only a genuinely more-specific (subset) gate rises on its own.
 - **The "opposite" is only as clean as the gate's match.** "Past the gate ⇒
   opposite" is exact for a plain binary test, but fuzzy when the gate uses a `for:`
   window (a grace period where neither side has settled) or when the entity can go
@@ -1424,8 +1489,8 @@ everything beneath it, so you avoid a separate no-op scene.
   when: { occupancy: { sensors: [binary_sensor.lounge] }, time_of_day: [{ period: evening }] }
   actions: [ <dim> ]
 
-# AFTER — "Vacant" (pinned) is the gate; below it the room is occupied (bar the 1-min grace)
-- name: Vacant            # pin to top
+# AFTER — "Vacant" (higher priority) is the gate; below it the room is occupied (bar the 1-min grace)
+- name: Vacant            # priority above Daytime/Evening
   when: { occupancy: { sensors: [binary_sensor.lounge], occupied: false, for: { m: 1 } } }
   actions: [ <lights off> ]
 - name: Daytime

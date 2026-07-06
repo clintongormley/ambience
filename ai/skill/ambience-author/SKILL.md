@@ -29,9 +29,12 @@ Every scene belongs to a **category** (a named group). A scene has:
 
 Within one `(scope, category)`, the **first matching scene wins** in the engine's
 derived order: more-specific scenes (those matching a *subset* of situations) are
-evaluated first, and **pinned** scenes are forced to the top. A broad
-override/blocker won't beat more-specific scenes unless the user pins it — see
-`reference/schema.md` → *How scenes are chosen*.
+evaluated first. A broad override/blocker won't beat more-specific scenes on its
+own — give it an explicit **`priority`** number (higher = evaluated earlier) to
+force its place; the import sets the order itself, no hand-pinning needed. The
+backend auto-drops any `priority` that just agrees with containment, so number
+deliberately — see `reference/schema.md` → *How scenes are chosen* and
+`reference/import-format.md` → *Ordering*.
 
 ## The two things you need from the user
 
@@ -149,12 +152,15 @@ requests.
 - **One scope per block.** Multi-room → multiple labelled blocks.
 - **Prefer built-in conditions**; reserve `unavailable`/`script`/`template` for
   fallback guards or logic the built-ins can't express.
-- **Pin broad overrides; lean on the cascade.** A rule meant to beat more-specific
-  scenes (e.g. "projector on → close", a "block while moving" no-op) won't win on
-  its own — tell the user to **pin it to the top** in the panel after importing.
-  Then drop any guard a higher/pinned scene already guarantees (don't re-test the
-  projector, or re-gate the daytime window, on every scene). See
-  `reference/schema.md` → *How scenes are chosen*.
+- **Order broad overrides via `priority`; lean on the cascade.** A rule meant to
+  beat more-specific scenes (e.g. "projector on → close", a "block while moving"
+  no-op) won't win on its own — give it (and the scenes it must beat) explicit
+  `priority` numbers, highest first, so the block sets the order; no hand-pinning
+  after import. Then drop any guard a higher scene already guarantees (don't
+  re-test the projector, or re-gate the daytime window, on every scene). Number
+  deliberately: the backend auto-drops any `priority` that just matches containment.
+  See `reference/schema.md` → *How scenes are chosen* and
+  `reference/import-format.md` → *Ordering*.
 - **Buffer flaky presence.** Occupancy/presence sensors lose still or sleeping
   people and jitter on entry — never let one dropout flip a scene. Put a `for:`
   buffer on "vacant → off", hold uncertain windows with a no-op blocker, and anchor

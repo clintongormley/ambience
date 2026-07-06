@@ -109,11 +109,21 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 | `actions` | array | yes | List of [ActionSpec](#5-actionspec). May be empty (a pure "blocker" scene that matches but does nothing). |
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |
 
-**Fields you don't author** (backend-owned / response-only): `priority`,
-`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`. `pinned`
-is a real, persisted field, but **you can't usefully set it from an import** (a
-freshly-imported pinned scene with no priority sorts to the *bottom*) — leave it
-off and have the user pin in the panel (see below).
+**Fields you don't author** (backend-owned / response-only):
+`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`.
+
+**`priority` — author it only to set order** (integer, optional). Higher number =
+evaluated earlier. **Presence of a `priority` marks the scene pinned on import**,
+so numbering a category's scenes descending (`4·1024, 3·1024, …`) sets their exact
+evaluation order. On save the backend **auto-unpins** every scene the natural
+containment order (below) already places correctly, so stored configs keep pins
+**only** where they genuinely override that order — the resolved order is always
+the one you numbered. You usually **don't** need it: author the order via
+containment and only add `priority` where you must force an order containment
+wouldn't produce. (`pinned` is a real persisted field too, but you don't set it —
+the `priority` number carries the pin.) See
+[*How scenes are chosen*](#how-scenes-are-chosen) and
+[import-format.md](import-format.md#ordering).
 
 ### How scenes are chosen
 
@@ -130,17 +140,29 @@ order — neither is your array order:
    "projector is on" vs "it's mid-morning and the blind is low") are ordered by
    which higher-priority *conditions* they constrain; the one you think of as the
    "override" is **not** promoted for being broad.
-2. **Pinning (manual, in the panel).** A pinned scene holds a fixed priority that
-   bypasses the containment order. This is the **only** reliable way to force a
-   broad rule above more-specific ones.
+2. **Priority (you set it, on import).** A scene carrying a `priority` number
+   holds that fixed priority and **bypasses** the containment order — this is the
+   way to force a broad rule above more-specific ones. Number a category's scenes
+   descending in the order you want. On save the backend drops the numbers that
+   were redundant (the ones containment already agreed with) and keeps only the
+   pins that genuinely override it, so you get your order with a minimal, clean
+   stored config. (A user can still pin/drag manually in the panel's Scopes view;
+   that's the same mechanism.)
 
 **Consequences for authoring:**
 
 - A broad **override or blocker** (few conditions, must beat everything — e.g.
   "projector on → close the blind", or an empty-`when` "block while moving" no-op)
   will **not** float to the top on its own; containment sorts it *below* the
-  specific scenes. Author it, then tell the user to **pin it to the top** in the
-  panel (Scopes view → pin/drag). Don't rely on array order.
+  specific scenes. Give it a **higher `priority`** than the scenes it must beat
+  (item 2 above) — the block now sets its own order; the user needn't pin by hand.
+  Don't rely on array order.
+- **Order incomparable scenes the way containment already would**, so no needless
+  pin is created. When two scenes are incomparable and you don't care about their
+  relative order, number them constrained- / higher-condition-priority-first (what
+  containment produces) — the backend will then auto-unpin both. Only deviate
+  deliberately (e.g. pulling a naturally-high `state` scene *below* a
+  time/occupancy gate), which correctly leaves that one scene pinned.
 - Because evaluation is a first-match cascade, a scene may **omit any condition an
   earlier (pinned/higher) scene already guarantees**. Once a pinned "projector →
   close" sits on top, lower scenes needn't re-test the projector; once a pinned

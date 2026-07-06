@@ -249,9 +249,10 @@ def minimise_pins(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene
     containment auto-order would otherwise place it differently. The resolved
     order is unchanged.
 
-    Per category (categories resolve independently). A scene without an integer
-    ``priority`` is left exactly as-is — it was already unpinned/auto. Used on
-    the import save path so a block can set order while storage keeps pins only
+    Per category (categories resolve independently). A scene with no integer
+    ``priority`` is never newly pinned; an unpinned one is left as-is (an
+    already-pinned scene may still have a redundant pin dropped). Used on the
+    import save path so a block can set order while storage keeps pins only
     where they genuinely override the natural order.
     """
     return _per_category(scenes, conditions, _minimise_one_category)

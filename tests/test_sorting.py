@@ -684,3 +684,65 @@ def test_minimise_pins_per_category_independent() -> None:
     # c1 agrees with containment → no pins; c2 overrides (state below occ) → a pin.
     assert _pinned_names([s for s in out if s["category"] == "c1"]) == set()
     assert len(_pinned_names([s for s in out if s["category"] == "c2"])) >= 1
+
+
+def test_minimise_pins_multiple_overrides_needs_cumulative_pins() -> None:
+    # Three "state" scenes whose natural (order_key) order is P<Q<R, numbered in
+    # the FULL REVERSE (R,Q,P). This is the case the greedy loop exists for: each
+    # pin is only load-bearing *given the others* — unpinning R alone, or Q alone,
+    # each still reproduces the target against the all-pinned baseline, so an
+    # independent per-pin check would wrongly drop all three and resolve to the
+    # natural P,Q,R. The cumulative greedy must keep the two upper pins.
+    scenes = [
+        {"name": "R", "category": "c", "when": {"state": "rrr"}, "actions": [], "priority": 3072},
+        {"name": "Q", "category": "c", "when": {"state": "qqq"}, "actions": [], "priority": 2048},
+        {"name": "P", "category": "c", "when": {"state": "ppp"}, "actions": [], "priority": 1024},
+    ]
+    out = minimise_pins(scenes, _CONDS)
+    assert _resolved_names(out) == ["R", "Q", "P"]  # author order preserved (invariant)
+    assert _pinned_names(out) == {"Q", "R"}  # minimal cumulative set, not all three
+
+
+def test_minimise_pins_target_may_shadow_a_subset_scene() -> None:
+    # BROAD ({state}) is a strict superset of NARROW ({state, occ}), so containment
+    # sorts NARROW first. Numbering BROAD ABOVE NARROW deliberately shadows the
+    # subset — allowed; minimise must keep BROAD pinned to preserve that order.
+    scenes = [
+        {
+            "name": "BROAD",
+            "category": "c",
+            "when": {"state": "aaa"},
+            "actions": [],
+            "priority": 2048,
+        },
+        {
+            "name": "NARROW",
+            "category": "c",
+            "when": {"state": "aaa", "occ": {"sensors": ["x"]}},
+            "actions": [],
+            "priority": 1024,
+        },
+    ]
+    out = minimise_pins(scenes, _CONDS)
+    assert _resolved_names(out) == ["BROAD", "NARROW"]  # shadowing order preserved
+    assert _pinned_names(out) == {"BROAD"}  # the override pin is load-bearing
+
+
+def test_minimise_pins_numbered_and_unnumbered_in_one_category() -> None:
+    # A numbered (→pinned) scene sharing a category with an unnumbered (auto) one.
+    # N overrides containment (occ is lower-priority than U's state, so U would
+    # naturally sort first) → N stays pinned; U is never force-pinned and flows
+    # under it. The order the numbers imply is preserved.
+    scenes = [
+        {
+            "name": "N",
+            "category": "c",
+            "when": {"occ": {"sensors": ["x"]}},
+            "actions": [],
+            "priority": 2048,
+        },
+        {"name": "U", "category": "c", "when": {"state": "aaa"}, "actions": []},  # no priority
+    ]
+    out = minimise_pins(scenes, _CONDS)
+    assert _resolved_names(out) == ["N", "U"]
+    assert _pinned_names(out) == {"N"}  # only the numbered override is pinned

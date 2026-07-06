@@ -24,3 +24,20 @@ class FakeTransport:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class FakeClient:
+    """Stands in for HAClient in tool tests. Records commands and returns
+    scripted results keyed by command type; raises HACommandError for types
+    whose scripted value is an exception."""
+
+    def __init__(self, results: dict[str, Any] | None = None) -> None:
+        self.results = results or {}
+        self.calls: list[dict[str, Any]] = []
+
+    async def command(self, type: str, **payload: Any) -> dict[str, Any]:
+        self.calls.append({"type": type, **payload})
+        value = self.results.get(type, {})
+        if isinstance(value, Exception):
+            raise value
+        return value

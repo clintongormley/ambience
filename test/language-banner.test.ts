@@ -42,6 +42,19 @@ describe("ambience-language-banner", () => {
     expect(innerBanner(el)).toBeNull();
   });
 
+  it("hidden for European Portuguese (pt is shipped)", async () => {
+    const el = await mount("pt");
+    expect(innerBanner(el)).toBeNull();
+  });
+
+  it("shown for Brazilian Portuguese, nudging a dedicated translation", async () => {
+    // European `pt` covers pt-BR strings as a fallback, but pt-BR is a wanted
+    // region variant, so the banner still invites a Brazilian translation.
+    const el = await mount("pt-BR");
+    expect(innerBanner(el)).not.toBeNull();
+    expect(el.shadowRoot.textContent.toLowerCase()).toContain("brasil");
+  });
+
   it("CTA href is the built translation-request URL", async () => {
     const el = await mount("fr");
     const cta = innerBanner(el).shadowRoot.querySelector('[data-test="banner-cta"]');

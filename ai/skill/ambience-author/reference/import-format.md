@@ -138,6 +138,12 @@ constrained / higher-condition-priority scene first — see
 then auto-unpins both and nothing is stored as pinned. Reserve `priority` for the
 deliberate overrides.
 
+> **Note.** The auto-unpin runs over the **whole scope** on every import, not just
+> the scenes you numbered — so a redundant pin anywhere in the scope (including one
+> the user set by hand in a category your block doesn't touch) is dropped whenever
+> it doesn't change the resolved order. The evaluation order is always preserved;
+> only pins that were doing nothing are removed, keeping the stored config minimal.
+
 ## What the import does
 
 ```text

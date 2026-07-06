@@ -18,6 +18,7 @@ original relative order.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from .engine import scene_enabled
@@ -217,19 +218,28 @@ def _resolve_order_one_category(scenes: list[Scene], conditions: dict[str, Any])
     return scenes
 
 
-def resolve_order(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
-    """Canonicalise a scope's scenes per category: partition by `category` (preserving
-    each category's first-appearance order), canonicalise each partition
-    independently, then concatenate so each category stays contiguous. Categories are
-    independent buckets, so order and priority are only meaningful within a
-    category."""
+def _per_category(
+    scenes: list[Scene],
+    conditions: dict[str, Any],
+    transform: Callable[[list[Scene], dict[str, Any]], list[Scene]],
+) -> list[Scene]:
+    """Partition `scenes` by `category` (preserving each category's
+    first-appearance order), apply `transform` to each partition independently,
+    then concatenate so each category stays contiguous. Categories are
+    independent buckets, so order and priority are only meaningful within one."""
     buckets: dict[str | None, list[Scene]] = {}
     for r in scenes:
         buckets.setdefault(r.get("category"), []).append(r)
     out: list[Scene] = []
     for bucket in buckets.values():
-        out.extend(_resolve_order_one_category(bucket, conditions))
+        out.extend(transform(bucket, conditions))
     return out
+
+
+def resolve_order(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Canonicalise a scope's scenes per category (see
+    :func:`_resolve_order_one_category`), keeping each category contiguous."""
+    return _per_category(scenes, conditions, _resolve_order_one_category)
 
 
 def minimise_pins(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
@@ -244,13 +254,7 @@ def minimise_pins(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene
     the import save path so a block can set order while storage keeps pins only
     where they genuinely override the natural order.
     """
-    buckets: dict[str | None, list[Scene]] = {}
-    for r in scenes:
-        buckets.setdefault(r.get("category"), []).append(r)
-    out: list[Scene] = []
-    for bucket in buckets.values():
-        out.extend(_minimise_one_category(bucket, conditions))
-    return out
+    return _per_category(scenes, conditions, _minimise_one_category)
 
 
 def _minimise_one_category(bucket: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
@@ -272,7 +276,7 @@ def _minimise_one_category(bucket: list[Scene], conditions: dict[str, Any]) -> l
     # pins. Deterministic: iteration order is fixed, so the chosen minimal set is
     # stable for a given input.
     for idx in reversed(target):
-        r = next(s for s in scenes if s["_mp_idx"] == idx)
+        r = scenes[idx]  # _mp_idx is the enumerate index; `scenes` is never reordered
         if not r.get("pinned"):
             continue
         r["pinned"] = False

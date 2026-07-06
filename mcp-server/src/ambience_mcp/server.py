@@ -1,4 +1,4 @@
-"""FastMCP glue: one connection, one preview ledger, ten thin tool wrappers.
+"""FastMCP glue: one connection, one preview ledger, nine thin tool wrappers.
 
 Each wrapper delegates to ambience_mcp.tools; the docstring + type hints become
 the tool's MCP schema. Keep descriptions short — the client's tool-search reads

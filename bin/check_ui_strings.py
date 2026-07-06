@@ -28,7 +28,7 @@ _USED_RE = re.compile(r'"(ui\.[A-Za-z0-9_.]+)"')
 
 def bundle_keys(text: str) -> set[str]:
     """The flattened `ui.*` key set of an i18n-data.ts source text (the `en`
-    locale — en/es ship the same keys). Reads the bundle via the shared
+    locale — all shipped locales share the same key set). Reads the bundle via the shared
     recursive-descent parser in `_i18n_bundle` rather than a second brace-walk."""
     locales = parse_locales(text)
     en = locales.get("en") or next(iter(locales.values()), {})

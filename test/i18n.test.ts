@@ -1,4 +1,4 @@
-import { describe, expect, it, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, test } from "vitest";
 import {
   actionLabel,
   anchorLabel,
@@ -365,6 +365,58 @@ describe("getLanguageSupport", () => {
   });
 });
 
+describe("region-aware locale resolution and banner (pt / pt-BR)", () => {
+  // These exercise the exact→base→en resolution chain and the banner's
+  // region-variant rule WITHOUT coupling to the shipped pt bundle's contents:
+  // temporary catalogue entries are seeded and restored around each test.
+  const bundle = AMBIENCE_STRINGS_BY_LOCALE as Record<string, unknown>;
+  let saved: { pt?: unknown; ptBR?: unknown; hadPt: boolean; hadPtBR: boolean };
+
+  beforeEach(() => {
+    saved = {
+      pt: bundle.pt,
+      ptBR: bundle["pt-BR"],
+      hadPt: "pt" in bundle,
+      hadPtBR: "pt-BR" in bundle,
+    };
+  });
+  afterEach(() => {
+    if (saved.hadPt) bundle.pt = saved.pt;
+    else delete bundle.pt;
+    if (saved.hadPtBR) bundle["pt-BR"] = saved.ptBR;
+    else delete bundle["pt-BR"];
+  });
+
+  test("a pt-BR user with no pt-BR catalogue renders European pt (base fallback)", () => {
+    bundle.pt = { ui: { close: "Fechar" } };
+    expect(localize({ language: "pt-BR" } as any, "ui.close", "Close")).toBe("Fechar");
+  });
+
+  test("a pt-BR catalogue, when present, wins over base pt and falls back to it per-key", () => {
+    bundle.pt = { ui: { close: "Fechar", cancel: "Cancelar" } };
+    bundle["pt-BR"] = { ui: { close: "Fechar-BR" } };
+    // exact-region value wins for a key it defines…
+    expect(localize({ language: "pt-BR" } as any, "ui.close", "Close")).toBe("Fechar-BR");
+    // …and falls through to base pt for a key it doesn't define.
+    expect(localize({ language: "pt-BR" } as any, "ui.cancel", "Cancel")).toBe("Cancelar");
+  });
+
+  it("banner: a pt-BR user is still nudged even though European pt covers them", () => {
+    bundle.pt = { ui: { close: "Fechar" } };
+    expect(getLanguageSupport({ language: "pt-BR" }).available).toBe(false);
+  });
+
+  it("banner: a European pt user is covered (no nudge)", () => {
+    bundle.pt = { ui: { close: "Fechar" } };
+    expect(getLanguageSupport({ language: "pt" }).available).toBe(true);
+  });
+
+  it("banner: a region variant we don't distinguish stays covered by its base (es-419)", () => {
+    // es ships; es-419 isn't a wanted variant, so base es covers it — no nudge.
+    expect(getLanguageSupport({ language: "es-419" }).available).toBe(true);
+  });
+});
+
 describe("languageDisplayName", () => {
   it("returns the native name for a known language", () => {
     expect(languageDisplayName("fr").toLowerCase()).toContain("français");
@@ -385,14 +437,18 @@ describe("languageDisplayName", () => {
 });
 
 describe("AMBIENCE_STRINGS_BY_LOCALE parity", () => {
-  test("es bundle mirrors en bundle key-for-key", () => {
-    const flat = (o: any, p = ""): string[] =>
-      Object.entries(o).flatMap(([k, v]) =>
-        v && typeof v === "object" ? flat(v, `${p}${k}.`) : [`${p}${k}`],
-      );
-    const en = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.en));
-    const es = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.es));
-    expect([...en].filter((k) => !es.has(k))).toEqual([]); // none missing in es
-    expect([...es].filter((k) => !en.has(k))).toEqual([]); // none extra in es
-  });
+  const flat = (o: any, p = ""): string[] =>
+    Object.entries(o).flatMap(([k, v]) =>
+      v && typeof v === "object" ? flat(v, `${p}${k}.`) : [`${p}${k}`],
+    );
+  const en = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.en));
+  // Every shipped locale must mirror en key-for-key (auto-covers es, pt, …).
+  for (const locale of Object.keys(AMBIENCE_STRINGS_BY_LOCALE)) {
+    if (locale === "en") continue;
+    test(`${locale} bundle mirrors en bundle key-for-key`, () => {
+      const other = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE[locale]));
+      expect([...en].filter((k) => !other.has(k))).toEqual([]); // none missing
+      expect([...other].filter((k) => !en.has(k))).toEqual([]); // none extra
+    });
+  }
 });

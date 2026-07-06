@@ -41,3 +41,6 @@ site/
 
 # Editor
 .vscode/
+
+# macOS
+.DS_Store

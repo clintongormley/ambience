@@ -10,31 +10,16 @@ Ambience override them every time a trigger fires. For instance, perhaps I want
 to close a blind manually, and I don't want Ambience to open it again two
 seconds later.
 
-In certain circumstances, however, we **do** want the actions to be reapplied on
-every match. For instance, imagine a Power Shower function which we switch on
-when somebody is in the shower and the water is flowing. We can create a scene
-such as this:
+In certain circumstances, however, you **do** want a scene's actions reapplied
+on every match — typically when something outside Ambience can change a device's
+state without changing which scene wins, so the winning scene needs to re-assert
+itself. Turning on a scene's **Apply on every match** toggle does exactly that:
+its actions are reapplied every time the scene wins a reassessment, not only
+when it first becomes the winner.
 
-![Power shower on when somebody is showering.](images/apply-on-every-match/power-shower-1.png "Power shower on when somebody is showering.")
-
-But the Power Shower has an internal timer which switches it off automatically
-every 5 minutes. That automatic off-switch is outside our control. To Ambience
-it looks like our _"Power Shower on"_ scene is still winning, but in reality the
-power shower has been turned off.
-
-We can solve this in two steps:
-
-1. We want to include state of the Power Shower switch as a trigger, so we add
-    it as a clause which matches on both **On** and **Off** into the entity
-    state condition.
-1. Turn the scene's **Apply on every match** toggle to **On**.
-
-![Apply on every match.](images/apply-on-every-match/power-shower-2.png "Apply on every match.")
-
-This way, the scene will match when somebody is in the shower and the water is
-flowing, **and** will turn the Power Shower back on whenever it turns itself
-off. The built-in **Turn on** action has a safeguard in place so that it will
-not try to turn the Power Shower on if it is already on.
+For a full worked example — keeping a water pump's _Power Shower_ mode on
+despite its own 5-minute auto-off timer — see the
+[Power Shower recipe](../../recipes/bathroom/power-shower.md).
 
 ## Re-run all scenes after inactivity
 

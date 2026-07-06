@@ -16,56 +16,52 @@ conditions you can safely leave out.
     rather than your specific entity IDs. Adapt the scope, category and entity
     choices to your own home as you build the group in the panel.
 
-## How to read a recipe
-
-Every recipe follows the same layout:
-
-1. **Goal** — what you want to happen, in one or two sentences.
-1. **Scene group** — the scope (area, floor or house) and category to create,
-    and why that grouping fits.
-1. **The cascade** — a table of the scenes in the group, listed **top to
-    bottom** in the order Ambience evaluates them. The first scene whose
-    conditions all pass wins.
-1. **Why it's shaped this way** — the reasoning behind the order: which scene is
-    the specific case, which is the catch-all, and which conditions are left
-    out because an earlier scene already guarantees them.
-1. **Variations** *(optional)* — small changes and what they do.
-
-## The cascade, briefly
-
-Within one scene group Ambience walks the scenes **from top to bottom** and
-applies the **first** one whose conditions all pass. Two consequences every
-recipe leans on:
-
-- **Order is priority.** Put the most specific scene first and the catch-all
-    last. A broad scene placed above a narrow one would win first, and the
-    narrow one could never fire.
-- **Earlier scenes narrow the field.** Because a higher scene already handled
-    its case, a lower scene can omit the conditions that scene covered — it only
-    runs when everything above it failed to match.
-
-For the full model, see
+Each recipe leans on Ambience's **cascade**: within a scene group the scenes are
+evaluated **top to bottom** and the **first** one whose conditions all pass
+wins. For the full model, see
 [Scene priority](../getting-started/step-6-scene-priority.md).
 
-## Recipe template
+## Available recipes
 
-Use this skeleton when writing a recipe:
+### Bathroom
 
-> **Goal.** One or two sentences describing the desired behaviour.
->
-> **Scene group.** Scope: *(area / floor / house — which and why)*. Category:
-> *(new or existing — and why)*.
->
-> **The cascade.**
->
-> | Scene (top → bottom) | When (conditions)          | What it does (actions) |
-> | -------------------- | -------------------------- | ---------------------- |
-> | *Specific case*      | *its conditions*           | *its actions*          |
-> | *Catch-all*          | *(none, or a broad guard)* | *its actions*          |
->
-> **Why it's shaped this way.** Explain the order, the catch-all, and any
-> conditions deliberately left out.
->
-> **Variations.** *(optional)*
+The devices we automate in our bathroom (see the [overview](bathroom/index.md)):
 
-Recipes will be added here as they're written.
+- [**Blind**](bathroom/blind.md) — open and close the bathroom blind by time of
+    day, and ease it open on bright mornings without overriding a manual
+    adjustment.
+- [**Extractor fan**](bathroom/fan.md) — turn the extractor fan on when someone
+    uses the shower or toilet, and off again once the bathroom has been vacant
+    for a while.
+- [**Lights**](bathroom/lights.md) — dim the bathroom lights to suit the time of
+    day, switch them off when the room is vacant, and drop to 1% at night when
+    the adjoining bedroom is in bed mode.
+- [**Power Shower**](bathroom/power-shower.md) — run the pump's high-pressure
+    mode while someone's in a shower, then bleed the pressure back to normal
+    through the garden irrigation once they leave.
+- [**Towel rack**](bathroom/towel-rack.md) — dry the towels after a shower by
+    running the heated rack for a couple of hours, even when a second person
+    showers before it finishes.
+
+### Bedroom
+
+- [**Lights**](bedroom/lights.md) — turn the lights on by time of day when
+    someone enters, drop to reading mode when they get into bed, and lean on
+    time buffers to survive flaky presence sensors.
+
+### Kitchen / Dining Room
+
+An open-plan kitchen and dining room split into separate lighting spaces (see
+the [overview](kitchen-dining/index.md)):
+
+- [**Dining room**](kitchen-dining/dining-room.md) — fade the table light by
+    time of day while someone's seated, and drop it quickly when the projector's
+    on.
+- [**Kitchen**](kitchen-dining/kitchen.md) — low light when you step up to the
+    island, brighter once you settle in to cook, off quickly when the
+    projector's on.
+
+### Security
+
+- [**House alarm**](security/alarm.md) — lock the front door when the alarm
+    arms, and disarm the alarm when someone unlocks the door.

@@ -43,6 +43,9 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/lightbox.js
+
 markdown_extensions:
   - md_in_html
   - admonition
@@ -97,6 +100,21 @@ nav:
       - Reporting an issue: reference/reporting-an-issue.md
   - Recipes:
       - recipes/index.md
+      - Bathroom:
+          - recipes/bathroom/index.md
+          - Blind: recipes/bathroom/blind.md
+          - Extractor fan: recipes/bathroom/fan.md
+          - Lights: recipes/bathroom/lights.md
+          - Power Shower: recipes/bathroom/power-shower.md
+          - Towel rack: recipes/bathroom/towel-rack.md
+      - Bedroom:
+          - Lights: recipes/bedroom/lights.md
+      - Kitchen / Dining Room:
+          - recipes/kitchen-dining/index.md
+          - Dining room: recipes/kitchen-dining/dining-room.md
+          - Kitchen: recipes/kitchen-dining/kitchen.md
+      - Security:
+          - House alarm: recipes/security/alarm.md
   - Developer:
       - developers/index.md
       - Architecture: developers/architecture.md

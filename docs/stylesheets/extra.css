@@ -242,3 +242,55 @@
 [data-md-color-scheme="slate"] .md-nav--primary .md-nav__item .md-nav {
   border-left-color: rgba(255, 255, 255, 0.14);
 }
+
+/* ---- Image lightbox --------------------------------------------------- */
+/* Behaviour lives in javascripts/lightbox.js. Click any content image to view
+   it full-size; close with the Escape key or by clicking anywhere in the
+   viewer. */
+
+/* Affordance: content images zoom on click; linked images keep the link cursor
+   and are never intercepted by the lightbox. */
+.md-typeset img {
+  cursor: zoom-in;
+}
+
+.md-typeset a img {
+  cursor: pointer;
+}
+
+/* Lock background scroll while the viewer is open. */
+body.lightbox-open {
+  overflow: hidden;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000; /* above the Material header and sidebars */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5vmin;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+}
+
+/* The [hidden] attribute must beat the display:flex above, so give it a more
+   specific selector. */
+.lightbox-overlay[hidden] {
+  display: none;
+}
+
+.lightbox-img {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: 2px;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
+}
+
+/* Focus is moved into the overlay for keyboard/AT users, but it isn't a visible
+   focus target, so suppress the ring. */
+.lightbox-overlay:focus {
+  outline: none;
+}

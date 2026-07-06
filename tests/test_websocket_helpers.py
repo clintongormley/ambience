@@ -214,6 +214,50 @@ class TestValidateScopeConfig:
         }
         validate_scope_config(hass, config)  # no error
 
+    def test_rejects_non_int_priority(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {"name": "A", "category": "c", "when": {}, "actions": [], "priority": "high"}
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_priority_invalid"
+
+    def test_rejects_bool_priority(self) -> None:
+        # bool is an int subclass; a `True`/`False` priority is a mistake, not a number.
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "priority": True}]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_priority_invalid"
+
+    def test_accepts_int_priority(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "priority": 2048}]
+        }
+        validate_scope_config(hass, config)  # no error
+
+    def test_rejects_non_bool_pinned(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "pinned": "yes"}]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_pinned_invalid"
+
+    def test_accepts_bool_pinned(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "pinned": True}]
+        }
+        validate_scope_config(hass, config)  # no error
+
     def test_calls_validate_predicate_for_known_condition(self) -> None:
         # Line 49: condition is registered, validate_predicate is called on the predicate.
         mock_condition = MagicMock()

@@ -129,6 +129,8 @@
     "scene_action_entity_ids_not_strings": { "message": "Scene {scene_idx} action {action_idx}: entity_ids must be non-empty strings." },
     "scene_action_params_not_object": { "message": "Scene {scene_idx} action {action_idx}: params must be an object." },
     "scene_apply_invalid": { "message": "Scene {scene_idx}: `apply` must be \"once\" or \"always\": {value}" },
+    "scene_priority_invalid": { "message": "Scene {scene_idx}: `priority` must be a whole number: {value}" },
+    "scene_pinned_invalid": { "message": "Scene {scene_idx}: `pinned` must be true or false: {value}" },
     "weather_groups_not_list": { "message": "Groups must be a list." },
     "weather_group_not_object": { "message": "Each group must be an object." },
     "weather_group_id_empty": { "message": "Group id must be a non-empty string: {gid}" },

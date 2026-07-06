@@ -109,6 +109,15 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         apply = scene.get("apply")
         if apply is not None and apply not in ("once", "always"):
             raise AmbienceError("scene_apply_invalid", scene_idx=scene_idx, value=apply)
+        # `priority`/`pinned` are authorable on import to set evaluation order.
+        # Validate their types so a mistyped value is a clear error, not a silently
+        # wrong order (bool is an int subclass, so reject it explicitly).
+        priority = scene.get("priority")
+        if priority is not None and (not isinstance(priority, int) or isinstance(priority, bool)):
+            raise AmbienceError("scene_priority_invalid", scene_idx=scene_idx, value=priority)
+        pinned = scene.get("pinned")
+        if pinned is not None and not isinstance(pinned, bool):
+            raise AmbienceError("scene_pinned_invalid", scene_idx=scene_idx, value=pinned)
 
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped

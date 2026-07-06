@@ -33,9 +33,9 @@ comes after the **Daytime** and **Evening** scenes.
 ## Scene: Block until table zone detected
 
 We didn't include an **Occupancy** condition in the **Daytime**, **Evening**,
-and **Nighttime** scenes because they come after the **Vacant** condition thus
-we know that the table is either occupied or has only been vacant for less than
-5 minutes.
+and **Nighttime** scenes because they come after the **Vacant** scene, so we
+know that the table is either occupied or has only been vacant for less than 5
+minutes.
 
 However, if we restart Home Assistant it will clear the last detected time on
 the presence sensor which would mean that the **Vacant** scene wouldn't match
@@ -60,6 +60,6 @@ after 1 minute of vacancy:
 | Person sits at table at 13:00                               | Daytime                     | Table Light fades to 40% |
 | Person sits at table just after sunset                      | Evening                     | Table Light fades to 35% |
 | Person sits at table after dusk                             | Nighttime                   | Table Light fades to 30% |
-| Person leaves table at 13:01 and returns at 13:04           | Daytime                     | None - already applied   |
+| Person leaves table at 13:01 and returns at 13:04           | Daytime                     | None — already applied   |
 | Person leaves table for one minute while projector is on    | Vacant and Projector in use | Table Light turns off    |
 | Person leaves table for five minutes while projector is off | Vacant                      | Table Light turns off    |

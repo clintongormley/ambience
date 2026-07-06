@@ -90,12 +90,12 @@ blocks evaluation while the blind is opening or closing:
 
 ## Lifecycle
 
-| Trigger                                                                                         | Matched Scene       | Action              |
-| ----------------------------------------------------------------------------------------------- | ------------------- | ------------------- |
-| Dusk falls                                                                                      | Nighttime           | Blind closes        |
-| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and it is sunny       | Sun low in East     | Blind opens to 30%  |
-| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and it is cloudy      | Sun mid-low in East | Blind opens to 50%  |
-| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and it is very cloudy | Daytime             | Blind opens to 100% |
-| At 8:30 am, blind is fully open, sun is in the East at 30º above the horizon, and it is sunny   | Daytime             | Blind remains open  |
-| At 9:05 am, blind is open to 30%, sun is in the East at 36º above the horizon, and it is sunny  | Sun mid-low in East | Blind opens to 50%  |
-| At 9:45 am, blind is open to 50%, sun is in the East at 46º above the horizon                   | Daytime             | Blind opens to 100% |
+| Trigger                                                                                                 | Matched Scene       | Action              |
+| ------------------------------------------------------------------------------------------------------- | ------------------- | ------------------- |
+| Dusk falls                                                                                              | Nighttime           | Blind closes        |
+| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and the weather is sunny      | Sun low in East     | Blind opens to 30%  |
+| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and the weather is dim        | Sun mid-low in East | Blind opens to 50%  |
+| At 8:30 am, blind is closed, sun is in the East at 25º above the horizon, and the weather is dark       | Daytime             | Blind opens to 100% |
+| At 8:30 am, blind is fully open, sun is in the East at 30º above the horizon, and the weather is sunny  | Daytime             | Blind remains open  |
+| At 9:05 am, blind is open to 30%, sun is in the East at 36º above the horizon, and the weather is sunny | Sun mid-low in East | Blind opens to 50%  |
+| At 9:45 am, blind is open to 50%, sun is in the East at 46º above the horizon                           | Daytime             | Blind opens to 100% |

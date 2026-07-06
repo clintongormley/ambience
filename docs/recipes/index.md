@@ -59,7 +59,7 @@ The devices we automate in our bedroom (see the [overview](bedroom/index.md)):
 An open-plan kitchen and dining room split into separate lighting spaces (see
 the [overview](kitchen-dining/index.md)):
 
-- [**Dining room**](kitchen-dining/dining-room.md) — fade the table light by
+- [**Dining Room**](kitchen-dining/dining-room.md) — fade the table light by
     time of day while someone's seated, and drop it quickly when the projector's
     on.
 - [**Kitchen**](kitchen-dining/kitchen.md) — low light when you step up to the

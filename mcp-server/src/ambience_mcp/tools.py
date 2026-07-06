@@ -14,18 +14,6 @@ class ToolError(RuntimeError):
     """A tool was called with an invalid argument (surfaced to the model)."""
 
 
-_GET_COMMAND = {
-    "area": "ambience/area/get",
-    "floor": "ambience/floor/get",
-    "house": "ambience/house/get",
-}
-_SAVE_COMMAND = {
-    "area": "ambience/area/save",
-    "floor": "ambience/floor/save",
-    "house": "ambience/house/save",
-}
-
-
 def _parse_scope(scope: dict[str, Any]) -> tuple[str, str | None]:
     kind = scope.get("kind")
     if kind == "house":
@@ -39,6 +27,9 @@ def _parse_scope(scope: dict[str, Any]) -> tuple[str, str | None]:
 
 
 def _id_payload(kind: str, sid: str | None) -> dict[str, Any]:
+    """The scope selector for the dedicated get/save commands: an id key for
+    area/floor, nothing for house (whose command carries no selector). Also
+    doubles as dry_run's selector for area/floor — see dry_run."""
     if kind == "area":
         return {"area_id": sid}
     if kind == "floor":
@@ -46,12 +37,10 @@ def _id_payload(kind: str, sid: str | None) -> dict[str, Any]:
     return {}
 
 
-def _selector(kind: str, sid: str | None) -> dict[str, Any]:
-    if kind == "area":
-        return {"area_id": sid}
-    if kind == "floor":
-        return {"floor_id": sid}
-    return {"house": True}
+def _scope_key(kind: str, sid: str | None) -> dict[str, Any]:
+    """The canonical scope shape the preview->apply confirm-token is bound to.
+    Defined once so preview_write and apply_write can never hash different shapes."""
+    return {"kind": kind, "id": sid}
 
 
 async def get_context(client: Any) -> dict[str, Any]:
@@ -60,12 +49,14 @@ async def get_context(client: Any) -> dict[str, Any]:
 
 async def get_scope(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
-    return await client.command(_GET_COMMAND[kind], **_id_payload(kind, sid))
+    return await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
-    return await client.command("ambience/dry_run", **_selector(kind, sid))
+    # dry_run uses HA's shared scope selector, which marks house with `house: True`
+    # rather than an id key; area/floor reuse the same id selector as get/save.
+    return await client.command("ambience/dry_run", **(_id_payload(kind, sid) or {"house": True}))
 
 
 async def validate(client: Any, scenes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -76,14 +67,16 @@ async def preview_write(
     client: Any, scope: dict[str, Any], scenes: list[dict[str, Any]], ledger: PreviewLedger
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
-    current = (await client.command(_GET_COMMAND[kind], **_id_payload(kind, sid))).get("scenes", [])
+    current = (await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
+        "scenes", []
+    )
     try:
         await client.command("ambience/validate", config={"scenes": scenes})
         valid, errors = True, None
     except HACommandError as exc:
         valid, errors = False, exc.message
     changes = diff_scopes(current, scenes)
-    token = fingerprint({"kind": kind, "id": sid}, scenes)
+    token = fingerprint(_scope_key(kind, sid), scenes)
     # Only a validated payload gets an applyable token; an invalid preview
     # returns its fingerprint for reference but records nothing, so apply_write
     # rejects it at the gate until the caller fixes the validation error.
@@ -100,14 +93,14 @@ async def apply_write(
     ledger: PreviewLedger,
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
-    token = fingerprint({"kind": kind, "id": sid}, scenes)
+    token = fingerprint(_scope_key(kind, sid), scenes)
     if confirm_token != token or not ledger.consume(token):
         raise ToolError(
             "apply_write needs the confirm_token from a preview_write of this exact "
             "payload; run preview_write first (and again if you changed the scenes)"
         )
     return await client.command(
-        _SAVE_COMMAND[kind],
+        f"ambience/{kind}/save",
         config={"scenes": scenes},
         change={"action": "import", "scene_name": None},
         minimise_pins=True,

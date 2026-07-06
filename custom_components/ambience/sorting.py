@@ -232,6 +232,58 @@ def resolve_order(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene
     return out
 
 
+def minimise_pins(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Given scenes whose intended order is carried by explicit ``priority``
+    numbers (the import "everything pinned" convention), return a copy with the
+    **maximal redundant subset unpinned**: a scene stays pinned only where the
+    containment auto-order would otherwise place it differently. The resolved
+    order is unchanged.
+
+    Per category (categories resolve independently). A scene without an integer
+    ``priority`` is left exactly as-is — it was already unpinned/auto. Used on
+    the import save path so a block can set order while storage keeps pins only
+    where they genuinely override the natural order.
+    """
+    buckets: dict[str | None, list[Scene]] = {}
+    for r in scenes:
+        buckets.setdefault(r.get("category"), []).append(r)
+    out: list[Scene] = []
+    for bucket in buckets.values():
+        out.extend(_minimise_one_category(bucket, conditions))
+    return out
+
+
+def _minimise_one_category(bucket: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Drop redundant pins for one category (see :func:`minimise_pins`)."""
+    scenes = [dict(r) for r in bucket]
+    # Import intent: any scene carrying a real integer priority is pinned at it.
+    for i, r in enumerate(scenes):
+        r["_mp_idx"] = i  # stable identity through _resolve_order_one_category's dict copies
+        p = r.get("priority")
+        if isinstance(p, int) and not isinstance(p, bool):
+            r["pinned"] = True
+
+    def order(state: list[Scene]) -> list[int]:
+        return [r["_mp_idx"] for r in _resolve_order_one_category(state, conditions)]
+
+    target = order(scenes)
+
+    # Greedily unpin, bottom of the target order up, keeping only load-bearing
+    # pins. Deterministic: iteration order is fixed, so the chosen minimal set is
+    # stable for a given input.
+    for idx in reversed(target):
+        r = next(s for s in scenes if s["_mp_idx"] == idx)
+        if not r.get("pinned"):
+            continue
+        r["pinned"] = False
+        if order(scenes) != target:
+            r["pinned"] = True  # this pin changes the order — keep it
+
+    for r in scenes:
+        r.pop("_mp_idx", None)
+    return scenes
+
+
 def _superset_or_equal(
     outer: dict[str, Any], inner: dict[str, Any], conditions: dict[str, Any]
 ) -> bool:

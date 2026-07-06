@@ -116,6 +116,23 @@ async def test_apply_write_rejects_token_for_different_payload():
         )
 
 
+async def test_invalid_preview_does_not_record_a_usable_token():
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"category": "c"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": HACommandError("validation_error", "bad predicate"),
+        }
+    )
+    ledger = PreviewLedger()
+    result = await tools.preview_write(client, scope, scenes, ledger)
+    assert result["valid"] is False
+    # Token was returned for reference but never recorded, so apply is gated out.
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
+
+
 async def test_list_traces_passes_limit():
     client = FakeClient({"ambience/traces/list": {"traces": []}})
     await tools.list_traces(client, limit=5)

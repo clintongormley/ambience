@@ -6,6 +6,7 @@ them, and a lean surface keeps the per-turn context footprint small."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -18,13 +19,19 @@ from .ledger import PreviewLedger
 mcp = FastMCP("ambience")
 _ledger = PreviewLedger()
 _client: HAClient | None = None
+_client_lock = asyncio.Lock()
 
 
 async def _client_() -> HAClient:
     global _client
+    # Double-checked lock: the fast path skips the lock once connected; the
+    # slow path serialises the first concurrent callers so only one socket
+    # is opened (a stdio server can receive parallel tool_use calls in a turn).
     if _client is None:
-        cfg = load_config()
-        _client = await connect(cfg.ws_url, cfg.token)
+        async with _client_lock:
+            if _client is None:
+                cfg = load_config()
+                _client = await connect(cfg.ws_url, cfg.token)
     return _client
 
 

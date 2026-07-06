@@ -84,7 +84,11 @@ async def preview_write(
         valid, errors = False, exc.message
     changes = diff_scopes(current, scenes)
     token = fingerprint({"kind": kind, "id": sid}, scenes)
-    ledger.record(token)
+    # Only a validated payload gets an applyable token; an invalid preview
+    # returns its fingerprint for reference but records nothing, so apply_write
+    # rejects it at the gate until the caller fixes the validation error.
+    if valid:
+        ledger.record(token)
     return {"valid": valid, "errors": errors, "diff": changes, "confirm_token": token}
 
 

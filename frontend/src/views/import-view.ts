@@ -143,10 +143,13 @@ export class AmbienceImportConfig extends LitElement {
       if (p.newCategory) {
         await saveCategories(this.hass, [...this.categories, p.newCategory]);
       }
-      await saveScopeConfig(this.hass, p.scope, p.resultConfig, {
-        action: "import",
-        scene_name: null,
-      });
+      await saveScopeConfig(
+        this.hass,
+        p.scope,
+        p.resultConfig,
+        { action: "import", scene_name: null },
+        { minimisePins: true },
+      );
       // The import saves with is_self=true, so the scopes-view's history path
       // skips its auto-reload — tell the panel to refetch scope configs (so the
       // scenes show) and, if a category was created, the category list too. Both

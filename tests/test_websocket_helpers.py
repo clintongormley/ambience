@@ -214,6 +214,50 @@ class TestValidateScopeConfig:
         }
         validate_scope_config(hass, config)  # no error
 
+    def test_rejects_non_int_priority(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {"name": "A", "category": "c", "when": {}, "actions": [], "priority": "high"}
+            ]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_priority_invalid"
+
+    def test_rejects_bool_priority(self) -> None:
+        # bool is an int subclass; a `True`/`False` priority is a mistake, not a number.
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "priority": True}]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_priority_invalid"
+
+    def test_accepts_int_priority(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "priority": 2048}]
+        }
+        validate_scope_config(hass, config)  # no error
+
+    def test_rejects_non_bool_pinned(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "pinned": "yes"}]
+        }
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_pinned_invalid"
+
+    def test_accepts_bool_pinned(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [{"name": "A", "category": "c", "when": {}, "actions": [], "pinned": True}]
+        }
+        validate_scope_config(hass, config)  # no error
+
     def test_calls_validate_predicate_for_known_condition(self) -> None:
         # Line 49: condition is registered, validate_predicate is called on the predicate.
         mock_condition = MagicMock()
@@ -564,6 +608,60 @@ class TestCanonicalise:
         config = {"scenes": [{"name": "r1", "when": {"some_condition": {"x": 1}}, "actions": []}]}
         out = canonicalise(hass, config)
         assert out["scenes"][0]["when"]["some_condition"] == {"x": 1}
+
+    def test_minimise_pins_drops_redundant_pins(self) -> None:
+        # Two empty-`when` scenes, both pinned, numbered in the same order the sort
+        # would already give them (array/stable order) → the pins are redundant, so
+        # the flag drops both while preserving the order.
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "name": "A",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 2048,
+                    "pinned": True,
+                },
+                {
+                    "name": "B",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 1024,
+                    "pinned": True,
+                },
+            ]
+        }
+        out = canonicalise(hass, config, minimise_pins=True)
+        assert [s["name"] for s in out["scenes"]] == ["A", "B"]  # order preserved
+        assert all(not s.get("pinned") for s in out["scenes"])  # both pins dropped
+
+    def test_without_minimise_flag_keeps_pins(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "name": "A",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 2048,
+                    "pinned": True,
+                },
+                {
+                    "name": "B",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 1024,
+                    "pinned": True,
+                },
+            ]
+        }
+        out = canonicalise(hass, config)  # default: no minimisation
+        assert all(s.get("pinned") for s in out["scenes"])  # pins preserved verbatim
 
 
 # ---------------------------------------------------------------------------

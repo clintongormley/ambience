@@ -87,12 +87,14 @@ export async function saveArea(
   areaId: string,
   config: AreaConfig,
   change?: ChangeDescriptor,
+  opts?: { minimisePins?: boolean },
 ): Promise<{ ok: true; config: AreaConfig }> {
   return hass.callWS({
     type: "ambience/area/save",
     area_id: areaId,
     config,
     ...(change ? { change } : {}),
+    ...(opts?.minimisePins ? { minimise_pins: true } : {}),
   });
 }
 
@@ -109,12 +111,14 @@ export async function saveFloor(
   floorId: string,
   config: ScopeConfig,
   change?: ChangeDescriptor,
+  opts?: { minimisePins?: boolean },
 ): Promise<{ ok: true; config: ScopeConfig }> {
   return hass.callWS({
     type: "ambience/floor/save",
     floor_id: floorId,
     config,
     ...(change ? { change } : {}),
+    ...(opts?.minimisePins ? { minimise_pins: true } : {}),
   });
 }
 
@@ -126,8 +130,14 @@ export async function saveHouse(
   hass: HassConnection,
   config: ScopeConfig,
   change?: ChangeDescriptor,
+  opts?: { minimisePins?: boolean },
 ): Promise<{ ok: true; config: ScopeConfig }> {
-  return hass.callWS({ type: "ambience/house/save", config, ...(change ? { change } : {}) });
+  return hass.callWS({
+    type: "ambience/house/save",
+    config,
+    ...(change ? { change } : {}),
+    ...(opts?.minimisePins ? { minimise_pins: true } : {}),
+  });
 }
 
 export async function listConditions(hass: HassConnection): Promise<ConditionInfo[]> {
@@ -605,10 +615,11 @@ export async function saveScopeConfig(
   scope: ScopeRef,
   config: ScopeConfig,
   change?: ChangeDescriptor,
+  opts?: { minimisePins?: boolean },
 ): Promise<{ ok: true; config: ScopeConfig }> {
-  if (scope.kind === "area") return saveArea(hass, scope.id, config, change);
-  if (scope.kind === "floor") return saveFloor(hass, scope.id, config, change);
-  return saveHouse(hass, config, change);
+  if (scope.kind === "area") return saveArea(hass, scope.id, config, change, opts);
+  if (scope.kind === "floor") return saveFloor(hass, scope.id, config, change, opts);
+  return saveHouse(hass, config, change, opts);
 }
 
 export async function simulateInputs(

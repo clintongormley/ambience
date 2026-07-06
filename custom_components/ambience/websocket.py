@@ -387,7 +387,7 @@ async def _save_scope(
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
     coerce_scene_categories(store, msg["config"])
-    config = canonicalise(hass, msg["config"])
+    config = canonicalise(hass, msg["config"], minimise_pins=msg.get("minimise_pins", False))
     before = copy.deepcopy(store.scope_config(scope_kind, scope_id))
     await store.async_save_scope(scope_kind, scope_id, config)
     after = copy.deepcopy(store.scope_config(scope_kind, scope_id))
@@ -409,6 +409,7 @@ async def _save_scope(
         vol.Required("area_id"): str,
         vol.Required("config"): dict,
         vol.Optional("change"): dict,
+        vol.Optional("minimise_pins"): bool,
     }
 )
 @websocket_api.async_response
@@ -451,6 +452,7 @@ async def _ws_floor_get(
         vol.Required("floor_id"): str,
         vol.Required("config"): dict,
         vol.Optional("change"): dict,
+        vol.Optional("minimise_pins"): bool,
     }
 )
 @websocket_api.async_response
@@ -484,6 +486,7 @@ async def _ws_house_get(
         vol.Required("type"): "ambience/house/save",
         vol.Required("config"): dict,
         vol.Optional("change"): dict,
+        vol.Optional("minimise_pins"): bool,
     }
 )
 @websocket_api.async_response

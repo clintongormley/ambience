@@ -18,6 +18,7 @@ original relative order.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from .engine import scene_enabled
@@ -217,19 +218,75 @@ def _resolve_order_one_category(scenes: list[Scene], conditions: dict[str, Any])
     return scenes
 
 
-def resolve_order(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
-    """Canonicalise a scope's scenes per category: partition by `category` (preserving
-    each category's first-appearance order), canonicalise each partition
-    independently, then concatenate so each category stays contiguous. Categories are
-    independent buckets, so order and priority are only meaningful within a
-    category."""
+def _per_category(
+    scenes: list[Scene],
+    conditions: dict[str, Any],
+    transform: Callable[[list[Scene], dict[str, Any]], list[Scene]],
+) -> list[Scene]:
+    """Partition `scenes` by `category` (preserving each category's
+    first-appearance order), apply `transform` to each partition independently,
+    then concatenate so each category stays contiguous. Categories are
+    independent buckets, so order and priority are only meaningful within one."""
     buckets: dict[str | None, list[Scene]] = {}
     for r in scenes:
         buckets.setdefault(r.get("category"), []).append(r)
     out: list[Scene] = []
     for bucket in buckets.values():
-        out.extend(_resolve_order_one_category(bucket, conditions))
+        out.extend(transform(bucket, conditions))
     return out
+
+
+def resolve_order(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Canonicalise a scope's scenes per category (see
+    :func:`_resolve_order_one_category`), keeping each category contiguous."""
+    return _per_category(scenes, conditions, _resolve_order_one_category)
+
+
+def minimise_pins(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Given scenes whose intended order is carried by explicit ``priority``
+    numbers (the import "everything pinned" convention), return a copy with the
+    **maximal redundant subset unpinned**: a scene stays pinned only where the
+    containment auto-order would otherwise place it differently. The resolved
+    order is unchanged.
+
+    Per category (categories resolve independently). A scene with no integer
+    ``priority`` is never newly pinned; an unpinned one is left as-is (an
+    already-pinned scene may still have a redundant pin dropped). Used on the
+    import save path so a block can set order while storage keeps pins only
+    where they genuinely override the natural order.
+    """
+    return _per_category(scenes, conditions, _minimise_one_category)
+
+
+def _minimise_one_category(bucket: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
+    """Drop redundant pins for one category (see :func:`minimise_pins`)."""
+    scenes = [dict(r) for r in bucket]
+    # Import intent: any scene carrying a real integer priority is pinned at it.
+    for i, r in enumerate(scenes):
+        r["_mp_idx"] = i  # stable identity through _resolve_order_one_category's dict copies
+        p = r.get("priority")
+        if isinstance(p, int) and not isinstance(p, bool):
+            r["pinned"] = True
+
+    def order(state: list[Scene]) -> list[int]:
+        return [r["_mp_idx"] for r in _resolve_order_one_category(state, conditions)]
+
+    target = order(scenes)
+
+    # Greedily unpin, bottom of the target order up, keeping only load-bearing
+    # pins. Deterministic: iteration order is fixed, so the chosen minimal set is
+    # stable for a given input.
+    for idx in reversed(target):
+        r = scenes[idx]  # _mp_idx is the enumerate index; `scenes` is never reordered
+        if not r.get("pinned"):
+            continue
+        r["pinned"] = False
+        if order(scenes) != target:
+            r["pinned"] = True  # this pin changes the order — keep it
+
+    for r in scenes:
+        r.pop("_mp_idx", None)
+    return scenes
 
 
 def _superset_or_equal(

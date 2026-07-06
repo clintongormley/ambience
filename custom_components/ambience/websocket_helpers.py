@@ -21,6 +21,7 @@ from .const import (
     GENERAL_CATEGORY_ID,
 )
 from .errors import AmbienceError
+from .sorting import minimise_pins as minimise_pins_fn
 from .sorting import resolve_order, shadowed_by
 from .store import reassign_orphan_scenes
 
@@ -108,6 +109,15 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         apply = scene.get("apply")
         if apply is not None and apply not in ("once", "always"):
             raise AmbienceError("scene_apply_invalid", scene_idx=scene_idx, value=apply)
+        # `priority`/`pinned` are authorable on import to set evaluation order.
+        # Validate their types so a mistyped value is a clear error, not a silently
+        # wrong order (bool is an int subclass, so reject it explicitly).
+        priority = scene.get("priority")
+        if priority is not None and (not isinstance(priority, int) or isinstance(priority, bool)):
+            raise AmbienceError("scene_priority_invalid", scene_idx=scene_idx, value=priority)
+        pinned = scene.get("pinned")
+        if pinned is not None and not isinstance(pinned, bool):
+            raise AmbienceError("scene_pinned_invalid", scene_idx=scene_idx, value=pinned)
 
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped
@@ -115,10 +125,17 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
 _TRANSIENT_SCENE_FIELDS = ("shadowed_by", "missing_entities", "overlap_entities", "config_issues")
 
 
-def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
+def canonicalise(
+    hass: HomeAssistant, config: dict[str, Any], *, minimise_pins: bool = False
+) -> dict[str, Any]:
     """Resolve scene order + numbers for storage. Strips the transient per-scene
     frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`,
-    `config_issues`) so they aren't persisted."""
+    `config_issues`) so they aren't persisted.
+
+    When ``minimise_pins`` is set (the import path), a scene carrying an explicit
+    ``priority`` is treated as pinned and then unpinned where the containment
+    order already reproduces it — so an import can set order while storage keeps
+    pins only where they truly override the natural order."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     out = dict(config)
     scenes = [
@@ -138,6 +155,8 @@ def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
             normalizer = getattr(conditions_registry.get(key), "normalize_predicate", None)
             normalised[key] = normalizer(predicate) if normalizer else predicate
         scene["when"] = normalised
+    if minimise_pins:
+        scenes = minimise_pins_fn(scenes, conditions_registry)
     out["scenes"] = resolve_order(scenes, conditions_registry)
     return out
 

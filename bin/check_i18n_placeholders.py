@@ -1,11 +1,13 @@
-"""Check that the bundled en/es strings agree on interpolation placeholders.
+"""Check that the bundled translations agree with `en` on interpolation placeholders.
 
 Each `localize()` string may carry `{name}`-style tokens that i18n.ts fills in at
 runtime. If a translation drops, duplicates or renames a token (e.g. en has
 `{n} scene(s)` but es has `{m} escena(s)`), the placeholder silently fails to
-substitute for that locale. This gate compares the placeholder *multiset* of
-every key across en and es (order doesn't matter, count does) and also flags any
-key present in only one locale.
+substitute for that locale. This gate compares, for EVERY non-`en` locale in the
+bundle, the placeholder *multiset* of every key against `en` (order doesn't
+matter, count does) and also flags any key present in only one of the two. `en`
+is the reference, so this doubles as a completeness gate: a shipped locale
+missing an `en` key is reported.
 
 Usage: python -m bin.check_i18n_placeholders [--root PATH]
 Exits non-zero (listing the offenders) on any mismatch. Stdlib-only.
@@ -21,20 +23,26 @@ from bin._i18n_bundle import parse_locales, placeholder_tokens
 
 
 def find_issues(locales: dict[str, dict[str, str]]) -> list[str]:
-    """Human-readable descriptions of en/es bundle drift: keys present in only one
-    locale, and keys whose placeholder-token multisets differ."""
+    """Human-readable descriptions of bundle drift against `en`: for every non-`en`
+    locale, keys present in only one of the two, and keys whose placeholder-token
+    multisets differ."""
     en = locales.get("en", {})
-    es = locales.get("es", {})
     issues: list[str] = []
-    for key in sorted(en.keys() - es.keys()):
-        issues.append(f"{key}: present in en but missing from es")
-    for key in sorted(es.keys() - en.keys()):
-        issues.append(f"{key}: present in es but missing from en")
-    for key in sorted(en.keys() & es.keys()):
-        en_tok = placeholder_tokens(en[key])
-        es_tok = placeholder_tokens(es[key])
-        if en_tok != es_tok:
-            issues.append(f"{key}: en placeholders {en_tok} != es placeholders {es_tok}")
+    for locale in sorted(locales):
+        if locale == "en":
+            continue
+        other = locales[locale]
+        for key in sorted(en.keys() - other.keys()):
+            issues.append(f"{key}: present in en but missing from {locale}")
+        for key in sorted(other.keys() - en.keys()):
+            issues.append(f"{key}: present in {locale} but missing from en")
+        for key in sorted(en.keys() & other.keys()):
+            en_tok = placeholder_tokens(en[key])
+            other_tok = placeholder_tokens(other[key])
+            if en_tok != other_tok:
+                issues.append(
+                    f"{key}: en placeholders {en_tok} != {locale} placeholders {other_tok}"
+                )
     return issues
 
 
@@ -50,11 +58,11 @@ def main(argv: list[str] | None = None) -> int:
     text = (args.root / "frontend" / "src" / "i18n-data.ts").read_text()
     issues = find_issues(parse_locales(text))
     if issues:
-        print("i18n placeholder drift between en and es:")
+        print("i18n placeholder drift against en:")
         for issue in issues:
             print(f"  - {issue}")
         return 1
-    print("i18n placeholder check OK (en/es placeholders match)")
+    print("i18n placeholder check OK (all locales match en placeholders)")
     return 0
 
 

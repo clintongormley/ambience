@@ -137,3 +137,9 @@ async def test_list_traces_passes_limit():
     client = FakeClient({"ambience/traces/list": {"traces": []}})
     await tools.list_traces(client, limit=5)
     assert client.calls == [{"type": "ambience/traces/list", "limit": 5}]
+
+
+async def test_dry_run_house_uses_house_selector():
+    client = FakeClient({"ambience/dry_run": {"winner": None}})
+    await tools.dry_run(client, {"kind": "house"})
+    assert client.calls == [{"type": "ambience/dry_run", "house": True}]

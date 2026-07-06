@@ -69,3 +69,18 @@ pip install -e '.[test]'
 python -m pytest -q
 ruff check . && ruff format --check .
 ```
+
+## Not in v1 (follow-ups)
+
+- **`ambience_simulate`** (the what-if simulator over `ambience/simulate`) is
+    not included yet — the author → dry-run → preview → apply loop is complete
+    without it. Deferred as a read-only diagnostic that needs its own payload
+    schema.
+- **Preview staleness:** the confirm-token binds the exact scope + scenes, not a
+    snapshot of live state. If the scope changes between
+    `ambience_preview_write` and `ambience_apply_write` (a panel edit, a
+    reapply, another session), the write overwrites that change — reversible via
+    Ambience undo. `ambience_dry_run` is the authoritative behavioural preview.
+- **Test gating:** these tests aren't yet wired into the repo's pre-push hook /
+    CI (only ruff sweeps the subtree). Run `python -m pytest` here before
+    pushing changes under `mcp-server/`.

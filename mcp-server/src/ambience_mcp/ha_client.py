@@ -6,8 +6,11 @@ doesn't match the request it's waiting on."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Protocol
+
+_CONNECT_TIMEOUT = 10  # seconds — fail fast on an unreachable / firewalled HA host
 
 
 class HAError(RuntimeError):
@@ -16,6 +19,10 @@ class HAError(RuntimeError):
 
 class HAAuthError(HAError):
     """Authentication was rejected."""
+
+
+class HAConnectionError(HAError):
+    """The websocket failed to open, dropped mid-session, or sent a bad frame."""
 
 
 class HACommandError(HAError):
@@ -37,6 +44,14 @@ class HAClient:
     def __init__(self, transport: Transport) -> None:
         self._transport = transport
         self._next_id = 0
+        self._lock = asyncio.Lock()
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        """True once a transport failure has broken this client; the caller
+        should discard it and reconnect."""
+        return self._closed
 
     async def authenticate(self, token: str) -> None:
         first = json.loads(await self._transport.recv())
@@ -48,19 +63,30 @@ class HAClient:
             raise HAAuthError(reply.get("message") or "authentication failed")
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
-        self._next_id += 1
-        cmd_id = self._next_id
-        await self._transport.send(json.dumps({"id": cmd_id, "type": type, **payload}))
-        while True:
-            msg = json.loads(await self._transport.recv())
-            if msg.get("id") != cmd_id or msg.get("type") != "result":
-                continue
-            if msg.get("success"):
-                return msg.get("result") or {}
-            error = msg.get("error") or {}
-            raise HACommandError(error.get("code", "unknown"), error.get("message", ""))
+        # Serialise command/response pairs: one transport allows only one
+        # in-flight recv() at a time, and the MCP SDK can dispatch tool calls as
+        # concurrent tasks — overlapping commands would otherwise race on recv().
+        async with self._lock:
+            self._next_id += 1
+            cmd_id = self._next_id
+            try:
+                await self._transport.send(json.dumps({"id": cmd_id, "type": type, **payload}))
+                while True:
+                    msg = json.loads(await self._transport.recv())
+                    if msg.get("id") != cmd_id or msg.get("type") != "result":
+                        continue
+                    if msg.get("success"):
+                        return msg.get("result") or {}
+                    error = msg.get("error") or {}
+                    raise HACommandError(error.get("code", "unknown"), error.get("message", ""))
+            except HACommandError:
+                raise  # a normal command-level failure — the connection is fine
+            except Exception as exc:  # transport dropped / malformed frame
+                self._closed = True
+                raise HAConnectionError(f"websocket connection failed: {exc}") from exc
 
     async def close(self) -> None:
+        self._closed = True
         await self._transport.close()
 
 
@@ -82,8 +108,15 @@ class _WebsocketsTransport:
 async def connect(ws_url: str, token: str) -> HAClient:
     import websockets
 
-    # max_size=None: the AI bundle can exceed the default 1 MiB frame cap.
-    connection = await websockets.connect(ws_url, max_size=None)
+    try:
+        # max_size=None: the AI bundle can exceed the default 1 MiB frame cap.
+        connection = await websockets.connect(ws_url, max_size=None, open_timeout=_CONNECT_TIMEOUT)
+    except Exception as exc:  # unreachable host, bad URL, TLS/timeout error
+        raise HAConnectionError(f"could not connect to Home Assistant at {ws_url}: {exc}") from exc
     client = HAClient(_WebsocketsTransport(connection))
-    await client.authenticate(token)
+    try:
+        await client.authenticate(token)
+    except Exception:
+        await connection.close()  # don't leak the socket on a bad token / failed handshake
+        raise
     return client

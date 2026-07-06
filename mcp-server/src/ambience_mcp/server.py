@@ -24,12 +24,11 @@ _client_lock = asyncio.Lock()
 
 async def _client_() -> HAClient:
     global _client
-    # Double-checked lock: the fast path skips the lock once connected; the
-    # slow path serialises the first concurrent callers so only one socket
-    # is opened (a stdio server can receive parallel tool_use calls in a turn).
-    if _client is None:
+    # Reconnect if we have no client yet, or the last one broke on a transport
+    # failure (HA restart, dropped socket) and marked itself closed.
+    if _client is None or _client.closed:
         async with _client_lock:
-            if _client is None:
+            if _client is None or _client.closed:
                 cfg = load_config()
                 _client = await connect(cfg.ws_url, cfg.token)
     return _client
@@ -79,7 +78,9 @@ async def ambience_apply_write(
 ) -> dict[str, Any]:
     """Commit a full scope write. Requires the confirm_token from a prior
     ambience_preview_write of this EXACT scope+scenes. Reversible via Ambience
-    undo. Only call after the user has approved the previewed diff."""
+    undo. Only call after the user has approved the previewed diff. Writes the
+    whole scope, so a change made to it since the preview is overwritten (undo
+    restores it)."""
     return await tools.apply_write(await _client_(), scope, scenes, confirm_token, _ledger)
 
 

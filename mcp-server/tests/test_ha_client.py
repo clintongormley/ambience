@@ -113,3 +113,17 @@ async def test_command_error_does_not_mark_client_closed():
     with pytest.raises(HACommandError):
         await client.command("ambience/validate", config={})
     assert client.closed is False
+
+
+async def test_authenticate_wraps_malformed_frame_as_connection_error():
+    class BadJsonTransport:
+        async def send(self, data: str) -> None: ...
+        async def recv(self) -> str:
+            return "this is not json"
+
+        async def close(self) -> None: ...
+
+    client = HAClient(BadJsonTransport())
+    with pytest.raises(HAConnectionError):
+        await client.authenticate("secret")
+    assert client.closed is True

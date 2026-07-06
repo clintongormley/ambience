@@ -29,3 +29,15 @@ def test_record_then_consume_true_once():
 
 def test_consume_unknown_is_false():
     assert PreviewLedger().consume("nope") is False
+
+
+def test_ledger_is_bounded_and_evicts_oldest():
+    ledger = PreviewLedger()
+    oldest = "tok-oldest"
+    ledger.record(oldest)
+    for i in range(PreviewLedger._MAX):
+        ledger.record(f"tok-{i:05d}")
+    # recording _MAX further tokens pushes the set past the cap, evicting the oldest
+    assert ledger.consume(oldest) is False
+    # a recently recorded token is still there
+    assert ledger.consume(f"tok-{PreviewLedger._MAX - 1:05d}") is True

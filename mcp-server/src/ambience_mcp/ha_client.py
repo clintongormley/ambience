@@ -54,13 +54,22 @@ class HAClient:
         return self._closed
 
     async def authenticate(self, token: str) -> None:
-        first = json.loads(await self._transport.recv())
-        if first.get("type") != "auth_required":
-            raise HAAuthError(f"expected auth_required, got {first.get('type')!r}")
-        await self._transport.send(json.dumps({"type": "auth", "access_token": token}))
-        reply = json.loads(await self._transport.recv())
-        if reply.get("type") != "auth_ok":
-            raise HAAuthError(reply.get("message") or "authentication failed")
+        # Same contract as command(): a genuine auth rejection is HAAuthError,
+        # but a dropped socket / malformed or non-object frame becomes
+        # HAConnectionError so callers never see raw json/transport exceptions.
+        try:
+            first = json.loads(await self._transport.recv())
+            if first.get("type") != "auth_required":
+                raise HAAuthError(f"expected auth_required, got {first.get('type')!r}")
+            await self._transport.send(json.dumps({"type": "auth", "access_token": token}))
+            reply = json.loads(await self._transport.recv())
+            if reply.get("type") != "auth_ok":
+                raise HAAuthError(reply.get("message") or "authentication failed")
+        except HAAuthError:
+            raise
+        except Exception as exc:  # transport dropped / malformed or non-object frame
+            self._closed = True
+            raise HAConnectionError(f"websocket connection failed during auth: {exc}") from exc
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
         # Serialise command/response pairs: one transport allows only one

@@ -20,14 +20,22 @@ def fingerprint(scope: dict[str, Any], scenes: list[dict[str, Any]]) -> str:
 
 
 class PreviewLedger:
+    # Cap outstanding (previewed-but-unapplied) tokens so a long session that
+    # previews far more than it applies can't grow the set without bound. The
+    # oldest outstanding token evicts first; re-recording refreshes its recency.
+    _MAX = 1024
+
     def __init__(self) -> None:
-        self._seen: set[str] = set()
+        self._seen: dict[str, None] = {}  # insertion-ordered set
 
     def record(self, fp: str) -> None:
-        self._seen.add(fp)
+        self._seen.pop(fp, None)
+        self._seen[fp] = None
+        while len(self._seen) > self._MAX:
+            del self._seen[next(iter(self._seen))]
 
     def consume(self, fp: str) -> bool:
         if fp in self._seen:
-            self._seen.discard(fp)
+            del self._seen[fp]
             return True
         return False

@@ -10,6 +10,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- **Portuguese (Portugal) translation.** Ambience is now available in European
+    Portuguese (`pt`) — the config flow, repair issues, service names, and the
+    whole panel UI. Locale resolution is now region-aware (exact locale → base
+    language → English), so a future Brazilian catalogue can be added without
+    either variant collapsing into the other. Until then, Brazilian Portuguese
+    (`pt-BR`) users see the European translation as a graceful fallback and a
+    banner inviting them to contribute a dedicated Brazilian translation.
 - **Sun-relative times in the Simulate screen.** The "When" control now offers a
     **Sun** mode alongside the clock: pick a solar anchor (dawn, sunrise, noon,
     sunset, dusk, or midnight) with an optional ± offset in minutes, and

@@ -45,6 +45,11 @@ The devices we automate in our bathroom (see the [overview](bathroom/index.md)):
 
 ### Bedroom
 
+The devices we automate in our bedroom (see the [overview](bedroom/index.md)):
+
+- [**Blinds**](bedroom/blinds.md) — close the bedroom blinds at dusk and open
+    them again in the morning, but only once the room has been vacant long
+    enough to trust that nobody's still asleep in bed.
 - [**Lights**](bedroom/lights.md) — turn the lights on by time of day when
     someone enters, drop to reading mode when they get into bed, and lean on
     time buffers to survive flaky presence sensors.

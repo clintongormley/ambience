@@ -5,8 +5,8 @@ by a presence sensor.
 
 !!! note "The disappointment of presence sensors"
 
-    Presence sensors, in spite of their promises, are notoriously unreliable at
-    detecting people who are asleep.
+    Presence sensors are wonderful but they are notoriously unreliable at detecting
+    people who are asleep.
 
     The Aqara FP2 loses people in bed for 15-20 minutes at a time, and the
     Everything Presence Pro is even worse, losing sleeping people for over an hour

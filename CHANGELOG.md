@@ -10,6 +10,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- **Import blocks can now set a category's scene order.** An AI-authored import
+    block may give its scenes explicit `priority` numbers (higher = evaluated
+    earlier) to force an evaluation order — for example floating a broad
+    override or "blocker" scene above the more-specific scenes that would
+    otherwise win. Previously the order was derived automatically and the only
+    way to override it was to pin scenes by hand in the Scopes view after
+    importing. On save Ambience keeps the pin **only** where your order
+    genuinely overrides the natural one and quietly drops the rest, so the
+    stored configuration stays clean while the imported order is preserved
+    exactly.
 - **Sun-relative times in the Simulate screen.** The "When" control now offers a
     **Sun** mode alongside the clock: pick a solar anchor (dawn, sunrise, noon,
     sunset, dusk, or midnight) with an optional ± offset in minutes, and

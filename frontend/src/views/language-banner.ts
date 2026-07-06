@@ -16,7 +16,9 @@ const PRODUCT_NAME = "Ambience";
  * dismissed. Everything render() needs — the display name, issue URL, message,
  * and labels — is resolved once per `hass` change in {@link willUpdate} and
  * cached, keeping that work off the (frequent) render path. The copy renders in
- * the English fallback — by definition the user's language has no catalogue.
+ * whatever catalogue covers the user's locale — English for an untranslated
+ * language, or the base language for a "wanted" region variant (e.g. a `pt-BR`
+ * user still sees the nudge, in European `pt`, inviting a Brazilian translation).
  */
 @customElement("ambience-language-banner")
 export class AmbienceLanguageBanner extends LitElement {

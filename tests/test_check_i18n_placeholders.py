@@ -40,6 +40,19 @@ def test_flags_key_missing_from_a_locale() -> None:
     assert any("ui.b" in i for i in issues)
 
 
+def test_flags_drift_in_any_locale_not_just_es() -> None:
+    # A third shipped locale (pt) must be checked too, not silently ignored.
+    locales = {
+        "en": {"ui.a": "Hi {name}", "ui.b": "B"},
+        "es": {"ui.a": "Hola {name}", "ui.b": "B"},  # es is clean
+        "pt": {"ui.a": "Ola {nome}"},  # pt: token renamed AND ui.b missing
+    }
+    issues = find_issues(locales)
+    assert any("ui.a" in i and "pt" in i for i in issues), issues  # token rename flagged
+    assert any("ui.b" in i and "pt" in i for i in issues), issues  # missing key flagged
+    assert all("pt" in i for i in issues), issues  # only the dirty locale (pt) is flagged
+
+
 def test_real_bundle_has_no_placeholder_drift() -> None:
     root = Path(__file__).resolve().parent.parent
     loc = parse_locales((root / "frontend" / "src" / "i18n-data.ts").read_text())

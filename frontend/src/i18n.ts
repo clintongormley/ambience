@@ -15,10 +15,40 @@ function _baseCode(raw: string): string {
   return raw.toLowerCase().split(/[-_]/)[0];
 }
 
-function _localeOf(hass: HassLike | undefined): string {
+/** Canonicalise a raw HA locale tag (hyphen separators, HA uses BCP-47 but be
+ *  robust to "pt_BR") and pair it with its base subtag, e.g.
+ *  "pt_BR" → { code: "pt-BR", base: "pt" }. The single home for locale
+ *  normalisation so region detection ({@link getLanguageSupport}) and string
+ *  loading ({@link _localeChain}) can never disagree on the canonical code.
+ *
+ *  Only separators are normalised, not case: `hass.language` is always one of
+ *  HA's own canonical language codes (`pt-BR`, `es-419`, …) with the region
+ *  already correctly cased, so the exact-code catalogue/`WANTED` matches line up.
+ *  `base` is lowercased by {@link _baseCode} and is what unshipped region
+ *  variants fall back on regardless. */
+function _canonicalLocale(raw: string): { code: string; base: string } {
+  const code = raw.replace(/_/g, "-");
+  return { code, base: _baseCode(code) };
+}
+
+/** Ordered list of catalogue keys to try for the user's `hass.language`: the
+ *  exact (region-specific) code first, then its base language, then `en`. A
+ *  `pt-BR` user therefore prefers a `pt-BR` catalogue when one is shipped, then
+ *  falls back to European `pt`, then English — so region variants can be
+ *  authored independently without either collapsing into the other. Only codes
+ *  actually present in the catalogue are included; `en` is always the final
+ *  fallback. Region catalogue keys must match HA's canonical spelling (`pt-BR`,
+ *  `es-419`); separators are normalised (`pt_BR` → `pt-BR`). */
+function _localeChain(hass: HassLike | undefined): string[] {
   const raw = hass?.language as string | undefined;
-  const lang = raw ? _baseCode(raw) : undefined;
-  return lang && lang in AMBIENCE_STRINGS_BY_LOCALE ? lang : "en";
+  const chain: string[] = [];
+  if (raw) {
+    const { code, base } = _canonicalLocale(raw);
+    if (code in AMBIENCE_STRINGS_BY_LOCALE) chain.push(code);
+    if (base !== code && base in AMBIENCE_STRINGS_BY_LOCALE) chain.push(base);
+  }
+  if (!chain.includes("en")) chain.push("en");
+  return chain;
 }
 
 export interface LanguageSupport {
@@ -30,21 +60,34 @@ export interface LanguageSupport {
   baseCode: string;
 }
 
-/** Whether Ambience ships UI strings for the user's HA language. Resolves the
- *  base code from `hass.language` and tests catalogue membership the SAME way
- *  {@link _localeOf} does (`baseCode in catalogue`), so `available` can never
- *  disagree with which catalogue `localize` loads — even if region-specific keys
- *  are ever added, both would still key off the base. An undeterminable language
- *  is treated as available (no nudge). */
+/** Region variants for which Ambience solicits a *dedicated* translation even
+ *  though a base catalogue already covers them. Ambience ships European `pt`;
+ *  Brazilian Portuguese differs enough that a `pt-BR` user is still nudged to
+ *  request their own translation — while their strings render in European `pt`
+ *  as a graceful fallback (via {@link _localeChain}) until a `pt-BR` catalogue
+ *  lands. Add a code here to invite its own translation; once its dedicated
+ *  catalogue ships, `available`'s exact-match clause suppresses the nudge
+ *  automatically (self-healing), so the entry can then be removed. */
+const WANTED_REGION_VARIANTS = new Set<string>(["pt-BR"]);
+
+/** Whether Ambience ships UI strings for the user's HA language, i.e. whether
+ *  to suppress the "request a translation" nudge. Covered when the catalogue has
+ *  an exact entry for the locale, OR a base-language entry covers it — UNLESS
+ *  the locale is a {@link WANTED_REGION_VARIANTS} variant, which is treated as
+ *  not-yet-covered so the nudge fires. This DELIBERATELY diverges from
+ *  {@link _localeChain} for those variants: a `pt-BR` user still renders European
+ *  `pt` strings (base fallback) yet is invited to request a Brazilian
+ *  translation. An undeterminable language is treated as available (no nudge). */
 export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
   const raw = hass?.language as string | undefined;
   if (!raw) return { available: true, code: "", baseCode: "" };
-  // Normalise separators to hyphens (HA uses BCP-47, but be robust to "pt_BR")
-  // so the display name, issue URL, and per-locale dismissal all key off one
-  // canonical form — and `pt-BR`/`pt_BR` can't be treated as distinct locales.
-  const code = raw.replace(/_/g, "-");
-  const baseCode = _baseCode(code);
-  const available = baseCode in AMBIENCE_STRINGS_BY_LOCALE;
+  // One canonical form (separators normalised) so the display name, issue URL,
+  // and per-locale dismissal all key off it — and `pt-BR`/`pt_BR` can't be
+  // treated as distinct locales.
+  const { code, base: baseCode } = _canonicalLocale(raw);
+  const available =
+    code in AMBIENCE_STRINGS_BY_LOCALE ||
+    (!WANTED_REGION_VARIANTS.has(code) && baseCode in AMBIENCE_STRINGS_BY_LOCALE);
   return { available, code, baseCode };
 }
 
@@ -94,16 +137,13 @@ function _bundleLookup(hass: HassLike | undefined, key: string): string | undefi
   if (!key.startsWith(PREFIX)) return undefined;
   const parts = key.slice(PREFIX.length).split(".");
 
-  const locale = _localeOf(hass);
-  const localeBundle = AMBIENCE_STRINGS_BY_LOCALE[locale];
-  if (localeBundle) {
-    const result = _lookupIn(localeBundle, parts);
+  // Try each catalogue in the locale's fallback chain (exact → base → en),
+  // returning the first that defines the key.
+  for (const locale of _localeChain(hass)) {
+    const catalogue = AMBIENCE_STRINGS_BY_LOCALE[locale];
+    if (!catalogue) continue;
+    const result = _lookupIn(catalogue, parts);
     if (result !== undefined) return result;
-  }
-  // Fall back to en
-  if (locale !== "en") {
-    const enBundle = AMBIENCE_STRINGS_BY_LOCALE.en;
-    if (enBundle) return _lookupIn(enBundle, parts);
   }
   return undefined;
 }

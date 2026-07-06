@@ -33,6 +33,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     Ambience does live — a scene that wins again shows as *unchanged* (its
     actions are **not** re-applied) rather than re-acting, exactly as the real
     debounce would. A **Clear** button resets the history.
+- **A local MCP server for authoring and diagnosing scenes live.** `mcp-server/`
+    lets Claude author and diagnose Ambience scenes live, directly against a
+    running Home Assistant, without the download/upload AI-bundle dance. Off by
+    default and project-scoped; see `mcp-server/README.md`.
 
 ### Fixed
 

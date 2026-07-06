@@ -15,6 +15,22 @@ function _baseCode(raw: string): string {
   return raw.toLowerCase().split(/[-_]/)[0];
 }
 
+/** Canonicalise a raw HA locale tag (hyphen separators, HA uses BCP-47 but be
+ *  robust to "pt_BR") and pair it with its base subtag, e.g.
+ *  "pt_BR" → { code: "pt-BR", base: "pt" }. The single home for locale
+ *  normalisation so region detection ({@link getLanguageSupport}) and string
+ *  loading ({@link _localeChain}) can never disagree on the canonical code.
+ *
+ *  Only separators are normalised, not case: `hass.language` is always one of
+ *  HA's own canonical language codes (`pt-BR`, `es-419`, …) with the region
+ *  already correctly cased, so the exact-code catalogue/`WANTED` matches line up.
+ *  `base` is lowercased by {@link _baseCode} and is what unshipped region
+ *  variants fall back on regardless. */
+function _canonicalLocale(raw: string): { code: string; base: string } {
+  const code = raw.replace(/_/g, "-");
+  return { code, base: _baseCode(code) };
+}
+
 /** Ordered list of catalogue keys to try for the user's `hass.language`: the
  *  exact (region-specific) code first, then its base language, then `en`. A
  *  `pt-BR` user therefore prefers a `pt-BR` catalogue when one is shipped, then
@@ -27,8 +43,7 @@ function _localeChain(hass: HassLike | undefined): string[] {
   const raw = hass?.language as string | undefined;
   const chain: string[] = [];
   if (raw) {
-    const code = raw.replace(/_/g, "-");
-    const base = _baseCode(code);
+    const { code, base } = _canonicalLocale(raw);
     if (code in AMBIENCE_STRINGS_BY_LOCALE) chain.push(code);
     if (base !== code && base in AMBIENCE_STRINGS_BY_LOCALE) chain.push(base);
   }
@@ -50,7 +65,9 @@ export interface LanguageSupport {
  *  Brazilian Portuguese differs enough that a `pt-BR` user is still nudged to
  *  request their own translation — while their strings render in European `pt`
  *  as a graceful fallback (via {@link _localeChain}) until a `pt-BR` catalogue
- *  lands. Add a code here to invite its own translation. */
+ *  lands. Add a code here to invite its own translation; once its dedicated
+ *  catalogue ships, `available`'s exact-match clause suppresses the nudge
+ *  automatically (self-healing), so the entry can then be removed. */
 const WANTED_REGION_VARIANTS = new Set<string>(["pt-BR"]);
 
 /** Whether Ambience ships UI strings for the user's HA language, i.e. whether
@@ -64,11 +81,10 @@ const WANTED_REGION_VARIANTS = new Set<string>(["pt-BR"]);
 export function getLanguageSupport(hass: HassLike | undefined): LanguageSupport {
   const raw = hass?.language as string | undefined;
   if (!raw) return { available: true, code: "", baseCode: "" };
-  // Normalise separators to hyphens (HA uses BCP-47, but be robust to "pt_BR")
-  // so the display name, issue URL, and per-locale dismissal all key off one
-  // canonical form — and `pt-BR`/`pt_BR` can't be treated as distinct locales.
-  const code = raw.replace(/_/g, "-");
-  const baseCode = _baseCode(code);
+  // One canonical form (separators normalised) so the display name, issue URL,
+  // and per-locale dismissal all key off it — and `pt-BR`/`pt_BR` can't be
+  // treated as distinct locales.
+  const { code, base: baseCode } = _canonicalLocale(raw);
   const available =
     code in AMBIENCE_STRINGS_BY_LOCALE ||
     (!WANTED_REGION_VARIANTS.has(code) && baseCode in AMBIENCE_STRINGS_BY_LOCALE);

@@ -352,7 +352,9 @@ describe("getLanguageSupport", () => {
       baseCode: "fr",
     });
   });
-  it("uncovered region variant keeps full code + base", () => {
+  it("wanted region variant (pt-BR) is nudged and keeps full code + base", () => {
+    // pt ships, so pt-BR is covered by base fallback — but it's a wanted variant,
+    // so available is false (the banner still invites a Brazilian translation).
     expect(getLanguageSupport({ language: "pt-BR" })).toEqual({
       available: false,
       code: "pt-BR",
@@ -404,6 +406,14 @@ describe("region-aware locale resolution and banner (pt / pt-BR)", () => {
   it("banner: a pt-BR user is still nudged even though European pt covers them", () => {
     bundle.pt = { ui: { close: "Fechar" } };
     expect(getLanguageSupport({ language: "pt-BR" }).available).toBe(false);
+  });
+
+  it("banner: shipping a pt-BR catalogue self-heals — the nudge is suppressed", () => {
+    // Once an exact catalogue exists, `available`'s exact-match clause wins over
+    // WANTED_REGION_VARIANTS, so a stale entry can't keep nudging forever.
+    bundle.pt = { ui: { close: "Fechar" } };
+    bundle["pt-BR"] = { ui: { close: "Fechar-BR" } };
+    expect(getLanguageSupport({ language: "pt-BR" }).available).toBe(true);
   });
 
   it("banner: a European pt user is covered (no nudge)", () => {

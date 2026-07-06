@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import type { ImportEnvelope } from "../frontend/src/import-config";
 import { computeImportPreview, ImportError, parseImport } from "../frontend/src/import-config";
 import type { SceneCategory, ScopeConfig } from "../frontend/src/types";
 
@@ -157,6 +158,21 @@ describe("computeImportPreview (merge)", () => {
     const preview = computeImportPreview(env, current, CATEGORIES);
     expect(preview.unknownCategories).toEqual(["ghost"]);
     expect(preview.newCategory).toBeNull();
+  });
+
+  test("preserves priority and pinned on imported scenes", () => {
+    const env = {
+      ambience_import: 1,
+      scope: { kind: "area", id: "lr" },
+      mode: "merge",
+      scenes: [
+        { name: "Top", category: "general", when: {}, actions: [], priority: 2048, pinned: true },
+      ],
+    } as unknown as ImportEnvelope;
+    const preview = computeImportPreview(env, { scenes: [] }, CATEGORIES);
+    const saved = preview.resultConfig.scenes[0] as { priority?: number; pinned?: boolean };
+    expect(saved.priority).toBe(2048);
+    expect(saved.pinned).toBe(true);
   });
 });
 

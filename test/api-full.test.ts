@@ -25,6 +25,7 @@ import {
   saveExposedActions,
   saveFloor,
   saveHouse,
+  saveScopeConfig,
   saveWeatherConfig,
 } from "../frontend/src/api";
 import type { AreaConfig, WeatherGroup } from "../frontend/src/types";
@@ -99,6 +100,29 @@ describe("API: saveArea", () => {
       config,
     });
     expect(res.ok).toBe(true);
+  });
+});
+
+describe("API: saveScopeConfig", () => {
+  test("sends minimise_pins when opts.minimisePins is set", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveScopeConfig(
+      { callWS } as any,
+      { kind: "area", id: "lr" },
+      { scenes: [] },
+      undefined,
+      {
+        minimisePins: true,
+      },
+    );
+    expect(sent[0].type).toBe("ambience/area/save");
+    expect(sent[0].minimise_pins).toBe(true);
+  });
+
+  test("omits minimise_pins by default", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveScopeConfig({ callWS } as any, { kind: "area", id: "lr" }, { scenes: [] });
+    expect("minimise_pins" in sent[0]).toBe(false);
   });
 });
 

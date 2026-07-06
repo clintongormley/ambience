@@ -565,6 +565,60 @@ class TestCanonicalise:
         out = canonicalise(hass, config)
         assert out["scenes"][0]["when"]["some_condition"] == {"x": 1}
 
+    def test_minimise_pins_drops_redundant_pins(self) -> None:
+        # Two empty-`when` scenes, both pinned, numbered in the same order the sort
+        # would already give them (array/stable order) → the pins are redundant, so
+        # the flag drops both while preserving the order.
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "name": "A",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 2048,
+                    "pinned": True,
+                },
+                {
+                    "name": "B",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 1024,
+                    "pinned": True,
+                },
+            ]
+        }
+        out = canonicalise(hass, config, minimise_pins=True)
+        assert [s["name"] for s in out["scenes"]] == ["A", "B"]  # order preserved
+        assert all(not s.get("pinned") for s in out["scenes"])  # both pins dropped
+
+    def test_without_minimise_flag_keeps_pins(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "name": "A",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 2048,
+                    "pinned": True,
+                },
+                {
+                    "name": "B",
+                    "category": "c",
+                    "when": {},
+                    "actions": [],
+                    "priority": 1024,
+                    "pinned": True,
+                },
+            ]
+        }
+        out = canonicalise(hass, config)  # default: no minimisation
+        assert all(s.get("pinned") for s in out["scenes"])  # pins preserved verbatim
+
 
 # ---------------------------------------------------------------------------
 # annotate_scenes  (merge unit — shadowed_by + scene_annotations; the heavy

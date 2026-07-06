@@ -986,6 +986,51 @@ async def test_area_save_pins_and_resolves(
     assert "auto_sort" not in cfg
 
 
+async def test_area_save_minimise_pins_flag(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """The import-intent `minimise_pins` flag drops pins that don't override the
+    natural order. Both scenes are numbered in the order the sort already gives
+    them (they tie — different occupancy polarity — so array order is preserved),
+    so the redundant pins are dropped while the resolved order is kept."""
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        minimise_pins=True,
+        config={
+            "scenes": [
+                {
+                    "name": "A",
+                    "category": "general",
+                    "when": {
+                        "occupancy": {
+                            "sensors": ["binary_sensor.a"],
+                            "occupied": False,
+                            "for": {"m": 5},
+                        }
+                    },
+                    "actions": [],
+                    "priority": 2048,
+                    "pinned": True,
+                },
+                {
+                    "name": "B",
+                    "category": "general",
+                    "when": {"occupancy": {"sensors": ["binary_sensor.a"]}},
+                    "actions": [],
+                    "priority": 1024,
+                    "pinned": True,
+                },
+            ]
+        },
+    )
+    assert save["success"] is True
+    scenes = save["result"]["config"]["scenes"]
+    assert [s["name"] for s in scenes] == ["A", "B"]
+    assert all(not s.get("pinned") for s in scenes)
+
+
 # ---------------------------------------------------------------------------
 # B7: ambience/time_of_day_periods/list
 # ---------------------------------------------------------------------------

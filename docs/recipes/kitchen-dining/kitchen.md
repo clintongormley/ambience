@@ -93,7 +93,7 @@ when it matches:
 | Person enters Zone Island                              | Present short time                  | Lights turn on at low level |
 | Person remains in Zone Island for 15 seconds           | Present long time                   | Lights brighten             |
 | Person exits Zone Island                               | Block until island recently vacated | None                        |
-| Person returns to Zone Island within 2 minutes         | Present long time                   | None - already applied      |
+| Person returns to Zone Island within 2 minutes         | Present long time                   | None — already applied      |
 | Person exits Zone Island for 2 minutes                 | Present short time                  | Lights dim                  |
 | Person exits Zone Island for 5 minutes                 | Vacant                              | Lights turn off             |
 | Projector on and person exits Zone Island for 1 minute | Vacant and Projector in use         | Lights turn off             |

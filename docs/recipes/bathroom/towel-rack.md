@@ -16,7 +16,7 @@ require us to know at what times people shower.
 ## Scene: Person in shower
 
 The first scene is intended to turn on the towel-rack (or radiator) once
-somebody has been detected in the shower for at least 10 seconds. The 10 seconds
+somebody has been detected in the shower for at least 10 seconds. The 10-second
 delay is to account for jitter that is often seen with presence sensors.
 
 ![Person in shower.](../images/bathroom/towel-rack/person-in-shower.png "Person in shower.")
@@ -55,11 +55,11 @@ clear for at least two hours, and move the radiator-off scene below that:
 
 ## Lifecycle
 
-| Trigger                                   | Matched Scene              | Action                     |
-| ----------------------------------------- | -------------------------- | -------------------------- |
-| Person enters the shower for 5 seconds    | No match                   | None                       |
-| Person enters the shower for 10 seconds   | Person in shower           | Radiator turns on          |
-| Person leaves the shower after 10 minutes | No match                   | None                       |
-| Person enters the shower 1 hour later     | Person in shower           | No action, already applied |
-| Person leaves shower                      | Block until shower clear   | None                       |
-| Shower clear for 2 hours                  | Radiator off after 2 hours | Radiator turns off         |
+| Trigger                                   | Matched Scene              | Action                 |
+| ----------------------------------------- | -------------------------- | ---------------------- |
+| Person enters the shower for 5 seconds    | No match                   | None                   |
+| Person enters the shower for 10 seconds   | Person in shower           | Radiator turns on      |
+| Person leaves the shower after 10 minutes | No match                   | None                   |
+| Person enters the shower 1 hour later     | Person in shower           | None — already applied |
+| Person leaves shower                      | Block until shower clear   | None                   |
+| Shower clear for 2 hours                  | Radiator off after 2 hours | Radiator turns off     |

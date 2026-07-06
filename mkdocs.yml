@@ -113,7 +113,7 @@ nav:
           - Lights: recipes/bedroom/lights.md
       - Kitchen / Dining Room:
           - recipes/kitchen-dining/index.md
-          - Dining room: recipes/kitchen-dining/dining-room.md
+          - Dining Room: recipes/kitchen-dining/dining-room.md
           - Kitchen: recipes/kitchen-dining/kitchen.md
       - Security:
           - House alarm: recipes/security/alarm.md

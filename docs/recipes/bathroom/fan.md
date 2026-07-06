@@ -8,7 +8,7 @@ turned on when somebody uses the shower or the toilet.
 - **Bathroom mmWave Presence** - Occupancy sensor for the bathroom.
 - **Zone Shower** - Occupancy sensor for the shower area.
 - **Zone Toilet** - Occupancy sensor for the toilet area.
-- **Bathroom Fan** - Extractor fan
+- **Bathroom Fan** - Extractor fan.
 
 ## Scene: Person in shower or toilet
 
@@ -27,12 +27,12 @@ for 15 minutes.
 
 ## Lifecycle
 
-| Trigger                                 | Matched Scene              | Action                         |
-| --------------------------------------- | -------------------------- | ------------------------------ |
-| Person goes to toilet for 45 seconds    | No match                   | None                           |
-| Person goes to toilet for 5 minutes     | Person in shower or toilet | Extractor fan turns on         |
-| Person showers for 10 minutes           | Person in shower or toilet | None - actions already applied |
-| Person leaves bathroom                  | No match                   | None                           |
-| Person enters bathroom 5 minutes later  | No match                   | None                           |
-| Person goes to toilet for 5 minutes     | Person in shower or toilet | None - actions already applied |
-| 15 minutes after person leaves bathroom | Bathroom vacant            | Fan turned off                 |
+| Trigger                                 | Matched Scene              | Action                 |
+| --------------------------------------- | -------------------------- | ---------------------- |
+| Person goes to toilet for 45 seconds    | No match                   | None                   |
+| Person goes to toilet for 5 minutes     | Person in shower or toilet | Extractor fan turns on |
+| Person showers for 10 minutes           | Person in shower or toilet | None — already applied |
+| Person leaves bathroom                  | No match                   | None                   |
+| Person enters bathroom 5 minutes later  | No match                   | None                   |
+| Person goes to toilet for 5 minutes     | Person in shower or toilet | None — already applied |
+| 15 minutes after person leaves bathroom | Bathroom vacant            | Fan turned off         |

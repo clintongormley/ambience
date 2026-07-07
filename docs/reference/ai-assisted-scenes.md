@@ -65,3 +65,10 @@ with:
 
 Real before-and-after examples like these are used to improve the guidance the
 AI learns from.
+
+______________________________________________________________________
+
+Next, pick how you will connect an AI:
+
+- [Use the MCP server](ai/mcp-server.md)
+- [Download and paste](ai/download-and-paste.md)

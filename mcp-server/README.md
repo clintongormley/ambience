@@ -6,19 +6,65 @@ download/upload of the AI bundle. It is a thin client over Ambience's existing
 admin websocket API; it adds no backend code and writes nothing without a
 preview + your confirmation.
 
+You do **not** need to check out this repository to use it — `uvx` runs it
+straight from GitHub (see below).
+
 ## Prerequisites
 
-- An Ambience install reachable over HTTP(S).
+- An Ambience install reachable over HTTP(S) from wherever Claude runs.
 - A **long-lived access token** from an **admin** HA user (Profile → Security →
-    Long-lived access tokens).
-- [`uv`](https://docs.astral.sh/uv/) on PATH (the default launcher), or a Python
-    3.11+ environment for the `python -m` fallback.
+    Long-lived access tokens). Admin is required — Ambience's config commands
+    are admin-only.
+- [`uv`](https://docs.astral.sh/uv/) on PATH (one-line install; provides `uvx`).
 
-## Configure
+## Install (no checkout needed)
 
-The repo ships a project-scoped `.mcp.json`. It reads two env vars — set them in
-git-ignored `.claude/settings.local.json` (or your shell) so no secret is
-committed:
+`uvx` fetches, builds, and runs the server from GitHub on demand — nothing to
+clone or `pip install`. Point your MCP client at it and pass your HA URL + token
+as env vars.
+
+**Claude Desktop** — add to `claude_desktop_config.json`, then restart:
+
+```json
+{
+  "mcpServers": {
+    "ambience": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server",
+        "ambience-mcp"
+      ],
+      "env": {
+        "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
+        "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** — one command (stores it in your user config):
+
+```sh
+claude mcp add ambience \
+  --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
+  --env AMBIENCE_HA_TOKEN=<your admin long-lived token> \
+  -- uvx --from "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server" ambience-mcp
+```
+
+> A PyPI release is planned so this shortens to `uvx ambience-mcp` (no git URL).
+
+Pin a specific version by appending a tag to the URL, e.g.
+`…ambience.git@v1.2.0#subdirectory=mcp-server`.
+
+## From a checkout (contributors)
+
+If you *do* have the repo checked out, it also ships a **project-scoped**
+`.mcp.json` at the repo root that launches the server from the working tree
+(`uvx --from ./mcp-server ambience-mcp`). It reads the same two env vars — set
+them in git-ignored `.claude/settings.local.json` (or your shell) so no secret
+is committed:
 
 ```json
 {
@@ -29,21 +75,16 @@ committed:
 }
 ```
 
-First use in a project prompts you to approve the `.mcp.json` server. Then
-`/mcp` shows it connected with its tools.
-
-**Fallback launcher** (no `uv`): `pip install -e ./mcp-server`, then set the
-`.mcp.json` command to your interpreter:
-`"command": "python", "args": ["-m", "ambience_mcp"]`.
+This config is active only inside an Ambience worktree, so it never loads in
+your other projects. First use prompts you to approve the `.mcp.json` server.
 
 ## Turning it off
 
-The server only loads in **this project** — it is absent in every other project.
-To disable it here without deleting config:
-
-- **Live, this session:** `/mcp` → select `ambience` → Disconnect.
-- **Persistently:** add `"disabledMcpjsonServers": ["ambience"]` to
-    `.claude/settings.local.json`.
+- **Live, this session:** `/mcp` → select `ambience` → Disconnect (no restart).
+- **Remove it:** `claude mcp remove ambience` (Claude Code), or delete the entry
+    from `claude_desktop_config.json` and restart (Claude Desktop).
+- **Keep the config but disable a project-scoped `.mcp.json`:** add
+    `"disabledMcpjsonServers": ["ambience"]` to `.claude/settings.local.json`.
 
 Tool schemas are deferred (tool-search) on supported models, so an idle server
 costs almost nothing per turn.
@@ -72,6 +113,7 @@ ruff check . && ruff format --check .
 
 ## Not in v1 (follow-ups)
 
+- **PyPI release** so the install shortens to `uvx ambience-mcp` (no git URL).
 - **`ambience_simulate`** (the what-if simulator over `ambience/simulate`) is
     not included yet — the author → dry-run → preview → apply loop is complete
     without it. Deferred as a read-only diagnostic that needs its own payload

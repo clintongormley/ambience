@@ -73,8 +73,8 @@ describe("ambience-import-config", () => {
     expect(text).toContain("install");
     expect(text).toContain("download");
     expect(text).toContain("upload");
-    const link = el.shadowRoot.querySelector("a.help-link") as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toContain("ai-assisted-scenes");
+    const link = el.shadowRoot.querySelector(".steps a.help-link") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toContain("download-and-paste");
     expect(link.getAttribute("target")).toBe("_blank");
     // No paste box — upload is the only input.
     expect(el.shadowRoot.querySelector("textarea")).toBeFalsy();
@@ -86,7 +86,7 @@ describe("ambience-import-config", () => {
     const text = (el.shadowRoot.textContent || "").toLowerCase();
     expect(text).toContain("mcp server");
     const mcpLink = el.shadowRoot.querySelector(".mcp a.help-link") as HTMLAnchorElement;
-    expect(mcpLink.getAttribute("href")).toContain("ai-assisted-scenes");
+    expect(mcpLink.getAttribute("href")).toContain("ai/mcp-server");
     expect(mcpLink.getAttribute("target")).toBe("_blank");
     // Option A: the download/paste flow stays as the no-install fallback.
     expect(el.shadowRoot.querySelector("button.download")).toBeTruthy();

@@ -95,7 +95,10 @@ nav:
           - How actions run: reference/actions/how-actions-run.md
       - Settings reference: reference/settings-reference.md
       - Panel & card: reference/panel-and-card.md
-      - AI-assisted scenes: reference/ai-assisted-scenes.md
+      - AI-assisted scenes:
+          - reference/ai-assisted-scenes.md
+          - Using the MCP server: reference/ai/mcp-server.md
+          - Download and paste: reference/ai/download-and-paste.md
       - Config health: reference/config-health.md
       - Reporting an issue: reference/reporting-an-issue.md
   - Recipes:

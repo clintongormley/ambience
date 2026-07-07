@@ -21,10 +21,11 @@ import {
 } from "../import-config.js";
 import type { SceneCategory } from "../types.js";
 
-// The user guide for the AI feature (install steps + workflow), shown as a link
-// in the AI tab. Built from DOCS_BASE_URL via docUrl() so it tracks the docs
-// origin in one place and can't drift; points at the published docs, not a branch.
-const AI_DOCS_URL = docUrl("reference/ai-assisted-scenes");
+// Deep links to the two AI-authoring guides, one per docs sub-page: the MCP
+// server (recommended) and the download/paste flow. Built from DOCS_BASE_URL via
+// docUrl() so they track the docs origin in one place and can't drift.
+const MCP_DOCS_URL = docUrl("reference/ai/mcp-server");
+const PASTE_DOCS_URL = docUrl("reference/ai/download-and-paste");
 
 // Where to send "the AI got it wrong, here's a better answer" feedback — used to
 // improve the cookbook the AI learns from.
@@ -220,7 +221,7 @@ export class AmbienceImportConfig extends LitElement {
         <div class="mcp-title">${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</div>
         <div class="mcp-body">
           ${localize(this.hass, "ui.import_mcp_desc", "The fastest way — Claude authors and fixes scenes directly against your running Home Assistant, with no download or upload. Best with Claude Desktop or Claude Code.")}
-          <a class="help-link" href=${AI_DOCS_URL} target="_blank" rel="noopener noreferrer"
+          <a class="help-link" href=${MCP_DOCS_URL} target="_blank" rel="noopener noreferrer"
             >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
           >
         </div>
@@ -231,7 +232,7 @@ export class AmbienceImportConfig extends LitElement {
           <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin")}</div>
           <div class="step-body">
             ${localize(this.hass, "ui.import_step1_desc", "Add the Ambience AI pack to your AI — a Claude Code plugin, a claude.ai skill, or a guide to paste into any AI.")}
-            <a class="help-link" href=${AI_DOCS_URL} target="_blank" rel="noopener noreferrer"
+            <a class="help-link" href=${PASTE_DOCS_URL} target="_blank" rel="noopener noreferrer"
               >${localize(this.hass, "ui.import_help_link", "Install & usage guide")}</a
             >
           </div>

@@ -3,7 +3,7 @@
 A local [MCP](https://modelcontextprotocol.io) server that lets Claude author
 and diagnose Ambience scenes **live** against your running Home Assistant. It is
 a thin client over Ambience's admin websocket API and writes nothing without a
-preview + your confirmation.
+preview and your confirmation.
 
 ## Prerequisites
 
@@ -67,9 +67,8 @@ version's authoring guide automatically.
 
 ## Compatibility
 
-One build works across Ambience versions — there is nothing to pin. If your
-Ambience is **older** than the server supports, it says so and refuses writes
-(telling you the version to update to) rather than failing cryptically.
+If your Ambience is **older** than the server supports, it will refuse to write
+changes and will tell you how to update to the correct version.
 
 ## Turning it off
 
@@ -149,6 +148,6 @@ python -m pytest -q
 ruff check . && ruff format --check .
 ```
 
-These tests aren't wired into the repo's pre-push hook / CI yet (only ruff
-sweeps the subtree), so run `python -m pytest` here before pushing changes under
-`mcp-server/`.
+These tests run in CI and in the pre-push hook whenever you change anything
+under `mcp-server/` (via `make mcp-tests`, which runs them in an isolated
+environment with `uv`, so no manual setup is needed).

@@ -2,7 +2,7 @@
 # hook (.githooks/pre-push), and CI. Coverage thresholds live in their configs
 # (pyproject.toml fail_under for Python, vitest.config.ts for the frontend) so
 # raising them propagates here automatically.
-.PHONY: lint-py lint-js lint-md format-md translations ui-strings i18n coverage-py coverage-js build-check ai-docs ai-docs-check install-hooks
+.PHONY: lint-py lint-js lint-md format-md translations ui-strings i18n coverage-py coverage-js mcp-tests build-check ai-docs ai-docs-check install-hooks
 
 # Markdown formatter, pinned for reproducible output (matches the editor venv).
 # Run via uvx so no local install/PATH setup is needed — only `uv`. The
@@ -45,6 +45,9 @@ coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
 
 coverage-js:    ## frontend tests + coverage gate (thresholds in vitest.config.ts)
 	npm run coverage
+
+mcp-tests:      ## mcp-server unit tests (isolated deps via uv, so no manual setup)
+	cd mcp-server && uv run --extra test python -m pytest -q
 
 build-check:    ## rebuild bundle and fail if the committed output differs
 	npm run build && git diff --exit-code custom_components/ambience/frontend/

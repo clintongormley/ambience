@@ -96,6 +96,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_import: "AI",
       import_title: "Author & fix scenes with AI",
       import_beta: "Beta",
+      import_mcp_title: "Author live with the MCP server",
+      import_mcp_desc:
+        "The fastest way — Claude authors and fixes scenes directly against your running Home Assistant, with no download or upload. Best with Claude Desktop or Claude Code.",
+      import_mcp_link: "Set up the MCP server",
+      import_paste_title: "No MCP client? Download and paste into any AI",
       import_help_link: "Install & usage guide",
       import_step1: "Install the skill or plugin",
       import_step1_desc:
@@ -677,6 +682,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_import: "IA",
       import_title: "Crea y arregla escenas con IA",
       import_beta: "Beta",
+      import_mcp_title: "Crea escenas en vivo con el servidor MCP",
+      import_mcp_desc:
+        "La forma más rápida: Claude crea y corrige escenas directamente sobre tu Home Assistant en marcha, sin descargas ni subidas. Ideal con Claude Desktop o Claude Code.",
+      import_mcp_link: "Configura el servidor MCP",
+      import_paste_title: "¿Sin cliente MCP? Descarga y pega en cualquier IA",
       import_help_link: "Guía de instalación y uso",
       import_step1: "Instala la skill o el plugin",
       import_step1_desc:

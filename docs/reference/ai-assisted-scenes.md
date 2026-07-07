@@ -16,9 +16,62 @@ The AI tab is hidden by default. Enable it in **Settings → Devices & services 
 Ambience → Configure → Enable the AI authoring tab (beta)**, then open the
 Ambience panel and find it under **Settings → the AI tab**.
 
-## How it works — three steps
+## Two ways to author
 
-1. **Install the skill or plugin** (see [below](#installing-the-ai-pack)) — once
+- **MCP server (recommended)** — Claude authors *live* against your running Home
+    Assistant: no download/upload, and it always has your current schema, ids
+    and entities. Best if you use **Claude Desktop** or **Claude Code**.
+- **Download and paste** — hand a snapshot bundle to *any* AI (Claude, ChatGPT,
+    Gemini …) and upload the result. Works with any AI and needs nothing
+    installed.
+
+Either way, every change is **previewed and imported by you** — nothing is
+written to Home Assistant until you confirm, and every import is reversible with
+undo.
+
+### MCP server (live)
+
+Install the server once — no clone and no `git` needed. You need
+[`uv`](https://docs.astral.sh/uv/) on PATH and an **admin** long-lived access
+token (Profile → Security → Long-lived access tokens). `AMBIENCE_HA_URL` can be
+a local address or a **remote HTTPS URL** (Nabu Casa, your own domain) —
+anywhere your Home Assistant is reachable from the machine running Claude.
+
+**Claude Desktop** — add to `claude_desktop_config.json`, then restart:
+
+```json
+{
+  "mcpServers": {
+    "ambience": {
+      "command": "uvx",
+      "args": ["ambience-mcp"],
+      "env": {
+        "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
+        "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** — one command:
+
+```sh
+claude mcp add ambience \
+  --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
+  --env AMBIENCE_HA_TOKEN=<your admin long-lived token> \
+  -- uvx ambience-mcp
+```
+
+Then ask Claude to author or fix a scene — it reads your live config, shows a
+preview, and you confirm. The authoring guide is served **live from your
+install**, so there's no separate pack to install for this path. Multiple
+instances, version pinning and other options are in the
+[mcp-server README](https://github.com/clintongormley/ambience/blob/stable/mcp-server/README.md).
+
+### Download and paste (any AI)
+
+1. **Install the skill or pack** (see [below](#installing-the-ai-pack)) — once
     per AI. This teaches the AI the Ambience schema and how to read a
     diagnostic.
 1. **Download your AI bundle.** In the AI tab, click **Download AI bundle**.
@@ -45,6 +98,9 @@ Ambience panel and find it under **Settings → the AI tab**.
     better answers.
 
 ## Installing the AI pack
+
+This is for the **download-and-paste** path — the MCP server serves the guide
+live from your install, so you don't install a pack for it.
 
 The "AI pack" teaches the AI the Ambience schema and how to read a diagnostic.
 Install it in whichever form suits your AI. **Always install the `stable`
@@ -87,9 +143,10 @@ Paste the single self-contained guide into your AI:
 
 ## Privacy
 
-The AI bundle is a **local download** — you choose when and to whom to send it.
-Presence and location data is redacted before it leaves Home Assistant: person
-and device-tracker locations, the zones in your traces, your weather/workday
+Both paths read the **same redacted bundle** — a local download you choose when
+and to whom to send, or the live read the MCP server makes. Presence and
+location data is redacted before it leaves Home Assistant: person and
+device-tracker locations, the zones in your traces, your weather/workday
 entities, and the rendered output of `people`/`template` conditions. Secrets in
 your actions are scrubbed too — alarm/lock codes, and the default values of
 sensitive fields such as a notification's message, recipients or push token.

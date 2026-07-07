@@ -59,6 +59,14 @@ export class AmbienceImportConfig extends LitElement {
       background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
     }
     .help-link { color: var(--primary-color, #03a9f4); }
+    .mcp {
+      margin-bottom: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
+      background: var(--secondary-background-color, #f5f5f5);
+      border: 1px solid var(--primary-color, #03a9f4);
+    }
+    .mcp .mcp-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .mcp .mcp-body { color: var(--secondary-text-color, #666); }
+    .paste-heading { font-weight: 600; margin: 0 0 0.75rem; }
     .feedback {
       margin-top: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
       background: var(--secondary-background-color, #f5f5f5);
@@ -208,6 +216,16 @@ export class AmbienceImportConfig extends LitElement {
         <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
         <span class="beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
       </div>
+      <div class="mcp">
+        <div class="mcp-title">${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</div>
+        <div class="mcp-body">
+          ${localize(this.hass, "ui.import_mcp_desc", "The fastest way — Claude authors and fixes scenes directly against your running Home Assistant, with no download or upload. Best with Claude Desktop or Claude Code.")}
+          <a class="help-link" href=${AI_DOCS_URL} target="_blank" rel="noopener noreferrer"
+            >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
+          >
+        </div>
+      </div>
+      <div class="paste-heading">${localize(this.hass, "ui.import_paste_title", "No MCP client? Download and paste into any AI")}</div>
       <ol class="steps">
         <li>
           <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin")}</div>

@@ -54,6 +54,16 @@ async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def ambience_get_guide(have_version: str | None = None) -> dict[str, Any]:
+    """Fetch the Ambience scene-authoring guide (schema + cookbook) live from the
+    running install. Read it once before authoring. Pass the `ambience_version`
+    you already hold (from ambience_get_context) as have_version; if it matches
+    you get {unchanged: true} and should keep using the guide already in your
+    context — the full text is only re-sent when the install's version changes."""
+    return await tools.get_guide(await _client_(), have_version)
+
+
+@mcp.tool()
 async def ambience_dry_run(scope: dict[str, Any]) -> dict[str, Any]:
     """Preview which scene currently wins for a scope, with the evaluation trace
     (including shadowing). Read-only. scope shape as in ambience_get_scope."""

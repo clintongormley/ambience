@@ -219,3 +219,60 @@ async def test_apply_write_strips_rank_before_save():
     await tools.apply_write(client, scope, scenes, token, ledger)
     save_call = next(c for c in client.calls if c["type"] == "ambience/area/save")
     assert save_call["config"] == {"scenes": stripped}
+
+
+async def test_get_guide_forwards_have_version_and_returns_payload():
+    payload = {"guide": "# Guide", "ambience_version": "1.1.0", "ambience_ai_bundle": 1}
+    client = FakeClient({"ambience/ai_guide": payload})
+    result = await tools.get_guide(client, have_version="1.0.0")
+    assert result == payload
+    assert client.calls == [{"type": "ambience/ai_guide", "have_version": "1.0.0"}]
+
+
+async def test_get_guide_omits_have_version_when_absent():
+    client = FakeClient(
+        {
+            "ambience/ai_guide": {
+                "guide": "# G",
+                "ambience_version": "1.1.0",
+                "ambience_ai_bundle": 1,
+            }
+        }
+    )
+    await tools.get_guide(client)
+    assert client.calls == [{"type": "ambience/ai_guide"}]
+
+
+async def test_get_guide_reports_unavailable_on_old_backend():
+    client = FakeClient(
+        {"ambience/ai_guide": HACommandError("unknown_command", "Unknown command.")}
+    )
+    result = await tools.get_guide(client)
+    assert result["unavailable"] is True
+    assert "guide" not in result
+
+
+async def test_get_guide_propagates_other_command_errors():
+    client = FakeClient({"ambience/ai_guide": HACommandError("internal_error", "boom")})
+    with pytest.raises(HACommandError):
+        await tools.get_guide(client)
+
+
+async def test_get_context_warns_when_backend_bundle_format_is_newer():
+    newer = tools.SUPPORTED_AI_BUNDLE + 1
+    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": newer}})
+    result = await tools.get_context(client)
+    assert "warning" in result
+    assert str(newer) in result["warning"]
+
+
+async def test_get_context_no_warning_when_backend_bundle_format_supported():
+    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": tools.SUPPORTED_AI_BUNDLE}})
+    result = await tools.get_context(client)
+    assert "warning" not in result
+
+
+async def test_get_context_no_warning_when_bundle_format_absent():
+    client = FakeClient({"ambience/ai_bundle": {"config": {}}})
+    result = await tools.get_context(client)
+    assert "warning" not in result

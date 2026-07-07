@@ -9,6 +9,11 @@ from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
 
+SUPPORTED_AI_BUNDLE = 1
+"""Highest `ambience_ai_bundle` structure version this server understands. A
+backend reporting a higher value is newer than this server, so get_context
+attaches a `warning` telling the user to update it."""
+
 
 class ToolError(RuntimeError):
     """A tool was called with an invalid argument (surfaced to the model)."""
@@ -80,6 +85,14 @@ async def get_context(client: Any) -> dict[str, Any]:
         for scope_cfg in _iter_scope_configs(config):
             if isinstance(scope_cfg.get("scenes"), list):
                 scope_cfg["scenes"] = _with_ranks(scope_cfg["scenes"])
+    backend_format = bundle.get("ambience_ai_bundle")
+    if isinstance(backend_format, int) and backend_format > SUPPORTED_AI_BUNDLE:
+        bundle["warning"] = (
+            f"This Ambience install speaks AI-bundle format {backend_format}, but this "
+            f"MCP server understands up to {SUPPORTED_AI_BUNDLE}. The server is out of "
+            "date and some fields may be missing — ask the user to restart Claude, or "
+            "pin a newer ambience-mcp source."
+        )
     return bundle
 
 
@@ -89,6 +102,29 @@ async def get_scope(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
     if isinstance(result.get("scenes"), list):
         result["scenes"] = _with_ranks(result["scenes"])
     return result
+
+
+_GUIDE_UNAVAILABLE_MESSAGE = (
+    "This Ambience version does not serve the authoring guide yet — upgrade "
+    "Ambience, or use the static skill guide."
+)
+
+
+async def get_guide(client: Any, have_version: str | None = None) -> dict[str, Any]:
+    """Fetch the authoring guide (schema + cookbook) live from the running
+    install. Pass the `ambience_version` you already hold as `have_version`; a
+    matching version returns {unchanged: true} with no text so the guide is only
+    re-read when the install changes. Old backends that predate the command
+    return {unavailable: true} instead of raising."""
+    payload: dict[str, Any] = {}
+    if have_version is not None:
+        payload["have_version"] = have_version
+    try:
+        return await client.command("ambience/ai_guide", **payload)
+    except HACommandError as exc:
+        if exc.code == "unknown_command":
+            return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
+        raise
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:

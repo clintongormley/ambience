@@ -37,6 +37,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     lets Claude author and diagnose Ambience scenes live, directly against a
     running Home Assistant, without the download/upload AI-bundle dance. Off by
     default and project-scoped; see `mcp-server/README.md`.
+- **The MCP server serves the authoring guide live from your install.** The
+    schema + cookbook guide is fetched from your running Ambience over the
+    websocket, so it always matches your version with nothing separate to
+    install or keep in sync; the transfer is skipped when your version hasn't
+    changed. If the server is older than your Ambience it says so, and scenes
+    are presented by relative rank (1…N per category) rather than the internal
+    priority number.
 
 ### Fixed
 

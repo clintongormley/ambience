@@ -10,6 +10,7 @@ def test_all_tool_wrappers_exist():
     for name in [
         "ambience_get_context",
         "ambience_get_scope",
+        "ambience_get_guide",
         "ambience_dry_run",
         "ambience_validate",
         "ambience_preview_write",

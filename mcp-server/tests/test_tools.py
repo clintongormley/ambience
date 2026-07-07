@@ -57,14 +57,37 @@ async def test_preview_write_returns_diff_valid_and_token():
         {
             "ambience/area/get": {"scenes": []},
             "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
     ledger = PreviewLedger()
     result = await tools.preview_write(client, {"kind": "area", "id": "lr"}, scenes, ledger)
     assert result["valid"] is True
     assert result["errors"] is None
+    assert result["unknown_categories"] == []
     assert result["diff"]["added"] == scenes
     assert result["confirm_token"] == fingerprint({"kind": "area", "id": "lr"}, scenes)
+
+
+async def test_preview_write_blocks_a_scene_with_an_unknown_category():
+    # The backend would silently move it to General, so preview must block until
+    # the category exists (create it with save_categories first).
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "typo_lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    ledger = PreviewLedger()
+    result = await tools.preview_write(client, scope, scenes, ledger)
+    assert result["unknown_categories"] == ["typo_lighting"]
+    assert result["valid"] is False
+    # No usable token was recorded → apply is gated out.
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
 
 
 async def test_preview_write_reports_validation_error():

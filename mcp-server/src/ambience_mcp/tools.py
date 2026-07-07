@@ -197,14 +197,31 @@ async def preview_write(
         valid, errors = True, None
     except HACommandError as exc:
         valid, errors = False, exc.message
+    # The backend silently reassigns a scene with an unknown category to "General"
+    # on save, so an unflagged typo would commit something other than the previewed
+    # diff. Block until every category exists — the caller creates any it needs with
+    # save_categories first (mirroring the panel's import gate).
+    cat_list = await client.command("ambience/categories/list")
+    known = {c.get("id") for c in cat_list.get("categories", [])}
+    unknown = sorted({s["category"] for s in scenes if isinstance(s.get("category"), str)} - known)
+    if unknown and valid:
+        valid = False
+        joined = ", ".join(unknown)
+        errors = f"unknown categories (create them with save_categories first): {joined}"
     changes = diff_scopes(current, scenes)
     token = fingerprint(_scope_key(kind, sid), scenes)
-    # Only a validated payload gets an applyable token; an invalid preview
-    # returns its fingerprint for reference but records nothing, so apply_write
-    # rejects it at the gate until the caller fixes the validation error.
+    # Only a fully-valid payload (schema OK + every category exists) gets an
+    # applyable token; otherwise the fingerprint is returned for reference but
+    # recorded nowhere, so apply_write rejects it until the caller fixes the problem.
     if valid:
         ledger.record(token)
-    return {"valid": valid, "errors": errors, "diff": changes, "confirm_token": token}
+    return {
+        "valid": valid,
+        "errors": errors,
+        "unknown_categories": unknown,
+        "diff": changes,
+        "confirm_token": token,
+    }
 
 
 async def apply_write(

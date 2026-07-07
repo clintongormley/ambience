@@ -88,7 +88,9 @@ async def ambience_preview_write(
     scope: dict[str, Any], scenes: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Preview a full scope write WITHOUT committing. Returns validity, a
-    before/after diff (added/updated/removed), and a confirm_token. Show the diff
+    before/after diff (added/updated/removed), any unknown_categories, and a
+    confirm_token. If unknown_categories is non-empty the write is blocked (no
+    usable token) — create them with ambience_save_categories first. Show the diff
     to the user; pass the token to ambience_apply_write to commit."""
     return await tools.preview_write(await _client_(), scope, scenes, _ledger)
 

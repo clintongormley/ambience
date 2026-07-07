@@ -110,7 +110,8 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |
 
 **Fields you don't author** (backend-owned / response-only):
-`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`.
+`shadowed_by`, `missing_entities`, `overlap_entities`, `config_issues`, and — over
+the MCP tools only — `rank` (see *Presenting scenes to a user*, below).
 
 **`priority` — author it only to set order** (integer, optional). Higher number =
 evaluated earlier. **Presence of a `priority` marks the scene pinned on import**,
@@ -124,6 +125,14 @@ wouldn't produce. (`pinned` is a real persisted field too, but you don't set it 
 the `priority` number carries the pin.) See
 [*How scenes are chosen*](#how-scenes-are-chosen) and
 [import-format.md](import-format.md#ordering).
+
+**Presenting scenes to a user.** When you *show* a user their scenes (a summary or
+a table), number them by **relative rank** — `1…N` within each `(scope, category)`,
+in evaluation order — and keep the 📌 pin marker for pinned scenes. **Never show
+the raw `priority`** (e.g. `7168`): it's an internal sort key, meaningless to a
+person. Over the MCP tools each scene carries this as a `rank` field; from a pasted
+bundle, derive it from the scene's position within its category. Rank is
+display-only — never author it back into config.
 
 ### How scenes are chosen
 

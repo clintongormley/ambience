@@ -21,10 +21,11 @@ import {
 } from "../import-config.js";
 import type { SceneCategory } from "../types.js";
 
-// The user guide for the AI feature (install steps + workflow), shown as a link
-// in the AI tab. Built from DOCS_BASE_URL via docUrl() so it tracks the docs
-// origin in one place and can't drift; points at the published docs, not a branch.
-const AI_DOCS_URL = docUrl("reference/ai-assisted-scenes");
+// Deep links to the two AI-authoring guides, one per docs sub-page: the MCP
+// server (recommended) and the download/paste flow. Built from DOCS_BASE_URL via
+// docUrl() so they track the docs origin in one place and can't drift.
+const MCP_DOCS_URL = docUrl("reference/ai/mcp-server");
+const PASTE_DOCS_URL = docUrl("reference/ai/download-and-paste");
 
 // Where to send "the AI got it wrong, here's a better answer" feedback — used to
 // improve the cookbook the AI learns from.
@@ -59,6 +60,14 @@ export class AmbienceImportConfig extends LitElement {
       background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
     }
     .help-link { color: var(--primary-color, #03a9f4); }
+    .mcp {
+      margin-bottom: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
+      background: var(--secondary-background-color, #f5f5f5);
+      border: 1px solid var(--primary-color, #03a9f4);
+    }
+    .mcp .mcp-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .mcp .mcp-body { color: var(--secondary-text-color, #666); }
+    .paste-heading { font-weight: 600; margin: 0 0 0.75rem; }
     .feedback {
       margin-top: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
       background: var(--secondary-background-color, #f5f5f5);
@@ -208,12 +217,22 @@ export class AmbienceImportConfig extends LitElement {
         <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
         <span class="beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
       </div>
+      <div class="mcp">
+        <div class="mcp-title">${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</div>
+        <div class="mcp-body">
+          ${localize(this.hass, "ui.import_mcp_desc", "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.")}
+          <a class="help-link" href=${MCP_DOCS_URL} target="_blank" rel="noopener noreferrer"
+            >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
+          >
+        </div>
+      </div>
+      <div class="paste-heading">${localize(this.hass, "ui.import_paste_title", "Alternatively, download and paste into any AI")}</div>
       <ol class="steps">
         <li>
-          <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin")}</div>
+          <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin once")}</div>
           <div class="step-body">
-            ${localize(this.hass, "ui.import_step1_desc", "Add the Ambience AI pack to your AI — a Claude Code plugin, a claude.ai skill, or a guide to paste into any AI.")}
-            <a class="help-link" href=${AI_DOCS_URL} target="_blank" rel="noopener noreferrer"
+            ${localize(this.hass, "ui.import_step1_desc", "Add the Ambience AI pack to your AI to teach it about Ambience.")}
+            <a class="help-link" href=${PASTE_DOCS_URL} target="_blank" rel="noopener noreferrer"
               >${localize(this.hass, "ui.import_help_link", "Install & usage guide")}</a
             >
           </div>
@@ -221,7 +240,7 @@ export class AmbienceImportConfig extends LitElement {
         <li>
           <div class="step-title">${localize(this.hass, "ui.import_step2", "Download your AI bundle")}</div>
           <div class="step-body">
-            ${localize(this.hass, "ui.import_step2_desc", "A snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Give it to the AI with your request.")}
+            ${localize(this.hass, "ui.import_step2_desc", "The bundle contains a snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Upload it to the AI with your request.")}
           </div>
           <button class="download" @click=${() => this._download()}>
             ${localize(this.hass, "ui.import_download_bundle", "Download AI bundle")}
@@ -230,7 +249,7 @@ export class AmbienceImportConfig extends LitElement {
         <li>
           <div class="step-title">${localize(this.hass, "ui.import_step3", "Upload the result")}</div>
           <div class="step-body">
-            ${localize(this.hass, "ui.import_step3_desc", "Upload the YAML or JSON file the AI gives you. It's previewed before anything is saved.")}
+            ${localize(this.hass, "ui.import_step3_desc", "Upload the YAML or JSON file the AI gives you. It will show you a preview before any changes are made, and you can always revert them with the Undo button.")}
           </div>
           <input
             class="file"

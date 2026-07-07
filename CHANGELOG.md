@@ -33,6 +33,20 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     Ambience does live — a scene that wins again shows as *unchanged* (its
     actions are **not** re-applied) rather than re-acting, exactly as the real
     debounce would. A **Clear** button resets the history.
+- **A local MCP server for authoring and diagnosing scenes live.** `mcp-server/`
+    lets Claude author and diagnose Ambience scenes live, directly against a
+    running Home Assistant, without the download/upload AI-bundle dance. Install
+    it with `uvx ambience-mcp` and add it to your Claude client; it does nothing
+    until you do. If your Ambience is older than the server supports it refuses
+    writes with the version to update to, rather than failing cryptically. See
+    `mcp-server/README.md`.
+- **The MCP server serves the authoring guide live from your install.** The
+    schema + cookbook guide is fetched from your running Ambience over the
+    websocket, so it always matches your version with nothing separate to
+    install or keep in sync; the transfer is skipped when your version hasn't
+    changed. If the server is older than your Ambience it says so, and scenes
+    are presented by relative rank (1…N per category) rather than the internal
+    priority number.
 
 ### Fixed
 

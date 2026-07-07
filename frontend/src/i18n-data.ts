@@ -96,16 +96,20 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_import: "AI",
       import_title: "Author & fix scenes with AI",
       import_beta: "Beta",
+      import_mcp_title: "Author live with the MCP server",
+      import_mcp_desc:
+        "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.",
+      import_mcp_link: "Set up the MCP server",
+      import_paste_title: "Alternatively, download and paste into any AI",
       import_help_link: "Install & usage guide",
-      import_step1: "Install the skill or plugin",
-      import_step1_desc:
-        "Add the Ambience AI pack to your AI — a Claude Code plugin, a claude.ai skill, or a guide to paste into any AI.",
+      import_step1: "Install the skill or plugin once",
+      import_step1_desc: "Add the Ambience AI pack to your AI to teach it about Ambience.",
       import_step2: "Download your AI bundle",
       import_step2_desc:
-        "A snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Give it to the AI with your request.",
+        "The bundle contains a snapshot of your areas, entities and exposed actions (location data redacted) for the AI to author against. Upload it to the AI with your request.",
       import_step3: "Upload the result",
       import_step3_desc:
-        "Upload the YAML or JSON file the AI gives you. It's previewed before anything is saved.",
+        "Upload the YAML or JSON file the AI gives you. It will show you a preview before any changes are made, and you can always revert them with the Undo button.",
       import_download_bundle: "Download AI bundle",
       import_target: "Target",
       import_new_category: "New category to create",
@@ -677,16 +681,21 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_tab_import: "IA",
       import_title: "Crea y arregla escenas con IA",
       import_beta: "Beta",
+      import_mcp_title: "Crea escenas en vivo con el servidor MCP",
+      import_mcp_desc:
+        "Instala el servidor MCP para la forma más rápida de crear y editar escenas, con Claude Code o Claude Desktop.",
+      import_mcp_link: "Configura el servidor MCP",
+      import_paste_title: "Como alternativa, descarga y pega en cualquier IA",
       import_help_link: "Guía de instalación y uso",
-      import_step1: "Instala la skill o el plugin",
+      import_step1: "Instala la skill o el plugin una vez",
       import_step1_desc:
-        "Añade el paquete de IA de Ambience a tu IA — un plugin de Claude Code, una skill de claude.ai o una guía para pegar en cualquier IA.",
+        "Añade el paquete de IA de Ambience a tu IA para enseñarle sobre Ambience.",
       import_step2: "Descarga tu paquete de IA",
       import_step2_desc:
-        "Una instantánea de tus áreas, entidades y acciones expuestas (datos de ubicación redactados) para que la IA cree sobre ella. Dásela a la IA con tu petición.",
+        "El paquete contiene una instantánea de tus áreas, entidades y acciones expuestas (datos de ubicación redactados) para que la IA cree sobre ellos. Súbelo a la IA junto con tu petición.",
       import_step3: "Sube el resultado",
       import_step3_desc:
-        "Sube el archivo YAML o JSON que te dé la IA. Se previsualiza antes de guardar nada.",
+        "Sube el archivo YAML o JSON que te dé la IA. Te mostrará una vista previa antes de hacer cambios, y siempre puedes revertirlos con el botón Deshacer.",
       import_download_bundle: "Descargar paquete de IA",
       import_target: "Destino",
       import_new_category: "Nueva categoría a crear",

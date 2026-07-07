@@ -38,6 +38,9 @@ site/
 # Local test/dev venvs (e.g. `uv venv --python 3.14 .venv-test`)
 .venv/
 .venv-test/
+# `make mcp-tests` runs the mcp-server suite via `uv run`, which resolves deps
+# fresh (catching drift). We don't pin its lockfile.
+mcp-server/uv.lock
 
 # Editor
 .vscode/

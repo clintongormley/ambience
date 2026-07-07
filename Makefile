@@ -53,7 +53,7 @@ ai-docs:        ## regenerate the code-derived AI knowledge-pack sections
 	python -m bin.gen_ai_docs
 
 ai-docs-check:  ## regenerate AI docs and fail if the committed output is stale
-	python -m bin.gen_ai_docs && git diff --exit-code docs/developers/ai-authoring/ ai/skill/
+	python -m bin.gen_ai_docs && git diff --exit-code docs/developers/ai-authoring/ ai/skill/ custom_components/ambience/ai_guide/
 
 install-hooks:  ## point git at the committed hooks
 	sh bin/install-hooks.sh

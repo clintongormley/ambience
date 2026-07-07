@@ -1419,6 +1419,27 @@ async def _ws_ai_bundle(
     connection.send_result(msg["id"], await build_ai_bundle(hass))
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/ai_guide",
+        vol.Optional("have_version"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_ai_guide(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The shipped authoring guide (schema + cookbook), served live and stamped
+    with the running version. Pass `have_version` to get {unchanged: true} when
+    it matches, so the client re-reads the text only when the install changes.
+    Public (not admin) — static prose with no install secrets."""
+    from .guide import build_ai_guide
+
+    connection.send_result(msg["id"], await build_ai_guide(hass, msg.get("have_version")))
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -1608,6 +1629,7 @@ _WS_HANDLERS = (
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_ai_bundle,
+    _ws_ai_guide,
     _ws_simulate_inputs,
     _ws_simulate,
     _ws_simulate_sun_anchors,

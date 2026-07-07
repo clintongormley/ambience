@@ -29,6 +29,9 @@ from custom_components.ambience.const import AI_BUNDLE_VERSION
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AI_DOCS_DIR = REPO_ROOT / "docs" / "developers" / "ai-authoring"
 SKILL_REFS_DIR = REPO_ROOT / "ai" / "skill" / "ambience-author" / "reference"
+# The assembled guide is also shipped inside the integration so the running
+# install can serve its own version-matched copy over the websocket (guide.py).
+INTEGRATION_GUIDE_DIR = REPO_ROOT / "custom_components" / "ambience" / "ai_guide"
 SERVICES_YAML = REPO_ROOT / "custom_components" / "ambience" / "services.yaml"
 MANIFEST = REPO_ROOT / "custom_components" / "ambience" / "manifest.json"
 
@@ -273,6 +276,12 @@ def main() -> None:
             parts.append((title, body))
     guide = assemble_portable_doc(parts)
     (AI_DOCS_DIR / "ambience-ai-guide.md").write_text(guide, encoding="utf-8")
+
+    # Ship the assembled guide inside the integration too, so the running install
+    # serves its own version-matched copy over the websocket (see guide.py). Only
+    # the single assembled guide is needed there — not the individual parts.
+    INTEGRATION_GUIDE_DIR.mkdir(parents=True, exist_ok=True)
+    (INTEGRATION_GUIDE_DIR / "ambience-ai-guide.md").write_text(guide, encoding="utf-8")
 
     # Sync the full pack into the skill so the plugin ships a current, self-
     # contained copy (drift-gated together with the docs).

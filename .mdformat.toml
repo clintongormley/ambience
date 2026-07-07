@@ -14,6 +14,9 @@ wrap = 80
 exclude = [
     "ai/**",
     "docs/developers/ai-authoring/**",
+    # The guide copy shipped inside the integration is generator output too
+    # (bin/gen_ai_docs.py), guarded by `make ai-docs-check` — don't reformat it.
+    "custom_components/ambience/ai_guide/**",
     "node_modules/**",
     # GitHub issue/PR templates carry front matter and invisible <!-- hint -->
     # comments; reflowing them wraps the hints onto indented lines for no gain.

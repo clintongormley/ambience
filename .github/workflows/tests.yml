@@ -78,12 +78,13 @@ jobs:
       - name: Verify committed AI docs match generator output
         # The knowledge pack's code-derived sections must track the shipped
         # conditions/services; a stale commit would ship wrong authoring docs.
+        # Uses the same Make target as the pre-push hook so the checked paths
+        # (incl. the integration's shipped guide) can't drift between them.
         run: |
-          python -m bin.gen_ai_docs
-          if ! git diff --exit-code docs/developers/ai-authoring/ ai/skill/; then
+          make ai-docs-check || {
             echo "::error::AI knowledge pack is stale. Run 'make ai-docs' and commit the result."
             exit 1
-          fi
+          }
 
   lint:
     runs-on: ubuntu-latest

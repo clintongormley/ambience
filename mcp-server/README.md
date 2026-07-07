@@ -7,8 +7,8 @@ from your install so it always matches your version. It is a thin client over
 Ambience's admin websocket API and writes nothing without a preview + your
 confirmation.
 
-You do **not** need to check out this repository to use it — `uvx` runs it
-straight from GitHub (see below).
+You do **not** need to check out this repository, install `git`, or
+`pip install` anything — `uvx` runs the published package for you (see below).
 
 ## Prerequisites
 
@@ -18,11 +18,11 @@ straight from GitHub (see below).
     are admin-only.
 - [`uv`](https://docs.astral.sh/uv/) on PATH (one-line install; provides `uvx`).
 
-## Install (no checkout needed)
+## Install
 
-`uvx` fetches, builds, and runs the server from GitHub on demand — nothing to
-clone or `pip install`. Point your MCP client at it and pass your HA URL + token
-as env vars.
+`uvx` downloads and runs the published `ambience-mcp` package on demand —
+nothing to clone or `pip install`. Point your MCP client at it and pass your HA
+URL + token as env vars.
 
 **Claude Desktop** — add to `claude_desktop_config.json`, then restart:
 
@@ -31,11 +31,7 @@ as env vars.
   "mcpServers": {
     "ambience": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server",
-        "ambience-mcp"
-      ],
+      "args": ["ambience-mcp"],
       "env": {
         "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
         "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
@@ -51,10 +47,8 @@ as env vars.
 claude mcp add ambience \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
   --env AMBIENCE_HA_TOKEN=<your admin long-lived token> \
-  -- uvx --from "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server" ambience-mcp
+  -- uvx ambience-mcp
 ```
-
-> A PyPI release is planned so this shortens to `uvx ambience-mcp` (no git URL).
 
 ## From a checkout (contributors)
 
@@ -91,25 +85,34 @@ you rarely pin anything. When you do:
       "mcpServers": {
         "ambience-home": {
           "command": "uvx",
-          "args": ["--from", "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server", "ambience-mcp"],
+          "args": ["ambience-mcp"],
           "env": { "AMBIENCE_HA_URL": "http://home.local:8123", "AMBIENCE_HA_TOKEN": "<token A>" }
         },
         "ambience-test": {
           "command": "uvx",
-          "args": ["--from", "git+https://github.com/clintongormley/ambience.git#subdirectory=mcp-server", "ambience-mcp"],
+          "args": ["ambience-mcp"],
           "env": { "AMBIENCE_HA_URL": "http://test.local:8123", "AMBIENCE_HA_TOKEN": "<token B>" }
         }
       }
     }
     ```
 
-- **A specific released version:** pin a tag in the `--from` URL —
-    `git+https://github.com/clintongormley/ambience.git@v1.2.0#subdirectory=mcp-server`.
+- **A specific released version:** pin it on the package —
+    `uvx ambience-mcp@0.2.0` (args: `["ambience-mcp@0.2.0"]`).
 
-- **An unreleased / dev version:** point at the branch, or a local checkout, so
-    the server matches the backend you're building —
-    `git+…@my-branch#subdirectory=mcp-server`, or `--from ./mcp-server` from a
-    worktree (the committed `.mcp.json` already does this).
+- **An unreleased / dev version:** run from GitHub or a local checkout so the
+    server matches the backend you're building. Use these `args`:
+
+    ```json
+    ["--from", "git+https://github.com/clintongormley/ambience.git@my-branch#subdirectory=mcp-server", "ambience-mcp"]
+    ```
+
+    or `uvx --from ./mcp-server ambience-mcp` from a worktree (the committed
+    `.mcp.json` already does this).
+
+If your Ambience is **older** than the server supports, it says so and refuses
+writes (with the version to update to) rather than failing cryptically — so a
+newer server against an older install degrades cleanly instead of breaking.
 
 ## Turning it off
 
@@ -151,7 +154,6 @@ ruff check . && ruff format --check .
 
 ## Not in v1 (follow-ups)
 
-- **PyPI release** so the install shortens to `uvx ambience-mcp` (no git URL).
 - **`ambience_simulate`** (the what-if simulator over `ambience/simulate`) is
     not included yet — the author → dry-run → preview → apply loop is complete
     without it. Deferred as a read-only diagnostic that needs its own payload

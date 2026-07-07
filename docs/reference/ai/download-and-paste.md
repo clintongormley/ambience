@@ -54,3 +54,7 @@ Paste this single guide into your AI:
 
 Ambience removes your private data before it leaves Home Assistant. See
 [Privacy](../ai-assisted-scenes.md#privacy) for what is hidden.
+
+______________________________________________________________________
+
+Next: [Config health](../config-health.md).

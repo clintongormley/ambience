@@ -70,3 +70,7 @@ see the
 
 Ambience removes your private data before it reaches the AI. See
 [Privacy](../ai-assisted-scenes.md#privacy) for what is hidden.
+
+______________________________________________________________________
+
+Next: [Download and paste](download-and-paste.md).

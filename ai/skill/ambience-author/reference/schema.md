@@ -293,6 +293,12 @@ reassigned to `general`. The envelope's `category` block avoids this: declare th
 category so the import creates it and the scene keeps its group. Always either
 declare `category` in the envelope or reference an existing category id.
 
+With the **MCP server** there is no envelope: create a new category with
+`ambience_save_categories`, or declare it in `ambience_preview_write` /
+`ambience_apply_write`'s `new_categories` (`[{id, name, icon?, color?}]`), which
+creates it on apply. Preview blocks (no confirm token) until every category the
+scenes use either already exists or is declared.
+
 ---
 
 ## 7. The AI bundle (what the user gives you)

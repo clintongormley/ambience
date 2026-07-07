@@ -11,6 +11,7 @@ import json
 from typing import Any, Protocol
 
 _CONNECT_TIMEOUT = 10  # seconds — fail fast on an unreachable / firewalled HA host
+_COMMAND_TIMEOUT = 10  # seconds — fail fast + reconnect if HA never answers a command
 
 
 class HAError(RuntimeError):
@@ -80,19 +81,24 @@ class HAClient:
             cmd_id = self._next_id
             try:
                 await self._transport.send(json.dumps({"id": cmd_id, "type": type, **payload}))
-                while True:
-                    msg = json.loads(await self._transport.recv())
-                    if msg.get("id") != cmd_id or msg.get("type") != "result":
-                        continue
-                    if msg.get("success"):
-                        return msg.get("result") or {}
-                    error = msg.get("error") or {}
-                    raise HACommandError(error.get("code", "unknown"), error.get("message", ""))
+                # Bounded so a live-but-unresponsive HA can't wedge the lock (and
+                # thus every other tool call) forever — fail fast, then reconnect.
+                return await asyncio.wait_for(self._recv_result(cmd_id), _COMMAND_TIMEOUT)
             except HACommandError:
                 raise  # a normal command-level failure — the connection is fine
-            except Exception as exc:  # transport dropped / malformed frame
+            except Exception as exc:  # timeout / transport dropped / malformed frame
                 self._closed = True
-                raise HAConnectionError(f"websocket connection failed: {exc}") from exc
+                raise HAConnectionError(f"websocket command failed: {exc}") from exc
+
+    async def _recv_result(self, cmd_id: int) -> dict[str, Any]:
+        while True:
+            msg = json.loads(await self._transport.recv())
+            if msg.get("id") != cmd_id or msg.get("type") != "result":
+                continue
+            if msg.get("success"):
+                return msg.get("result") or {}
+            error = msg.get("error") or {}
+            raise HACommandError(error.get("code", "unknown"), error.get("message", ""))
 
     async def close(self) -> None:
         self._closed = True

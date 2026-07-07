@@ -127,3 +127,23 @@ async def test_authenticate_wraps_malformed_frame_as_connection_error():
     with pytest.raises(HAConnectionError):
         await client.authenticate("secret")
     assert client.closed is True
+
+
+async def test_command_times_out_and_marks_the_client_closed(monkeypatch):
+    import asyncio
+
+    from ambience_mcp import ha_client
+
+    class HangingTransport:
+        async def send(self, data: str) -> None: ...
+        async def recv(self) -> str:
+            await asyncio.Event().wait()  # never returns — a live but stalled HA
+            return ""  # unreachable
+
+        async def close(self) -> None: ...
+
+    monkeypatch.setattr(ha_client, "_COMMAND_TIMEOUT", 0.02)
+    client = HAClient(HangingTransport())
+    with pytest.raises(HAConnectionError):
+        await client.command("ambience/dry_run", house=True)
+    assert client.closed is True

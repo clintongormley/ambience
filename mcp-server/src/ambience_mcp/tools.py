@@ -43,13 +43,52 @@ def _scope_key(kind: str, sid: str | None) -> dict[str, Any]:
     return {"kind": kind, "id": sid}
 
 
+def _with_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Annotate each scene with a 1-indexed `rank` within its category (list order
+    is evaluation order), so a summary can show relative rank instead of the raw
+    internal `priority` sort key. Read-only — stripped again before any write."""
+    counters: dict[Any, int] = {}
+    ranked: list[dict[str, Any]] = []
+    for scene in scenes:
+        category = scene.get("category")
+        counters[category] = counters.get(category, 0) + 1
+        ranked.append({**scene, "rank": counters[category]})
+    return ranked
+
+
+def _strip_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop the read-only `rank` annotation so it never reaches the store."""
+    return [{k: v for k, v in scene.items() if k != "rank"} for scene in scenes]
+
+
+def _iter_scope_configs(config: dict[str, Any]):
+    """Yield each scope config ({"scenes": [...]}) in a bundle's config: every
+    area, every floor, and the house."""
+    for group_key in ("areas", "floors"):
+        group = config.get(group_key)
+        if isinstance(group, dict):
+            yield from (cfg for cfg in group.values() if isinstance(cfg, dict))
+    house = config.get("house")
+    if isinstance(house, dict):
+        yield house
+
+
 async def get_context(client: Any) -> dict[str, Any]:
-    return await client.command("ambience/ai_bundle")
+    bundle = await client.command("ambience/ai_bundle")
+    config = bundle.get("config")
+    if isinstance(config, dict):
+        for scope_cfg in _iter_scope_configs(config):
+            if isinstance(scope_cfg.get("scenes"), list):
+                scope_cfg["scenes"] = _with_ranks(scope_cfg["scenes"])
+    return bundle
 
 
 async def get_scope(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
-    return await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))
+    result = await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))
+    if isinstance(result.get("scenes"), list):
+        result["scenes"] = _with_ranks(result["scenes"])
+    return result
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
@@ -67,6 +106,7 @@ async def preview_write(
     client: Any, scope: dict[str, Any], scenes: list[dict[str, Any]], ledger: PreviewLedger
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
+    scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
     current = (await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
         "scenes", []
     )
@@ -93,6 +133,7 @@ async def apply_write(
     ledger: PreviewLedger,
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
+    scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
     token = fingerprint(_scope_key(kind, sid), scenes)
     if confirm_token != token or not ledger.consume(token):
         raise ToolError(

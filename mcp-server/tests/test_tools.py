@@ -9,7 +9,7 @@ from ambience_mcp.ledger import PreviewLedger, fingerprint
 async def test_get_scope_area_uses_area_get():
     client = FakeClient({"ambience/area/get": {"scenes": [{"name": "X"}]}})
     result = await tools.get_scope(client, {"kind": "area", "id": "living_room"})
-    assert result == {"scenes": [{"name": "X"}]}
+    assert result == {"scenes": [{"name": "X", "rank": 1}]}
     assert client.calls == [{"type": "ambience/area/get", "area_id": "living_room"}]
 
 
@@ -143,3 +143,79 @@ async def test_dry_run_house_uses_house_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
     await tools.dry_run(client, {"kind": "house"})
     assert client.calls == [{"type": "ambience/dry_run", "house": True}]
+
+
+async def test_get_scope_ranks_scenes_per_category_in_order():
+    client = FakeClient(
+        {
+            "ambience/area/get": {
+                "scenes": [
+                    {"name": "A", "category": "lighting"},
+                    {"name": "B", "category": "lighting"},
+                    {"name": "C", "category": "blinds"},
+                    {"name": "D", "category": "lighting"},
+                ]
+            }
+        }
+    )
+    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    # rank counts within each category, in list (evaluation) order
+    assert [(s["name"], s["rank"]) for s in result["scenes"]] == [
+        ("A", 1),
+        ("B", 2),
+        ("C", 1),
+        ("D", 3),
+    ]
+
+
+async def test_get_scope_keeps_priority_and_pinned_alongside_rank():
+    client = FakeClient(
+        {
+            "ambience/house/get": {
+                "scenes": [{"name": "X", "category": "c", "priority": 7168, "pinned": True}]
+            }
+        }
+    )
+    scene = (await tools.get_scope(client, {"kind": "house"}))["scenes"][0]
+    assert scene["rank"] == 1
+    assert scene["priority"] == 7168
+    assert scene["pinned"] is True
+
+
+async def test_get_context_ranks_scenes_in_every_bundle_scope():
+    bundle = {
+        "catalog": {"areas": []},
+        "config": {
+            "areas": {
+                "lr": {"scenes": [{"name": "A", "category": "c"}, {"name": "B", "category": "c"}]}
+            },
+            "floors": {"g": {"scenes": [{"name": "F", "category": "c"}]}},
+            "house": {"scenes": [{"name": "H", "category": "c"}]},
+        },
+    }
+    client = FakeClient({"ambience/ai_bundle": bundle})
+    result = await tools.get_context(client)
+    assert [s["rank"] for s in result["config"]["areas"]["lr"]["scenes"]] == [1, 2]
+    assert result["config"]["floors"]["g"]["scenes"][0]["rank"] == 1
+    assert result["config"]["house"]["scenes"][0]["rank"] == 1
+
+
+async def test_preview_write_strips_rank_before_backend():
+    scenes = [{"name": "A", "category": "c", "rank": 1}]
+    client = FakeClient({"ambience/area/get": {"scenes": []}, "ambience/validate": {"ok": True}})
+    await tools.preview_write(client, {"kind": "area", "id": "lr"}, scenes, PreviewLedger())
+    validate_call = next(c for c in client.calls if c["type"] == "ambience/validate")
+    assert validate_call["config"] == {"scenes": [{"name": "A", "category": "c"}]}
+
+
+async def test_apply_write_strips_rank_before_save():
+    scope = {"kind": "area", "id": "lr"}
+    stripped = [{"name": "A", "category": "c"}]
+    scenes = [{"name": "A", "category": "c", "rank": 5}]
+    ledger = PreviewLedger()
+    token = fingerprint(scope, stripped)  # the gate fingerprints the rank-free payload
+    ledger.record(token)
+    client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": stripped}}})
+    await tools.apply_write(client, scope, scenes, token, ledger)
+    save_call = next(c for c in client.calls if c["type"] == "ambience/area/save")
+    assert save_call["config"] == {"scenes": stripped}

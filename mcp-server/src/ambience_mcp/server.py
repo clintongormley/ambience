@@ -38,14 +38,18 @@ async def _client_() -> HAClient:
 async def ambience_get_context() -> dict[str, Any]:
     """Live Ambience authoring context: areas/floors/entities+state, exposed
     actions and their field schemas, category/period/lux definitions, and recent
-    traces. Fetch this before authoring so every id and vocabulary word is real."""
+    traces. Fetch this before authoring so every id and vocabulary word is real.
+    Scenes carry a per-category `rank` (1..N) — show that, not the raw
+    `priority`, when presenting scenes to a user."""
     return await tools.get_context(await _client_())
 
 
 @mcp.tool()
 async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
     """Read the current scenes for one scope.
-    scope = {"kind": "area"|"floor"|"house", "id": "<area_or_floor_id>"} (omit id for house)."""
+    scope = {"kind": "area"|"floor"|"house", "id": "<area_or_floor_id>"} (omit id for house).
+    Each scene carries a per-category `rank` (1..N, evaluation order); present that
+    plus the 📌 pin marker, never the raw internal `priority` number."""
     return await tools.get_scope(await _client_(), scope)
 
 

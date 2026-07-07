@@ -42,6 +42,14 @@ def test_ignores_transient_annotation_fields_when_comparing():
     assert diff_scopes(current, proposed)["updated"] == []
 
 
+def test_ignores_backend_priority_and_pinned_when_comparing():
+    # The backend annotates stored scenes with a computed `priority` + `pinned` the
+    # AI never authors, so a re-submitted-unchanged scene must not show as updated.
+    current = [{"name": "Evening", "category": "lighting", "priority": 7168, "pinned": True}]
+    proposed = [{"name": "Evening", "category": "lighting"}]
+    assert diff_scopes(current, proposed)["updated"] == []
+
+
 def test_same_name_different_category_are_distinct():
     current = [{"name": "On", "category": "a"}]
     proposed = [{"name": "On", "category": "b"}]

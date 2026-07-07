@@ -23,14 +23,18 @@ work below this. Set to the release that first ships MCP support."""
 
 def _parse_version(value: Any) -> tuple[int, ...] | None:
     """Parse "MAJOR.MINOR.PATCH" (ignoring any -prerelease/+build suffix) into a
-    comparable tuple; None if it isn't a recognisable version string."""
+    comparable tuple, zero-padded to at least 3 components; None if it isn't a
+    recognisable version string. Padding stops a short "1.1" from sorting below
+    "1.1.0" (Python compares the shorter tuple as smaller)."""
     if not isinstance(value, str):
         return None
     head = value.strip().split("-", 1)[0].split("+", 1)[0]
     parts = head.split(".")
-    if not head or not all(p.isdigit() for p in parts):
+    # isdecimal, not isdigit: reject unicode digits like "²" that int() would raise on.
+    if not all(p.isdecimal() for p in parts):  # an empty head → parts == [""] → False
         return None
-    return tuple(int(p) for p in parts)
+    nums = [int(p) for p in parts]
+    return tuple(nums + [0] * (3 - len(nums))) if len(nums) < 3 else tuple(nums)
 
 
 def _version_str(version: tuple[int, ...]) -> str:
@@ -175,7 +179,9 @@ async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
 
 
 async def validate(client: Any, scenes: list[dict[str, Any]]) -> dict[str, Any]:
-    return await client.command("ambience/validate", config={"scenes": scenes})
+    # Strip the read-only `rank` annotation, like the write paths, so a caller that
+    # validates scenes it just read never leaks it to the backend validator.
+    return await client.command("ambience/validate", config={"scenes": _strip_ranks(scenes)})
 
 
 async def preview_write(

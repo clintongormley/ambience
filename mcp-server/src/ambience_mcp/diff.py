@@ -9,6 +9,11 @@ from __future__ import annotations
 from typing import Any
 
 _TRANSIENT_FIELDS = {"shadowed_by", "missing_entities", "overlap_entities", "config_issues"}
+# The backend annotates stored scenes with a computed sort key (`priority`) and a
+# derived `pinned` flag that the AI never authors (it works by rank/order). Ignore
+# them when summarising changes, or every re-submitted-unchanged scene would show
+# as "updated"; the fingerprint and the actual write still use the full scene list.
+_IGNORED_FIELDS = _TRANSIENT_FIELDS | {"priority", "pinned"}
 
 
 def _key(scene: dict[str, Any], index: int) -> tuple[Any, ...]:
@@ -20,7 +25,7 @@ def _key(scene: dict[str, Any], index: int) -> tuple[Any, ...]:
 
 
 def _comparable(scene: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in scene.items() if k not in _TRANSIENT_FIELDS}
+    return {k: v for k, v in scene.items() if k not in _IGNORED_FIELDS}
 
 
 def diff_scopes(current: list[dict[str, Any]], proposed: list[dict[str, Any]]) -> dict[str, list]:

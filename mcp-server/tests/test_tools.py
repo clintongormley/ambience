@@ -43,6 +43,14 @@ async def test_validate_wraps_scenes_in_config():
     ]
 
 
+async def test_validate_strips_rank():
+    # `rank` is a read-only annotation; validating read-back scenes must not leak it.
+    client = FakeClient({"ambience/validate": {"ok": True}})
+    await tools.validate(client, [{"name": "X", "category": "c", "rank": 1}])
+    call = next(c for c in client.calls if c["type"] == "ambience/validate")
+    assert call["config"] == {"scenes": [{"name": "X", "category": "c"}]}
+
+
 async def test_preview_write_returns_diff_valid_and_token():
     scenes = [{"name": "Movie", "category": "lighting"}]
     client = FakeClient(
@@ -275,6 +283,18 @@ def test_parse_version_returns_none_for_unrecognisable():
     assert tools._parse_version(None) is None
     assert tools._parse_version("") is None
     assert tools._parse_version("garbage") is None
+
+
+def test_parse_version_pads_short_versions_so_they_dont_sort_low():
+    # Bare tuple compare would make (1, 1) < (1, 1, 0); padding keeps 1.1 == 1.1.0.
+    assert tools._parse_version("1.1") == (1, 1, 0)
+    assert tools._parse_version("2") == (2, 0, 0)
+    assert tools._parse_version("1.1") >= tools.MIN_AMBIENCE_VERSION
+
+
+def test_parse_version_rejects_unicode_digits():
+    # "²".isdigit() is True but int("²") raises; isdecimal() must reject it → None.
+    assert tools._parse_version("1.².0") is None
 
 
 def test_min_ambience_version_is_the_release_with_minimise_pins():

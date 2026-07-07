@@ -1,4 +1,4 @@
-"""FastMCP glue: one connection, one preview ledger, nine thin tool wrappers.
+"""FastMCP glue: one connection, one preview ledger, ten thin tool wrappers.
 
 Each wrapper delegates to ambience_mcp.tools; the docstring + type hints become
 the tool's MCP schema. Keep descriptions short — the client's tool-search reads
@@ -7,6 +7,7 @@ them, and a lean surface keeps the per-turn context footprint small."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -29,6 +30,12 @@ async def _client_() -> HAClient:
     if _client is None or _client.closed:
         async with _client_lock:
             if _client is None or _client.closed:
+                if _client is not None:
+                    # Release the dead client's socket + keepalive/reader tasks; a
+                    # malformed frame can mark it closed while the socket is still
+                    # open, so they'd otherwise leak on every reconnect. Best-effort.
+                    with contextlib.suppress(Exception):
+                        await _client.close()
                 cfg = load_config()
                 _client = await connect(cfg.ws_url, cfg.token)
     return _client

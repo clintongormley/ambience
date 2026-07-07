@@ -20,6 +20,15 @@ def test_fingerprint_changes_with_scope():
     assert a != b
 
 
+def test_fingerprint_binds_new_categories():
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "X", "category": "c"}]
+    base = fingerprint(scope, scenes)
+    assert fingerprint(scope, scenes, []) == base  # empty → unchanged (back-compat)
+    assert fingerprint(scope, scenes, None) == base
+    assert fingerprint(scope, scenes, [{"id": "c", "name": "C"}]) != base
+
+
 def test_record_then_consume_true_once():
     ledger = PreviewLedger()
     ledger.record("abc")

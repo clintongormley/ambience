@@ -184,11 +184,27 @@ async def validate(client: Any, scenes: list[dict[str, Any]]) -> dict[str, Any]:
     return await client.command("ambience/validate", config={"scenes": _strip_ranks(scenes)})
 
 
+def _merge_categories(
+    existing: list[dict[str, Any]], new: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The full category list categories/save expects: existing order preserved
+    (updated in place where re-declared), then any genuinely-new ones appended."""
+    new_by_id = {c.get("id"): c for c in new}
+    merged = [new_by_id.pop(c.get("id"), c) for c in existing]
+    merged.extend(new_by_id.values())
+    return merged
+
+
 async def preview_write(
-    client: Any, scope: dict[str, Any], scenes: list[dict[str, Any]], ledger: PreviewLedger
+    client: Any,
+    scope: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    ledger: PreviewLedger,
+    new_categories: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
     scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
+    new_categories = new_categories or []
     current = (await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
         "scenes", []
     )
@@ -199,26 +215,29 @@ async def preview_write(
         valid, errors = False, exc.message
     # The backend silently reassigns a scene with an unknown category to "General"
     # on save, so an unflagged typo would commit something other than the previewed
-    # diff. Block until every category exists — the caller creates any it needs with
-    # save_categories first (mirroring the panel's import gate).
+    # diff. A category counts as known if it already exists OR is declared in
+    # new_categories (created on apply); anything else blocks the write.
     cat_list = await client.command("ambience/categories/list")
-    known = {c.get("id") for c in cat_list.get("categories", [])}
+    existing_ids = {c.get("id") for c in cat_list.get("categories", [])}
+    known = existing_ids | {c.get("id") for c in new_categories}
     unknown = sorted({s["category"] for s in scenes if isinstance(s.get("category"), str)} - known)
     if unknown and valid:
         valid = False
         joined = ", ".join(unknown)
-        errors = f"unknown categories (create them with save_categories first): {joined}"
+        errors = f"unknown categories (create them or declare in new_categories): {joined}"
+    creating = [c for c in new_categories if c.get("id") not in existing_ids]
     changes = diff_scopes(current, scenes)
-    token = fingerprint(_scope_key(kind, sid), scenes)
-    # Only a fully-valid payload (schema OK + every category exists) gets an
-    # applyable token; otherwise the fingerprint is returned for reference but
-    # recorded nowhere, so apply_write rejects it until the caller fixes the problem.
+    token = fingerprint(_scope_key(kind, sid), scenes, new_categories)
+    # Only a fully-valid payload (schema OK + every category known) gets an applyable
+    # token; otherwise the fingerprint is returned for reference but recorded nowhere,
+    # so apply_write rejects it until the caller fixes the problem.
     if valid:
         ledger.record(token)
     return {
         "valid": valid,
         "errors": errors,
         "unknown_categories": unknown,
+        "creating_categories": creating,
         "diff": changes,
         "confirm_token": token,
     }
@@ -230,8 +249,10 @@ async def apply_write(
     scenes: list[dict[str, Any]],
     confirm_token: str,
     ledger: PreviewLedger,
+    new_categories: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
+    new_categories = new_categories or []
     version = await _backend_version(client)
     if version is not None and version < MIN_AMBIENCE_VERSION:
         raise ToolError(
@@ -240,11 +261,19 @@ async def apply_write(
             "ambience-mcp that matches your version."
         )
     scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
-    token = fingerprint(_scope_key(kind, sid), scenes)
+    token = fingerprint(_scope_key(kind, sid), scenes, new_categories)
     if confirm_token != token or not ledger.consume(token):
         raise ToolError(
             "apply_write needs the confirm_token from a preview_write of this exact "
             "payload; run preview_write first (and again if you changed the scenes)"
+        )
+    # Create any declared categories first (merged into the existing list, which
+    # categories/save replaces wholesale) so a scene's new category exists instead
+    # of being coerced to General.
+    if new_categories:
+        existing = (await client.command("ambience/categories/list")).get("categories", [])
+        await client.command(
+            "ambience/categories/save", categories=_merge_categories(existing, new_categories)
         )
     return await client.command(
         f"ambience/{kind}/save",

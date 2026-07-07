@@ -10,12 +10,19 @@ import json
 from typing import Any
 
 
-def fingerprint(scope: dict[str, Any], scenes: list[dict[str, Any]]) -> str:
+def fingerprint(
+    scope: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    new_categories: list[dict[str, Any]] | None = None,
+) -> str:
     # This fingerprint is a workflow-ordering gate (it forces a preview before an
     # apply of the SAME payload within one in-memory session), not a security
     # control — there is no adversary and no secret. `usedforsecurity=False` says
     # exactly that; it does not change the digest, so existing fingerprints hold.
-    payload = json.dumps({"scope": scope, "scenes": scenes}, sort_keys=True, separators=(",", ":"))
+    obj: dict[str, Any] = {"scope": scope, "scenes": scenes}
+    if new_categories:  # omit when empty so tokens with no declared categories are unchanged
+        obj["new_categories"] = new_categories
+    payload = json.dumps(obj, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 

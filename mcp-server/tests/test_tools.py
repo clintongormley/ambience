@@ -90,6 +90,49 @@ async def test_preview_write_blocks_a_scene_with_an_unknown_category():
         await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
 
 
+async def test_preview_write_accepts_declared_new_categories():
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Film", "category": "movie_night"}]
+    new_cats = [{"id": "movie_night", "name": "Movie Night"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    ledger = PreviewLedger()
+    result = await tools.preview_write(client, scope, scenes, ledger, new_cats)
+    assert result["valid"] is True
+    assert result["unknown_categories"] == []
+    assert result["creating_categories"] == new_cats
+    assert result["confirm_token"] == fingerprint(scope, scenes, new_cats)
+    assert ledger.consume(result["confirm_token"]) is True  # a usable, applyable token
+
+
+async def test_apply_write_creates_declared_categories_before_saving():
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Film", "category": "movie_night"}]
+    new_cats = [{"id": "movie_night", "name": "Movie Night"}]
+    ledger = PreviewLedger()
+    token = fingerprint(scope, scenes, new_cats)
+    ledger.record(token)
+    client = FakeClient(
+        {
+            "ambience/frontend_version": {"version": "1.1.0"},
+            "ambience/categories/list": {"categories": [{"id": "lighting", "name": "Lighting"}]},
+            "ambience/categories/save": {"ok": True},
+            "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
+        }
+    )
+    await tools.apply_write(client, scope, scenes, token, ledger, new_cats)
+    types = [c["type"] for c in client.calls]
+    # categories are created (existing preserved + new appended) before the scope save
+    assert types.index("ambience/categories/save") < types.index("ambience/area/save")
+    save_cats = next(c for c in client.calls if c["type"] == "ambience/categories/save")
+    assert [c["id"] for c in save_cats["categories"]] == ["lighting", "movie_night"]
+
+
 async def test_preview_write_reports_validation_error():
     client = FakeClient(
         {

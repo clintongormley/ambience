@@ -85,26 +85,37 @@ async def ambience_validate(scenes: list[dict[str, Any]]) -> dict[str, Any]:
 
 @mcp.tool()
 async def ambience_preview_write(
-    scope: dict[str, Any], scenes: list[dict[str, Any]]
+    scope: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    new_categories: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Preview a full scope write WITHOUT committing. Returns validity, a
-    before/after diff (added/updated/removed), any unknown_categories, and a
-    confirm_token. If unknown_categories is non-empty the write is blocked (no
-    usable token) — create them with ambience_save_categories first. Show the diff
-    to the user; pass the token to ambience_apply_write to commit."""
-    return await tools.preview_write(await _client_(), scope, scenes, _ledger)
+    before/after diff (added/updated/removed), any unknown_categories, the
+    categories it will create (creating_categories), and a confirm_token. Declare
+    any new category a scene uses in new_categories ([{id, name, icon?, color?}]);
+    they are created on apply. If unknown_categories is non-empty the write is
+    blocked (no usable token) — declare them here or create them with
+    ambience_save_categories. Show the diff to the user; pass the token to
+    ambience_apply_write to commit."""
+    return await tools.preview_write(await _client_(), scope, scenes, _ledger, new_categories)
 
 
 @mcp.tool()
 async def ambience_apply_write(
-    scope: dict[str, Any], scenes: list[dict[str, Any]], confirm_token: str
+    scope: dict[str, Any],
+    scenes: list[dict[str, Any]],
+    confirm_token: str,
+    new_categories: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Commit a full scope write. Requires the confirm_token from a prior
-    ambience_preview_write of this EXACT scope+scenes. Reversible via Ambience
-    undo. Only call after the user has approved the previewed diff. Writes the
-    whole scope, so a change made to it since the preview is overwritten (undo
-    restores it)."""
-    return await tools.apply_write(await _client_(), scope, scenes, confirm_token, _ledger)
+    ambience_preview_write of this EXACT scope+scenes+new_categories. Any
+    new_categories are created before the scenes are saved. Reversible via Ambience
+    undo. Only call after the user has approved the previewed diff. Writes the whole
+    scope, so a change made to it since the preview is overwritten (undo restores
+    it)."""
+    return await tools.apply_write(
+        await _client_(), scope, scenes, confirm_token, _ledger, new_categories
+    )
 
 
 @mcp.tool()

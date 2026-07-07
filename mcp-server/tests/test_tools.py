@@ -77,20 +77,24 @@ async def test_apply_write_requires_matching_token_from_preview():
     scenes = [{"name": "Movie", "category": "lighting"}]
     scope = {"kind": "area", "id": "lr"}
     ledger = PreviewLedger()
-    client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": scenes}}})
+    client = FakeClient(
+        {
+            "ambience/frontend_version": {"version": "1.1.0"},
+            "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
+        }
+    )
     ledger.record(fingerprint(scope, scenes))
     token = fingerprint(scope, scenes)
     result = await tools.apply_write(client, scope, scenes, token, ledger)
     assert result == {"ok": True, "config": {"scenes": scenes}}
-    assert client.calls == [
-        {
-            "type": "ambience/area/save",
-            "area_id": "lr",
-            "config": {"scenes": scenes},
-            "change": {"action": "import", "scene_name": None},
-            "minimise_pins": True,
-        }
-    ]
+    save_call = next(c for c in client.calls if c["type"] == "ambience/area/save")
+    assert save_call == {
+        "type": "ambience/area/save",
+        "area_id": "lr",
+        "config": {"scenes": scenes},
+        "change": {"action": "import", "scene_name": None},
+        "minimise_pins": True,
+    }
 
 
 async def test_apply_write_rejects_without_preview():
@@ -258,6 +262,73 @@ async def test_get_guide_propagates_other_command_errors():
         await tools.get_guide(client)
 
 
+def test_parse_version_reads_major_minor_patch():
+    assert tools._parse_version("1.1.0") == (1, 1, 0)
+
+
+def test_parse_version_tolerates_prerelease_and_build_suffix():
+    assert tools._parse_version("1.2.0-rc.1") == (1, 2, 0)
+    assert tools._parse_version("2.0.0+build5") == (2, 0, 0)
+
+
+def test_parse_version_returns_none_for_unrecognisable():
+    assert tools._parse_version(None) is None
+    assert tools._parse_version("") is None
+    assert tools._parse_version("garbage") is None
+
+
+def test_min_ambience_version_is_the_release_with_minimise_pins():
+    # The floor below which apply_write is refused; comparable as a tuple.
+    assert tools.MIN_AMBIENCE_VERSION == (1, 1, 0)
+    assert tools._parse_version("1.0.0") < tools.MIN_AMBIENCE_VERSION
+    assert tools._parse_version("1.1.0") >= tools.MIN_AMBIENCE_VERSION
+
+
+def _apply_ready(version_result):
+    """A FakeClient primed to apply, with a scripted frontend_version probe."""
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    scope = {"kind": "area", "id": "lr"}
+    ledger = PreviewLedger()
+    token = fingerprint(scope, scenes)
+    ledger.record(token)
+    client = FakeClient(
+        {
+            "ambience/frontend_version": version_result,
+            "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
+        }
+    )
+    return client, scope, scenes, token, ledger
+
+
+async def test_apply_write_refused_against_old_backend():
+    client, scope, scenes, token, ledger = _apply_ready({"version": "1.0.0"})
+    with pytest.raises(tools.ToolError, match="1.1.0"):
+        await tools.apply_write(client, scope, scenes, token, ledger)
+    # Refused before ever saving.
+    assert not any(c["type"] == "ambience/area/save" for c in client.calls)
+
+
+async def test_apply_write_proceeds_against_current_backend():
+    client, scope, scenes, token, ledger = _apply_ready({"version": "1.1.0"})
+    result = await tools.apply_write(client, scope, scenes, token, ledger)
+    assert result == {"ok": True, "config": {"scenes": scenes}}
+
+
+async def test_apply_write_fails_open_when_version_blank():
+    # Indeterminate version (teardown race) -> proceed, don't block on a hiccup.
+    client, scope, scenes, token, ledger = _apply_ready({"version": ""})
+    result = await tools.apply_write(client, scope, scenes, token, ledger)
+    assert result["ok"] is True
+
+
+async def test_apply_write_fails_open_when_probe_unsupported():
+    client, scope, scenes, token, ledger = _apply_ready(
+        HACommandError("unknown_command", "Unknown command.")
+    )
+    result = await tools.apply_write(client, scope, scenes, token, ledger)
+    assert result["ok"] is True
+
+
 async def test_get_context_warns_when_backend_bundle_format_is_newer():
     newer = tools.SUPPORTED_AI_BUNDLE + 1
     client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": newer}})
@@ -274,5 +345,18 @@ async def test_get_context_no_warning_when_backend_bundle_format_supported():
 
 async def test_get_context_no_warning_when_bundle_format_absent():
     client = FakeClient({"ambience/ai_bundle": {"config": {}}})
+    result = await tools.get_context(client)
+    assert "warning" not in result
+
+
+async def test_get_context_warns_when_backend_older_than_min():
+    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.0.0"}})
+    result = await tools.get_context(client)
+    assert "warning" in result
+    assert "1.0.0" in result["warning"]
+
+
+async def test_get_context_no_warning_when_backend_at_min():
+    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.1.0"}})
     result = await tools.get_context(client)
     assert "warning" not in result

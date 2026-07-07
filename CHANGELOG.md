@@ -35,8 +35,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     debounce would. A **Clear** button resets the history.
 - **A local MCP server for authoring and diagnosing scenes live.** `mcp-server/`
     lets Claude author and diagnose Ambience scenes live, directly against a
-    running Home Assistant, without the download/upload AI-bundle dance. Off by
-    default and project-scoped; see `mcp-server/README.md`.
+    running Home Assistant, without the download/upload AI-bundle dance. Install
+    it with `uvx ambience-mcp` and add it to your Claude client; it does nothing
+    until you do. If your Ambience is older than the server supports it refuses
+    writes with the version to update to, rather than failing cryptically. See
+    `mcp-server/README.md`.
 - **The MCP server serves the authoring guide live from your install.** The
     schema + cookbook guide is fetched from your running Ambience over the
     websocket, so it always matches your version with nothing separate to

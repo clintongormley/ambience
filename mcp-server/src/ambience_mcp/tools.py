@@ -14,6 +14,39 @@ SUPPORTED_AI_BUNDLE = 1
 backend reporting a higher value is newer than this server, so get_context
 attaches a `warning` telling the user to update it."""
 
+MIN_AMBIENCE_VERSION = (1, 1, 0)
+"""Oldest Ambience the server can safely write to: the first release carrying the
+`minimise_pins` save flag apply_write sends. Older backends (e.g. 1.0.0) reject
+the unknown key, so writes are refused with a clear message instead. Reads still
+work below this. Set to the release that first ships MCP support."""
+
+
+def _parse_version(value: Any) -> tuple[int, ...] | None:
+    """Parse "MAJOR.MINOR.PATCH" (ignoring any -prerelease/+build suffix) into a
+    comparable tuple; None if it isn't a recognisable version string."""
+    if not isinstance(value, str):
+        return None
+    head = value.strip().split("-", 1)[0].split("+", 1)[0]
+    parts = head.split(".")
+    if not head or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts)
+
+
+def _version_str(version: tuple[int, ...]) -> str:
+    return ".".join(str(p) for p in version)
+
+
+async def _backend_version(client: Any) -> tuple[int, ...] | None:
+    """The running Ambience version via the cheap `frontend_version` probe; None
+    if the backend predates the command or reports no parseable version (in which
+    case callers fail open rather than block on a hiccup)."""
+    try:
+        info = await client.command("ambience/frontend_version")
+    except HACommandError:
+        return None
+    return _parse_version(info.get("version"))
+
 
 class ToolError(RuntimeError):
     """A tool was called with an invalid argument (surfaced to the model)."""
@@ -85,8 +118,15 @@ async def get_context(client: Any) -> dict[str, Any]:
         for scope_cfg in _iter_scope_configs(config):
             if isinstance(scope_cfg.get("scenes"), list):
                 scope_cfg["scenes"] = _with_ranks(scope_cfg["scenes"])
+    ambver = _parse_version(bundle.get("ambience_version"))
     backend_format = bundle.get("ambience_ai_bundle")
-    if isinstance(backend_format, int) and backend_format > SUPPORTED_AI_BUNDLE:
+    if ambver is not None and ambver < MIN_AMBIENCE_VERSION:
+        bundle["warning"] = (
+            f"Your Ambience ({bundle.get('ambience_version')}) is older than this MCP "
+            f"server needs (>= {_version_str(MIN_AMBIENCE_VERSION)}). Reads work, but "
+            "writes will be refused — update Ambience, or pin an older ambience-mcp."
+        )
+    elif isinstance(backend_format, int) and backend_format > SUPPORTED_AI_BUNDLE:
         bundle["warning"] = (
             f"This Ambience install speaks AI-bundle format {backend_format}, but this "
             f"MCP server understands up to {SUPPORTED_AI_BUNDLE}. The server is out of "
@@ -169,6 +209,13 @@ async def apply_write(
     ledger: PreviewLedger,
 ) -> dict[str, Any]:
     kind, sid = _parse_scope(scope)
+    version = await _backend_version(client)
+    if version is not None and version < MIN_AMBIENCE_VERSION:
+        raise ToolError(
+            f"This MCP server needs Ambience >= {_version_str(MIN_AMBIENCE_VERSION)}; your "
+            f"install reports {_version_str(version)}. Update Ambience (HACS), or pin an "
+            "ambience-mcp that matches your version."
+        )
     scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
     token = fingerprint(_scope_key(kind, sid), scenes)
     if confirm_token != token or not ledger.consume(token):

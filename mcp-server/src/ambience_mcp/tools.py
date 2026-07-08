@@ -85,7 +85,7 @@ def _scope_key(kind: str, sid: str | None) -> dict[str, Any]:
     return {"kind": kind, "id": sid}
 
 
-def _with_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _with_ranks(scenes: list[Any]) -> list[Any]:
     """Annotate each scene with a 1-indexed `rank` within its category (list order
     is evaluation order), so a summary can show relative rank instead of the raw
     internal `priority` sort key. Read-only — stripped again before any write.

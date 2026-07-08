@@ -88,7 +88,12 @@ def _scope_key(kind: str, sid: str | None) -> dict[str, Any]:
 def _with_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Annotate each scene with a 1-indexed `rank` within its category (list order
     is evaluation order), so a summary can show relative rank instead of the raw
-    internal `priority` sort key. Read-only — stripped again before any write."""
+    internal `priority` sort key. Read-only — stripped again before any write.
+
+    A non-dict scene means an unrecognised bundle shape: return the list untouched
+    rather than raise, so a too-new bundle fails open instead of crashing the read."""
+    if not all(isinstance(scene, dict) for scene in scenes):
+        return scenes
     counters: dict[Any, int] = {}
     ranked: list[dict[str, Any]] = []
     for scene in scenes:

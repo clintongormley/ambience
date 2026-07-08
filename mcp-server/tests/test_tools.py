@@ -278,6 +278,39 @@ async def test_get_context_ranks_scenes_in_every_bundle_scope():
     assert result["config"]["house"]["scenes"][0]["rank"] == 1
 
 
+async def test_get_scope_leaves_non_dict_scenes_untouched():
+    # Ranking is a convenience, not load-bearing. If a future bundle changed a
+    # scenes element's shape, ranking must skip and return the list untouched
+    # rather than raise — the server's only structural read of the bundle.
+    client = FakeClient({"ambience/area/get": {"scenes": ["sceneref-1", "sceneref-2"]}})
+    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    assert result["scenes"] == ["sceneref-1", "sceneref-2"]
+
+
+async def test_get_scope_skips_ranking_for_whole_list_when_any_scene_non_dict():
+    # All-or-nothing: a single non-dict element (an unrecognised shape) disables
+    # ranking for the entire list, so even the well-formed dict scenes come back
+    # untouched — no partial annotation.
+    scenes = [{"name": "A", "category": "c"}, "sceneref"]
+    client = FakeClient({"ambience/area/get": {"scenes": scenes}})
+    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    assert result["scenes"] == scenes
+    assert "rank" not in result["scenes"][0]
+
+
+async def test_get_context_still_warns_when_scene_shape_unrecognised():
+    # The fail-open promise must hold end to end: a too-new bundle whose scenes no
+    # longer match the expected shape must still reach the format warning, not crash
+    # in the rank annotation before the warning is ever attached.
+    newer = tools.SUPPORTED_AI_BUNDLE + 1
+    bundle = {"ambience_ai_bundle": newer, "config": {"house": {"scenes": ["sceneref-1"]}}}
+    client = FakeClient({"ambience/ai_bundle": bundle})
+    result = await tools.get_context(client)
+    assert "warning" in result
+    assert str(newer) in result["warning"]  # pins the format branch, not the version branch
+    assert result["config"]["house"]["scenes"] == ["sceneref-1"]
+
+
 async def test_preview_write_strips_rank_before_backend():
     scenes = [{"name": "A", "category": "c", "rank": 1}]
     client = FakeClient({"ambience/area/get": {"scenes": []}, "ambience/validate": {"ok": True}})

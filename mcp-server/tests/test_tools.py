@@ -69,6 +69,45 @@ async def test_preview_write_returns_diff_valid_and_token():
     assert result["confirm_token"] == fingerprint({"kind": "area", "id": "lr"}, scenes)
 
 
+async def test_preview_write_survives_unreadable_current_scenes():
+    # `current` is read from the same ambience/{kind}/get command the read-path guard
+    # covers. A too-new backend returning an unrecognised scene shape must not crash
+    # diff_scopes — fall back to an empty baseline (proposed shown as added) rather
+    # than raise. The write's validity is still decided by validate + categories.
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": ["sceneref-1", "sceneref-2"]},  # unreadable shape
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    assert result["valid"] is True
+    assert result["diff"]["added"] == scenes
+    assert result["diff"]["removed"] == []
+    assert result["diff"]["updated"] == []
+
+
+async def test_preview_write_survives_non_list_current_scenes():
+    # A reshaped backend could send `{"scenes": null}` (or any non-list) — `.get`'s
+    # default only fires on an absent key, so `current` becomes None. The guard must
+    # check the container type too, or it crashes on `for scene in None`.
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": None},  # non-list shape
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    assert result["valid"] is True
+    assert result["diff"]["added"] == scenes
+
+
 async def test_preview_write_blocks_a_scene_with_an_unknown_category():
     # The backend would silently move it to General, so preview must block until
     # the category exists (create it with save_categories first).
@@ -276,6 +315,39 @@ async def test_get_context_ranks_scenes_in_every_bundle_scope():
     assert [s["rank"] for s in result["config"]["areas"]["lr"]["scenes"]] == [1, 2]
     assert result["config"]["floors"]["g"]["scenes"][0]["rank"] == 1
     assert result["config"]["house"]["scenes"][0]["rank"] == 1
+
+
+async def test_get_scope_leaves_non_dict_scenes_untouched():
+    # Ranking is a convenience, not load-bearing. If a future bundle changed a
+    # scenes element's shape, ranking must skip and return the list untouched
+    # rather than raise — the server's only structural read of the bundle.
+    client = FakeClient({"ambience/area/get": {"scenes": ["sceneref-1", "sceneref-2"]}})
+    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    assert result["scenes"] == ["sceneref-1", "sceneref-2"]
+
+
+async def test_get_scope_skips_ranking_for_whole_list_when_any_scene_non_dict():
+    # All-or-nothing: a single non-dict element (an unrecognised shape) disables
+    # ranking for the entire list, so even the well-formed dict scenes come back
+    # untouched — no partial annotation.
+    scenes = [{"name": "A", "category": "c"}, "sceneref"]
+    client = FakeClient({"ambience/area/get": {"scenes": scenes}})
+    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    assert result["scenes"] == scenes
+    assert "rank" not in result["scenes"][0]
+
+
+async def test_get_context_still_warns_when_scene_shape_unrecognised():
+    # The fail-open promise must hold end to end: a too-new bundle whose scenes no
+    # longer match the expected shape must still reach the format warning, not crash
+    # in the rank annotation before the warning is ever attached.
+    newer = tools.SUPPORTED_AI_BUNDLE + 1
+    bundle = {"ambience_ai_bundle": newer, "config": {"house": {"scenes": ["sceneref-1"]}}}
+    client = FakeClient({"ambience/ai_bundle": bundle})
+    result = await tools.get_context(client)
+    assert "warning" in result
+    assert str(newer) in result["warning"]  # pins the format branch, not the version branch
+    assert result["config"]["house"]["scenes"] == ["sceneref-1"]
 
 
 async def test_preview_write_strips_rank_before_backend():

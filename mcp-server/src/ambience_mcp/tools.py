@@ -85,10 +85,15 @@ def _scope_key(kind: str, sid: str | None) -> dict[str, Any]:
     return {"kind": kind, "id": sid}
 
 
-def _with_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _with_ranks(scenes: list[Any]) -> list[Any]:
     """Annotate each scene with a 1-indexed `rank` within its category (list order
     is evaluation order), so a summary can show relative rank instead of the raw
-    internal `priority` sort key. Read-only — stripped again before any write."""
+    internal `priority` sort key. Read-only — stripped again before any write.
+
+    A non-dict scene means an unrecognised bundle shape: return the list untouched
+    rather than raise, so a too-new bundle fails open instead of crashing the read."""
+    if not all(isinstance(scene, dict) for scene in scenes):
+        return scenes
     counters: dict[Any, int] = {}
     ranked: list[dict[str, Any]] = []
     for scene in scenes:
@@ -208,6 +213,13 @@ async def preview_write(
     current = (await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
         "scenes", []
     )
+    # `current` is backend-sourced, so a too-new/unknown bundle could reshape it (same
+    # risk _with_ranks guards on the read path). We can't diff against scenes we can't
+    # read, so fall back to an empty baseline rather than let diff_scopes raise — the
+    # write's validity is decided by validate + categories below, not by the diff. Check
+    # the container too: `{"scenes": null}` makes `.get`'s default moot, leaving None.
+    if not isinstance(current, list) or not all(isinstance(scene, dict) for scene in current):
+        current = []
     try:
         await client.command("ambience/validate", config={"scenes": scenes})
         valid, errors = True, None

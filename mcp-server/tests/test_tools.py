@@ -90,6 +90,24 @@ async def test_preview_write_survives_unreadable_current_scenes():
     assert result["diff"]["updated"] == []
 
 
+async def test_preview_write_survives_non_list_current_scenes():
+    # A reshaped backend could send `{"scenes": null}` (or any non-list) — `.get`'s
+    # default only fires on an absent key, so `current` becomes None. The guard must
+    # check the container type too, or it crashes on `for scene in None`.
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": None},  # non-list shape
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    assert result["valid"] is True
+    assert result["diff"]["added"] == scenes
+
+
 async def test_preview_write_blocks_a_scene_with_an_unknown_category():
     # The backend would silently move it to General, so preview must block until
     # the category exists (create it with save_categories first).

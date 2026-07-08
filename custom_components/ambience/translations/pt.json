@@ -1,0 +1,194 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar o Ambience",
+        "description": "Isto irá criar a entrada de integração do Ambience."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Apenas é permitida uma única instância."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Ambience",
+        "data": {
+          "show_sidebar_panel": "Mostrar o Ambience na barra lateral",
+          "enable_ai_tab": "Ativar o separador de criação com IA (beta)"
+        },
+        "data_description": {
+          "show_sidebar_panel": "Quando desativado, o Ambience é removido da barra lateral. Pode continuar a adicionar o cartão do Ambience a qualquer painel.",
+          "enable_ai_tab": "Adiciona um separador de IA ao painel do Ambience para criar e corrigir cenas com um assistente de IA. Desativado por predefinição enquanto está em beta."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Ambience: uma cena refere uma entidade em falta ou desativada",
+      "description": "A entidade `{entity_id}` não existe ou está desativada no Home Assistant, mas é referida por estas cenas do Ambience no {scope}:\n{scenes}\n\nUma condição que a refira nunca corresponderá; uma ação que a vise falhará silenciosamente. Corrija o id da entidade no editor do Ambience, ative a entidade (ou o respetivo dispositivo), ou remova a referência. Esta mensagem desaparece automaticamente assim que a entidade existir e estiver ativada."
+    },
+    "action_overlap": {
+      "title": "Ambience: uma entidade é controlada por vários grupos",
+      "description": "A entidade `{entity_id}` é controlada por mais do que um grupo de categoria/âmbito do Ambience:\n{groups}\n\nCada grupo é um ciclo de controlo independente com o seu próprio estado, pelo que podem competir por esta entidade e produzir aplicações desatualizadas ou sem efeito. Considere movê-la para um único grupo. Esta mensagem desaparece automaticamente assim que a sobreposição for resolvida."
+    },
+    "missing_workday_sensor": {
+      "title": "Ambience: há cenas que usam um item de dia útil mas não está configurado nenhum sensor de dia útil",
+      "description": "Estas cenas do Ambience usam um item de dia `workday` ou `holiday`, mas não está configurado nenhum **sensor de dia útil** (Definições → Ambience → Condições → Dia), pelo que nunca podem corresponder:\n{scenes}\n\nConfigure um sensor de dia útil, ou remova os itens workday/holiday. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "missing_workday_calendar": {
+      "title": "Ambience: há cenas que usam um item de calendário de dia útil mas não está configurado nenhum calendário",
+      "description": "Estas cenas do Ambience usam um item de dia `first_workday`/`last_workday`, mas não está configurado nenhum **calendário de dias úteis** (Definições → Ambience → Condições → Dia), pelo que nunca podem corresponder:\n{scenes}\n\nConfigure um calendário de dias úteis, ou remova esses itens. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "missing_weather_entity": {
+      "title": "Ambience: há cenas que usam uma condição meteorológica mas não está configurada nenhuma entidade meteorológica",
+      "description": "Estas cenas do Ambience usam uma condição meteorológica, mas não está configurada nenhuma **entidade meteorológica** (Definições → Ambience → Condições → Meteorologia), pelo que nunca podem corresponder:\n{scenes}\n\nConfigure uma entidade meteorológica, ou remova as condições meteorológicas. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "missing_weather_group": {
+      "title": "Ambience: há cenas que referem um grupo meteorológico eliminado",
+      "description": "O grupo meteorológico `{ref}` já não existe, mas é referido por estas cenas do Ambience:\n{scenes}\n\nUma condição que o refira nunca corresponderá. Recrie o grupo ou remova a referência. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "missing_period": {
+      "title": "Ambience: há cenas que referem um período do dia eliminado",
+      "description": "O período do dia `{ref}` já não existe, mas é referido por estas cenas do Ambience:\n{scenes}\n\nUma condição que o refira nunca corresponderá. Recrie o período ou remova a referência. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "missing_lux_range": {
+      "title": "Ambience: há cenas que referem um intervalo de lux eliminado",
+      "description": "O intervalo de lux `{ref}` já não existe, mas é referido por estas cenas do Ambience:\n{scenes}\n\nUma condição que o refira nunca corresponderá. Recrie o intervalo ou remova a referência. Esta mensagem desaparece automaticamente assim que for resolvido."
+    },
+    "unexposed_action": {
+      "title": "Ambience: há cenas que usam uma ação que já não está exposta",
+      "description": "A ação `{ref}` já não está exposta (Definições → Ambience → Ações), mas é usada por estas cenas do Ambience:\n{scenes}\n\nA ação será ignorada quando a cena for aplicada. Volte a expor a ação ou remova-a das cenas. Esta mensagem desaparece automaticamente assim que for resolvido."
+    }
+  },
+  "exceptions": {
+    "unexpected_error": { "message": "Ocorreu um erro inesperado. Consulte os registos do Home Assistant para mais detalhes." },
+    "period_clamp_not_object": { "message": "O clamp tem de ser um objeto." },
+    "period_invalid_clamp_dir": { "message": "Direção de clamp inválida: {value}" },
+    "period_invalid_clamp_hh": { "message": "Hora de clamp inválida: {value}" },
+    "period_invalid_clamp_mm": { "message": "Minuto de clamp inválido: {value}" },
+    "period_endpoint_not_object": { "message": "O extremo tem de ser um objeto com um 'kind'." },
+    "period_invalid_hh": { "message": "Hora inválida: {value}" },
+    "period_invalid_mm": { "message": "Minuto inválido: {value}" },
+    "period_invalid_anchor": { "message": "Âncora inválida: {value}" },
+    "period_offset_not_int": { "message": "offset_min tem de ser um número inteiro: {value}" },
+    "period_invalid_endpoint_kind": { "message": "Tipo de extremo inválido: {value}" },
+    "period_def_not_object": { "message": "A definição do período tem de ser um objeto." },
+    "period_def_missing_from_to": { "message": "A definição do período precisa de 'from' e 'to'." },
+    "lux_not_integer": { "message": "{which} tem de ser um número inteiro: {value}" },
+    "lux_negative": { "message": "{which} tem de ser >= 0: {value}" },
+    "lux_def_not_object": { "message": "A definição do intervalo de lux tem de ser um objeto." },
+    "lux_def_needs_min_or_max": { "message": "O intervalo de lux precisa de pelo menos um de 'min'/'max'." },
+    "lux_min_not_below_max": { "message": "O 'min' do intervalo de lux tem de ser < 'max': {min} >= {max}" },
+    "named_def_custom_not_object": { "message": "custom tem de ser um objeto." },
+    "named_def_hidden_not_list": { "message": "hidden tem de ser uma lista." },
+    "named_def_invalid_id": { "message": "id de {kind} inválido: {id}" },
+    "named_def_only_builtin_hideable": { "message": "Apenas os ids incorporados podem ser ocultados: {id}" },
+    "unknown_scope_kind": { "message": "Tipo de âmbito desconhecido: {scope_kind}" },
+    "store_switch_name_empty": { "message": "O `name` das predefinições do interruptor tem de ser uma cadeia de carateres não vazia: {name}" },
+    "store_switch_auto_on_delay_invalid": { "message": "O `auto_on_delay_seconds` das predefinições do interruptor tem de ser um inteiro não negativo: {delay}" },
+    "store_reapply_enabled_invalid": { "message": "O `enabled` de reaplicação tem de ser um booleano: {enabled}" },
+    "store_reapply_interval_invalid": { "message": "O `interval_seconds` de reaplicação tem de ser um inteiro >= {min}: {interval}" },
+    "store_exposure_invalid": { "message": "A exposição para {assistant} tem de ser um booleano: {value}" },
+    "store_unknown_assistants": { "message": "Assistente(s) desconhecido(s): {assistants}" },
+    "last_category_required": { "message": "É necessária pelo menos uma categoria." },
+    "categories_still_have_scenes": { "message": "Estas categorias ainda têm cenas: {categories}" },
+    "cannot_delete_last_category": { "message": "Não é possível eliminar a última categoria." },
+    "category_still_has_scenes": { "message": "A categoria {category_id} ainda tem cenas." },
+    "exposed_actions_not_list": { "message": "As ações expostas têm de ser uma lista." },
+    "exposed_entry_not_object": { "message": "A entrada tem de ser um objeto: {entry}" },
+    "exposed_invalid_service_id": { "message": "id de serviço inválido: {sid}" },
+    "exposed_duplicate_service_id": { "message": "id de serviço duplicado: {sid}" },
+    "exposed_label_not_string": { "message": "{sid}: o rótulo tem de ser uma cadeia de carateres." },
+    "exposed_visible_fields_not_list": { "message": "{sid}: visible_fields tem de ser uma lista de cadeias de carateres." },
+    "exposed_defaults_not_object": { "message": "{sid}: defaults tem de ser um objeto indexado por cadeia de carateres." },
+    "exposed_unknown_service": { "message": "Serviço desconhecido: {sid}" },
+    "exposed_unknown_visible_field": { "message": "{sid}: campo desconhecido {field} em visible_fields." },
+    "exposed_unknown_default_field": { "message": "{sid}: campo desconhecido {field} em defaults." },
+    "scene_config_not_object": { "message": "A configuração tem de ser um objeto." },
+    "scene_scenes_not_list": { "message": "`scenes` tem de ser uma lista." },
+    "scene_not_object": { "message": "Cena {scene_idx}: tem de ser um objeto." },
+    "scene_category_not_string": { "message": "Cena {scene_idx}: a categoria tem de ser uma cadeia de carateres." },
+    "scene_description_not_string": { "message": "Cena {scene_idx}: a descrição tem de ser texto." },
+    "scene_dup_name": { "message": "Cena {scene_idx}: já existe uma cena com o nome {name} nesta categoria." },
+    "scene_when_not_object": { "message": "Cena {scene_idx}: `when` tem de ser um objeto." },
+    "scene_unknown_condition": { "message": "Cena {scene_idx}: condição desconhecida {key}" },
+    "scene_actions_not_list": { "message": "Cena {scene_idx}: `actions` tem de ser uma lista." },
+    "scene_action_not_object": { "message": "Cena {scene_idx} ação {action_idx}: tem de ser um objeto." },
+    "scene_action_service_invalid": { "message": "Cena {scene_idx} ação {action_idx}: `service` em falta ou malformado." },
+    "scene_action_entity_ids_not_list": { "message": "Cena {scene_idx} ação {action_idx}: entity_ids tem de ser uma lista." },
+    "scene_action_entity_ids_not_strings": { "message": "Cena {scene_idx} ação {action_idx}: entity_ids têm de ser cadeias de carateres não vazias." },
+    "scene_action_params_not_object": { "message": "Cena {scene_idx} ação {action_idx}: params tem de ser um objeto." },
+    "scene_apply_invalid": { "message": "Cena {scene_idx}: `apply` tem de ser \"once\" ou \"always\": {value}" },
+    "scene_priority_invalid": { "message": "Cena {scene_idx}: `priority` tem de ser um número inteiro: {value}" },
+    "scene_pinned_invalid": { "message": "Cena {scene_idx}: `pinned` tem de ser true ou false: {value}" },
+    "weather_groups_not_list": { "message": "Os grupos têm de ser uma lista." },
+    "weather_group_not_object": { "message": "Cada grupo tem de ser um objeto." },
+    "weather_group_id_empty": { "message": "O id do grupo tem de ser uma cadeia de carateres não vazia: {gid}" },
+    "weather_group_id_duplicate": { "message": "id de grupo duplicado: {gid}" },
+    "weather_group_label_empty": { "message": "O rótulo do grupo {gid} tem de ser uma cadeia de carateres não vazia." },
+    "weather_group_invalid_conditions": { "message": "O grupo {gid} tem condição(ões) inválida(s)." },
+    "unknown_area": { "message": "Área desconhecida: {scope_id}" },
+    "unknown_floor": { "message": "Piso desconhecido: {scope_id}" },
+    "scope_disabled": { "message": "O âmbito {scope_kind}/{scope_id} está desativado." },
+    "scene_index_out_of_range": { "message": "scene_index fora do intervalo: {scene_index}" },
+    "scope_selector_invalid": { "message": "{command} requer exatamente um de area_id/floor_id/house, obteve: {present}" },
+    "invalid_service_id_format": { "message": "O id de serviço tem de ser domain.service: {service_id}" },
+    "no_verdict_snapshot": { "message": "Sem instantâneo de veredito para a condição opaca {condition_key}" },
+    "unknown_service": { "message": "Serviço desconhecido: {service}" },
+    "category_id_empty": { "message": "O id da categoria tem de ser uma cadeia de carateres não vazia." },
+    "duplicate_category_id": { "message": "id de categoria duplicado: {cid}" },
+    "category_name_empty": { "message": "O nome da categoria {cid} tem de ser uma cadeia de carateres não vazia." },
+    "duplicate_category_name": { "message": "Nome de categoria duplicado: {name}" },
+    "unparseable_now": { "message": "'now' não interpretável: {now}" },
+    "unparseable_date": { "message": "Data não interpretável: {date}" },
+    "now_not_timezone_aware": { "message": "`now` tem de incluir fuso horário: {now}" }
+  },
+  "services": {
+    "turn_on": {
+      "name": "Ligar",
+      "description": "Liga as entidades visadas, ignorando as que já estão ligadas. Funciona em todos os domínios com capacidade de ligar/desligar."
+    },
+    "turn_off": {
+      "name": "Desligar",
+      "description": "Desliga as entidades visadas, ignorando as que já estão desligadas. Funciona em todos os domínios com capacidade de ligar/desligar."
+    },
+    "cover_safe_open": {
+      "name": "Abrir estore (seguro)",
+      "description": "Abre os estores visados, ignorando os que já estão totalmente abertos (sem clique de relé redundante)."
+    },
+    "cover_safe_close": {
+      "name": "Fechar estore (seguro)",
+      "description": "Fecha os estores visados, ignorando os que já estão totalmente fechados (sem clique de relé redundante)."
+    },
+    "cover_safe_set_position": {
+      "name": "Definir posição do estore (seguro)",
+      "description": "Define os estores visados para uma posição, ignorando os que já estão nessa posição.",
+      "fields": {
+        "position": {
+          "name": "Posição",
+          "description": "Posição-alvo, 0 (fechado) a 100 (aberto)."
+        }
+      }
+    },
+    "cover_safe_set_tilt_position": {
+      "name": "Definir inclinação do estore (seguro)",
+      "description": "Define os estores visados para uma posição de inclinação, ignorando os que já estão nessa inclinação.",
+      "fields": {
+        "tilt_position": {
+          "name": "Posição de inclinação",
+          "description": "Posição de inclinação-alvo, 0 a 100."
+        }
+      }
+    }
+  }
+}

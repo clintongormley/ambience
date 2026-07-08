@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-SHIPPED_LOCALES = ("en", "es")
+SHIPPED_LOCALES = ("en", "es", "pt")
 
 
 def flatten_keys(obj: dict, prefix: str = "") -> set[str]:

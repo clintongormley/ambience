@@ -95,10 +95,14 @@ def test_parse_locales_on_real_bundle() -> None:
     root = Path(__file__).resolve().parent.parent
     text = (root / "frontend" / "src" / "i18n-data.ts").read_text()
     loc = parse_locales(text)
-    assert set(loc) == {"en", "es"}
-    # en and es ship the same key set, and a healthy number of them.
-    assert set(loc["en"]) == set(loc["es"])
-    assert len(loc["en"]) > 400
+    # canary: a forgotten/renamed shipped locale fails loudly here.
+    assert set(loc) == {"en", "es", "pt"}
+    # every shipped locale mirrors en's key set, and a healthy number of them.
+    en_keys = set(loc["en"])
+    for locale in loc.keys() - {"en"}:
+        assert set(loc[locale]) == en_keys, f"{locale} bundle keys differ from en"
+    assert len(en_keys) > 400
     # a couple of known anchors survive the parse
     assert loc["en"]["ui.close"]
     assert "{name}" in loc["en"]["ui.lux_modal_edit_title"]
+    assert "{name}" in loc["pt"]["ui.lux_modal_edit_title"]

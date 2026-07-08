@@ -44,6 +44,24 @@ def test_non_shipped_locale_missing_keys_ok(tmp_path):
     assert main(["--component", str(comp)]) == 0
 
 
+def test_pt_is_a_shipped_locale_and_must_be_complete(tmp_path):
+    comp = tmp_path / "comp"
+    (comp / "translations").mkdir(parents=True)
+    (comp / "strings.json").write_text('{"a": "x", "b": "y"}')
+    (comp / "translations" / "en.json").write_text('{"a": "x", "b": "y"}')
+    (comp / "translations" / "pt.json").write_text('{"a": "x"}')  # missing "b"
+    assert main(["--component", str(comp)]) == 1  # pt is shipped -> incomplete -> fail
+
+
+def test_real_pt_json_is_complete():
+    root = Path(__file__).resolve().parent.parent / "custom_components" / "ambience"
+    source = json.loads((root / "strings.json").read_text())
+    pt = json.loads((root / "translations" / "pt.json").read_text())
+    missing, extra = compare_keys(source, pt)
+    assert not missing, f"pt.json missing keys present in strings.json: {sorted(missing)}"
+    assert not extra, f"pt.json has keys absent from strings.json: {sorted(extra)}"
+
+
 def test_real_es_json_is_complete():
     root = Path(__file__).resolve().parent.parent / "custom_components" / "ambience"
     source = json.loads((root / "strings.json").read_text())

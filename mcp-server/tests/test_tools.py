@@ -69,6 +69,27 @@ async def test_preview_write_returns_diff_valid_and_token():
     assert result["confirm_token"] == fingerprint({"kind": "area", "id": "lr"}, scenes)
 
 
+async def test_preview_write_survives_unreadable_current_scenes():
+    # `current` is read from the same ambience/{kind}/get command the read-path guard
+    # covers. A too-new backend returning an unrecognised scene shape must not crash
+    # diff_scopes — fall back to an empty baseline (proposed shown as added) rather
+    # than raise. The write's validity is still decided by validate + categories.
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": ["sceneref-1", "sceneref-2"]},  # unreadable shape
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    assert result["valid"] is True
+    assert result["diff"]["added"] == scenes
+    assert result["diff"]["removed"] == []
+    assert result["diff"]["updated"] == []
+
+
 async def test_preview_write_blocks_a_scene_with_an_unknown_category():
     # The backend would silently move it to General, so preview must block until
     # the category exists (create it with save_categories first).

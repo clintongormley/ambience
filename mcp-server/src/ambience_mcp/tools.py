@@ -213,6 +213,12 @@ async def preview_write(
     current = (await client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
         "scenes", []
     )
+    # `current` is backend-sourced, so a too-new/unknown bundle could reshape it (same
+    # risk _with_ranks guards on the read path). We can't diff against scenes we can't
+    # read, so fall back to an empty baseline rather than let diff_scopes raise — the
+    # write's validity is decided by validate + categories below, not by the diff.
+    if not all(isinstance(scene, dict) for scene in current):
+        current = []
     try:
         await client.command("ambience/validate", config={"scenes": scenes})
         valid, errors = True, None

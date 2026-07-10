@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "ambience": {
+    "ambience-dev": {
       "command": "uvx",
       "args": ["--from", "./mcp-server", "ambience-mcp"],
       "env": {
-        "AMBIENCE_HA_URL": "${AMBIENCE_HA_URL}",
-        "AMBIENCE_HA_TOKEN": "${AMBIENCE_HA_TOKEN}"
+        "AMBIENCE_HA_URL": "${AMBIENCE_DEV_HA_URL}",
+        "AMBIENCE_HA_TOKEN": "${AMBIENCE_DEV_HA_TOKEN}"
       }
     }
   }

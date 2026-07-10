@@ -85,11 +85,43 @@ describe("ambience-import-config", () => {
     el = await mount();
     const text = (el.shadowRoot.textContent || "").toLowerCase();
     expect(text).toContain("mcp server");
-    const mcpLink = el.shadowRoot.querySelector(".mcp a.help-link") as HTMLAnchorElement;
+    // The MCP path is the first of the two peer sections.
+    const sections = el.shadowRoot.querySelectorAll("section.path");
+    const mcpLink = sections[0].querySelector("a.help-link") as HTMLAnchorElement;
     expect(mcpLink.getAttribute("href")).toContain("ai/mcp-server");
     expect(mcpLink.getAttribute("target")).toBe("_blank");
-    // Option A: the download/paste flow stays as the no-install fallback.
+    // The download/paste flow stays as the no-install fallback.
     expect(el.shadowRoot.querySelector("button.download")).toBeTruthy();
+  });
+
+  test("presents the two authoring paths as sibling sections split by a rule", async () => {
+    el = await mount();
+    const root = el.shadowRoot;
+
+    // Two peers, and the old highlighted callout is gone.
+    const sections = root.querySelectorAll("section.path");
+    expect(sections.length).toBe(2);
+    expect(root.querySelector(".mcp")).toBeFalsy();
+    expect(root.querySelector(".paste-heading")).toBeFalsy();
+
+    // Exactly one rule, sitting between the two sections.
+    expect(root.querySelectorAll("hr.path-divider").length).toBe(1);
+    const order = Array.from(root.querySelectorAll("section.path, hr.path-divider")).map((n) =>
+      n.tagName.toLowerCase(),
+    );
+    expect(order).toEqual(["section", "hr", "section"]);
+
+    // MCP comes first and carries the Recommended pill in its heading.
+    const pill = sections[0].querySelector(".section-heading .pill.recommended");
+    expect(pill).toBeTruthy();
+    expect((pill?.textContent || "").toLowerCase()).toContain("recommended");
+
+    // The paste section keeps its wording and its three steps.
+    expect((sections[1].textContent || "").toLowerCase()).toContain("alternatively");
+    expect(sections[1].querySelectorAll("ol.steps > li").length).toBe(3);
+
+    // The feedback aside survives, still boxed.
+    expect(root.querySelector(".feedback")).toBeTruthy();
   });
 
   test("invites feedback when the AI gets it wrong, linking to GitHub issues", async () => {

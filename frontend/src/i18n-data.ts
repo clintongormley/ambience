@@ -100,6 +100,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_mcp_desc:
         "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.",
       import_mcp_link: "Set up the MCP server",
+      import_mcp_recommended: "Recommended",
       import_paste_title: "Alternatively, download and paste into any AI",
       import_help_link: "Install & usage guide",
       import_step1: "Install the skill or plugin once",
@@ -685,6 +686,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_mcp_desc:
         "Instala el servidor MCP para la forma más rápida de crear y editar escenas, con Claude Code o Claude Desktop.",
       import_mcp_link: "Configura el servidor MCP",
+      import_mcp_recommended: "Recomendado",
       import_paste_title: "Como alternativa, descarga y pega en cualquier IA",
       import_help_link: "Guía de instalación y uso",
       import_step1: "Instala la skill o el plugin una vez",
@@ -1273,6 +1275,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       import_mcp_desc:
         "Instale o servidor MCP para a forma mais rápida de criar e editar cenas, com o Claude Code ou o Claude Desktop.",
       import_mcp_link: "Configurar o servidor MCP",
+      import_mcp_recommended: "Recomendado",
       import_paste_title: "Em alternativa, descarregue e cole em qualquer IA",
       import_help_link: "Guia de instalação e utilização",
       import_step1: "Instale a skill ou plugin",

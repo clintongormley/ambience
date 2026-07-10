@@ -54,20 +54,23 @@ export class AmbienceImportConfig extends LitElement {
     :host { display: block; }
     .header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem; }
     .header .title { font-size: 1.1rem; font-weight: 500; }
-    .beta {
+    .pill {
       font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
       padding: 0.05rem 0.4rem; border-radius: 999px;
-      background: var(--label-badge-yellow, #f4b400); color: var(--text-primary-color, #fff);
+      color: var(--text-primary-color, #fff);
     }
+    .pill.beta { background: var(--label-badge-yellow, #f4b400); }
+    .pill.recommended { background: var(--primary-color, #03a9f4); }
     .help-link { color: var(--primary-color, #03a9f4); }
-    .mcp {
-      margin-bottom: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
-      background: var(--secondary-background-color, #f5f5f5);
-      border: 1px solid var(--primary-color, #03a9f4);
+    .section-heading {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-weight: 600; margin: 0 0 0.75rem;
     }
-    .mcp .mcp-title { font-weight: 600; margin-bottom: 0.25rem; }
-    .mcp .mcp-body { color: var(--secondary-text-color, #666); }
-    .paste-heading { font-weight: 600; margin: 0 0 0.75rem; }
+    .section-body { color: var(--secondary-text-color, #666); }
+    hr.path-divider {
+      border: none; border-top: 1px solid var(--divider-color, #e0e0e0);
+      margin: 1.75rem 0;
+    }
     .feedback {
       margin-top: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
       background: var(--secondary-background-color, #f5f5f5);
@@ -215,19 +218,26 @@ export class AmbienceImportConfig extends LitElement {
     return html`
       <div class="header">
         <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
-        <span class="beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
+        <span class="pill beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
       </div>
-      <div class="mcp">
-        <div class="mcp-title">${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</div>
-        <div class="mcp-body">
+      <section class="path">
+        <div class="section-heading">
+          <span>${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</span>
+          <span class="pill recommended"
+            >${localize(this.hass, "ui.import_mcp_recommended", "Recommended")}</span
+          >
+        </div>
+        <div class="section-body">
           ${localize(this.hass, "ui.import_mcp_desc", "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.")}
           <a class="help-link" href=${MCP_DOCS_URL} target="_blank" rel="noopener noreferrer"
             >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
           >
         </div>
-      </div>
-      <div class="paste-heading">${localize(this.hass, "ui.import_paste_title", "Alternatively, download and paste into any AI")}</div>
-      <ol class="steps">
+      </section>
+      <hr class="path-divider" />
+      <section class="path">
+        <div class="section-heading">${localize(this.hass, "ui.import_paste_title", "Alternatively, download and paste into any AI")}</div>
+        <ol class="steps">
         <li>
           <div class="step-title">${localize(this.hass, "ui.import_step1", "Install the skill or plugin once")}</div>
           <div class="step-body">
@@ -259,6 +269,7 @@ export class AmbienceImportConfig extends LitElement {
           />
         </li>
       </ol>
+      </section>
       ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       ${this.preview ? this._renderPreview(this.preview) : nothing}
       ${this.done ? html`<div class="done">${this.done}</div>` : nothing}

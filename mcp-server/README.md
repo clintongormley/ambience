@@ -32,14 +32,52 @@ preview and your confirmation.
 }
 ```
 
-**Claude Code** — one command (stores it in your user config):
+**Claude Code** (terminal, and the VS Code extension) — one command, with your
+own address and token.
+
+Mac and Linux:
 
 ```sh
-claude mcp add ambience \
+claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
-  --env AMBIENCE_HA_TOKEN=<your admin long-lived token> \
+  --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
   -- uvx ambience-mcp
 ```
+
+Windows:
+
+```text
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp
+```
+
+It confirms where it saved the server, with a line like this.
+
+On Linux:
+
+```text
+File modified: /home/your_home_dir/.claude.json
+```
+
+On Mac:
+
+```text
+File modified: /Users/your_home_dir/.claude.json
+```
+
+On Windows:
+
+```text
+File modified: C:\Users\your_home_dir\.claude.json
+```
+
+## Check that it is running
+
+Open a **new** Claude Code conversation — a running session does not pick up the
+change. Nothing further is needed for VS Code: the extension reads the same
+`~/.claude.json`, so a user-scoped server is available there too.
+
+Run `/mcp` to see the server and whether it connected. It works the same in
+Claude Code in a terminal and in VS Code.
 
 ## Multiple Home Assistant instances
 
@@ -73,7 +111,8 @@ changes and will tell you how to update to the correct version.
 ## Turning it off
 
 - **Live, this session:** `/mcp` → select `ambience` → Disconnect (no restart).
-- **Remove it:** `claude mcp remove ambience` (Claude Code), or delete the entry
+- **Remove it:** `claude mcp remove ambience --scope user` (Claude Code and the
+    VS Code extension — pass the scope you added it with), or delete the entry
     from `claude_desktop_config.json` and restart (Claude Desktop).
 
 Tool schemas are deferred (tool-search) on supported models, so an idle server

@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.1] - 2026-07-10
+
 ### Added
 
 - **Import blocks can now set a category's scene order.** An AI-authored import

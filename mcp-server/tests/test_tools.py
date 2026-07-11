@@ -365,6 +365,15 @@ async def test_get_context_does_not_warn_when_the_format_field_is_absent():
     assert "warning" not in result
 
 
+async def test_get_context_propagates_other_command_errors():
+    # Mirrors test_get_guide_propagates_other_command_errors: only unknown_command
+    # is converted to a ToolError; every other HACommandError must pass through
+    # untouched rather than be swallowed or misreported.
+    client = FakeClient({"ambience/ai_context": HACommandError("validation_error", "boom")})
+    with pytest.raises(HACommandError):
+        await tools.get_context(client)
+
+
 async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
     client = FakeClient(

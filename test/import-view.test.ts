@@ -134,6 +134,20 @@ describe("ambience-import-config", () => {
     expect(sections[1].classList.contains("card")).toBe(false);
   });
 
+  test("puts the MCP setup link in its own paragraph below the description", async () => {
+    el = await mount();
+    const mcp = el.shadowRoot.querySelectorAll("section.path")[0];
+    const paras = mcp.querySelectorAll(".section-body p");
+    expect(paras.length).toBe(2);
+    // The description is the first paragraph and does not contain the link.
+    expect((paras[0].textContent || "").toLowerCase()).toContain("fastest authoring");
+    expect(paras[0].querySelector("a.help-link")).toBeFalsy();
+    // The setup link stands alone in the second paragraph.
+    const link = paras[1].querySelector("a.help-link") as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute("href")).toContain("ai/mcp-server");
+  });
+
   test("invites feedback when the AI gets it wrong, linking to GitHub issues", async () => {
     el = await mount();
     expect((el.shadowRoot.textContent || "").toLowerCase()).toContain("better than the ai");

@@ -67,6 +67,8 @@ export class AmbienceImportConfig extends LitElement {
       font-weight: 600; margin: 0 0 0.75rem;
     }
     .section-body { color: var(--secondary-text-color, #666); }
+    .section-body p { margin: 0; }
+    .section-body p + p { margin-top: 0.5rem; }
     hr.path-divider {
       border: none; border-top: 1px solid var(--divider-color, #e0e0e0);
       margin: 1.75rem 0;
@@ -229,10 +231,12 @@ export class AmbienceImportConfig extends LitElement {
           >
         </div>
         <div class="section-body">
-          ${localize(this.hass, "ui.import_mcp_desc", "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.")}
-          <a class="help-link" href=${MCP_DOCS_URL} target="_blank" rel="noopener noreferrer"
-            >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
-          >
+          <p>${localize(this.hass, "ui.import_mcp_desc", "Install the MCP server for the fastest authoring and editing experience with Claude Code or Claude Desktop.")}</p>
+          <p>
+            <a class="help-link" href=${MCP_DOCS_URL} target="_blank" rel="noopener noreferrer"
+              >${localize(this.hass, "ui.import_mcp_link", "Set up the MCP server")}</a
+            >
+          </p>
         </div>
       </section>
       <hr class="path-divider" />

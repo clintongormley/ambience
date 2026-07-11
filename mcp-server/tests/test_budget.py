@@ -20,6 +20,20 @@ def test_max_result_chars_ignores_a_nonsense_override(monkeypatch, bad):
     assert budget.max_result_chars() == budget.DEFAULT_MAX_RESULT_CHARS
 
 
+def test_size_of_models_the_wire_payload_not_compact_json():
+    # FastMCP sends a result pretty-printed (indent=2) AND a second time as
+    # structuredContent — size_of must model both, not the compact json.dumps a
+    # naive implementation would reach for.
+    schemas = {f"a{i}": {"fields": {"f": "x" * 50}} for i in range(20)}
+    payload = {"actions": {"schemas": schemas}}
+    compact = len(json.dumps(payload))
+
+    assert budget.size_of(payload) == 2 * len(json.dumps(payload, indent=2))
+    # The whole point of the fix: compact JSON meaningfully under-counts nested
+    # schemas, exactly the term fit_context sheds.
+    assert budget.size_of(payload) > compact * 1.5
+
+
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
         "ambience_ai_context": 1,

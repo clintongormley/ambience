@@ -101,3 +101,74 @@ def entity_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "by_area": by_area,
         "by_device_class": by_device_class,
     }
+
+
+FIND_LIMIT_DEFAULT = 50
+FIND_LIMIT_MAX = 200
+"""Page size for `find_entities`. An out-of-range `limit` is CLAMPED, never
+rejected: a model that asks for 10,000 rows should get the biggest page we are
+willing to serve plus a cursor, not an error it has to reason its way out of."""
+
+
+def _as_set(value: Any) -> set[str] | None:
+    """A filter argument as a set, accepting a bare string or a list. None means
+    "no filter" — distinct from an empty list, which matches nothing."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return {value}
+    return set(value)
+
+
+def find_entities(
+    rows: list[dict[str, Any]],
+    *,
+    query: str | None = None,
+    domain: str | list[str] | None = None,
+    area_id: str | list[str] | None = None,
+    device_class: str | list[str] | None = None,
+    limit: int | None = None,
+    cursor: int | None = None,
+) -> dict[str, Any]:
+    """Search the catalog, one bounded page at a time.
+
+    This is what makes a bounded context honest: the MCP export carries counts
+    rather than rows, but every entity stays REACHABLE through here. Curation was
+    rejected precisely because no static filter is sound — a `state` condition can
+    name any entity in the house, and exposing a new action can make a previously
+    irrelevant domain relevant — so nothing is hidden, it is merely paged.
+
+    Filters combine with AND. `cursor` is an integer offset into the matches,
+    which is stable because `rows` is sorted by `entity_id`.
+    """
+    domains = _as_set(domain)
+    areas = _as_set(area_id)
+    classes = _as_set(device_class)
+    needle = query.casefold() if query else None
+
+    matches = [
+        row
+        for row in rows
+        if (domains is None or row["domain"] in domains)
+        and (areas is None or row["area_id"] in areas)
+        and (classes is None or row["device_class"] in classes)
+        and (
+            needle is None
+            or needle in row["entity_id"].casefold()
+            or (row["name"] is not None and needle in row["name"].casefold())
+        )
+    ]
+
+    size = FIND_LIMIT_DEFAULT if limit is None else max(1, min(int(limit), FIND_LIMIT_MAX))
+    offset = max(0, int(cursor or 0))
+    page = matches[offset : offset + size]
+    next_offset = offset + len(page)
+    more = next_offset < len(matches)
+    return {
+        "entities": page,
+        "total_matches": len(matches),
+        "offset": offset,
+        "returned": len(page),
+        "cursor": next_offset if more else None,
+        "truncated": more,
+    }

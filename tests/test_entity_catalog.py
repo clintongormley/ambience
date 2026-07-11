@@ -8,7 +8,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.ambience.entity_catalog import entity_rows, entity_summary
+from custom_components.ambience.entity_catalog import (
+    FIND_LIMIT_MAX,
+    entity_rows,
+    entity_summary,
+    find_entities,
+)
 
 
 async def test_entity_rows_carry_area_domain_and_state(hass: HomeAssistant) -> None:
@@ -132,3 +137,139 @@ def test_entity_summary_of_empty_catalog() -> None:
         "by_area": {},
         "by_device_class": {},
     }
+
+
+def _catalog():
+    return [
+        _row(
+            "binary_sensor.hall_motion",
+            domain="binary_sensor",
+            area_id="hall",
+            device_class="occupancy",
+        ),
+        _row("light.kitchen_ceiling", domain="light", area_id="kitchen"),
+        _row("light.kitchen_spots", domain="light", area_id="kitchen"),
+        _row("sensor.hall_lux", domain="sensor", area_id="hall", device_class="illuminance"),
+        _row("switch.kettle", domain="switch", area_id="kitchen"),
+    ]
+
+
+def test_find_with_no_filters_returns_everything() -> None:
+    result = find_entities(_catalog())
+
+    assert result["total_matches"] == 5
+    assert result["returned"] == 5
+    assert result["offset"] == 0
+    assert result["cursor"] is None
+    assert result["truncated"] is False
+
+
+def test_find_filters_by_domain() -> None:
+    result = find_entities(_catalog(), domain="light")
+
+    assert [e["entity_id"] for e in result["entities"]] == [
+        "light.kitchen_ceiling",
+        "light.kitchen_spots",
+    ]
+    assert result["total_matches"] == 2
+
+
+def test_find_accepts_a_list_of_domains() -> None:
+    result = find_entities(_catalog(), domain=["light", "switch"])
+
+    assert result["total_matches"] == 3
+
+
+def test_find_filters_combine_with_and() -> None:
+    result = find_entities(_catalog(), domain="light", area_id="kitchen")
+    assert result["total_matches"] == 2
+
+    # A domain that exists and an area that exists, but no entity in both.
+    result = find_entities(_catalog(), domain="light", area_id="hall")
+    assert result["total_matches"] == 0
+
+
+def test_find_filters_by_device_class() -> None:
+    result = find_entities(_catalog(), device_class="illuminance")
+
+    assert [e["entity_id"] for e in result["entities"]] == ["sensor.hall_lux"]
+
+
+def test_find_query_matches_entity_id_case_insensitively() -> None:
+    result = find_entities(_catalog(), query="KITCHEN")
+
+    assert result["total_matches"] == 2  # light.kitchen_ceiling and light.kitchen_spots
+
+
+def test_find_query_matches_the_name_too() -> None:
+    rows = [_row("light.abc123", domain="light")]
+    rows[0]["name"] = "Reading Lamp"
+
+    assert find_entities(rows, query="reading")["total_matches"] == 1
+
+
+def test_find_query_tolerates_a_null_name() -> None:
+    rows = [_row("light.abc123", domain="light")]
+    rows[0]["name"] = None
+
+    assert find_entities(rows, query="abc")["total_matches"] == 1
+    assert find_entities(rows, query="nope")["total_matches"] == 0
+
+
+def test_find_unknown_filter_value_is_empty_not_an_error() -> None:
+    result = find_entities(_catalog(), domain="nonexistent")
+
+    assert result["entities"] == []
+    assert result["total_matches"] == 0
+    assert result["cursor"] is None
+
+
+def test_find_pages_with_a_cursor() -> None:
+    first = find_entities(_catalog(), limit=2)
+
+    assert first["returned"] == 2
+    assert first["offset"] == 0
+    assert first["cursor"] == 2
+    assert first["truncated"] is True
+
+    second = find_entities(_catalog(), limit=2, cursor=first["cursor"])
+
+    assert second["offset"] == 2
+    assert second["cursor"] == 4
+
+
+def test_paging_the_whole_catalog_yields_every_entity_exactly_once() -> None:
+    rows = _catalog()
+    seen: list[str] = []
+    cursor = None
+    while True:
+        page = find_entities(rows, limit=2, cursor=cursor)
+        seen.extend(e["entity_id"] for e in page["entities"])
+        cursor = page["cursor"]
+        if cursor is None:
+            break
+
+    assert seen == [r["entity_id"] for r in rows]  # no gaps, no duplicates
+
+
+def test_find_clamps_an_oversized_limit_rather_than_erroring() -> None:
+    rows = [_row(f"light.l{i:03d}", domain="light") for i in range(FIND_LIMIT_MAX + 50)]
+
+    result = find_entities(rows, limit=10_000)
+
+    assert result["returned"] == FIND_LIMIT_MAX
+    assert result["truncated"] is True
+
+
+def test_find_clamps_a_nonsense_limit_up_to_one() -> None:
+    result = find_entities(_catalog(), limit=0)
+
+    assert result["returned"] == 1
+
+
+def test_find_cursor_past_the_end_is_empty_not_an_error() -> None:
+    result = find_entities(_catalog(), cursor=999)
+
+    assert result["entities"] == []
+    assert result["cursor"] is None
+    assert result["truncated"] is False

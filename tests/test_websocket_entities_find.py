@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from homeassistant.components.diagnostics import REDACTED
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -87,3 +88,18 @@ async def test_find_with_no_filters_returns_the_catalog(
 
     assert msg["success"]
     assert msg["result"]["total_matches"] >= 3
+
+
+async def test_find_redacts_presence_state(hass, installed, hass_ws_client) -> None:
+    # Presence-PII redaction is unit-tested on entity_rows already (no leak here
+    # either, since this route reuses those rows), but the spec explicitly calls
+    # for a test on THIS route too: a person.* row's `state` must be REDACTED.
+    ent_reg = er.async_get(hass)
+    person = ent_reg.async_get_or_create("person", "ambience", "alice", suggested_object_id="alice")
+    hass.states.async_set(person.entity_id, "home")
+
+    msg = await _ws_send(hass_ws_client, type="ambience/entities/find", domain="person")
+
+    assert msg["success"]
+    row = next(e for e in msg["result"]["entities"] if e["entity_id"] == person.entity_id)
+    assert row["state"] == REDACTED

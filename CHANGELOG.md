@@ -8,6 +8,25 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- The MCP server can now work with houses of any size. `ambience_get_context`
+    returns an entity **summary** (counts by domain, area and device class)
+    instead of every entity, and a new `ambience_find_entities` tool searches
+    and pages the catalog. Previously a house with ~1,500 entities produced a
+    ~90k-token context that the AI client rejected outright.
+
+### Changed
+
+- `ambience-mcp` now requires an Ambience that serves `ambience/ai_context`
+    (this release or newer); it will tell you to upgrade if not.
+
+### Unchanged
+
+- The **Download AI bundle** flow is untouched: the downloaded bundle still
+    carries the full entity catalog, because an AI you paste it into has no
+    tools to look entities up with.
+
 ## [1.1.0-rc.2] - 2026-07-11
 
 ### Added

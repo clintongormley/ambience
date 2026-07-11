@@ -1420,6 +1420,25 @@ async def _ws_ai_bundle(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/ai_context"})
+@websocket_api.async_response
+async def _ws_ai_context(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The BOUNDED authoring export an MCP client reads: the same catalog, actions
+    and definitions as the AI bundle, but with entity COUNTS instead of 1,534 rows,
+    scene counts instead of scene lists, and no traces — because an MCP client has
+    ambience/entities/find, ambience/{scope}/get and ambience/traces/list to fetch
+    those on demand, and a hard cap on one result's size. The fat bundle stays for
+    the download-and-paste flow, where the AI has no tools."""
+    from .ai_context import build_ai_context
+
+    connection.send_result(msg["id"], await build_ai_context(hass))
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/entities/find",
@@ -1666,6 +1685,7 @@ _WS_HANDLERS = (
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_ai_bundle,
+    _ws_ai_context,
     _ws_entities_find,
     _ws_ai_guide,
     _ws_simulate_inputs,

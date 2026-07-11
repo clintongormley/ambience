@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .budget import fit_context
+from .budget import fit_context, fit_entities
 from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
@@ -390,6 +390,35 @@ async def apply_write(
         minimise_pins=True,
         **_id_payload(kind, sid),
     )
+
+
+async def find_entities(
+    client: Any,
+    query: str | None = None,
+    domain: str | list[str] | None = None,
+    area_id: str | list[str] | None = None,
+    device_class: str | list[str] | None = None,
+    limit: int | None = None,
+    cursor: int | None = None,
+) -> dict[str, Any]:
+    """Search the live entity catalog, one bounded page at a time.
+
+    Only the filters the caller actually set are forwarded — sending explicit
+    nulls would defeat the backend's `vol.Optional` schema.
+    """
+    payload: dict[str, Any] = {
+        key: value
+        for key, value in (
+            ("query", query),
+            ("domain", domain),
+            ("area_id", area_id),
+            ("device_class", device_class),
+            ("limit", limit),
+            ("cursor", cursor),
+        )
+        if value is not None
+    }
+    return fit_entities(await client.command("ambience/entities/find", **payload))
 
 
 async def list_traces(client: Any, limit: int | None = None) -> dict[str, Any]:

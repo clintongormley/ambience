@@ -387,6 +387,61 @@ async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
     assert result["schemas_omitted"]
 
 
+async def test_find_entities_forwards_only_the_given_filters():
+    client = FakeClient({"ambience/entities/find": {"entities": [], "total_matches": 0}})
+
+    await tools.find_entities(client, domain="light", area_id="kitchen")
+
+    assert client.calls == [
+        {"type": "ambience/entities/find", "domain": "light", "area_id": "kitchen"}
+    ]
+
+
+async def test_find_entities_omits_unset_filters_entirely():
+    # Sending explicit nulls would make the backend's vol.Optional pointless.
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client)
+
+    assert client.calls == [{"type": "ambience/entities/find"}]
+
+
+async def test_find_entities_forwards_paging():
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client, query="lux", limit=10, cursor=20)
+
+    assert client.calls == [
+        {"type": "ambience/entities/find", "query": "lux", "limit": 10, "cursor": 20}
+    ]
+
+
+async def test_find_entities_trims_an_oversized_page_and_repoints_the_cursor(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/entities/find": {
+                "entities": [
+                    {"entity_id": f"light.l{i:03d}", "name": "n" * 100} for i in range(50)
+                ],
+                "total_matches": 500,
+                "offset": 0,
+                "returned": 50,
+                "cursor": 50,
+                "truncated": True,
+            }
+        }
+    )
+
+    result = await tools.find_entities(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["cursor"] == result["returned"]  # offset 0 + kept
+    assert result["truncated"] is True
+
+
 async def test_preview_write_strips_rank_before_backend():
     scenes = [{"name": "A", "category": "c", "rank": 1}]
     client = FakeClient({"ambience/area/get": {"scenes": []}, "ambience/validate": {"ok": True}})

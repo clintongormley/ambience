@@ -120,10 +120,15 @@ costs almost nothing per turn.
 
 ## Tools
 
-`ambience_get_context`, `ambience_get_scope`, `ambience_get_guide`,
-`ambience_dry_run`, `ambience_validate`, `ambience_preview_write`,
-`ambience_apply_write`, `ambience_list_traces`, `ambience_list_categories`,
-`ambience_save_categories`.
+`ambience_get_context`, `ambience_find_entities`, `ambience_get_scope`,
+`ambience_get_guide`, `ambience_dry_run`, `ambience_validate`,
+`ambience_preview_write`, `ambience_apply_write`, `ambience_list_traces`,
+`ambience_list_categories`, `ambience_save_categories`.
+
+`ambience_get_context` carries entity COUNTS, not rows — a real house has
+thousands of entities. `ambience_find_entities` is the paged search that
+returns real entity ids to author with; nothing is filtered out of the
+catalog, only paged.
 
 `ambience_get_guide` fetches the scene-authoring guide (schema + cookbook) live
 from your install, so it always matches your Ambience version — no separately

@@ -46,6 +46,38 @@ async def ambience_get_context() -> dict[str, Any]:
 
 
 @mcp.tool()
+async def ambience_find_entities(
+    query: str | None = None,
+    domain: str | list[str] | None = None,
+    area_id: str | list[str] | None = None,
+    device_class: str | list[str] | None = None,
+    limit: int | None = None,
+    cursor: int | None = None,
+) -> dict[str, Any]:
+    """Look up entities in the live catalog. This is how you get entity ids —
+    ambience_get_context carries only COUNTS, because a real house has thousands
+    of entities.
+
+    Filters combine with AND; each of domain/area_id/device_class takes one value
+    or a list. `query` is a case-insensitive substring of the entity_id or name.
+    Results are paged: pass the returned `cursor` back to get the next page
+    (`cursor` is null on the last page). `limit` defaults to 50, max 200.
+
+    Everything is reachable here — an action can target any domain you expose, and
+    a `state`/`template` condition can reference ANY entity in the house, so
+    nothing is filtered out of the catalog, only paged.
+
+    Examples:
+      lights in the kitchen  → domain="light", area_id="kitchen"
+      the lux sensors        → device_class="illuminance"
+      anything named 'lamp'  → query="lamp"
+    """
+    return await tools.find_entities(
+        _client_(), query, domain, area_id, device_class, limit, cursor
+    )
+
+
+@mcp.tool()
 async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
     """Read the current scenes for one scope.
     scope = {"kind": "area"|"floor"|"house", "id": "<area_or_floor_id>"} (omit id for house).

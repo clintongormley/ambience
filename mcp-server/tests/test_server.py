@@ -19,6 +19,7 @@ def test_reuses_one_reconnecting_client_across_tool_calls(monkeypatch):
 def test_all_tool_wrappers_exist():
     for name in [
         "ambience_get_context",
+        "ambience_find_entities",
         "ambience_get_scope",
         "ambience_get_guide",
         "ambience_dry_run",

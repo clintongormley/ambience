@@ -129,19 +129,22 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
     total = result.get("total_matches", len(rows))
     offset = result.get("offset", 0)
 
+    # Measure the dict we would actually RETURN at each length, cursor/truncated
+    # included — not a stand-in that carries the original (pre-trim) cursor. The
+    # returned cursor/truncated can flip (null -> int, false -> true) once rows
+    # are dropped, and those recomputed fields cost bytes too; sizing anything
+    # else risks handing back a page that is still over budget by a few chars.
     kept = list(rows)
-    while len(kept) > 1:
-        candidate = {**result, "entities": kept, "returned": len(kept)}
-        if size_of(candidate) <= limit:
-            break
+    while True:
+        next_cursor = offset + len(kept)
+        more = next_cursor < total
+        candidate = {
+            **result,
+            "entities": kept,
+            "returned": len(kept),
+            "cursor": next_cursor if more else None,
+            "truncated": more,
+        }
+        if size_of(candidate) <= limit or len(kept) <= 1:
+            return candidate
         kept.pop()
-
-    next_cursor = offset + len(kept)
-    more = next_cursor < total
-    return {
-        **result,
-        "entities": kept,
-        "returned": len(kept),
-        "cursor": next_cursor if more else None,
-        "truncated": more,
-    }

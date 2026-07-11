@@ -425,6 +425,17 @@ async def test_find_entities_forwards_paging():
     ]
 
 
+async def test_find_entities_forwards_a_zero_cursor():
+    # A zero cursor is falsy but legitimately SET and must be forwarded.
+    # If the filter check were "simplified" from `if value is not None` to
+    # `if value`, cursor=0 would be silently dropped, breaking pagination.
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client, cursor=0)
+
+    assert client.calls == [{"type": "ambience/entities/find", "cursor": 0}]
+
+
 async def test_find_entities_trims_an_oversized_page_and_repoints_the_cursor(monkeypatch):
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
     client = FakeClient(

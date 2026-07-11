@@ -19,6 +19,11 @@ STORAGE_VERSION = 1
 # version (which tracks features, not bundle shape).
 AI_BUNDLE_VERSION = 1
 
+AI_CONTEXT_VERSION = 1
+"""Structure version of the BOUNDED MCP export (`ambience/ai_context`). Versioned
+independently of AI_BUNDLE_VERSION: the fat download-and-paste bundle and the slim
+MCP context are different shapes for different consumers and evolve separately."""
+
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"

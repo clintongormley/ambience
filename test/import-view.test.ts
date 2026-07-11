@@ -124,6 +124,16 @@ describe("ambience-import-config", () => {
     expect(root.querySelector(".feedback")).toBeTruthy();
   });
 
+  test("boxes the recommended MCP section like the feedback aside, keeping the paste flow plain", async () => {
+    el = await mount();
+    const sections = el.shadowRoot.querySelectorAll("section.path");
+    // The MCP section and the feedback aside share the same card box treatment.
+    expect(sections[0].classList.contains("card")).toBe(true);
+    expect(el.shadowRoot.querySelector(".feedback")?.classList.contains("card")).toBe(true);
+    // The download/paste section stays a plain, unboxed section.
+    expect(sections[1].classList.contains("card")).toBe(false);
+  });
+
   test("invites feedback when the AI gets it wrong, linking to GitHub issues", async () => {
     el = await mount();
     expect((el.shadowRoot.textContent || "").toLowerCase()).toContain("better than the ai");

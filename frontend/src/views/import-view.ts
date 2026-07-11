@@ -71,11 +71,12 @@ export class AmbienceImportConfig extends LitElement {
       border: none; border-top: 1px solid var(--divider-color, #e0e0e0);
       margin: 1.75rem 0;
     }
-    .feedback {
-      margin-top: 1.5rem; padding: 0.75rem 1rem; border-radius: 6px;
+    .card {
+      padding: 0.75rem 1rem; border-radius: 6px;
       background: var(--secondary-background-color, #f5f5f5);
       border: 1px solid var(--divider-color, #e0e0e0);
     }
+    .feedback { margin-top: 1.5rem; }
     .feedback .fb-title { font-weight: 600; margin-bottom: 0.25rem; }
     .feedback .fb-body { color: var(--secondary-text-color, #666); }
     .feedback a { color: var(--primary-color, #03a9f4); }
@@ -220,7 +221,7 @@ export class AmbienceImportConfig extends LitElement {
         <span class="title">${localize(this.hass, "ui.import_title", "Author & fix scenes with AI")}</span>
         <span class="pill beta">${localize(this.hass, "ui.import_beta", "Beta")}</span>
       </div>
-      <section class="path">
+      <section class="path card">
         <div class="section-heading">
           <span>${localize(this.hass, "ui.import_mcp_title", "Author live with the MCP server")}</span>
           <span class="pill recommended"
@@ -273,7 +274,7 @@ export class AmbienceImportConfig extends LitElement {
       ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       ${this.preview ? this._renderPreview(this.preview) : nothing}
       ${this.done ? html`<div class="done">${this.done}</div>` : nothing}
-      <div class="feedback">
+      <div class="feedback card">
         <div class="fb-title">${localize(this.hass, "ui.import_feedback_title", "Can you do better than the AI?")}</div>
         <div class="fb-body">
           ${localize(this.hass, "ui.import_feedback_body", "If the AI gives you bad advice, share its suggestion, your corrected version, and a short note on what was wrong — it's used to improve the cookbook the AI learns from.")}

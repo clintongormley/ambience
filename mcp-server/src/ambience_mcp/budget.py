@@ -88,6 +88,15 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
     the dropped rows would make them UNREACHABLE — a silent hole in the catalog.
     The backend told us the page's `offset`, so the next cursor is exactly
     `offset + kept`.
+
+    Trimming never goes below one row. If even the first row alone exceeds the
+    budget, it is served anyway — an honest oversized result, exactly as
+    `fit_context` returns an oversized payload when it has nothing left to shed.
+    A zero-row page would set `next_cursor == offset`, handing the caller back
+    the exact cursor it just used: a conforming pagination client would fetch
+    that identical empty page forever. Flooring at one row instead guarantees
+    `next_cursor >= offset + 1` whenever rows exist, so paging always makes
+    progress and no row is ever silently skipped.
     """
     limit = max_result_chars() if budget is None else budget
     if size_of(result) <= limit:
@@ -101,7 +110,7 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
     offset = result.get("offset", 0)
 
     kept = list(rows)
-    while kept:
+    while len(kept) > 1:
         candidate = {**result, "entities": kept, "returned": len(kept)}
         if size_of(candidate) <= limit:
             break

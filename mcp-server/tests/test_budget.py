@@ -138,3 +138,58 @@ def test_fit_entities_with_no_rows_returns_what_it_has():
     }
 
     assert budget.fit_entities(result, budget=1) == result
+
+
+def test_fit_entities_floors_at_one_row_instead_of_livelocking():
+    # A single row bigger than the whole budget must still be served — trimming
+    # to zero rows would re-point the cursor at the caller's own offset, and a
+    # conforming pagination client would fetch the identical empty page forever.
+    result = {
+        "entities": [{"entity_id": "light.huge", "name": "x" * 500}],
+        "total_matches": 500,
+        "offset": 100,
+        "returned": 1,
+        "cursor": 101,
+        "truncated": True,
+    }
+
+    fitted = budget.fit_entities(result, budget=50)
+
+    assert fitted["returned"] == 1
+    assert fitted["entities"] == result["entities"]  # the oversized row is served, not dropped
+    assert fitted["cursor"] == result["offset"] + 1
+    assert fitted["cursor"] > result["offset"]  # must advance past the caller's own offset
+    assert fitted["truncated"] is True
+
+
+def test_fit_entities_paging_always_makes_progress_past_an_oversized_row():
+    # Simulate a client that pages forward using whatever cursor fit_entities hands
+    # back. If the cursor ever equals the offset it was given, the client is stuck
+    # re-fetching the same page forever.
+    first = {
+        "entities": [{"entity_id": "light.huge", "name": "x" * 500}],
+        "total_matches": 500,
+        "offset": 100,
+        "returned": 1,
+        "cursor": 101,
+        "truncated": True,
+    }
+
+    fitted = budget.fit_entities(first, budget=50)
+    assert fitted["cursor"] != first["offset"]
+
+    # Feed the returned cursor forward as the next page's offset.
+    second = {**first, "offset": fitted["cursor"], "cursor": fitted["cursor"] + 1}
+    fitted2 = budget.fit_entities(second, budget=50)
+
+    assert fitted2["cursor"] != second["offset"]
+    assert fitted2["cursor"] > second["offset"]
+
+
+def test_fit_entities_does_not_mutate_the_input():
+    result = _entities(50, 200)
+    before = json.dumps(result)
+
+    budget.fit_entities(result, budget=3_000)
+
+    assert json.dumps(result) == before

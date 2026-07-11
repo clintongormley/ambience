@@ -1419,6 +1419,43 @@ async def _ws_ai_bundle(
     connection.send_result(msg["id"], await build_ai_bundle(hass))
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/entities/find",
+        vol.Optional("query"): vol.Any(str, None),
+        vol.Optional("domain"): vol.Any(str, [str], None),
+        vol.Optional("area_id"): vol.Any(str, [str], None),
+        vol.Optional("device_class"): vol.Any(str, [str], None),
+        vol.Optional("limit"): vol.Any(int, None),
+        vol.Optional("cursor"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_entities_find(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Search the entity catalog, one bounded page at a time. The AI context
+    carries only entity COUNTS, so this is how an MCP client reaches an actual
+    entity — nothing is hidden, it is merely paged."""
+    from .entity_catalog import entity_rows, find_entities
+
+    connection.send_result(
+        msg["id"],
+        find_entities(
+            entity_rows(hass),
+            query=msg.get("query"),
+            domain=msg.get("domain"),
+            area_id=msg.get("area_id"),
+            device_class=msg.get("device_class"),
+            limit=msg.get("limit"),
+            cursor=msg.get("cursor"),
+        ),
+    )
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/ai_guide",
@@ -1629,6 +1666,7 @@ _WS_HANDLERS = (
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_ai_bundle,
+    _ws_entities_find,
     _ws_ai_guide,
     _ws_simulate_inputs,
     _ws_simulate,

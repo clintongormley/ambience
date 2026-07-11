@@ -60,6 +60,35 @@ The envelope is documented field-by-field in
   scope).
 - `scenes`: a non-empty list of [Scene](#3-scene) objects.
 
+### The two authoring paths differ — and one can destroy scenes
+
+> **The import block merges. The MCP write does not.**
+
+There are two ways to get scenes into an install, and their write semantics are
+**opposite**. Do not carry an assumption from one to the other:
+
+| | Import block (paste/upload) | MCP `ambience_apply_write` |
+|---|---|---|
+| Default | `mode: merge` — upserts by `(category, name)` | **no `mode` — always writes the whole scope** |
+| Scenes you omit | left untouched | **deleted** |
+
+`ambience_apply_write` takes the scope's **complete** scene list and stores
+exactly that. Any existing scene you leave out of the array is **removed** —
+including scenes in categories you never intended to touch.
+
+So over MCP, **always**:
+
+1. `ambience_get_scope` first, to read what is already there.
+2. Include every scene you intend to **keep**, alongside the ones you are adding
+   or changing.
+3. `ambience_preview_write` and **read the `removed` list** — if it contains
+   anything you did not mean to remove, you dropped a scene. Fix the array; do
+   not confirm.
+
+The `confirm_token` from a preview only commits *that exact* scene list, and an
+apply is reversible via Ambience's undo — but a silent mass-delete that the user
+confirms is still the easiest way to ruin their config. Check `removed`.
+
 ---
 
 ## 2. ScopeConfig (what a scope stores)
@@ -311,7 +340,10 @@ real. Author against it. Shape:
 {
   "ambience_ai_bundle": 1,
   "catalog": {
-    "areas":  [ { "area_id": "living_room", "name": "Living Room" } ],
+    // `floor_id` is the area's floor, or null if it is on none. It is the ONLY
+    // link between an area and a floor — use it to resolve a floor scope to its
+    // areas, and so to their entities.
+    "areas":  [ { "area_id": "living_room", "name": "Living Room", "floor_id": "ground" } ],
     "floors": [ { "floor_id": "ground", "name": "Ground floor" } ],
     // Flat list. `area_id` is the entity's own area, else its device's area, else null.
     "entities": [
@@ -341,6 +373,21 @@ Presence/location data is redacted (person/device_tracker ids, zones, templates,
 workday/weather entities), so don't expect those values; reference people by the
 `person.*` ids you can still see in `catalog.entities`.
 
+### Reading the catalog — two traps
+
+**An entity's `area_id` is authoritative; the words in its `entity_id` are not.**
+Entity ids are frozen at discovery and rarely renamed, so
+`binary_sensor.lounge_presence_occupancy` may well sit in the **Upstairs** area.
+Never filter, group or exclude an entity on what its id *looks* like — read
+`area_id`. If an id and its area disagree, mention it to the user (the registry
+may genuinely be wrong) but **author against `area_id`**.
+
+**An area and a floor can share a name.** "Upstairs" is commonly both a floor and
+a room on it, and the two are different scopes with different scenes. A user who
+says "upstairs" has not told you which. When a name matches both, **ask** — do not
+guess. Picking the wrong one fails silently: the scenes save happily into a unit
+that never fires for the entities you meant.
+
 ---
 
 ## Glossary
@@ -357,7 +404,20 @@ workday/weather entities), so don't expect those values; reference people by the
   wildcard.
 - **Exposed service / action** — a HA service the user has allowed Ambience to
   call. Only these are valid in `actions[].service`.
-- **AI bundle** — the file the user downloads from the Ambience panel: their real
+- **AI bundle** — the **data**: what is in the user's house. Their real
   areas/floors/entities, exposed services + field schemas, custom periods / lux
   ranges / weather groups / categories, current config (redacted), and recent
-  traces. Always author against the bundle so entity ids and vocabulary are real.
+  traces. Unique to each install. Downloaded from the panel (**AI** tab →
+  *Download AI bundle*), or fetched live over MCP with `ambience_get_context`.
+  Always author against the bundle so entity ids and vocabulary are real.
+- **Guide** — the **documentation**: how Ambience works (this document — schema,
+  import format, conditions, actions, diagnosis). Identical for everyone on a
+  given Ambience version. Pasted in, shipped in the knowledge pack, or fetched
+  live over MCP with `ambience_get_guide`.
+- **Knowledge pack** — the plugin/skill that ships a static copy of the guide.
+  It, not the guide, is what you update on a version mismatch.
+
+> **The guide is how Ambience works; the bundle is what's in your house.** They
+> are different artifacts and both carry an `ambience_version` — so reading a
+> version out of the *bundle* is no evidence you have ever read the *guide*.
+> Never call the guide a "bundle".

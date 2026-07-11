@@ -371,26 +371,93 @@ async def test_apply_write_strips_rank_before_save():
     assert save_call["config"] == {"scenes": stripped}
 
 
-async def test_get_guide_forwards_have_version_and_returns_payload():
-    payload = {"guide": "# Guide", "ambience_version": "1.1.0", "ambience_ai_bundle": 1}
-    client = FakeClient({"ambience/ai_guide": payload})
-    result = await tools.get_guide(client, have_version="1.0.0")
-    assert result == payload
-    assert client.calls == [{"type": "ambience/ai_guide", "have_version": "1.0.0"}]
+# A guide whose "Import format" section contains a fenced YAML block with `#`
+# comments — the shape that a naive line-based splitter would shred into bogus
+# sections (the real guide is full of these).
+GUIDE_TEXT = """<!-- generated -->
+
+# Ambience — AI authoring & diagnosis guide
+
+Intro paragraph.
+
+# Config schema
+
+Schema body.
+
+# Import format
+
+Envelope body.
+
+```yaml
+# --- Block 1 of 2: Living room ---
+ambience_import: 1
+```
+
+Trailing envelope prose.
+
+# Actions
+
+Actions body.
+"""
+
+GUIDE_PAYLOAD = {
+    "guide": GUIDE_TEXT,
+    "ambience_version": "1.1.0",
+    "ambience_ai_bundle": 1,
+}
 
 
-async def test_get_guide_omits_have_version_when_absent():
-    client = FakeClient(
-        {
-            "ambience/ai_guide": {
-                "guide": "# G",
-                "ambience_version": "1.1.0",
-                "ambience_ai_bundle": 1,
-            }
-        }
-    )
-    await tools.get_guide(client)
+def test_split_guide_sections_ignores_hash_comments_inside_code_fences():
+    sections = tools._split_guide_sections(GUIDE_TEXT)
+    assert [name for name, _ in sections] == [
+        "Ambience — AI authoring & diagnosis guide",
+        "Config schema",
+        "Import format",
+        "Actions",
+    ]
+    body = dict(sections)["Import format"]
+    assert "# --- Block 1 of 2: Living room ---" in body
+    assert "Trailing envelope prose." in body
+
+
+async def test_get_guide_without_section_returns_contents_not_the_full_text():
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    result = await tools.get_guide(client)
+    assert result["sections"] == [
+        "Ambience — AI authoring & diagnosis guide",
+        "Config schema",
+        "Import format",
+        "Actions",
+    ]
+    assert "guide" not in result
+    assert result["ambience_version"] == "1.1.0"
+
+
+async def test_get_guide_returns_only_the_requested_section():
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    result = await tools.get_guide(client, section="Config schema")
+    assert result["section"] == "Config schema"
+    assert "Schema body." in result["guide"]
+    assert "Actions body." not in result["guide"]
+
+
+async def test_get_guide_never_sends_have_version_so_the_text_always_arrives():
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    await tools.get_guide(client, section="Actions")
     assert client.calls == [{"type": "ambience/ai_guide"}]
+
+
+async def test_get_guide_rejects_an_unknown_section_and_lists_the_real_ones():
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    result = await tools.get_guide(client, section="Nonsense")
+    assert "error" in result
+    assert result["sections"] == [
+        "Ambience — AI authoring & diagnosis guide",
+        "Config schema",
+        "Import format",
+        "Actions",
+    ]
+    assert "guide" not in result
 
 
 async def test_get_guide_reports_unavailable_on_old_backend():

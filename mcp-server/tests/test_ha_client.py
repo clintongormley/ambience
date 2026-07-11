@@ -98,6 +98,41 @@ async def test_transport_failure_marks_client_closed_and_wraps_error():
     assert client.closed is True
 
 
+async def test_a_failed_send_reports_the_command_never_left_the_client():
+    """A socket that went stale while idle (an HA restart) fails on send — HA
+    never saw the command, so it is provably safe to retry, even a write."""
+
+    class DeadOnSend:
+        async def send(self, data: str) -> None:
+            raise ConnectionResetError("received 1000 (OK)")
+
+        async def recv(self) -> str: ...
+        async def close(self) -> None: ...
+
+    client = HAClient(DeadOnSend())
+    with pytest.raises(HAConnectionError) as exc:
+        await client.command("ambience/house/get")
+    assert exc.value.sent is False
+    assert client.closed is True
+
+
+async def test_a_failed_receive_reports_the_command_may_have_run():
+    """The send succeeded, so HA may have applied a write and only the reply was
+    lost. Retrying is NOT safe — the caller must be told."""
+
+    class DeadOnRecv:
+        async def send(self, data: str) -> None: ...
+        async def recv(self) -> str:
+            raise ConnectionResetError("socket dropped")
+
+        async def close(self) -> None: ...
+
+    client = HAClient(DeadOnRecv())
+    with pytest.raises(HAConnectionError) as exc:
+        await client.command("ambience/house/get")
+    assert exc.value.sent is True
+
+
 async def test_command_error_does_not_mark_client_closed():
     t = FakeTransport(
         [

@@ -159,21 +159,74 @@ _GUIDE_UNAVAILABLE_MESSAGE = (
 )
 
 
-async def get_guide(client: Any, have_version: str | None = None) -> dict[str, Any]:
+_GUIDE_USAGE = (
+    "Call ambience_get_guide again with section=<one of sections> to read that "
+    "part. The whole guide is far too large to return at once — read the "
+    "sections you need. 'Config schema' and 'Condition cookbook' cover most "
+    "authoring; 'Reading a diagnostic bundle' covers diagnosis."
+)
+
+
+def _split_guide_sections(text: str) -> list[tuple[str, str]]:
+    """Split the assembled guide on its top-level `# ` headings.
+
+    Fence-aware on purpose: the guide's YAML examples are full of `#` comments
+    (`# --- Block 1 of 2 ---`, `# BEFORE — ...`) which a naive line-based split
+    would mistake for headings and shred the sections apart.
+    """
+    sections: list[tuple[str, str]] = []
+    name: str | None = None
+    body: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("# "):
+            if name is not None:
+                sections.append((name, "\n".join(body).strip()))
+            name = line[2:].strip()
+            body = []
+            continue
+        if name is not None:
+            body.append(line)
+    if name is not None:
+        sections.append((name, "\n".join(body).strip()))
+    return sections
+
+
+async def get_guide(client: Any, section: str | None = None) -> dict[str, Any]:
     """Fetch the authoring guide (schema + cookbook) live from the running
-    install. Pass the `ambience_version` you already hold as `have_version`; a
-    matching version returns {unchanged: true} with no text so the guide is only
-    re-read when the install changes. Old backends that predate the command
-    return {unavailable: true} instead of raising."""
-    payload: dict[str, Any] = {}
-    if have_version is not None:
-        payload["have_version"] = have_version
+    install, one section at a time.
+
+    With no `section`, returns the list of section names (a table of contents).
+    With a `section`, returns just that section's text. The full guide is ~25k
+    tokens and does not fit in a single tool result, which is why there is no
+    "give me all of it" mode. Old backends that predate the command return
+    {unavailable: true} instead of raising.
+    """
     try:
-        return await client.command("ambience/ai_guide", **payload)
+        payload = await client.command("ambience/ai_guide")
     except HACommandError as exc:
         if exc.code == "unknown_command":
             return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
         raise
+
+    sections = _split_guide_sections(payload.get("guide") or "")
+    names = [name for name, _ in sections]
+    meta = {
+        "ambience_version": payload.get("ambience_version"),
+        "ambience_ai_bundle": payload.get("ambience_ai_bundle"),
+    }
+    if section is None:
+        return {**meta, "sections": names, "usage": _GUIDE_USAGE}
+    bodies = dict(sections)
+    if section not in bodies:
+        return {
+            **meta,
+            "error": f"Unknown guide section {section!r}.",
+            "sections": names,
+        }
+    return {**meta, "section": section, "guide": bodies[section]}
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:

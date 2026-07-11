@@ -60,12 +60,32 @@ async def test_bundle_includes_area_floor_and_entity_catalog(
     bundle = await build_ai_bundle(hass)
 
     assert bundle["ambience_ai_bundle"] == 1
-    assert {"area_id": area.id, "name": "Living Room"} in bundle["catalog"]["areas"]
+    assert {"area_id": area.id, "name": "Living Room", "floor_id": None} in bundle["catalog"][
+        "areas"
+    ]
     assert any(f["name"] == "Upstairs" for f in bundle["catalog"]["floors"])
     lamp = next(e for e in bundle["catalog"]["entities"] if e["entity_id"] == entry.entity_id)
     assert lamp["domain"] == "light"
     assert lamp["area_id"] == area.id
     assert lamp["state"] == "on"
+
+
+async def test_area_carries_its_floor_id_so_floor_scopes_are_authorable(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    """Without this link an AI authoring a floor-scoped block cannot tell which
+    areas — and so which entities — are on that floor."""
+    floor = fr.async_get(hass).async_create("Upstairs")
+    area_reg = ar.async_get(hass)
+    bedroom = area_reg.async_create("Bedroom")
+    area_reg.async_update(bedroom.id, floor_id=floor.floor_id)
+    garden = area_reg.async_create("Garden")  # deliberately on no floor
+
+    bundle = await build_ai_bundle(hass)
+    areas = {a["area_id"]: a for a in bundle["catalog"]["areas"]}
+
+    assert areas[bedroom.id]["floor_id"] == floor.floor_id
+    assert areas[garden.id]["floor_id"] is None
 
 
 async def test_entity_inherits_area_from_its_device(hass: HomeAssistant) -> None:

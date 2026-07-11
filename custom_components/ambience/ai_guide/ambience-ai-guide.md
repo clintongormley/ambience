@@ -4,17 +4,23 @@
 
 This single document teaches an AI how to author and diagnose Home Assistant Ambience scene config. Paste it into your AI, then paste your downloaded **AI bundle** (Ambience panel → Download AI bundle) so the AI knows your real entities, areas and exposed actions.
 
-# Supported AI bundle format
+# Compatibility
 
-# Pack compatibility
+**Three things, three names — don't mix them up:**
 
-This pack was built for **Ambience 1.1.x** and understands **AI bundle format 1**.
+- **This guide** — how Ambience *works*: schema, conditions, actions, diagnosis. Identical for everyone on a given Ambience version.
+- **The AI bundle** — what is in the *user's house*: their areas, floors, entities, exposed actions, vocabularies, config and traces. Unique to each install. Never call the guide a bundle.
+- **The knowledge pack** — the plugin/skill that *ships* a static copy of this guide, and the thing you update below.
 
-**Before authoring or diagnosing, check the bundle against this pack:**
+This guide was built for **Ambience 1.1.x** and understands **AI bundle format 1**.
+
+> **Reading this over the Ambience MCP server? Skip the check.** The MCP server fetches the guide from the running install, so it always matches the user's Ambience — there is no static pack to fall out of date. The version check below is for a guide you were *pasted* or that ships in the knowledge pack.
+
+**Before authoring or diagnosing, check the bundle against this guide:**
 
 1. **Version.** Take the bundle's `ambience_version` (e.g. `1.1.2`), drop the patch, and compare its major.minor to **1.1** — compare each part as an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):
-   - **newer than 1.1** → the user's Ambience is newer than this pack. **Stop. Do not author.** Update the plugin (below), then retry.
-   - **older than 1.1** → the user's Ambience is older than this pack. Ask them to update Ambience (HACS) and re-download the bundle.
+   - **newer than 1.1** → the user's Ambience is newer than this guide. **Stop. Do not author.** Update the knowledge pack (below), then retry.
+   - **older than 1.1** → the user's Ambience is older than this guide. Ask them to update Ambience (HACS) and re-download the bundle.
    - **same `1.1`** → compatible, continue.
 2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater than **1**, also stop and update the plugin.
 
@@ -30,8 +36,6 @@ On a version mismatch, give the user these exact steps (and, in Claude Code, off
 If it doesn't take effect, a clean reinstall always works (`/plugin uninstall ambience@ambience` then `/plugin install ambience@ambience`). The updated skill loads on the **next session** — have them restart and re-run. To skip this every release, they can enable **auto-update** for the `ambience` marketplace (`/plugin` → Marketplaces → ambience → enable auto-update).
 
 # Config schema
-
-# Ambience configuration schema (overview)
 
 This is a hand-authored **overview** of the data an AI produces to author
 Ambience scenes. It explains the shapes and how they fit together. For the
@@ -92,6 +96,35 @@ The envelope is documented field-by-field in
   others untouched) or `replace` (replace only this category's scenes in the
   scope).
 - `scenes`: a non-empty list of [Scene](#3-scene) objects.
+
+### The two authoring paths differ — and one can destroy scenes
+
+> **The import block merges. The MCP write does not.**
+
+There are two ways to get scenes into an install, and their write semantics are
+**opposite**. Do not carry an assumption from one to the other:
+
+| | Import block (paste/upload) | MCP `ambience_apply_write` |
+|---|---|---|
+| Default | `mode: merge` — upserts by `(category, name)` | **no `mode` — always writes the whole scope** |
+| Scenes you omit | left untouched | **deleted** |
+
+`ambience_apply_write` takes the scope's **complete** scene list and stores
+exactly that. Any existing scene you leave out of the array is **removed** —
+including scenes in categories you never intended to touch.
+
+So over MCP, **always**:
+
+1. `ambience_get_scope` first, to read what is already there.
+2. Include every scene you intend to **keep**, alongside the ones you are adding
+   or changing.
+3. `ambience_preview_write` and **read the `removed` list** — if it contains
+   anything you did not mean to remove, you dropped a scene. Fix the array; do
+   not confirm.
+
+The `confirm_token` from a preview only commits *that exact* scene list, and an
+apply is reversible via Ambience's undo — but a silent mass-delete that the user
+confirms is still the easiest way to ruin their config. Check `removed`.
 
 ---
 
@@ -344,7 +377,10 @@ real. Author against it. Shape:
 {
   "ambience_ai_bundle": 1,
   "catalog": {
-    "areas":  [ { "area_id": "living_room", "name": "Living Room" } ],
+    // `floor_id` is the area's floor, or null if it is on none. It is the ONLY
+    // link between an area and a floor — use it to resolve a floor scope to its
+    // areas, and so to their entities.
+    "areas":  [ { "area_id": "living_room", "name": "Living Room", "floor_id": "ground" } ],
     "floors": [ { "floor_id": "ground", "name": "Ground floor" } ],
     // Flat list. `area_id` is the entity's own area, else its device's area, else null.
     "entities": [
@@ -374,6 +410,21 @@ Presence/location data is redacted (person/device_tracker ids, zones, templates,
 workday/weather entities), so don't expect those values; reference people by the
 `person.*` ids you can still see in `catalog.entities`.
 
+### Reading the catalog — two traps
+
+**An entity's `area_id` is authoritative; the words in its `entity_id` are not.**
+Entity ids are frozen at discovery and rarely renamed, so
+`binary_sensor.lounge_presence_occupancy` may well sit in the **Upstairs** area.
+Never filter, group or exclude an entity on what its id *looks* like — read
+`area_id`. If an id and its area disagree, mention it to the user (the registry
+may genuinely be wrong) but **author against `area_id`**.
+
+**An area and a floor can share a name.** "Upstairs" is commonly both a floor and
+a room on it, and the two are different scopes with different scenes. A user who
+says "upstairs" has not told you which. When a name matches both, **ask** — do not
+guess. Picking the wrong one fails silently: the scenes save happily into a unit
+that never fires for the entities you meant.
+
 ---
 
 ## Glossary
@@ -390,14 +441,25 @@ workday/weather entities), so don't expect those values; reference people by the
   wildcard.
 - **Exposed service / action** — a HA service the user has allowed Ambience to
   call. Only these are valid in `actions[].service`.
-- **AI bundle** — the file the user downloads from the Ambience panel: their real
+- **AI bundle** — the **data**: what is in the user's house. Their real
   areas/floors/entities, exposed services + field schemas, custom periods / lux
   ranges / weather groups / categories, current config (redacted), and recent
-  traces. Always author against the bundle so entity ids and vocabulary are real.
+  traces. Unique to each install. Downloaded from the panel (**AI** tab →
+  *Download AI bundle*), or fetched live over MCP with `ambience_get_context`.
+  Always author against the bundle so entity ids and vocabulary are real.
+- **Guide** — the **documentation**: how Ambience works (this document — schema,
+  import format, conditions, actions, diagnosis). Identical for everyone on a
+  given Ambience version. Pasted in, shipped in the knowledge pack, or fetched
+  live over MCP with `ambience_get_guide`.
+- **Knowledge pack** — the plugin/skill that ships a static copy of the guide.
+  It, not the guide, is what you update on a version mismatch.
+
+> **The guide is how Ambience works; the bundle is what's in your house.** They
+> are different artifacts and both carry an `ambience_version` — so reading a
+> version out of the *bundle* is no evidence you have ever read the *guide*.
+> Never call the guide a "bundle".
 
 # Import format
-
-# Import format — the single-scope envelope
 
 An AI authors Ambience scenes by emitting **import blocks**. Each block is one
 **scope's** scenes wrapped in a thin, self-describing envelope that tells the
@@ -482,6 +544,12 @@ silently coerce to "General".
   in one category so the blast radius matches your intent. Higher blast radius —
   the preview lists exactly which existing scenes will be removed, so check it
   before confirming.
+
+> **`mode` is a property of the import block only — the MCP server has no such
+> thing.** `ambience_apply_write` always writes the **whole scope**, so a scene
+> you omit is deleted, not merged. Read the scope with `ambience_get_scope`
+> first, carry forward everything you mean to keep, and check the preview's
+> `removed` list. See [schema.md](schema.md#the-two-authoring-paths-differ--and-one-can-destroy-scenes).
 
 ### `scenes` (required)
 
@@ -635,8 +703,6 @@ grey, blue-grey
 
 # Condition reference
 
-# Condition reference
-
 Every built-in condition usable under a scene's `when`. Each `when` key is one of these names; its value is that condition's predicate (or `null` to match anything). See `conditions-cookbook.md` for plain-English → predicate examples.
 
 ## `unavailable`
@@ -717,8 +783,6 @@ Every built-in condition usable under a scene's `when`. Each `when` key is one o
 - **Help:** Object {groups: [group_id, ...], thresholds: [{attribute, op, value}]}. Matches when the current weather condition belongs to one of the selected `groups` (empty = any) and every threshold holds. Operators: < <= > >=.
 
 # Condition cookbook
-
-# Conditions cookbook
 
 This is the most important file for **authoring**. It maps plain-English intent
 to the exact predicate JSON, for every built-in condition. Read this when
@@ -1213,6 +1277,21 @@ predict the containment order and avoid needless pins).
 
 ## Patterns
 
+### Naming a blocker
+
+A blocker's `when` is nearly always the **negative** of the thing you're waiting
+for ("occupancy is off", "the cover is moving"). Don't name it after that
+inverted predicate — name it after **what the cascade is waiting for**:
+
+| Prefer | Over |
+|---|---|
+| `Block until occupied` | `Block while the sensor is clear` |
+| `Block until the blinds settle` | `Block while the blinds are moving` |
+
+Users read the scene list top-down to understand the cascade, and "block **until**
+X" states the condition under which the rules below it come alive. "Block while
+not-X" makes them invert it in their head to get the same information.
+
 ### Don't decide while a cover is moving (the "settle" blocker)
 
 Covers (blinds, shades, garage doors) have **transitional** states — `opening`
@@ -1305,6 +1384,12 @@ spike can't flip a scene:
 
 ### Survive a Home Assistant restart (a `for:` gate is briefly immature)
 
+> **Precondition — you only need this if you hoisted the occupancy test.** The
+> blocker below exists to repair the *gate-hoisting* simplification, not to
+> accompany every `for:` gate. If your "on" scene tests occupancy itself, it
+> already declines to match in an empty room and **no blocker is needed** — see
+> *When you don't need the blocker*, below.
+
 After a Home Assistant restart, presence / occupancy sensors are re-created and
 their `last_changed` usually resets to boot time (HA doesn't restore it for most of
 them). Ambience seeds a `for:` gate's clock from that anchor (`last_changed`) on
@@ -1346,6 +1431,38 @@ per [schema.md](schema.md) → *How scenes are chosen*.
 > This only bites a `for:` gate whose entity resets `last_changed` on restart. A
 > sensor that restores its timestamp, or a `for`-less test, matures immediately and
 > needs no guard.
+
+#### When you *don't* need the blocker
+
+The blocker only earns its place because the lower scenes **dropped** their
+occupancy test. The commonest ask — *"lights on when someone enters, off five
+minutes after everyone leaves"* — has a single "on" scene and nothing to hoist,
+so it needs **two** scenes, not three. Have the "on" scene test occupancy
+directly and it declines to match in an empty room all by itself:
+
+```yaml
+- name: Vacant
+  when: { occupancy: { sensors: [binary_sensor.hall], occupied: false, for: { m: 5 } } }
+  actions: [ <lights off> ]
+- name: Occupied           # tests occupancy itself — no catch-all, so no blocker
+  when: { occupancy: { sensors: [binary_sensor.hall], occupied: true } }
+  actions: [ <lights on> ]
+```
+
+Both awkward windows fall out for free, because **no scene matching is a valid
+outcome** — the unit simply does nothing and the lights keep their current state:
+
+- **The 5-minute grace.** The room is vacant but the timer hasn't matured, so
+  `Vacant` fails; `Occupied` fails too. Nothing runs — the lights stay **on**,
+  which is exactly the delay the user asked for.
+- **A cold boot into an empty room.** `Vacant` is immature, and `Occupied` fails
+  because the sensor is off. Nothing runs — the lights stay **off**. The restart
+  bug never arises.
+
+Reach for the three-scene form only once "on" splits into variants — *Daytime* /
+*Evening* / *Nighttime* — each of which would otherwise have to repeat the same
+occupancy test. **That** is when you hoist it into the `Vacant` gate and add the
+blocker to cover what the hoist broke.
 
 ### Cap-and-hold a cover without overriding a manual change
 
@@ -1560,8 +1677,6 @@ the `Lights off` catch-all reaches into the "home" case and clobbers manual chan
 
 # Actions
 
-# Actions
-
 When a scene wins, Ambience runs its `actions` — a list of HA service calls. This
 file explains how they work and how to author them. For the high-level
 `ActionSpec` shape see [schema.md](schema.md); for the generated field schemas of
@@ -1741,8 +1856,6 @@ unit so no lower scene fires) but commands nothing:
 
 # Action reference
 
-# Built-in action reference
-
 The always-available `ambience.*` safe services. The exposed services for a specific install (e.g. `light.turn_on`) and their field schemas live in that install's AI bundle under `actions`.
 
 ## `ambience.cover_safe_close`
@@ -1782,8 +1895,6 @@ The always-available `ambience.*` safe services. The exposed services for a spec
 - **Fields:** _(none)_
 
 # Reading a diagnostic bundle
-
-# Diagnostics guide — "why didn't my scene fire?"
 
 When a user says a scene isn't behaving, the answer is in the **traces** carried
 in their downloaded AI bundle (and in the panel's per-scope diagnostics). This

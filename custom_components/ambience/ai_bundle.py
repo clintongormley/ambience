@@ -47,7 +47,9 @@ async def _ambience_version(hass: HomeAssistant) -> str | None:
 def _areas(hass: HomeAssistant) -> list[dict[str, Any]]:
     area_reg = ar.async_get(hass)
     return [
-        {"area_id": entry.id, "name": entry.name}
+        # floor_id is what lets an AI resolve a floor scope to its areas (and so
+        # to their entities); without it a floor-scoped block cannot be authored.
+        {"area_id": entry.id, "name": entry.name, "floor_id": entry.floor_id}
         for entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name)
     ]
 

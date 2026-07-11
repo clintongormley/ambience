@@ -23,7 +23,17 @@ class HAAuthError(HAError):
 
 
 class HAConnectionError(HAError):
-    """The websocket failed to open, dropped mid-session, or sent a bad frame."""
+    """The websocket failed to open, dropped mid-session, or sent a bad frame.
+
+    `sent` says whether the command reached Home Assistant before the failure.
+    False (the socket was already dead when we tried to write) means HA never saw
+    it, so even a write is safe to retry. True means it may have been applied and
+    only the reply was lost — re-sending a write could apply it twice.
+    """
+
+    def __init__(self, message: str, *, sent: bool = True) -> None:
+        super().__init__(message)
+        self.sent = sent
 
 
 class HACommandError(HAError):
@@ -79,8 +89,15 @@ class HAClient:
         async with self._lock:
             self._next_id += 1
             cmd_id = self._next_id
+            # Send and receive are reported separately: a socket that went stale
+            # while idle (an HA restart) fails here, before HA sees anything, and
+            # the caller can safely retry it — even a write. See HAConnectionError.
             try:
                 await self._transport.send(json.dumps({"id": cmd_id, "type": type, **payload}))
+            except Exception as exc:
+                self._closed = True
+                raise HAConnectionError(f"websocket command failed: {exc}", sent=False) from exc
+            try:
                 # Bounded so a live-but-unresponsive HA can't wedge the lock (and
                 # thus every other tool call) forever — fail fast, then reconnect.
                 return await asyncio.wait_for(self._recv_result(cmd_id), _COMMAND_TIMEOUT)
@@ -88,7 +105,7 @@ class HAClient:
                 raise  # a normal command-level failure — the connection is fine
             except Exception as exc:  # timeout / transport dropped / malformed frame
                 self._closed = True
-                raise HAConnectionError(f"websocket command failed: {exc}") from exc
+                raise HAConnectionError(f"websocket command failed: {exc}", sent=True) from exc
 
     async def _recv_result(self, cmd_id: int) -> dict[str, Any]:
         while True:

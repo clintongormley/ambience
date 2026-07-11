@@ -88,3 +88,50 @@ def test_assemble_portable_doc_concatenates_parts_under_one_banner() -> None:
     # Section titles become headings so the reader can navigate.
     assert "# Schema" in doc
     assert "# Cookbook" in doc
+
+
+def test_guide_section_titles_are_stable_and_never_call_the_guide_a_bundle() -> None:
+    """The section titles are an API: the MCP server serves the guide by section
+    and an AI passes these names back to `ambience_get_guide(section=...)`, so a
+    rename breaks callers. They must also keep "bundle" for the user's *data* —
+    the guide/pack is the documentation, and conflating the two is what makes an
+    AI think it already holds a guide it has never read.
+    """
+    titles = [title for title, _ in gen_ai_docs._PORTABLE_PARTS]
+    assert titles == [
+        "Compatibility",
+        "Config schema",
+        "Import format",
+        "Condition reference",
+        "Condition cookbook",
+        "Actions",
+        "Action reference",
+        "Reading a diagnostic bundle",
+    ]
+
+
+def test_assemble_portable_doc_drops_a_parts_own_h1() -> None:
+    """Each part file opens with its own H1, and the assembler adds the section
+    title as an H1 too. Emitting both leaves two consecutive H1s — which reads as
+    an empty section to anything that splits the guide on top-level headings
+    (the MCP server serves the guide section by section this way)."""
+    doc = gen_ai_docs.assemble_portable_doc(
+        [("Config schema", "# Ambience configuration schema (overview)\n\nschema body")]
+    )
+    assert "# Config schema" in doc
+    assert "# Ambience configuration schema (overview)" not in doc
+    assert "schema body" in doc
+    # Exactly one top-level heading for the part (plus the guide's own title).
+    assert [ln for ln in doc.splitlines() if ln.startswith("# ")] == [
+        "# Ambience — AI authoring & diagnosis guide",
+        "# Config schema",
+    ]
+
+
+def test_assemble_portable_doc_keeps_subheadings_and_fenced_comments() -> None:
+    """Only a *leading* H1 is dropped: `##` structure and `#` comments inside
+    YAML fences must survive untouched."""
+    body = "# Import format\n\n## The envelope\n\n```yaml\n# --- Block 1 ---\nx: 1\n```"
+    doc = gen_ai_docs.assemble_portable_doc([("Import format", body)])
+    assert "## The envelope" in doc
+    assert "# --- Block 1 ---" in doc

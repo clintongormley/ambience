@@ -84,6 +84,12 @@ silently coerce to "General".
   the preview lists exactly which existing scenes will be removed, so check it
   before confirming.
 
+> **`mode` is a property of the import block only — the MCP server has no such
+> thing.** `ambience_apply_write` always writes the **whole scope**, so a scene
+> you omit is deleted, not merged. Read the scope with `ambience_get_scope`
+> first, carry forward everything you mean to keep, and check the preview's
+> `removed` list. See [schema.md](schema.md#the-two-authoring-paths-differ--and-one-can-destroy-scenes).
+
 ### `scenes` (required)
 
 A non-empty list of [Scene](schema.md#3-scene) objects. Each scene's `category`

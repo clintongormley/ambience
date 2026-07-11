@@ -58,7 +58,7 @@ _REQUIRED_ATTRS = ("name", "description", "predicate_help", "input", "priority")
 # The curated source files, in the order they appear in the portable guide.
 # Missing files are skipped (so the generator runs before they're all authored).
 _PORTABLE_PARTS = [
-    ("Supported AI bundle format", "bundle-format.generated.md"),
+    ("Compatibility", "bundle-format.generated.md"),
     ("Config schema", "schema.md"),
     ("Import format", "import-format.md"),
     ("Condition reference", "condition-reference.generated.md"),
@@ -183,25 +183,41 @@ def render_action_reference(actions: list[dict[str, Any]]) -> str:
 
 
 def render_compatibility(bundle_format: int, version_minor: str) -> str:
-    """The generated compatibility note: the Ambience version this pack was built
+    """The generated compatibility note: the Ambience version this guide was built
     for and the bundle format it understands, plus exactly how to update. Derived
     from manifest.json + the `AI_BUNDLE_VERSION` constant so it can't go stale."""
     lines = [
         GENERATED_BANNER,
         "",
-        "# Pack compatibility",
+        "# Compatibility",
         "",
-        f"This pack was built for **Ambience {version_minor}.x** and understands "
+        "**Three things, three names — don't mix them up:**",
+        "",
+        "- **This guide** — how Ambience *works*: schema, conditions, actions, "
+        "diagnosis. Identical for everyone on a given Ambience version.",
+        "- **The AI bundle** — what is in the *user's house*: their areas, floors, "
+        "entities, exposed actions, vocabularies, config and traces. Unique to "
+        "each install. Never call the guide a bundle.",
+        "- **The knowledge pack** — the plugin/skill that *ships* a static copy of "
+        "this guide, and the thing you update below.",
+        "",
+        f"This guide was built for **Ambience {version_minor}.x** and understands "
         f"**AI bundle format {bundle_format}**.",
         "",
-        "**Before authoring or diagnosing, check the bundle against this pack:**",
+        "> **Reading this over the Ambience MCP server? Skip the check.** The MCP "
+        "server fetches the guide from the running install, so it always matches "
+        "the user's Ambience — there is no static pack to fall out of date. The "
+        "version check below is for a guide you were *pasted* or that ships in "
+        "the knowledge pack.",
+        "",
+        "**Before authoring or diagnosing, check the bundle against this guide:**",
         "",
         f"1. **Version.** Take the bundle's `ambience_version` (e.g. `{version_minor}.2`), drop "
         f"the patch, and compare its major.minor to **{version_minor}** — compare each part as "
         "an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):",
-        f"   - **newer than {version_minor}** → the user's Ambience is newer than this pack. "
-        "**Stop. Do not author.** Update the plugin (below), then retry.",
-        f"   - **older than {version_minor}** → the user's Ambience is older than this pack. "
+        f"   - **newer than {version_minor}** → the user's Ambience is newer than this guide. "
+        "**Stop. Do not author.** Update the knowledge pack (below), then retry.",
+        f"   - **older than {version_minor}** → the user's Ambience is older than this guide. "
         "Ask them to update Ambience (HACS) and re-download the bundle.",
         f"   - **same `{version_minor}`** → compatible, continue.",
         "2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater "
@@ -229,6 +245,22 @@ def render_compatibility(bundle_format: int, version_minor: str) -> str:
     return "\n".join(lines)
 
 
+def _drop_leading_h1(body: str) -> str:
+    """Remove a part's own opening `# Title` line.
+
+    The assembler emits the section title as an H1 already, so keeping the
+    part's would leave two consecutive H1s — an empty section to any reader that
+    splits the guide on top-level headings (the MCP server serves it that way).
+    Only a *leading* H1 goes: `##` structure and the `#` comments inside the
+    guide's YAML fences must survive.
+    """
+    stripped = body.strip()
+    if not stripped.startswith("# "):
+        return stripped
+    _, _, rest = stripped.partition("\n")
+    return rest.strip()
+
+
 def assemble_portable_doc(parts: list[tuple[str, str]]) -> str:
     """One self-contained markdown built from titled section bodies, suitable to
     paste/upload into any AI."""
@@ -244,7 +276,7 @@ def assemble_portable_doc(parts: list[tuple[str, str]]) -> str:
         "",
     ]
     for title, body in parts:
-        lines += [f"# {title}", "", body.strip(), ""]
+        lines += [f"# {title}", "", _drop_leading_h1(body), ""]
     return "\n".join(lines)
 
 

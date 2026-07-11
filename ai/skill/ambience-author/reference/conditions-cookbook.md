@@ -493,6 +493,21 @@ predict the containment order and avoid needless pins).
 
 ## Patterns
 
+### Naming a blocker
+
+A blocker's `when` is nearly always the **negative** of the thing you're waiting
+for ("occupancy is off", "the cover is moving"). Don't name it after that
+inverted predicate — name it after **what the cascade is waiting for**:
+
+| Prefer | Over |
+|---|---|
+| `Block until occupied` | `Block while the sensor is clear` |
+| `Block until the blinds settle` | `Block while the blinds are moving` |
+
+Users read the scene list top-down to understand the cascade, and "block **until**
+X" states the condition under which the rules below it come alive. "Block while
+not-X" makes them invert it in their head to get the same information.
+
 ### Don't decide while a cover is moving (the "settle" blocker)
 
 Covers (blinds, shades, garage doors) have **transitional** states — `opening`
@@ -585,6 +600,12 @@ spike can't flip a scene:
 
 ### Survive a Home Assistant restart (a `for:` gate is briefly immature)
 
+> **Precondition — you only need this if you hoisted the occupancy test.** The
+> blocker below exists to repair the *gate-hoisting* simplification, not to
+> accompany every `for:` gate. If your "on" scene tests occupancy itself, it
+> already declines to match in an empty room and **no blocker is needed** — see
+> *When you don't need the blocker*, below.
+
 After a Home Assistant restart, presence / occupancy sensors are re-created and
 their `last_changed` usually resets to boot time (HA doesn't restore it for most of
 them). Ambience seeds a `for:` gate's clock from that anchor (`last_changed`) on
@@ -626,6 +647,38 @@ per [schema.md](schema.md) → *How scenes are chosen*.
 > This only bites a `for:` gate whose entity resets `last_changed` on restart. A
 > sensor that restores its timestamp, or a `for`-less test, matures immediately and
 > needs no guard.
+
+#### When you *don't* need the blocker
+
+The blocker only earns its place because the lower scenes **dropped** their
+occupancy test. The commonest ask — *"lights on when someone enters, off five
+minutes after everyone leaves"* — has a single "on" scene and nothing to hoist,
+so it needs **two** scenes, not three. Have the "on" scene test occupancy
+directly and it declines to match in an empty room all by itself:
+
+```yaml
+- name: Vacant
+  when: { occupancy: { sensors: [binary_sensor.hall], occupied: false, for: { m: 5 } } }
+  actions: [ <lights off> ]
+- name: Occupied           # tests occupancy itself — no catch-all, so no blocker
+  when: { occupancy: { sensors: [binary_sensor.hall], occupied: true } }
+  actions: [ <lights on> ]
+```
+
+Both awkward windows fall out for free, because **no scene matching is a valid
+outcome** — the unit simply does nothing and the lights keep their current state:
+
+- **The 5-minute grace.** The room is vacant but the timer hasn't matured, so
+  `Vacant` fails; `Occupied` fails too. Nothing runs — the lights stay **on**,
+  which is exactly the delay the user asked for.
+- **A cold boot into an empty room.** `Vacant` is immature, and `Occupied` fails
+  because the sensor is off. Nothing runs — the lights stay **off**. The restart
+  bug never arises.
+
+Reach for the three-scene form only once "on" splits into variants — *Daytime* /
+*Evening* / *Nighttime* — each of which would otherwise have to repeat the same
+occupancy test. **That** is when you hoist it into the `Vacant` gate and add the
+blocker to cover what the hoist broke.
 
 ### Cap-and-hold a cover without overriding a manual change
 

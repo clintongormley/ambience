@@ -8,6 +8,63 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- **The AI bundle now records which floor each area is on.** Every entry in
+    `catalog.areas` carries a `floor_id` (or `null` when the area is on no
+    floor). This is the only link between an area and a floor, so without it an
+    AI asked to author scenes for a floor could not work out which areas — and
+    so which entities — that floor actually contains.
+
+### Changed
+
+- **The MCP server now serves the authoring guide section by section.**
+    `ambience_get_guide` called with no argument returns the list of section
+    names; call it again with `section=<name>` to read one. The guide is roughly
+    25k tokens and exceeded the maximum size of a single tool result, so an AI
+    asking for it got an error instead of a guide and could end up authoring
+    without ever having read it.
+
+    The `have_version` **argument** is gone. It invited an AI to pass a version it
+    had read from the *bundle* and so claim it already held a guide it had never
+    fetched — which returned `{unchanged: true}` with no text, leaving it to
+    author blind. The server now remembers the guide itself, keyed on the
+    install's version, and asks for the text only when that version changes. The
+    guide is ~109KB and only changes when you upgrade Ambience, so it is fetched
+    once per session rather than once per section — which matters when Home
+    Assistant is reached over the internet rather than a LAN.
+
+### Fixed
+
+- **The MCP server can read the guide from an Ambience it did not ship with.**
+    The server is installed separately from the integration, so a newer server
+    routinely meets an older install — which assembles the guide with two
+    headings per section. Split naively, every section an AI is told to read
+    came back **empty**, so it would fetch the guide, receive nothing, and
+    author blind. The server now reads both layouts.
+- **The first MCP tool call after a Home Assistant restart no longer fails.**
+    Restarting Home Assistant closes the websocket, and the MCP server only
+    discovered this when it next tried to use it — so the next tool call always
+    failed with `websocket command failed: received 1000 (OK)` and only the one
+    after it reconnected. The server now reconnects and retries that call. A
+    write that had already reached Home Assistant is deliberately **not**
+    retried, since it may have been applied and only its reply lost.
+- **The assembled AI guide no longer emits two headings per section.** Each
+    section began with both the assembler's title and the source document's own,
+    which read as an empty section to anything splitting the guide on its
+    headings.
+- **Documented that writing scenes over MCP replaces the whole scope.** Import
+    blocks merge by default, but `ambience_apply_write` stores exactly the scene
+    list it is given — so any scene left out is deleted. The guide now spells
+    out the difference and tells an AI to read the scope first and check the
+    preview's `removed` list.
+- **Clarified when a presence "blocker" scene is actually needed.** The guide
+    presented the no-op blocker as the fix for any `for:`-gated vacancy rule; in
+    fact it is only needed when the occupancy test has been hoisted out of the
+    scenes below it. The common "lights on when someone enters, off five minutes
+    after everyone leaves" needs two scenes, not three, and the guide now shows
+    that form.
+
 ## [1.1.0-rc.1] - 2026-07-10
 
 ### Added

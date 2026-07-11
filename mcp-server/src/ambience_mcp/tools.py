@@ -159,21 +159,120 @@ _GUIDE_UNAVAILABLE_MESSAGE = (
 )
 
 
-async def get_guide(client: Any, have_version: str | None = None) -> dict[str, Any]:
-    """Fetch the authoring guide (schema + cookbook) live from the running
-    install. Pass the `ambience_version` you already hold as `have_version`; a
-    matching version returns {unchanged: true} with no text so the guide is only
-    re-read when the install changes. Old backends that predate the command
-    return {unavailable: true} instead of raising."""
-    payload: dict[str, Any] = {}
-    if have_version is not None:
-        payload["have_version"] = have_version
+_GUIDE_USAGE = (
+    "Call ambience_get_guide again with section=<one of sections> to read that "
+    "part. The whole guide is far too large to return at once — read the "
+    "sections you need. 'Config schema' and 'Condition cookbook' cover most "
+    "authoring; 'Reading a diagnostic bundle' covers diagnosis."
+)
+
+
+def _split_guide_sections(text: str) -> dict[str, str]:
+    """Split the assembled guide on its top-level `# ` headings, title first.
+
+    Fence-aware on purpose: the guide's YAML examples are full of `#` comments
+    (`# --- Block 1 of 2 ---`, `# BEFORE — ...`) which a naive line-based split
+    would mistake for headings and shred the sections apart.
+
+    The FIRST heading is the document's own title, and its body is the paste-flow
+    preamble ("paste your downloaded AI bundle") — wrong advice over MCP, where the
+    bundle is fetched, not pasted. It is dropped, so what comes back is exactly the
+    readable sections.
+    """
+    ordered: list[tuple[str, list[str]]] = []
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("# "):
+            # Ambience <= 1.1.0 assembles each part under TWO H1s — the wrapper
+            # title, then the source document's own — leaving the wrapper's body
+            # empty. This server ships separately from the integration, so it must
+            # read that older guide too: an empty section is a wrapper, so keep its
+            # (canonical) name and let it absorb the body that follows, instead of
+            # serving an empty string for every section an AI is told to read.
+            if ordered and not any(text_line.strip() for text_line in ordered[-1][1]):
+                continue
+            ordered.append((line[2:].strip(), []))
+            continue
+        if ordered:
+            ordered[-1][1].append(line)
+    # The first heading is the document's own title (its body is the paste-flow
+    # preamble), never a readable section.
+    return {name: "\n".join(lines).strip() for name, lines in ordered[1:]}
+
+
+class GuideCache:
+    """The split guide for one Ambience version, held by the SERVER.
+
+    The guide is ~109KB and only changes when the user upgrades Ambience, so
+    refetching it for every section wastes real bandwidth — the MCP server may be
+    reaching Home Assistant over the internet, not a LAN. Keyed on the install's
+    version, which is exactly when the guide can change.
+
+    Server-held on purpose. `have_version` used to be a **tool argument**, which
+    invited a model to pass a version it had read from the *bundle* and so claim it
+    already held a guide it had never fetched — the install would answer
+    {unchanged: true} with no text, and the model would author blind. The server's
+    own memory cannot lie about what it has read.
+    """
+
+    def __init__(self) -> None:
+        self.version: str | None = None
+        self.sections: dict[str, str] = {}
+
+    def store(self, version: str | None, sections: dict[str, str]) -> None:
+        """Remember a guide we could actually read.
+
+        An empty split is never cached: claiming that version would POISON the cache
+        for the life of the process — every later call would send `have_version`, be
+        answered {unchanged: true} with no text, and serve the empty map forever,
+        with no error the model could see. Remembering nothing means we ask the
+        install again, so it can recover.
+        """
+        if not sections:
+            return
+        self.version = version
+        self.sections = sections
+
+
+async def get_guide(client: Any, cache: GuideCache, section: str | None = None) -> dict[str, Any]:
+    """Fetch the authoring guide (schema + cookbook) from the running install, one
+    section at a time.
+
+    With no `section`, returns the list of section names (a table of contents).
+    With a `section`, returns just that section's text. The full guide is ~25k
+    tokens and does not fit in a single tool result, which is why there is no
+    "give me all of it" mode. Old backends that predate the command return
+    {unavailable: true} instead of raising.
+    """
+    held = {"have_version": cache.version} if cache.version else {}
     try:
-        return await client.command("ambience/ai_guide", **payload)
+        payload = await client.command("ambience/ai_guide", **held)
     except HACommandError as exc:
         if exc.code == "unknown_command":
             return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
         raise
+
+    if payload.get("unchanged"):
+        # We only claim a version we actually hold, so the cache is populated here.
+        sections, version = cache.sections, cache.version
+    else:
+        # Always answer from what THIS fetch returned — never fall back to a cached
+        # older guide, which would serve stale text under the new version's number.
+        sections = _split_guide_sections(payload.get("guide") or "")
+        version = payload.get("ambience_version")
+        cache.store(version, sections)
+    meta = {
+        "ambience_version": version,
+        "ambience_ai_bundle": payload.get("ambience_ai_bundle"),
+        "sections": list(sections),
+    }
+    if section is None:
+        return {**meta, "usage": _GUIDE_USAGE}
+    if section not in sections:
+        return {**meta, "error": f"Unknown guide section {section!r}.", "usage": _GUIDE_USAGE}
+    return {**meta, "section": section, "guide": sections[section]}
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:

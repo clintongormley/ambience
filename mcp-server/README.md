@@ -32,14 +32,52 @@ preview and your confirmation.
 }
 ```
 
-**Claude Code** — one command (stores it in your user config):
+**Claude Code** (terminal, and the VS Code extension) — one command, with your
+own address and token.
+
+Mac and Linux:
 
 ```sh
-claude mcp add ambience \
+claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
-  --env AMBIENCE_HA_TOKEN=<your admin long-lived token> \
+  --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
   -- uvx ambience-mcp
 ```
+
+Windows:
+
+```text
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp
+```
+
+It confirms where it saved the server, with a line like this.
+
+On Linux:
+
+```text
+File modified: /home/your_home_dir/.claude.json
+```
+
+On Mac:
+
+```text
+File modified: /Users/your_home_dir/.claude.json
+```
+
+On Windows:
+
+```text
+File modified: C:\Users\your_home_dir\.claude.json
+```
+
+## Check that it is running
+
+Open a **new** Claude Code conversation — a running session does not pick up the
+change. Nothing further is needed for VS Code: the extension reads the same
+`~/.claude.json`, so a user-scoped server is available there too.
+
+Run `/mcp` to see the server and whether it connected. It works the same in
+Claude Code in a terminal and in VS Code.
 
 ## Multiple Home Assistant instances
 
@@ -73,7 +111,8 @@ changes and will tell you how to update to the correct version.
 ## Turning it off
 
 - **Live, this session:** `/mcp` → select `ambience` → Disconnect (no restart).
-- **Remove it:** `claude mcp remove ambience` (Claude Code), or delete the entry
+- **Remove it:** `claude mcp remove ambience --scope user` (Claude Code and the
+    VS Code extension — pass the scope you added it with), or delete the entry
     from `claude_desktop_config.json` and restart (Claude Desktop).
 
 Tool schemas are deferred (tool-search) on supported models, so an idle server
@@ -104,24 +143,57 @@ ______________________________________________________________________
 ### From a checkout
 
 If you have the repo checked out, it ships a **project-scoped** `.mcp.json` at
-the repo root that launches the server from the working tree
-(`uvx --from ./mcp-server ambience-mcp`). It reads the same two env vars — set
-them in git-ignored `.claude/settings.local.json` (or your shell) so no secret
-is committed:
+the repo root defining a second server, **`ambience-dev`**, which launches from
+the working tree (`uvx --from ./mcp-server ambience-mcp`) rather than from PyPI.
+It takes its address and token from **`AMBIENCE_DEV_HA_URL`** and
+**`AMBIENCE_DEV_HA_TOKEN`** — set them in git-ignored
+`.claude/settings.local.json` (or your shell) so no secret is committed:
 
 ```json
 {
   "env": {
-    "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
-    "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
+    "AMBIENCE_DEV_HA_URL": "http://homeassistant.local:8123",
+    "AMBIENCE_DEV_HA_TOKEN": "<your admin long-lived token>"
   }
 }
 ```
 
+The `_DEV_` prefix keeps the two servers' settings from being mistaken for one
+another. Inside `.mcp.json` those values are handed to the server under the
+names it actually reads, which never change:
+
+```json
+"env": {
+  "AMBIENCE_HA_URL": "${AMBIENCE_DEV_HA_URL}",
+  "AMBIENCE_HA_TOKEN": "${AMBIENCE_DEV_HA_TOKEN}"
+}
+```
+
+Because `.mcp.json` always sets those two keys, they shadow any `AMBIENCE_HA_*`
+exported in your shell — `ambience-dev` can never quietly borrow the released
+server's Home Assistant. If a `AMBIENCE_DEV_*` variable is missing, the
+unexpanded `${…}` text reaches the server and it fails naming the variable,
+rather than falling back to something that looks like it works.
+
+The `${VAR}` references are expanded by Claude Code, not by your shell, so the
+file works unchanged on Windows; the settings file above is the portable way to
+supply the values.
+
+It is named `ambience-dev`, not `ambience`, so it sits **alongside** any
+user-scoped `ambience` you have rather than hiding it — a project server takes
+the name for the whole directory, even while disabled, so a same-named one would
+leave you unable to reach the released build at all. The distinct name also
+makes each call attributable: you can see `mcp__ambience-dev__…` in the
+transcript and know which build ran.
+
+Both expose the same write-capable tools against the same Home Assistant, so
+**keep exactly one enabled at a time** — normally `ambience-dev` while you are
+working on the server. Toggle them with `/mcp`.
+
 This config is active only inside an Ambience worktree, so it never loads in
 your other projects. First use prompts you to approve the `.mcp.json` server. To
 disable it without removing the file, add
-`"disabledMcpjsonServers": ["ambience"]` to `.claude/settings.local.json`.
+`"disabledMcpjsonServers": ["ambience-dev"]` to `.claude/settings.local.json`.
 
 ### Pinning a version
 

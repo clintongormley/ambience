@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.2] - 2026-07-11
+
 ### Added
 
 - **The AI bundle now records which floor each area is on.** Every entry in

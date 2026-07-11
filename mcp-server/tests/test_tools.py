@@ -349,6 +349,22 @@ async def test_get_context_warns_when_the_backend_is_newer_than_us():
     assert "ambience-mcp" in result["warning"]
 
 
+async def test_get_context_does_not_warn_when_the_backend_format_matches():
+    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 1}})
+
+    result = await tools.get_context(client)
+
+    assert "warning" not in result
+
+
+async def test_get_context_does_not_warn_when_the_format_field_is_absent():
+    client = FakeClient({"ambience/ai_context": {}})
+
+    result = await tools.get_context(client)
+
+    assert "warning" not in result
+
+
 async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
     client = FakeClient(

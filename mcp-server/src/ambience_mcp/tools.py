@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from .budget import fit_context
 from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
 
-SUPPORTED_AI_BUNDLE = 1
-"""Highest `ambience_ai_bundle` structure version this server understands. A
+SUPPORTED_AI_CONTEXT = 1
+"""Highest `ambience_ai_context` structure version this server understands. A
 backend reporting a higher value is newer than this server, so get_context
 attaches a `warning` telling the user to update it."""
 
@@ -108,41 +109,37 @@ def _strip_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{k: v for k, v in scene.items() if k != "rank"} for scene in scenes]
 
 
-def _iter_scope_configs(config: dict[str, Any]):
-    """Yield each scope config ({"scenes": [...]}) in a bundle's config: every
-    area, every floor, and the house."""
-    for group_key in ("areas", "floors"):
-        group = config.get(group_key)
-        if isinstance(group, dict):
-            yield from (cfg for cfg in group.values() if isinstance(cfg, dict))
-    house = config.get("house")
-    if isinstance(house, dict):
-        yield house
+_CONTEXT_UNAVAILABLE_MESSAGE = (
+    "Your Ambience is too old for this ambience-mcp: it does not serve "
+    "ambience/ai_context. Upgrade Ambience, or pin an older ambience-mcp."
+)
 
 
 async def get_context(client: Any) -> dict[str, Any]:
-    bundle = await client.command("ambience/ai_bundle")
-    config = bundle.get("config")
-    if isinstance(config, dict):
-        for scope_cfg in _iter_scope_configs(config):
-            if isinstance(scope_cfg.get("scenes"), list):
-                scope_cfg["scenes"] = _with_ranks(scope_cfg["scenes"])
-    ambver = _parse_version(bundle.get("ambience_version"))
-    backend_format = bundle.get("ambience_ai_bundle")
-    if ambver is not None and ambver < MIN_AMBIENCE_VERSION:
-        bundle["warning"] = (
-            f"Your Ambience ({bundle.get('ambience_version')}) is older than this MCP "
-            f"server needs (>= {_version_str(MIN_AMBIENCE_VERSION)}). Reads work, but "
-            "writes will be refused — update Ambience, or pin an older ambience-mcp."
-        )
-    elif isinstance(backend_format, int) and backend_format > SUPPORTED_AI_BUNDLE:
-        bundle["warning"] = (
-            f"This Ambience install speaks AI-bundle format {backend_format}, but this "
-            f"MCP server understands up to {SUPPORTED_AI_BUNDLE}. The server is out of "
+    """The bounded authoring context: counts, not rows.
+
+    Reads `ambience/ai_context`, NOT the fat `ambience/ai_bundle` — that one still
+    exists for the download-and-paste flow, where the AI has no tools and needs
+    everything inline, but at ~90k tokens it cannot be returned as a tool result.
+    Entity rows come from `find_entities`, scene lists from `get_scope`, traces
+    from `list_traces`.
+    """
+    try:
+        context = await client.command("ambience/ai_context")
+    except HACommandError as exc:
+        if exc.code == "unknown_command":
+            raise ToolError(_CONTEXT_UNAVAILABLE_MESSAGE) from exc
+        raise
+
+    backend_format = context.get("ambience_ai_context")
+    if isinstance(backend_format, int) and backend_format > SUPPORTED_AI_CONTEXT:
+        context["warning"] = (
+            f"This Ambience install speaks AI-context format {backend_format}, but this "
+            f"MCP server understands up to {SUPPORTED_AI_CONTEXT}. The server is out of "
             "date and some fields may be missing — ask the user to restart Claude, or "
-            "pin a newer ambience-mcp source."
+            "pin a newer ambience-mcp."
         )
-    return bundle
+    return fit_context(context)
 
 
 async def get_scope(client: Any, scope: dict[str, Any]) -> dict[str, Any]:

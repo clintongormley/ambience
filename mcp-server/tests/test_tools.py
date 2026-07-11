@@ -302,24 +302,6 @@ async def test_get_scope_keeps_priority_and_pinned_alongside_rank():
     assert scene["pinned"] is True
 
 
-async def test_get_context_ranks_scenes_in_every_bundle_scope():
-    bundle = {
-        "catalog": {"areas": []},
-        "config": {
-            "areas": {
-                "lr": {"scenes": [{"name": "A", "category": "c"}, {"name": "B", "category": "c"}]}
-            },
-            "floors": {"g": {"scenes": [{"name": "F", "category": "c"}]}},
-            "house": {"scenes": [{"name": "H", "category": "c"}]},
-        },
-    }
-    client = FakeClient({"ambience/ai_bundle": bundle})
-    result = await tools.get_context(client)
-    assert [s["rank"] for s in result["config"]["areas"]["lr"]["scenes"]] == [1, 2]
-    assert result["config"]["floors"]["g"]["scenes"][0]["rank"] == 1
-    assert result["config"]["house"]["scenes"][0]["rank"] == 1
-
-
 async def test_get_scope_leaves_non_dict_scenes_untouched():
     # Ranking is a convenience, not load-bearing. If a future bundle changed a
     # scenes element's shape, ranking must skip and return the list untouched
@@ -340,17 +322,53 @@ async def test_get_scope_skips_ranking_for_whole_list_when_any_scene_non_dict():
     assert "rank" not in result["scenes"][0]
 
 
-async def test_get_context_still_warns_when_scene_shape_unrecognised():
-    # The fail-open promise must hold end to end: a too-new bundle whose scenes no
-    # longer match the expected shape must still reach the format warning, not crash
-    # in the rank annotation before the warning is ever attached.
-    newer = tools.SUPPORTED_AI_BUNDLE + 1
-    bundle = {"ambience_ai_bundle": newer, "config": {"house": {"scenes": ["sceneref-1"]}}}
-    client = FakeClient({"ambience/ai_bundle": bundle})
+async def test_get_context_reads_ai_context_not_the_fat_bundle():
+    client = FakeClient(
+        {"ambience/ai_context": {"ambience_ai_context": 1, "catalog": {"entity_summary": {}}}}
+    )
+
     result = await tools.get_context(client)
+
+    assert client.calls == [{"type": "ambience/ai_context"}]
+    assert result["ambience_ai_context"] == 1
+
+
+async def test_get_context_on_an_old_backend_says_to_upgrade():
+    client = FakeClient({"ambience/ai_context": HACommandError("unknown_command", "nope")})
+
+    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
+        await tools.get_context(client)
+
+
+async def test_get_context_warns_when_the_backend_is_newer_than_us():
+    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 99}})
+
+    result = await tools.get_context(client)
+
     assert "warning" in result
-    assert str(newer) in result["warning"]  # pins the format branch, not the version branch
-    assert result["config"]["house"]["scenes"] == ["sceneref-1"]
+    assert "ambience-mcp" in result["warning"]
+
+
+async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/ai_context": {
+                "ambience_ai_context": 1,
+                "actions": {
+                    "exposed": [{"id": f"light.a{i}"} for i in range(10)],
+                    "schemas": {f"light.a{i}": {"f": "x" * 500} for i in range(10)},
+                },
+            }
+        }
+    )
+
+    result = await tools.get_context(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["schemas_omitted"]
 
 
 async def test_preview_write_strips_rank_before_backend():
@@ -682,36 +700,3 @@ async def test_apply_write_fails_open_when_probe_unsupported():
     )
     result = await tools.apply_write(client, scope, scenes, token, ledger)
     assert result["ok"] is True
-
-
-async def test_get_context_warns_when_backend_bundle_format_is_newer():
-    newer = tools.SUPPORTED_AI_BUNDLE + 1
-    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": newer}})
-    result = await tools.get_context(client)
-    assert "warning" in result
-    assert str(newer) in result["warning"]
-
-
-async def test_get_context_no_warning_when_backend_bundle_format_supported():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": tools.SUPPORTED_AI_BUNDLE}})
-    result = await tools.get_context(client)
-    assert "warning" not in result
-
-
-async def test_get_context_no_warning_when_bundle_format_absent():
-    client = FakeClient({"ambience/ai_bundle": {"config": {}}})
-    result = await tools.get_context(client)
-    assert "warning" not in result
-
-
-async def test_get_context_warns_when_backend_older_than_min():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.0.0"}})
-    result = await tools.get_context(client)
-    assert "warning" in result
-    assert "1.0.0" in result["warning"]
-
-
-async def test_get_context_no_warning_when_backend_at_min():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.1.0"}})
-    result = await tools.get_context(client)
-    assert "warning" not in result

@@ -33,11 +33,15 @@ def _client_() -> ReconnectingClient:
 
 @mcp.tool()
 async def ambience_get_context() -> dict[str, Any]:
-    """Live Ambience authoring context: areas/floors/entities+state, exposed
-    actions and their field schemas, category/period/lux definitions, and recent
-    traces. Fetch this before authoring so every id and vocabulary word is real.
-    Scenes carry a per-category `rank` (1..N) — show that, not the raw
-    `priority`, when presenting scenes to a user."""
+    """Live Ambience authoring context: areas/floors, an entity SUMMARY (counts by
+    domain/area/device_class), exposed actions and their field schemas, and
+    category/period/lux definitions. Fetch this before authoring so every id and
+    vocabulary word is real.
+
+    It carries entity COUNTS, not entity rows — a real house has thousands. Use
+    ambience_find_entities to look up the actual entities you need, the summary to
+    discover what exists, ambience_get_scope for a scope's scenes, and
+    ambience_list_traces for traces."""
     return await tools.get_context(_client_())
 
 

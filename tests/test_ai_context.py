@@ -121,3 +121,16 @@ async def test_context_house_scope_is_thinned_too(
 
     assert context["config"]["house"]["scene_count"] == 1
     assert "scenes" not in context["config"]["house"]
+
+
+async def test_context_floor_scope_is_thinned_too(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    await seeded_store.async_save_floor(
+        "second_floor", {"scenes": [{"category": "general", "actions": []}]}
+    )
+
+    context = await build_ai_context(hass)
+
+    assert context["config"]["floors"]["second_floor"]["scene_count"] == 1
+    assert "scenes" not in context["config"]["floors"]["second_floor"]

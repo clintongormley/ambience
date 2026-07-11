@@ -48,10 +48,9 @@ async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
             # Sensitive default values (tokens, message bodies, recipients) are
             # scrubbed; the schema ids fetched below use the unredacted list.
             "exposed": [redact_exposed_action(a) for a in exposed],
-            # `fetch=get_service_schema` passes THIS module's (patchable) name
-            # through explicitly — tests monkeypatch `ai_bundle.get_service_schema`,
-            # which a bare call to `action_schemas(hass, exposed)` would not see
-            # (that would resolve the name from ai_common's own globals instead).
+            # Pass this module's (patchable) `get_service_schema` explicitly so
+            # tests can monkeypatch `ai_bundle.get_service_schema`. Default args are
+            # bound at definition time, so a bare call would use ai_common's capture.
             "schemas": await action_schemas(hass, exposed, fetch=get_service_schema),
         },
         "definitions": {

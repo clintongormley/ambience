@@ -32,6 +32,7 @@ from .entity_catalog import entity_rows, entity_summary
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .redact import redact_exposed_action, redact_store
+from .services_meta import get_service_schema
 
 
 def _thin_scope(scope_config: Any) -> Any:
@@ -81,7 +82,7 @@ async def build_ai_context(hass: HomeAssistant) -> dict[str, Any]:
         },
         "actions": {
             "exposed": [redact_exposed_action(a) for a in exposed],
-            "schemas": await action_schemas(hass, exposed),
+            "schemas": await action_schemas(hass, exposed, fetch=get_service_schema),
         },
         "definitions": {
             "categories": store.categories(),

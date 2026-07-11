@@ -62,9 +62,9 @@ async def action_schemas(
     can't be resolved (not loaded, a bare on/off helper, or an outright error) is
     simply omitted.
 
-    `fetch` defaults to `services_meta.get_service_schema` and exists only so
-    `ai_bundle` can pass through its own (test-patchable) module-level name —
-    see the comment at its call site.
+    `fetch` defaults to `services_meta.get_service_schema`, which is bound at
+    definition time. Both callers pass their own module-level `get_service_schema`
+    explicitly, keeping each name independently monkeypatchable in tests.
     """
     service_ids = list(
         dict.fromkeys(

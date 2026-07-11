@@ -153,7 +153,11 @@ async def ambience_apply_write(
 
 @mcp.tool()
 async def ambience_list_traces(limit: int | None = None) -> dict[str, Any]:
-    """Recent scene-evaluation traces for diagnosis ("why didn't my scene fire?")."""
+    """Recent scene-evaluation traces for diagnosis ("why didn't my scene fire?").
+
+    If the list is too big for one result, the oldest traces are dropped and the
+    result carries `omitted` and a `notice` saying so — ask again with a smaller
+    `limit` to see a different slice."""
     return await tools.list_traces(_client_(), limit)
 
 

@@ -259,6 +259,28 @@ async def test_list_traces_passes_limit():
     assert client.calls == [{"type": "ambience/traces/list", "limit": 5}]
 
 
+async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(monkeypatch):
+    # ambience/traces/list has no default cap on the backend, so an unguarded MCP
+    # tool could hand back the whole (possibly huge) buffer — the exact unbounded
+    # result this module exists to prevent, reached through a different tool.
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/traces/list": {
+                "traces": [{"unit": f"u{i}", "reason": "x" * 100} for i in range(50)]
+            }
+        }
+    )
+
+    result = await tools.list_traces(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["omitted"] > 0
+    assert result["notice"]
+
+
 async def test_dry_run_house_uses_house_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
     await tools.dry_run(client, {"kind": "house"})

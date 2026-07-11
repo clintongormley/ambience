@@ -207,3 +207,61 @@ def test_fit_entities_does_not_mutate_the_input():
     budget.fit_entities(result, budget=3_000)
 
     assert json.dumps(result) == before
+
+
+def _traces(count: int, size: int) -> dict:
+    return {"traces": [{"unit": f"u{i}", "reason": "x" * size} for i in range(count)]}
+
+
+def test_fit_traces_leaves_a_list_under_budget_untouched():
+    result = _traces(3, 10)
+
+    assert budget.fit_traces(result, budget=10_000) == result
+
+
+def test_fit_traces_drops_from_the_end_and_announces_what_was_dropped():
+    result = _traces(50, 200)
+
+    fitted = budget.fit_traces(result, budget=3_000)
+
+    assert budget.size_of(fitted) <= 3_000
+    kept = fitted["returned"]
+    assert 0 < kept < 50
+    assert fitted["traces"] == result["traces"][:kept]  # dropped from the END
+    assert fitted["omitted"] == 50 - kept
+    assert fitted["omitted"] > 0
+    assert "notice" in fitted and fitted["notice"]  # announced, never silent
+
+
+def test_fit_traces_omits_nothing_and_no_notice_when_it_already_fits():
+    result = _traces(3, 10)
+
+    fitted = budget.fit_traces(result, budget=10_000)
+
+    assert fitted == result
+    assert "omitted" not in fitted
+    assert "notice" not in fitted
+
+
+def test_fit_traces_with_no_traces_returns_what_it_has():
+    result = {"traces": []}
+
+    assert budget.fit_traces(result, budget=1) == result
+
+
+def test_fit_traces_floors_at_one_trace_instead_of_returning_nothing():
+    result = _traces(1, 5_000)
+
+    fitted = budget.fit_traces(result, budget=50)
+
+    assert fitted["returned"] == 1
+    assert fitted["traces"] == result["traces"]  # the oversized trace is served, not dropped
+
+
+def test_fit_traces_does_not_mutate_the_input():
+    result = _traces(50, 200)
+    before = json.dumps(result)
+
+    budget.fit_traces(result, budget=3_000)
+
+    assert json.dumps(result) == before

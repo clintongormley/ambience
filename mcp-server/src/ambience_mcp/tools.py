@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .budget import fit_context, fit_entities
+from .budget import fit_context, fit_entities, fit_traces
 from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
@@ -425,7 +425,7 @@ async def list_traces(client: Any, limit: int | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if limit is not None:
         payload["limit"] = limit
-    return await client.command("ambience/traces/list", **payload)
+    return fit_traces(await client.command("ambience/traces/list", **payload))
 
 
 async def list_categories(client: Any) -> dict[str, Any]:

@@ -148,3 +148,48 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
         if size_of(candidate) <= limit or len(kept) <= 1:
             return candidate
         kept.pop()
+
+
+def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:
+    """Drop trace records from the END of the list until the result fits,
+    announcing what was cut instead of truncating silently.
+
+    `ambience/traces/list` takes an uncapped `limit` — by design, the backend's
+    contract is unchanged here — so a model that asks for (or gets the default
+    of) more than fits is the exact unbounded-result failure this module exists
+    to prevent, just reached through a different tool. Unlike `fit_entities`
+    there is no cursor to re-point: the list is a prefix of the trace buffer,
+    newest first, so the fix is to say how many were kept/omitted and let the
+    model ask again with a smaller `limit` for a different slice.
+
+    Trimming never goes below one trace, for the same reason `fit_entities`
+    floors at one row: a smaller, honest result beats an empty one that tells
+    the model nothing happened.
+    """
+    limit = max_result_chars() if budget is None else budget
+    if size_of(result) <= limit:
+        return result
+
+    traces = result.get("traces")
+    if not isinstance(traces, list) or not traces:
+        return result
+
+    kept = list(traces)
+    while True:
+        omitted = len(traces) - len(kept)
+        candidate = {
+            **result,
+            "traces": kept,
+            "returned": len(kept),
+            "omitted": omitted,
+            "notice": (
+                f"Showing {len(kept)} of {len(traces)} traces; the oldest {omitted} were "
+                "omitted to fit the result budget. Call again with a smaller limit to see "
+                "a different slice."
+            )
+            if omitted
+            else None,
+        }
+        if size_of(candidate) <= limit or len(kept) <= 1:
+            return candidate
+        kept.pop()

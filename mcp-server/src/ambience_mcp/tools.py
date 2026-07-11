@@ -114,6 +114,11 @@ _CONTEXT_UNAVAILABLE_MESSAGE = (
     "ambience/ai_context. Upgrade Ambience, or pin an older ambience-mcp."
 )
 
+_FIND_ENTITIES_UNAVAILABLE_MESSAGE = (
+    "Your Ambience is too old for this ambience-mcp: it does not serve "
+    "ambience/entities/find. Upgrade Ambience, or pin an older ambience-mcp."
+)
+
 
 async def get_context(client: Any) -> dict[str, Any]:
     """The bounded authoring context: counts, not rows.
@@ -418,7 +423,13 @@ async def find_entities(
         )
         if value is not None
     }
-    return fit_entities(await client.command("ambience/entities/find", **payload))
+    try:
+        result = await client.command("ambience/entities/find", **payload)
+    except HACommandError as exc:
+        if exc.code == "unknown_command":
+            raise ToolError(_FIND_ENTITIES_UNAVAILABLE_MESSAGE) from exc
+        raise
+    return fit_entities(result)
 
 
 async def list_traces(client: Any, limit: int | None = None) -> dict[str, Any]:

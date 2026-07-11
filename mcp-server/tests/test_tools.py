@@ -484,6 +484,23 @@ async def test_find_entities_trims_an_oversized_page_and_repoints_the_cursor(mon
     assert result["truncated"] is True
 
 
+async def test_find_entities_on_an_old_backend_says_to_upgrade():
+    # Mirrors test_get_context_on_an_old_backend_says_to_upgrade: find_entities is
+    # just as load-bearing as get_context and must fail the same actionable way
+    # against a pre-ai_context backend, not surface a raw unknown_command.
+    client = FakeClient({"ambience/entities/find": HACommandError("unknown_command", "nope")})
+
+    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
+        await tools.find_entities(client)
+
+
+async def test_find_entities_propagates_other_command_errors():
+    client = FakeClient({"ambience/entities/find": HACommandError("validation_error", "boom")})
+
+    with pytest.raises(HACommandError):
+        await tools.find_entities(client)
+
+
 async def test_preview_write_strips_rank_before_backend():
     scenes = [{"name": "A", "category": "c", "rank": 1}]
     client = FakeClient({"ambience/area/get": {"scenes": []}, "ambience/validate": {"ok": True}})

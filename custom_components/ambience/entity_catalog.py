@@ -120,6 +120,28 @@ def _as_set(value: Any) -> set[str] | None:
     return set(value)
 
 
+def _split_device_classes(classes: set[str]) -> tuple[set[str], set[tuple[str, str]]]:
+    """Split a `device_class` filter into bare class names and (domain,
+    device_class) pairs, so a caller can pass either form back.
+
+    `entity_summary`'s `by_device_class` keys are domain-qualified
+    (`"sensor.illuminance"`), because `sensor.occupancy` and
+    `binary_sensor.occupancy` are different things. A value containing a `.` is
+    that qualified form: split it and require BOTH the domain and the device
+    class to match. A value with no `.` is the bare, pre-existing form: it
+    matches the device class alone, regardless of domain.
+    """
+    bare: set[str] = set()
+    qualified: set[tuple[str, str]] = set()
+    for value in classes:
+        if "." in value:
+            domain, cls = value.split(".", 1)
+            qualified.add((domain, cls))
+        else:
+            bare.add(value)
+    return bare, qualified
+
+
 def find_entities(
     rows: list[dict[str, Any]],
     *,
@@ -140,10 +162,20 @@ def find_entities(
 
     Filters combine with AND. `cursor` is an integer offset into the matches,
     which is stable because `rows` is sorted by `entity_id`.
+
+    `device_class` accepts either form `entity_summary`'s `by_device_class` uses:
+    domain-qualified (`"sensor.illuminance"`) or bare (`"illuminance"`). This is
+    deliberate — the summary is the model's discovery mechanism, and its keys are
+    domain-qualified so `sensor.occupancy` and `binary_sensor.occupancy` don't
+    collide, so a key read from the summary must round-trip straight back into
+    this filter without the model having to strip the domain off first.
     """
     domains = _as_set(domain)
     areas = _as_set(area_id)
     classes = _as_set(device_class)
+    bare_classes, qualified_classes = (
+        _split_device_classes(classes) if classes is not None else (set(), set())
+    )
     needle = query.casefold() if query else None
 
     matches = [
@@ -151,7 +183,11 @@ def find_entities(
         for row in rows
         if (domains is None or row["domain"] in domains)
         and (areas is None or row["area_id"] in areas)
-        and (classes is None or row["device_class"] in classes)
+        and (
+            classes is None
+            or row["device_class"] in bare_classes
+            or (row["domain"], row["device_class"]) in qualified_classes
+        )
         and (
             needle is None
             or needle in row["entity_id"].casefold()

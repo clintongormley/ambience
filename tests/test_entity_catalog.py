@@ -195,6 +195,56 @@ def test_find_filters_by_device_class() -> None:
     assert [e["entity_id"] for e in result["entities"]] == ["sensor.hall_lux"]
 
 
+def test_find_filters_by_domain_qualified_device_class() -> None:
+    # entity_summary's own by_device_class keys are domain-qualified
+    # (`"sensor.illuminance"`); find_entities must accept that form directly, since
+    # the guide tells the model to hand this key straight back.
+    result = find_entities(_catalog(), device_class="sensor.illuminance")
+
+    assert [e["entity_id"] for e in result["entities"]] == ["sensor.hall_lux"]
+    assert result["total_matches"] == 1
+
+
+def test_find_domain_qualified_device_class_does_not_cross_domains() -> None:
+    rows = [
+        _row("sensor.occ", domain="sensor", device_class="occupancy"),
+        _row("binary_sensor.occ", domain="binary_sensor", device_class="occupancy"),
+    ]
+
+    result = find_entities(rows, device_class="binary_sensor.occupancy")
+
+    assert [e["entity_id"] for e in result["entities"]] == ["binary_sensor.occ"]
+    assert result["total_matches"] == 1
+
+
+def test_find_domain_qualified_device_class_combines_with_an_explicit_domain_filter() -> None:
+    # A qualified device_class already pins the domain; an explicit domain= that
+    # disagrees must still AND against it, matching nothing.
+    result = find_entities(_catalog(), device_class="sensor.illuminance", domain="light")
+
+    assert result["total_matches"] == 0
+
+
+def test_find_device_class_round_trips_every_summary_key() -> None:
+    # The real fix: every key entity_summary hands back must find exactly the rows
+    # that were counted under it, across several device classes and domains.
+    rows = [
+        _row("sensor.lux1", domain="sensor", device_class="illuminance"),
+        _row("sensor.lux2", domain="sensor", device_class="illuminance"),
+        _row("sensor.occ1", domain="sensor", device_class="occupancy"),
+        _row("binary_sensor.occ1", domain="binary_sensor", device_class="occupancy"),
+        _row("binary_sensor.occ2", domain="binary_sensor", device_class="occupancy"),
+        _row("binary_sensor.occ3", domain="binary_sensor", device_class="occupancy"),
+        _row("climate.thermo", domain="climate", device_class="thermostat"),
+        _row("light.plain", domain="light"),  # no device_class — not counted
+    ]
+
+    summary = entity_summary(rows)
+
+    for key, count in summary["by_device_class"].items():
+        assert find_entities(rows, device_class=key)["total_matches"] == count
+
+
 def test_find_query_matches_entity_id_case_insensitively() -> None:
     result = find_entities(_catalog(), query="KITCHEN")
 

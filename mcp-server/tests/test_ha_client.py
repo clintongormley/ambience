@@ -157,6 +157,46 @@ async def test_a_failed_send_reports_the_command_never_left_the_client():
     assert client.closed is True
 
 
+async def test_a_client_already_marked_dead_refuses_to_send():
+    """Without this guard a command queued behind a slow one goes out on a socket
+    that is already marked dead and about to be torn down — and dies on RECEIVE, so
+    it is classified sent=True and never retried. A WRITE could then reach Home
+    Assistant on a doomed socket and fail with an unknowable outcome. Refusing up
+    front makes it sent=False, so the caller transparently re-sends it on a fresh
+    socket."""
+    t = FakeTransport([{"id": 1, "type": "result", "success": True, "result": {}}])
+    client = HAClient(t)
+    await client.close()
+
+    with pytest.raises(HAConnectionError) as exc:
+        await client.command("ambience/house/save", config={})
+    assert exc.value.sent is False
+    assert t.sent == []  # nothing was put on the doomed socket
+
+
+async def test_a_read_is_resent_even_when_the_reply_was_lost():
+    """Reads have no side effects, so a lost reply (a timeout, a socket that dies
+    after the send) is safe to re-request. Only a mutating command is given up on."""
+    dead = _ScriptedClient(HAConnectionError("reply lost", sent=True))
+    fresh = _ScriptedClient({"scenes": []})
+    client = _reconnecting(dead, fresh)
+
+    assert await client.command("ambience/area/get", area_id="lr") == {"scenes": []}
+    assert fresh.sent == ["ambience/area/get"]
+
+
+async def test_a_write_whose_reply_was_lost_is_never_resent():
+    """It may have been applied with only the reply lost — re-sending could apply
+    it twice."""
+    dead = _ScriptedClient(HAConnectionError("reply lost", sent=True))
+    fresh = _ScriptedClient({"ok": True})
+    client = _reconnecting(dead, fresh)
+
+    with pytest.raises(HAConnectionError):
+        await client.command("ambience/area/save", config={})
+    assert fresh.sent == []
+
+
 async def test_reconnects_and_resends_a_command_that_never_left_the_client():
     """HA closes every socket when it restarts and we only find out on the next
     command. A command that failed on *send* never reached HA, so re-sending it on

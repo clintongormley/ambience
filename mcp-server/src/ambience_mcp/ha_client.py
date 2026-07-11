@@ -88,13 +88,23 @@ class HAClient:
         # in-flight recv() at a time, and the MCP SDK can dispatch tool calls as
         # concurrent tasks — overlapping commands would otherwise race on recv().
         async with self._lock:
+            # Never send on a client already known dead. A command queued behind a
+            # slow one would otherwise go out on a socket that is about to be torn
+            # down, then die on RECEIVE — classified sent=True and so never re-sent,
+            # leaving a write with an unknowable outcome. Failing here makes it
+            # sent=False, and the caller re-sends it on a fresh socket.
+            if self._closed:
+                raise HAConnectionError("connection is closed", sent=False)
             self._next_id += 1
             cmd_id = self._next_id
+            # Serialise BEFORE the try: a non-serialisable payload is our bug, not a
+            # transport failure, and must not tear down a healthy socket.
+            frame = json.dumps({"id": cmd_id, "type": type, **payload})
             # Send and receive are reported separately: a socket that went stale
             # while idle (an HA restart) fails here, before HA sees anything, and
-            # the caller can safely retry it — even a write. See HAConnectionError.
+            # the caller can safely re-send it — even a write. See HAConnectionError.
             try:
-                await self._transport.send(json.dumps({"id": cmd_id, "type": type, **payload}))
+                await self._transport.send(frame)
             except Exception as exc:
                 self._closed = True
                 raise HAConnectionError(f"websocket command failed: {exc}", sent=False) from exc
@@ -136,6 +146,17 @@ class _WebsocketsTransport:
 
     async def close(self) -> None:
         await self._connection.close()
+
+
+def _mutates(command: str) -> bool:
+    """Whether a command changes state in Home Assistant.
+
+    Classified by the command itself — a fact about the protocol — rather than by a
+    flag each tool has to remember to set. Every Ambience write is a `/save`
+    (`ambience/{area,floor,house}/save`, `ambience/categories/save`); everything else
+    reads.
+    """
+    return command.endswith("/save")
 
 
 class ReconnectingClient:
@@ -183,7 +204,10 @@ class ReconnectingClient:
         try:
             return await (await self._live()).command(type, **payload)
         except HAConnectionError as exc:
-            if exc.sent:
+            # Never reached HA → always safe to re-send, read or write.
+            # Reached HA but the reply was lost → safe only for a read; a write may
+            # have been applied, and re-sending could apply it twice.
+            if exc.sent and _mutates(type):
                 raise
             return await (await self._live()).command(type, **payload)
 

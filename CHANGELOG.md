@@ -36,6 +36,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- **The MCP server can read the guide from an Ambience it did not ship with.**
+    The server is installed separately from the integration, so a newer server
+    routinely meets an older install — which assembles the guide with two
+    headings per section. Split naively, every section an AI is told to read
+    came back **empty**, so it would fetch the guide, receive nothing, and
+    author blind. The server now reads both layouts.
 - **The first MCP tool call after a Home Assistant restart no longer fails.**
     Restarting Home Assistant closes the websocket, and the MCP server only
     discovered this when it next tried to use it — so the next tool call always

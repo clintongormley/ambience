@@ -179,20 +179,27 @@ def _split_guide_sections(text: str) -> dict[str, str]:
     bundle is fetched, not pasted. It is dropped, so what comes back is exactly the
     readable sections.
     """
-    sections: dict[str, list[str]] = {}
-    body: list[str] | None = None
+    ordered: list[tuple[str, list[str]]] = []
     in_fence = False
     for line in text.splitlines():
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
         elif not in_fence and line.startswith("# "):
-            body = sections.setdefault(line[2:].strip(), [])
+            # Ambience <= 1.1.0 assembles each part under TWO H1s — the wrapper
+            # title, then the source document's own — leaving the wrapper's body
+            # empty. This server ships separately from the integration, so it must
+            # read that older guide too: an empty section is a wrapper, so keep its
+            # (canonical) name and let it absorb the body that follows, instead of
+            # serving an empty string for every section an AI is told to read.
+            if ordered and not any(text_line.strip() for text_line in ordered[-1][1]):
+                continue
+            ordered.append((line[2:].strip(), []))
             continue
-        if body is not None:
-            body.append(line)
-    for title in list(sections)[:1]:  # the document title, never a section
-        del sections[title]
-    return {name: "\n".join(lines).strip() for name, lines in sections.items()}
+        if ordered:
+            ordered[-1][1].append(line)
+    # The first heading is the document's own title (its body is the paste-flow
+    # preamble), never a readable section.
+    return {name: "\n".join(lines).strip() for name, lines in ordered[1:]}
 
 
 class GuideCache:
@@ -215,6 +222,16 @@ class GuideCache:
         self.sections: dict[str, str] = {}
 
     def store(self, version: str | None, sections: dict[str, str]) -> None:
+        """Remember a guide we could actually read.
+
+        An empty split is never cached: claiming that version would POISON the cache
+        for the life of the process — every later call would send `have_version`, be
+        answered {unchanged: true} with no text, and serve the empty map forever,
+        with no error the model could see. Remembering nothing means we ask the
+        install again, so it can recover.
+        """
+        if not sections:
+            return
         self.version = version
         self.sections = sections
 
@@ -238,15 +255,16 @@ async def get_guide(client: Any, cache: GuideCache, section: str | None = None) 
         raise
 
     if payload.get("unchanged"):
-        payload = {**payload, "ambience_version": cache.version}
+        # We only claim a version we actually hold, so the cache is populated here.
+        sections, version = cache.sections, cache.version
     else:
-        cache.store(
-            payload.get("ambience_version"),
-            _split_guide_sections(payload.get("guide") or ""),
-        )
-    sections = cache.sections
+        # Always answer from what THIS fetch returned — never fall back to a cached
+        # older guide, which would serve stale text under the new version's number.
+        sections = _split_guide_sections(payload.get("guide") or "")
+        version = payload.get("ambience_version")
+        cache.store(version, sections)
     meta = {
-        "ambience_version": payload.get("ambience_version"),
+        "ambience_version": version,
         "ambience_ai_bundle": payload.get("ambience_ai_bundle"),
         "sections": list(sections),
     }

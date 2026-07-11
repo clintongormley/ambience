@@ -410,6 +410,44 @@ GUIDE_PAYLOAD = {
 }
 
 
+# How Ambience <= 1.1.0 assembles the guide: the wrapper title AND the source
+# document's own H1, back to back. The wrapper's body is empty.
+OLD_FORMAT_GUIDE = """# Ambience — AI authoring & diagnosis guide
+
+Intro paragraph.
+
+# Config schema
+
+# Ambience configuration schema (overview)
+
+Schema body.
+
+# Condition cookbook
+
+# Conditions cookbook
+
+Cookbook body.
+"""
+
+
+def test_split_guide_sections_reads_the_older_double_heading_format():
+    """The MCP server ships separately from the integration, so a NEW server WILL
+    meet an OLD Ambience (MIN_AMBIENCE_VERSION is 1.1.0, which assembles the guide
+    with two H1s per part). Splitting that naively yields an empty body for every
+    section an AI is told to read — it would fetch the guide, get "", and author
+    blind, which is the exact failure this whole feature exists to prevent.
+
+    The wrapper's title is the canonical section name in BOTH formats, so an empty
+    section absorbs the body that follows it.
+    """
+    sections = tools._split_guide_sections(OLD_FORMAT_GUIDE)
+    assert list(sections) == ["Config schema", "Condition cookbook"]
+    assert "Schema body." in sections["Config schema"]
+    assert "Cookbook body." in sections["Condition cookbook"]
+    # The inner heading is absorbed, not surfaced as a section of its own.
+    assert "Ambience configuration schema (overview)" not in sections
+
+
 def test_split_guide_sections_ignores_hash_comments_inside_code_fences():
     sections = tools._split_guide_sections(GUIDE_TEXT)
     # The document title is dropped; a `#` comment inside a ```yaml fence is not a
@@ -445,13 +483,36 @@ async def test_get_guide_refetches_when_the_install_was_upgraded():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
     await tools.get_guide(client, cache)
 
-    upgraded = {**GUIDE_PAYLOAD, "ambience_version": "1.2.0", "guide": "# New section\n\nfresh"}
+    upgraded = {
+        **GUIDE_PAYLOAD,
+        "ambience_version": "1.2.0",
+        "guide": "# Title\n\nintro\n\n# Brand new\n\nfresh body",
+    }
     client.results["ambience/ai_guide"] = upgraded
     result = await tools.get_guide(client, cache)
 
     assert result["ambience_version"] == "1.2.0"
-    assert result["sections"] == []  # the only H1 is the doc title, which is dropped
+    assert result["sections"] == ["Brand new"]
     assert cache.version == "1.2.0"
+
+
+async def test_an_unsplittable_guide_is_never_cached():
+    """Caching an empty split would POISON the cache for the life of the process:
+    every later call would send have_version, be told {unchanged: true} with no
+    text, and serve the empty map forever — with no error the model could see.
+    Keep asking the install instead, so it can recover."""
+    cache = tools.GuideCache()
+    client = FakeClient({"ambience/ai_guide": {**GUIDE_PAYLOAD, "guide": ""}})
+
+    first = await tools.get_guide(client, cache)
+    assert first["sections"] == []
+    assert cache.version is None  # nothing worth remembering
+
+    # It must ask for the text again — not claim to hold a guide it never got.
+    client.results["ambience/ai_guide"] = GUIDE_PAYLOAD
+    second = await tools.get_guide(client, cache)
+    assert second["sections"] == ["Config schema", "Import format", "Actions"]
+    assert client.calls[-1] == {"type": "ambience/ai_guide"}
 
 
 async def test_get_guide_without_section_returns_contents_not_the_full_text():
@@ -498,6 +559,11 @@ def test_the_sections_named_in_the_usage_hint_really_exist_in_the_shipped_guide(
     for named in re.findall(r"'([^']+)'", _quoted(tools._GUIDE_USAGE)):
         assert named in sections, f"_GUIDE_USAGE names a section that does not exist: {named}"
     assert sections, "the shipped guide produced no sections"
+    # An empty body means the split went wrong (an unbalanced fence swallowing the
+    # rest of the file, a heading shape we don't handle) — an AI would be handed ""
+    # and author blind, which is precisely what serving the guide is meant to stop.
+    empty = [name for name, body in sections.items() if not body.strip()]
+    assert not empty, f"sections split to an empty body: {empty}"
 
 
 def _quoted(text: str) -> str:

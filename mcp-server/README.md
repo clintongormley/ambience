@@ -126,9 +126,9 @@ costs almost nothing per turn.
 `ambience_list_categories`, `ambience_save_categories`.
 
 `ambience_get_context` carries entity COUNTS, not rows — a real house has
-thousands of entities. `ambience_find_entities` is the paged search that
-returns real entity ids to author with; nothing is filtered out of the
-catalog, only paged.
+thousands of entities. `ambience_find_entities` is the paged search that returns
+real entity ids to author with; nothing is filtered out of the catalog, only
+paged.
 
 `ambience_get_guide` fetches the scene-authoring guide (schema + cookbook) live
 from your install, so it always matches your Ambience version — no separately

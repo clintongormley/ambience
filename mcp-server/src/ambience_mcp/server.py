@@ -6,58 +6,29 @@ them, and a lean surface keeps the per-turn context footprint small."""
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from . import tools
 from .config import load_config
-from .ha_client import HAClient, HAConnectionError, connect
+from .ha_client import ReconnectingClient, connect
 from .ledger import PreviewLedger
 
 mcp = FastMCP("ambience")
 _ledger = PreviewLedger()
-_client: HAClient | None = None
-_client_lock = asyncio.Lock()
+_guide_cache = tools.GuideCache()
+_client: ReconnectingClient | None = None
 
 
-async def _client_() -> HAClient:
+def _client_() -> ReconnectingClient:
+    """The one HA connection. It reconnects and re-sends a command that never left
+    us (an HA restart closes the socket), so tools see a live link and never have
+    to reason about retry-safety themselves — see ReconnectingClient."""
     global _client
-    # Reconnect if we have no client yet, or the last one broke on a transport
-    # failure (HA restart, dropped socket) and marked itself closed.
-    if _client is None or _client.closed:
-        async with _client_lock:
-            if _client is None or _client.closed:
-                if _client is not None:
-                    # Release the dead client's socket + keepalive/reader tasks; a
-                    # malformed frame can mark it closed while the socket is still
-                    # open, so they'd otherwise leak on every reconnect. Best-effort.
-                    with contextlib.suppress(Exception):
-                        await _client.close()
-                cfg = load_config()
-                _client = await connect(cfg.ws_url, cfg.token)
+    if _client is None:
+        _client = ReconnectingClient(connect, load_config)
     return _client
-
-
-async def _call(fn: Any, *args: Any, idempotent: bool = True, **kwargs: Any) -> Any:
-    """Run a tool against a live client, reconnecting and retrying once when the
-    socket turns out to be dead.
-
-    HA closes every websocket when it restarts, and we only find out on the next
-    command — so without this the FIRST tool call after any HA restart fails and
-    only the one after it reconnects. Retry when nothing reached HA (`sent` is
-    False), or when the call has no side effects to repeat. A write whose command
-    was already sent is NOT retried: HA may have applied it and lost only the
-    reply, and re-sending could apply it twice.
-    """
-    try:
-        return await fn(await _client_(), *args, **kwargs)
-    except HAConnectionError as exc:
-        if exc.sent and not idempotent:
-            raise
-        return await fn(await _client_(), *args, **kwargs)
 
 
 @mcp.tool()
@@ -67,7 +38,7 @@ async def ambience_get_context() -> dict[str, Any]:
     traces. Fetch this before authoring so every id and vocabulary word is real.
     Scenes carry a per-category `rank` (1..N) — show that, not the raw
     `priority`, when presenting scenes to a user."""
-    return await _call(tools.get_context)
+    return await tools.get_context(_client_())
 
 
 @mcp.tool()
@@ -76,7 +47,7 @@ async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
     scope = {"kind": "area"|"floor"|"house", "id": "<area_or_floor_id>"} (omit id for house).
     Each scene carries a per-category `rank` (1..N, evaluation order); present that
     plus the 📌 pin marker, never the raw internal `priority` number."""
-    return await _call(tools.get_scope, scope)
+    return await tools.get_scope(_client_(), scope)
 
 
 @mcp.tool()
@@ -89,20 +60,20 @@ async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
     section=<name> to read one. Start with "Config schema" and "Condition
     cookbook"; read "Reading a diagnostic bundle" when diagnosing why a scene
     did not fire."""
-    return await _call(tools.get_guide, section)
+    return await tools.get_guide(_client_(), _guide_cache, section)
 
 
 @mcp.tool()
 async def ambience_dry_run(scope: dict[str, Any]) -> dict[str, Any]:
     """Preview which scene currently wins for a scope, with the evaluation trace
     (including shadowing). Read-only. scope shape as in ambience_get_scope."""
-    return await _call(tools.dry_run, scope)
+    return await tools.dry_run(_client_(), scope)
 
 
 @mcp.tool()
 async def ambience_validate(scenes: list[dict[str, Any]]) -> dict[str, Any]:
     """Structurally validate a proposed list of scenes (raises on invalid)."""
-    return await _call(tools.validate, scenes)
+    return await tools.validate(_client_(), scenes)
 
 
 @mcp.tool()
@@ -119,7 +90,7 @@ async def ambience_preview_write(
     blocked (no usable token) — declare them here or create them with
     ambience_save_categories. Show the diff to the user; pass the token to
     ambience_apply_write to commit."""
-    return await _call(tools.preview_write, scope, scenes, _ledger, new_categories)
+    return await tools.preview_write(_client_(), scope, scenes, _ledger, new_categories)
 
 
 @mcp.tool()
@@ -139,33 +110,27 @@ async def ambience_apply_write(
     categories you did not mean to touch. Unlike a pasted import block there is no
     merge mode. So: ambience_get_scope first, carry forward every scene you mean to
     keep, and check the preview's `removed` list before committing."""
-    return await _call(
-        tools.apply_write,
-        scope,
-        scenes,
-        confirm_token,
-        _ledger,
-        new_categories,
-        idempotent=False,
+    return await tools.apply_write(
+        _client_(), scope, scenes, confirm_token, _ledger, new_categories
     )
 
 
 @mcp.tool()
 async def ambience_list_traces(limit: int | None = None) -> dict[str, Any]:
     """Recent scene-evaluation traces for diagnosis ("why didn't my scene fire?")."""
-    return await _call(tools.list_traces, limit)
+    return await tools.list_traces(_client_(), limit)
 
 
 @mcp.tool()
 async def ambience_list_categories() -> dict[str, Any]:
     """List the scene categories (id + name + icon/color)."""
-    return await _call(tools.list_categories)
+    return await tools.list_categories(_client_())
 
 
 @mcp.tool()
 async def ambience_save_categories(categories: list[dict[str, Any]]) -> dict[str, Any]:
     """Create/update scene categories. Each item = {id, name, icon?, color?}."""
-    return await _call(tools.save_categories, categories, idempotent=False)
+    return await tools.save_categories(_client_(), categories)
 
 
 def main() -> None:

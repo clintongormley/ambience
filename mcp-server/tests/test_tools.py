@@ -1,3 +1,6 @@
+import pathlib
+import re
+
 import pytest
 from conftest import FakeClient
 
@@ -409,54 +412,115 @@ GUIDE_PAYLOAD = {
 
 def test_split_guide_sections_ignores_hash_comments_inside_code_fences():
     sections = tools._split_guide_sections(GUIDE_TEXT)
-    assert [name for name, _ in sections] == [
-        "Ambience — AI authoring & diagnosis guide",
-        "Config schema",
-        "Import format",
-        "Actions",
-    ]
-    body = dict(sections)["Import format"]
+    # The document title is dropped; a `#` comment inside a ```yaml fence is not a
+    # heading (a naive line split would shred "Import format" into fragments).
+    assert list(sections) == ["Config schema", "Import format", "Actions"]
+    body = sections["Import format"]
     assert "# --- Block 1 of 2: Living room ---" in body
     assert "Trailing envelope prose." in body
 
 
-async def test_get_guide_without_section_returns_contents_not_the_full_text():
+async def test_get_guide_fetches_the_whole_guide_once_then_reuses_it():
+    """The guide is ~109KB and does not change until the user upgrades Ambience, so
+    refetching it per section wastes real bandwidth (the server may be reached over
+    the internet, not just a LAN). The version is held by the SERVER, not passed in
+    as a tool argument — a model could claim to hold a guide it had never fetched
+    and be told {unchanged: true} with no text, which is the trap this replaces."""
+    cache = tools.GuideCache()
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client)
-    assert result["sections"] == [
-        "Ambience — AI authoring & diagnosis guide",
-        "Config schema",
-        "Import format",
-        "Actions",
-    ]
+
+    first = await tools.get_guide(client, cache, section="Config schema")
+    assert "Schema body." in first["guide"]
+    assert client.calls == [{"type": "ambience/ai_guide"}]  # nothing held yet
+
+    # The install says "same version" and sends no text; the split is reused.
+    client.results["ambience/ai_guide"] = {"unchanged": True, "ambience_version": "1.1.0"}
+    second = await tools.get_guide(client, cache, section="Actions")
+    assert "Actions body." in second["guide"]
+    assert client.calls[-1] == {"type": "ambience/ai_guide", "have_version": "1.1.0"}
+
+
+async def test_get_guide_refetches_when_the_install_was_upgraded():
+    cache = tools.GuideCache()
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    await tools.get_guide(client, cache)
+
+    upgraded = {**GUIDE_PAYLOAD, "ambience_version": "1.2.0", "guide": "# New section\n\nfresh"}
+    client.results["ambience/ai_guide"] = upgraded
+    result = await tools.get_guide(client, cache)
+
+    assert result["ambience_version"] == "1.2.0"
+    assert result["sections"] == []  # the only H1 is the doc title, which is dropped
+    assert cache.version == "1.2.0"
+
+
+async def test_get_guide_without_section_returns_contents_not_the_full_text():
+    """The document's own title is NOT a section: its body is the paste-flow
+    preamble ("paste your downloaded AI bundle"), which is exactly the wrong
+    advice over MCP — there is nothing to paste. Offering it would waste a TOC
+    entry on a section no MCP reader should open."""
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    result = await tools.get_guide(client, tools.GuideCache())
+    assert result["sections"] == ["Config schema", "Import format", "Actions"]
     assert "guide" not in result
     assert result["ambience_version"] == "1.1.0"
 
 
+async def test_get_guide_will_not_serve_the_document_title_as_a_section():
+    client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    result = await tools.get_guide(
+        client, tools.GuideCache(), section="Ambience — AI authoring & diagnosis guide"
+    )
+    assert "error" in result
+    assert "guide" not in result
+
+
 async def test_get_guide_returns_only_the_requested_section():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, section="Config schema")
+    result = await tools.get_guide(client, tools.GuideCache(), section="Config schema")
     assert result["section"] == "Config schema"
     assert "Schema body." in result["guide"]
     assert "Actions body." not in result["guide"]
 
 
-async def test_get_guide_never_sends_have_version_so_the_text_always_arrives():
+def test_the_sections_named_in_the_usage_hint_really_exist_in_the_shipped_guide():
+    """`_GUIDE_USAGE` names sections in prose, and an AI passes those names back to
+    `ambience_get_guide(section=...)`. The titles are set by bin/gen_ai_docs.py in
+    the *other* package, so nothing but this test stops a rename there from leaving
+    the hint pointing at a section that no longer exists — which is exactly what a
+    rename in this very branch would have done."""
+    guide = pathlib.Path(__file__).parents[2] / (
+        "custom_components/ambience/ai_guide/ambience-ai-guide.md"
+    )
+    if not guide.is_file():
+        pytest.skip("shipped guide not present (standalone mcp-server checkout)")
+    sections = tools._split_guide_sections(guide.read_text(encoding="utf-8"))
+    for named in re.findall(r"'([^']+)'", _quoted(tools._GUIDE_USAGE)):
+        assert named in sections, f"_GUIDE_USAGE names a section that does not exist: {named}"
+    assert sections, "the shipped guide produced no sections"
+
+
+def _quoted(text: str) -> str:
+    """Normalise the hint's double quotes to single so one regex finds them all."""
+    return text.replace('"', "'")
+
+
+async def test_get_guide_asks_for_the_text_whenever_it_holds_none():
+    """A cold cache must never claim to hold a version — that was the old trap:
+    a model passed a version read from the bundle and got {unchanged: true} with no
+    guide at all."""
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    await tools.get_guide(client, section="Actions")
+    result = await tools.get_guide(client, tools.GuideCache(), section="Actions")
     assert client.calls == [{"type": "ambience/ai_guide"}]
+    assert "Actions body." in result["guide"]
 
 
 async def test_get_guide_rejects_an_unknown_section_and_lists_the_real_ones():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, section="Nonsense")
+    result = await tools.get_guide(client, tools.GuideCache(), section="Nonsense")
     assert "error" in result
-    assert result["sections"] == [
-        "Ambience — AI authoring & diagnosis guide",
-        "Config schema",
-        "Import format",
-        "Actions",
-    ]
+    assert result["sections"] == ["Config schema", "Import format", "Actions"]
+    assert result["usage"]  # a wrong guess still gets told how to call it properly
     assert "guide" not in result
 
 
@@ -464,7 +528,7 @@ async def test_get_guide_reports_unavailable_on_old_backend():
     client = FakeClient(
         {"ambience/ai_guide": HACommandError("unknown_command", "Unknown command.")}
     )
-    result = await tools.get_guide(client)
+    result = await tools.get_guide(client, tools.GuideCache())
     assert result["unavailable"] is True
     assert "guide" not in result
 
@@ -472,7 +536,7 @@ async def test_get_guide_reports_unavailable_on_old_backend():
 async def test_get_guide_propagates_other_command_errors():
     client = FakeClient({"ambience/ai_guide": HACommandError("internal_error", "boom")})
     with pytest.raises(HACommandError):
-        await tools.get_guide(client)
+        await tools.get_guide(client, tools.GuideCache())
 
 
 def test_parse_version_reads_major_minor_patch():

@@ -4,6 +4,8 @@ stale authoring docs (enforced by `make ai-docs-check`)."""
 
 from __future__ import annotations
 
+import pathlib
+
 from bin import gen_ai_docs
 
 # The conditions registered in __init__.py — discovery must find exactly these.
@@ -108,6 +110,32 @@ def test_guide_section_titles_are_stable_and_never_call_the_guide_a_bundle() -> 
         "Action reference",
         "Reading a diagnostic bundle",
     ]
+
+
+def test_the_shipped_guide_has_exactly_one_h1_per_section() -> None:
+    """Gate the ARTIFACT, not just the inputs. `_drop_leading_h1` strips only a
+    *leading* H1, so a curated part that ever grows a second, mid-body H1 would
+    silently become a phantom section in the guide — and the MCP server, which
+    splits the guide on its H1s to serve it section by section, would start
+    offering it. Nothing else catches that.
+    """
+    guide = (
+        pathlib.Path(__file__).parent.parent
+        / "custom_components/ambience/ai_guide/ambience-ai-guide.md"
+    ).read_text(encoding="utf-8")
+
+    # Fence-aware: the guide's YAML examples are full of `#` comments.
+    h1s, in_fence = [], False
+    for line in guide.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("# "):
+            h1s.append(line[2:].strip())
+
+    expected = ["Ambience — AI authoring & diagnosis guide"] + [
+        title for title, _ in gen_ai_docs._PORTABLE_PARTS
+    ]
+    assert h1s == expected
 
 
 def test_assemble_portable_doc_drops_a_parts_own_h1() -> None:

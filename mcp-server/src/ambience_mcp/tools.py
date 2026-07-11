@@ -167,36 +167,61 @@ _GUIDE_USAGE = (
 )
 
 
-def _split_guide_sections(text: str) -> list[tuple[str, str]]:
-    """Split the assembled guide on its top-level `# ` headings.
+def _split_guide_sections(text: str) -> dict[str, str]:
+    """Split the assembled guide on its top-level `# ` headings, title first.
 
     Fence-aware on purpose: the guide's YAML examples are full of `#` comments
     (`# --- Block 1 of 2 ---`, `# BEFORE — ...`) which a naive line-based split
     would mistake for headings and shred the sections apart.
+
+    The FIRST heading is the document's own title, and its body is the paste-flow
+    preamble ("paste your downloaded AI bundle") — wrong advice over MCP, where the
+    bundle is fetched, not pasted. It is dropped, so what comes back is exactly the
+    readable sections.
     """
-    sections: list[tuple[str, str]] = []
-    name: str | None = None
-    body: list[str] = []
+    sections: dict[str, list[str]] = {}
+    body: list[str] | None = None
     in_fence = False
     for line in text.splitlines():
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
         elif not in_fence and line.startswith("# "):
-            if name is not None:
-                sections.append((name, "\n".join(body).strip()))
-            name = line[2:].strip()
-            body = []
+            body = sections.setdefault(line[2:].strip(), [])
             continue
-        if name is not None:
+        if body is not None:
             body.append(line)
-    if name is not None:
-        sections.append((name, "\n".join(body).strip()))
-    return sections
+    for title in list(sections)[:1]:  # the document title, never a section
+        del sections[title]
+    return {name: "\n".join(lines).strip() for name, lines in sections.items()}
 
 
-async def get_guide(client: Any, section: str | None = None) -> dict[str, Any]:
-    """Fetch the authoring guide (schema + cookbook) live from the running
-    install, one section at a time.
+class GuideCache:
+    """The split guide for one Ambience version, held by the SERVER.
+
+    The guide is ~109KB and only changes when the user upgrades Ambience, so
+    refetching it for every section wastes real bandwidth — the MCP server may be
+    reaching Home Assistant over the internet, not a LAN. Keyed on the install's
+    version, which is exactly when the guide can change.
+
+    Server-held on purpose. `have_version` used to be a **tool argument**, which
+    invited a model to pass a version it had read from the *bundle* and so claim it
+    already held a guide it had never fetched — the install would answer
+    {unchanged: true} with no text, and the model would author blind. The server's
+    own memory cannot lie about what it has read.
+    """
+
+    def __init__(self) -> None:
+        self.version: str | None = None
+        self.sections: dict[str, str] = {}
+
+    def store(self, version: str | None, sections: dict[str, str]) -> None:
+        self.version = version
+        self.sections = sections
+
+
+async def get_guide(client: Any, cache: GuideCache, section: str | None = None) -> dict[str, Any]:
+    """Fetch the authoring guide (schema + cookbook) from the running install, one
+    section at a time.
 
     With no `section`, returns the list of section names (a table of contents).
     With a `section`, returns just that section's text. The full guide is ~25k
@@ -204,29 +229,32 @@ async def get_guide(client: Any, section: str | None = None) -> dict[str, Any]:
     "give me all of it" mode. Old backends that predate the command return
     {unavailable: true} instead of raising.
     """
+    held = {"have_version": cache.version} if cache.version else {}
     try:
-        payload = await client.command("ambience/ai_guide")
+        payload = await client.command("ambience/ai_guide", **held)
     except HACommandError as exc:
         if exc.code == "unknown_command":
             return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
         raise
 
-    sections = _split_guide_sections(payload.get("guide") or "")
-    names = [name for name, _ in sections]
+    if payload.get("unchanged"):
+        payload = {**payload, "ambience_version": cache.version}
+    else:
+        cache.store(
+            payload.get("ambience_version"),
+            _split_guide_sections(payload.get("guide") or ""),
+        )
+    sections = cache.sections
     meta = {
         "ambience_version": payload.get("ambience_version"),
         "ambience_ai_bundle": payload.get("ambience_ai_bundle"),
+        "sections": list(sections),
     }
     if section is None:
-        return {**meta, "sections": names, "usage": _GUIDE_USAGE}
-    bodies = dict(sections)
-    if section not in bodies:
-        return {
-            **meta,
-            "error": f"Unknown guide section {section!r}.",
-            "sections": names,
-        }
-    return {**meta, "section": section, "guide": bodies[section]}
+        return {**meta, "usage": _GUIDE_USAGE}
+    if section not in sections:
+        return {**meta, "error": f"Unknown guide section {section!r}.", "usage": _GUIDE_USAGE}
+    return {**meta, "section": section, "guide": sections[section]}
 
 
 async def dry_run(client: Any, scope: dict[str, Any]) -> dict[str, Any]:

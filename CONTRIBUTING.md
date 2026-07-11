@@ -124,7 +124,7 @@ wrap width and exclusions come from the repo automatically.
 
 The repo ships a project-scoped `ambience-dev` MCP server (`.mcp.json`) that
 points your editor's AI at the worktree's own Home Assistant container, so you
-can drive the real tools while developing. Three things about the reload path
+can drive the real tools while developing. A few things about the reload path
 routinely make a correct change look broken:
 
 - **The MCP server is spawned by your editor, not by you.** `.mcp.json` runs
@@ -139,6 +139,12 @@ routinely make a correct change look broken:
     adding or renaming an export in `~/.zshrc` also needs a **full editor
     restart**. Until then the server receives the literal unexpanded string and
     fails with `AMBIENCE_HA_URL must start with http:// or https:// (got '${…}')`.
+- **A regenerated guide looks stale over MCP.** The server caches the authoring
+    guide keyed on the install's `ambience_version`, which does **not** change
+    when you run `make ai-docs` — so `ambience_get_guide` keeps serving the copy
+    it already holds until the server restarts. Harmless for users (their guide
+    only changes when they upgrade Ambience, which does bump the version), but
+    in the dev loop, restart the editor after regenerating the guide.
 - **The backend needs only a container restart.** The worktree's
     `custom_components/` is bind-mounted into its HA container, so
     `docker restart ha-amb-<branch>` picks up backend changes with no rebuild.

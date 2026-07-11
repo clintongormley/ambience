@@ -1,7 +1,44 @@
 import pytest
 from conftest import FakeTransport
 
-from ambience_mcp.ha_client import HAAuthError, HAClient, HACommandError, HAConnectionError
+from ambience_mcp.ha_client import (
+    HAAuthError,
+    HAClient,
+    HACommandError,
+    HAConnectionError,
+    ReconnectingClient,
+)
+
+
+class _ScriptedClient:
+    """An HAClient stand-in whose command() replays a scripted outcome per call."""
+
+    def __init__(self, *outcomes) -> None:
+        self._outcomes = list(outcomes)
+        self.closed = False
+        self.sent: list[str] = []
+
+    async def command(self, type: str, **payload):
+        self.sent.append(type)
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            if isinstance(outcome, HAConnectionError):
+                self.closed = True
+            raise outcome
+        return outcome
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _reconnecting(*clients):
+    """A ReconnectingClient that hands out the given clients, in order."""
+    made = iter(clients)
+
+    async def _connect(ws_url: str, token: str):
+        return next(made)
+
+    return ReconnectingClient(_connect, lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})())
 
 
 async def test_authenticate_ok():
@@ -85,6 +122,9 @@ async def test_command_serialises_sequential_calls():
 
 
 async def test_transport_failure_marks_client_closed_and_wraps_error():
+    """The send succeeded, so HA may have applied a write and only the reply was
+    lost: `sent` is True and the command must NOT be re-sent."""
+
     class BoomTransport:
         async def send(self, data: str) -> None: ...
         async def recv(self) -> str:
@@ -93,14 +133,15 @@ async def test_transport_failure_marks_client_closed_and_wraps_error():
         async def close(self) -> None: ...
 
     client = HAClient(BoomTransport())
-    with pytest.raises(HAConnectionError, match="socket dropped"):
+    with pytest.raises(HAConnectionError, match="socket dropped") as exc:
         await client.command("ambience/house/get")
     assert client.closed is True
+    assert exc.value.sent is True
 
 
 async def test_a_failed_send_reports_the_command_never_left_the_client():
     """A socket that went stale while idle (an HA restart) fails on send — HA
-    never saw the command, so it is provably safe to retry, even a write."""
+    never saw the command, so it is provably safe to re-send, even a write."""
 
     class DeadOnSend:
         async def send(self, data: str) -> None:
@@ -116,21 +157,64 @@ async def test_a_failed_send_reports_the_command_never_left_the_client():
     assert client.closed is True
 
 
-async def test_a_failed_receive_reports_the_command_may_have_run():
-    """The send succeeded, so HA may have applied a write and only the reply was
-    lost. Retrying is NOT safe — the caller must be told."""
+async def test_reconnects_and_resends_a_command_that_never_left_the_client():
+    """HA closes every socket when it restarts and we only find out on the next
+    command. A command that failed on *send* never reached HA, so re-sending it on
+    a fresh socket is safe — this is what stops the first call after every HA
+    restart from failing."""
+    dead = _ScriptedClient(HAConnectionError("stale socket", sent=False))
+    fresh = _ScriptedClient({"ok": True})
+    client = _reconnecting(dead, fresh)
 
-    class DeadOnRecv:
-        async def send(self, data: str) -> None: ...
-        async def recv(self) -> str:
-            raise ConnectionResetError("socket dropped")
+    assert await client.command("ambience/house/get") == {"ok": True}
+    assert dead.sent == ["ambience/house/get"]
+    assert fresh.sent == ["ambience/house/get"]
+    assert dead.closed is True  # the dead socket's tasks were released
 
-        async def close(self) -> None: ...
 
-    client = HAClient(DeadOnRecv())
-    with pytest.raises(HAConnectionError) as exc:
+async def test_resends_a_write_too_when_it_never_left_the_client():
+    """The retry is safe for writes as well: HA never saw the command. Crucially
+    only the one frame is re-sent — the *tool* is not re-entered, so single-use
+    state like apply_write's confirm token is never consumed twice."""
+    dead = _ScriptedClient(HAConnectionError("stale socket", sent=False))
+    fresh = _ScriptedClient({"ok": True})
+    client = _reconnecting(dead, fresh)
+
+    assert await client.command("ambience/area/save", config={}) == {"ok": True}
+    assert fresh.sent == ["ambience/area/save"]
+
+
+async def test_does_not_resend_a_command_that_reached_home_assistant():
+    """The send succeeded, so HA may have applied it and only the reply was lost.
+    Re-sending could apply it twice — give up instead."""
+    dead = _ScriptedClient(HAConnectionError("dropped mid-flight", sent=True))
+    fresh = _ScriptedClient({"ok": True})
+    client = _reconnecting(dead, fresh)
+
+    with pytest.raises(HAConnectionError):
+        await client.command("ambience/area/save", config={})
+    assert fresh.sent == []  # never re-sent
+
+
+async def test_a_resend_that_fails_again_propagates():
+    first = _ScriptedClient(HAConnectionError("stale", sent=False))
+    second = _ScriptedClient(HAConnectionError("still dead", sent=False))
+    client = _reconnecting(first, second)
+
+    with pytest.raises(HAConnectionError):
         await client.command("ambience/house/get")
-    assert exc.value.sent is True
+
+
+async def test_a_command_level_error_is_not_a_connection_failure():
+    """success:false is a normal answer — the socket is fine, don't reconnect."""
+    live = _ScriptedClient(HACommandError("validation_error", "nope"))
+    spare = _ScriptedClient({"ok": True})
+    client = _reconnecting(live, spare)
+
+    with pytest.raises(HACommandError):
+        await client.command("ambience/validate", scenes=[])
+    assert spare.sent == []
+    assert live.closed is False
 
 
 async def test_command_error_does_not_mark_client_closed():

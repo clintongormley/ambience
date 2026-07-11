@@ -23,10 +23,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     names; call it again with `section=<name>` to read one. The guide is roughly
     25k tokens and exceeded the maximum size of a single tool result, so an AI
     asking for it got an error instead of a guide and could end up authoring
-    without ever having read it. The `have_version` argument is gone: it existed
-    only to avoid re-sending the whole guide, and its documentation invited an
-    AI to claim it already held a guide it had never fetched — which silently
-    returned no guide at all.
+    without ever having read it.
+
+    The `have_version` **argument** is gone. It invited an AI to pass a version it
+    had read from the *bundle* and so claim it already held a guide it had never
+    fetched — which returned `{unchanged: true}` with no text, leaving it to
+    author blind. The server now remembers the guide itself, keyed on the
+    install's version, and asks for the text only when that version changes. The
+    guide is ~109KB and only changes when you upgrade Ambience, so it is fetched
+    once per session rather than once per section — which matters when Home
+    Assistant is reached over the internet rather than a LAN.
 
 ### Fixed
 

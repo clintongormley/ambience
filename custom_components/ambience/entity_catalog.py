@@ -68,3 +68,36 @@ def entity_rows(hass: HomeAssistant) -> list[dict[str, Any]]:
             }
         )
     return sorted(out, key=lambda e: e["entity_id"])
+
+
+def entity_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Counts, not rows — what the MCP context carries in place of the catalog.
+
+    This is the model's *discovery* mechanism: it is how an AI learns the house
+    has five illuminance sensors without being handed 1,534 entities. Size is
+    O(domains + areas + device_classes), so it stays small at any house size.
+
+    An entity with no area (or no device class) is absent from that map but still
+    counted in `total` and `by_domain`, so the counts never lie about the whole.
+    `by_device_class` keys are domain-qualified (`sensor.occupancy` vs
+    `binary_sensor.occupancy`) because those are different things.
+    """
+    by_domain: dict[str, int] = {}
+    by_area: dict[str, int] = {}
+    by_device_class: dict[str, int] = {}
+    for row in rows:
+        domain = row["domain"]
+        by_domain[domain] = by_domain.get(domain, 0) + 1
+        area_id = row["area_id"]
+        if area_id is not None:
+            by_area[area_id] = by_area.get(area_id, 0) + 1
+        device_class = row["device_class"]
+        if device_class is not None:
+            key = f"{domain}.{device_class}"
+            by_device_class[key] = by_device_class.get(key, 0) + 1
+    return {
+        "total": len(rows),
+        "by_domain": by_domain,
+        "by_area": by_area,
+        "by_device_class": by_device_class,
+    }

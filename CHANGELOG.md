@@ -20,9 +20,6 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - `ambience-mcp` now requires an Ambience that serves `ambience/ai_context`
     (this release or newer); it will tell you to upgrade if not.
-
-### Unchanged
-
 - The **Download AI bundle** flow is untouched: the downloaded bundle still
     carries the full entity catalog, because an AI you paste it into has no
     tools to look entities up with.

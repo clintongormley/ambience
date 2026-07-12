@@ -10,7 +10,6 @@ to be identical.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -51,20 +50,11 @@ def floors(hass: HomeAssistant) -> list[dict[str, Any]]:
     ]
 
 
-async def action_schemas(
-    hass: HomeAssistant,
-    exposed: list[dict[str, Any]],
-    *,
-    fetch: Callable[[HomeAssistant, str], Awaitable[Any]] = get_service_schema,
-) -> dict[str, Any]:
+async def action_schemas(hass: HomeAssistant, exposed: list[dict[str, Any]]) -> dict[str, Any]:
     """The field schema for each exposed action's service, so the AI knows which
     params are valid. Fetched concurrently; best-effort — a service whose schema
     can't be resolved (not loaded, a bare on/off helper, or an outright error) is
     simply omitted.
-
-    `fetch` defaults to `services_meta.get_service_schema`, which is bound at
-    definition time. Both callers pass their own module-level `get_service_schema`
-    explicitly, keeping each name independently monkeypatchable in tests.
     """
     service_ids = list(
         dict.fromkeys(
@@ -72,7 +62,7 @@ async def action_schemas(
         )  # unique, order-preserving
     )
     results = await asyncio.gather(
-        *(fetch(hass, sid) for sid in service_ids),
+        *(get_service_schema(hass, sid) for sid in service_ids),
         return_exceptions=True,  # a single bad service must not sink the export
     )
     return {

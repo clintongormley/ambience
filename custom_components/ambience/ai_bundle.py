@@ -25,7 +25,6 @@ from .entity_catalog import entity_rows
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .redact import redact_exposed_action, redact_store, redacted_traces
-from .services_meta import get_service_schema
 
 
 async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
@@ -48,10 +47,7 @@ async def build_ai_bundle(hass: HomeAssistant) -> dict[str, Any]:
             # Sensitive default values (tokens, message bodies, recipients) are
             # scrubbed; the schema ids fetched below use the unredacted list.
             "exposed": [redact_exposed_action(a) for a in exposed],
-            # Pass this module's (patchable) `get_service_schema` explicitly so
-            # tests can monkeypatch `ai_bundle.get_service_schema`. Default args are
-            # bound at definition time, so a bare call would use ai_common's capture.
-            "schemas": await action_schemas(hass, exposed, fetch=get_service_schema),
+            "schemas": await action_schemas(hass, exposed),
         },
         "definitions": {
             "categories": store.categories(),

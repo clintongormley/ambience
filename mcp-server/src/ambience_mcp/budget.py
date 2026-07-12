@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 
 DEFAULT_MAX_RESULT_CHARS = 60_000
@@ -100,6 +101,46 @@ def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str,
     return fitted
 
 
+def _trim_list_to_fit(
+    result: dict[str, Any],
+    key: str,
+    limit: int,
+    derive_fields: Callable[[int], dict[str, Any]],
+) -> dict[str, Any]:
+    """The floor-at-one-element trim loop shared by `fit_entities` and
+    `fit_traces`: drop items from the END of `result[key]` until the result
+    fits, never going below ONE item.
+
+    This floor is the trickiest invariant in this module. A trim to zero items
+    is never safe: for `fit_entities` it would re-point the cursor at the
+    caller's own offset, so a conforming pagination client would fetch that
+    identical empty page forever; for `fit_traces` it would tell the model
+    nothing happened at all. One item, however oversized, is always an honest,
+    forward-making result — the same philosophy `fit_context` documents for its
+    own "nothing left to shed" case.
+
+    `derive_fields(kept_len)` recomputes the caller-specific metadata (cursor/
+    truncated for entities, omitted/notice for traces) for a trim of that
+    length. Measuring the dict we would actually RETURN — those recomputed
+    fields included, not a stand-in that still carries the pre-trim values — is
+    required for correctness: the fields themselves cost bytes too, and sizing
+    anything else risks handing back a result still over budget by a few chars.
+
+    Bails out unchanged if `result[key]` is missing, not a list, or empty —
+    there is nothing to trim.
+    """
+    rows = result.get(key)
+    if not isinstance(rows, list) or not rows:
+        return result
+
+    kept = list(rows)
+    while True:
+        candidate = {**result, key: kept, **derive_fields(len(kept))}
+        if size_of(candidate) <= limit or len(kept) <= 1:
+            return candidate
+        kept.pop()
+
+
 def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:
     """Drop rows from the end of a page until it fits, and re-point the cursor at
     the first row dropped.
@@ -109,12 +150,10 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
     The backend told us the page's `offset`, so the next cursor is exactly
     `offset + kept`.
 
-    Trimming never goes below one row. If even the first row alone exceeds the
-    budget, it is served anyway — an honest oversized result, exactly as
-    `fit_context` returns an oversized payload when it has nothing left to shed.
-    A zero-row page would set `next_cursor == offset`, handing the caller back
-    the exact cursor it just used: a conforming pagination client would fetch
-    that identical empty page forever. Flooring at one row instead guarantees
+    Trimming never goes below one row (see `_trim_list_to_fit`): a zero-row page
+    would set `next_cursor == offset`, handing the caller back the exact cursor
+    it just used, so a conforming pagination client would fetch that identical
+    empty page forever. Flooring at one row instead guarantees
     `next_cursor >= offset + 1` whenever rows exist, so paging always makes
     progress and no row is ever silently skipped.
     """
@@ -129,25 +168,12 @@ def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str,
     total = result.get("total_matches", len(rows))
     offset = result.get("offset", 0)
 
-    # Measure the dict we would actually RETURN at each length, cursor/truncated
-    # included — not a stand-in that carries the original (pre-trim) cursor. The
-    # returned cursor/truncated can flip (null -> int, false -> true) once rows
-    # are dropped, and those recomputed fields cost bytes too; sizing anything
-    # else risks handing back a page that is still over budget by a few chars.
-    kept = list(rows)
-    while True:
-        next_cursor = offset + len(kept)
+    def derive_fields(kept_len: int) -> dict[str, Any]:
+        next_cursor = offset + kept_len
         more = next_cursor < total
-        candidate = {
-            **result,
-            "entities": kept,
-            "returned": len(kept),
-            "cursor": next_cursor if more else None,
-            "truncated": more,
-        }
-        if size_of(candidate) <= limit or len(kept) <= 1:
-            return candidate
-        kept.pop()
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    return _trim_list_to_fit(result, "entities", limit, derive_fields)
 
 
 def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:
@@ -162,34 +188,25 @@ def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, A
     newest first, so the fix is to say how many were kept/omitted and let the
     model ask again with a smaller `limit` for a different slice.
 
-    Trimming never goes below one trace, for the same reason `fit_entities`
-    floors at one row: a smaller, honest result beats an empty one that tells
-    the model nothing happened.
+    Trimming never goes below one trace (see `_trim_list_to_fit`): a smaller,
+    honest result beats an empty one that tells the model nothing happened.
     """
     limit = max_result_chars() if budget is None else budget
     if size_of(result) <= limit:
         return result
 
     traces = result.get("traces")
-    if not isinstance(traces, list) or not traces:
-        return result
+    total = len(traces) if isinstance(traces, list) else 0
 
-    kept = list(traces)
-    while True:
-        omitted = len(traces) - len(kept)
-        candidate = {
-            **result,
-            "traces": kept,
-            "returned": len(kept),
-            "omitted": omitted,
-            "notice": (
-                f"Showing {len(kept)} of {len(traces)} traces; the oldest {omitted} were "
-                "omitted to fit the result budget. Call again with a smaller limit to see "
-                "a different slice."
-            )
+    def derive_fields(kept_len: int) -> dict[str, Any]:
+        omitted = total - kept_len
+        notice = (
+            f"Showing {kept_len} of {total} traces; the oldest {omitted} were "
+            "omitted to fit the result budget. Call again with a smaller limit to see "
+            "a different slice."
             if omitted
-            else None,
-        }
-        if size_of(candidate) <= limit or len(kept) <= 1:
-            return candidate
-        kept.pop()
+            else None
+        )
+        return {"returned": kept_len, "omitted": omitted, "notice": notice}
+
+    return _trim_list_to_fit(result, "traces", limit, derive_fields)

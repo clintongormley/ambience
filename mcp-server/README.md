@@ -103,10 +103,36 @@ version's authoring guide automatically.
 }
 ```
 
-## Compatibility
+## Version compatibility
 
-If your Ambience is **older** than the server supports, it will refuse to write
-changes and will tell you how to update to the correct version.
+There are three version numbers, and only one of them is about compatibility:
+
+| Number                        | Example      | Changes when                                         |
+| ----------------------------- | ------------ | ---------------------------------------------------- |
+| Ambience (the integration)    | `1.1.0-rc.3` | every Ambience release                               |
+| `ambience-mcp` (this package) | `0.2.0rc3`   | every MCP release                                    |
+| **MCP protocol**              | **`1`**      | **only when the backend↔MCP contract changes shape** |
+
+On connect, this server asks Ambience which protocol it speaks and loads the
+matching adapter. **It ships an adapter for every protocol it supports**, so the
+latest `ambience-mcp` still talks to older Ambience installs — which is what
+makes the multi-instance setup above work when your two installs are on
+different versions.
+
+If the two cannot work together, **every** tool call fails with a message naming
+which side to upgrade. It will never tell you to install an *older*
+`ambience-mcp`: `uvx` installs the latest, so that would be advice you could not
+follow.
+
+- *"Update Ambience"* — your Ambience is older than this server supports.
+- *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
+    refusing this build. Quit your MCP client, run
+    `uv cache clean ambience-mcp`, then restart it. The cache clean matters:
+    `uvx` caches the old version, and the running server holds the cache lock,
+    so restarting alone will not pick up the new one.
+
+Fixing either side and reconnecting is enough — the handshake re-runs on
+reconnect, so you do not need to restart the MCP server itself.
 
 ## Turning it off
 

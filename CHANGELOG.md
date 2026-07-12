@@ -8,6 +8,28 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- The MCP server and Ambience now agree on a **protocol** at connect time, so an
+    incompatible pair says so instead of half-working. Every tool call fails
+    with a message naming which side to upgrade — and never asks you to install
+    an older `ambience-mcp`, which `uvx` could not do anyway. The check rides on
+    a tiny handshake rather than inside the authoring context, so it arrives
+    even on a house whose context is too large to return: the failure that
+    prompted this could not report itself, because its own warning was inside
+    the payload being rejected.
+- The MCP server ships an adapter for every protocol it supports, so the latest
+    release still talks to older Ambience installs — which is what makes
+    pointing one MCP server at two installs on different Ambience versions work.
+
+### Changed
+
+- The AI guide response no longer carries `ambience_ai_bundle`, and the MCP
+    context no longer carries `ambience_ai_context`. Compatibility is the
+    handshake's job now. The **downloadable AI bundle still carries
+    `ambience_ai_bundle`** — the paste-flow skill gates on it, and there is no
+    handshake with a human.
+
 ## [1.1.0-rc.3] - 2026-07-12
 
 ### Added

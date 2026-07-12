@@ -11,6 +11,8 @@ import contextlib
 import json
 from typing import Any, Protocol
 
+from packaging.version import InvalidVersion, Version
+
 _CONNECT_TIMEOUT = 10  # seconds — fail fast on an unreachable / firewalled HA host
 _COMMAND_TIMEOUT = 10  # seconds — fail fast + reconnect if HA never answers a command
 
@@ -44,6 +46,31 @@ class HACommandError(HAError):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+
+
+class IncompatibleError(HAError):
+    """This ambience-mcp and this Ambience cannot work together.
+
+    Raised from every tool call, not just the one that noticed, and carrying a
+    message that names WHICH side to upgrade. Never advises a downgrade: `uvx
+    ambience-mcp` installs LATEST, so "install an older one" is advice the user
+    cannot follow.
+    """
+
+
+_UPDATE_AMBIENCE = (
+    "Your Ambience is too old for this ambience-mcp. Update Ambience (HACS) and "
+    "restart Home Assistant."
+)
+
+
+def _upgrade_mcp(reason: str) -> str:
+    return (
+        f"{reason} Upgrade ambience-mcp: quit your MCP client, run "
+        "`uv cache clean ambience-mcp`, then restart it. (`uvx` caches the old "
+        "version and the running server holds the cache lock, so the restart alone "
+        "is not enough.)"
+    )
 
 
 class Transport(Protocol):
@@ -178,11 +205,64 @@ class ReconnectingClient:
     applied with only the reply lost.
     """
 
-    def __init__(self, connect_fn: Any, config_fn: Any) -> None:
+    def __init__(
+        self,
+        connect_fn: Any,
+        config_fn: Any,
+        *,
+        supported_protocols: frozenset[int],
+        mcp_version: str,
+    ) -> None:
         self._connect = connect_fn
         self._config = config_fn
         self._client: HAClient | None = None
         self._lock = asyncio.Lock()
+        # Injected, not imported: `protocols/` references HAClient, so importing it
+        # here would be a cycle.
+        self._supported = supported_protocols
+        self._mcp_version = mcp_version
+        self._verdict: str | None = None  # the incompatibility message, if any
+        self._protocol: int | None = None
+
+    async def _negotiate(self, client: HAClient) -> str | None:
+        """Handshake over a freshly-connected client. Returns the incompatibility
+        message, or None when the pair can work together."""
+        try:
+            hello = await client.command("ambience/mcp/hello")
+        except HACommandError as exc:
+            if exc.code == "unknown_command":
+                return _UPDATE_AMBIENCE  # predates the handshake entirely
+            raise
+
+        # The backend refusing THIS client outranks any protocol question: it is the
+        # one thing a protocol number cannot express ("that build is known-broken").
+        floor = hello.get("min_mcp_version")
+        if isinstance(floor, str):
+            try:
+                too_old = Version(self._mcp_version) < Version(floor)
+            except InvalidVersion:
+                too_old = False  # no floor we understand == no floor stated
+            if too_old:
+                return _upgrade_mcp(
+                    f"This Ambience needs ambience-mcp >= {floor}; you are running "
+                    f"{self._mcp_version}."
+                )
+
+        protocol = hello.get("protocol")
+        if not isinstance(protocol, int):
+            return _UPDATE_AMBIENCE  # pre-protocol: silence never grants permission
+        if protocol in self._supported:
+            self._protocol = protocol
+            return None
+        if protocol > max(self._supported):
+            return _upgrade_mcp(
+                f"This Ambience speaks MCP protocol {protocol}; this ambience-mcp "
+                f"speaks {sorted(self._supported)}."
+            )
+        return (
+            f"This ambience-mcp no longer supports MCP protocol {protocol} (it speaks "
+            f"{sorted(self._supported)}). Update Ambience (HACS)."
+        )
 
     async def _live(self) -> HAClient:
         # Reconnect if we have no client yet, or the last one broke on a transport
@@ -197,10 +277,31 @@ class ReconnectingClient:
                         with contextlib.suppress(Exception):
                             await self._client.close()
                     cfg = self._config()
-                    self._client = await self._connect(cfg.ws_url, cfg.token)
+                    client = await self._connect(cfg.ws_url, cfg.token)
+                    # Handshake ONCE per connection, before publishing the client —
+                    # so it costs one round trip, and re-runs on every reconnect.
+                    # Changing the backend's protocol means restarting HA, which
+                    # drops the socket, so a stale verdict cannot survive the very
+                    # upgrade that would change it. That makes this self-healing.
+                    self._protocol = None
+                    self._verdict = await self._negotiate(client)
+                    self._client = client
         return self._client
 
+    async def ready(self) -> int:
+        """Connect and negotiate. Raises IncompatibleError if the pair cannot work
+        together; otherwise returns the agreed protocol."""
+        await self._live()
+        if self._verdict is not None:
+            raise IncompatibleError(self._verdict)
+        assert self._protocol is not None  # a clean verdict always sets it
+        return self._protocol
+
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
+        await self._live()
+        if self._verdict is not None:
+            # Raise BEFORE sending: an incompatible pair must not touch the backend.
+            raise IncompatibleError(self._verdict)
         try:
             return await (await self._live()).command(type, **payload)
         except HAConnectionError as exc:

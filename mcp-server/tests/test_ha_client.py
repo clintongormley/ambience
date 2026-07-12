@@ -11,7 +11,13 @@ from ambience_mcp.ha_client import (
 
 
 class _ScriptedClient:
-    """An HAClient stand-in whose command() replays a scripted outcome per call."""
+    """An HAClient stand-in whose command() replays a scripted outcome per call.
+
+    `ambience/mcp/hello` is answered transparently with an always-compatible
+    protocol 1 and never consumes from `_outcomes` — these tests are about the
+    reconnect/resend machinery, not the handshake (see test_handshake.py), so the
+    scripted outcomes must line up with the real commands under test exactly as
+    before the handshake was added."""
 
     def __init__(self, *outcomes) -> None:
         self._outcomes = list(outcomes)
@@ -19,6 +25,8 @@ class _ScriptedClient:
         self.sent: list[str] = []
 
     async def command(self, type: str, **payload):
+        if type == "ambience/mcp/hello":
+            return {"protocol": 1}
         self.sent.append(type)
         outcome = self._outcomes.pop(0)
         if isinstance(outcome, Exception):
@@ -38,7 +46,12 @@ def _reconnecting(*clients):
     async def _connect(ws_url: str, token: str):
         return next(made)
 
-    return ReconnectingClient(_connect, lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})())
+    return ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
 
 
 async def test_authenticate_ok():

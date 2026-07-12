@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Callable
+from importlib.metadata import version
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -81,10 +82,20 @@ _client: ReconnectingClient | None = None
 def _client_() -> ReconnectingClient:
     """The one HA connection. It reconnects and re-sends a command that never left
     us (an HA restart closes the socket), so tools see a live link and never have
-    to reason about retry-safety themselves — see ReconnectingClient."""
+    to reason about retry-safety themselves — see ReconnectingClient.
+
+    `supported_protocols` is hardcoded to {1} rather than read from a registry:
+    the `protocols/` adapter package (which will own the real `PROTOCOLS` mapping
+    and wire `.ready()`'s agreed protocol into an adapter) lands in the next task.
+    Until then this only has to match the one protocol the backend speaks today."""
     global _client
     if _client is None:
-        _client = ReconnectingClient(connect, load_config)
+        _client = ReconnectingClient(
+            connect,
+            load_config,
+            supported_protocols=frozenset({1}),
+            mcp_version=version("ambience-mcp"),
+        )
     return _client
 
 

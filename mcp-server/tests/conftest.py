@@ -34,6 +34,7 @@ class FakeClient:
     def __init__(self, results: dict[str, Any] | None = None) -> None:
         self.results = results or {}
         self.calls: list[dict[str, Any]] = []
+        self.closed = False
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
         self.calls.append({"type": type, **payload})

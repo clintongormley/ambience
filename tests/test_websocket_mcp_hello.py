@@ -2,7 +2,7 @@
 
 Every other version check this project has tried lived *inside* a payload that
 could be too large to return — so the failure swallowed its own diagnostic. This
-command is a handful of bytes and cannot."""
+command is a handful of bytes: it always arrives."""
 
 from __future__ import annotations
 

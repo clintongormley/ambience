@@ -265,3 +265,105 @@ def test_fit_traces_does_not_mutate_the_input():
     budget.fit_traces(result, budget=3_000)
 
     assert json.dumps(result) == before
+
+
+# fit_result: the generic backstop under fit_context/fit_entities/fit_traces,
+# applied to EVERY tool's result at the server boundary (see test_server.py for
+# the wiring-level proof). These tests exercise the shedding logic itself,
+# against shapes none of the three shape-aware strategies above understand.
+
+
+def test_fit_result_leaves_an_already_small_result_untouched():
+    result = {"scenes": [{"name": "A"}], "other": "x"}
+
+    assert budget.fit_result(result, budget=10_000) == result
+
+
+def test_fit_result_trims_an_unguarded_get_scope_shaped_result():
+    # get_scope has no fit_* strategy of its own — exactly the gap FIX A closes.
+    result = {"scenes": [{"name": f"s{i}", "actions": "x" * 200} for i in range(50)]}
+
+    fitted = budget.fit_result(result, budget=3_000)
+
+    assert budget.size_of(fitted) <= 3_000
+    kept = len(fitted["scenes"])
+    assert 0 < kept < 50
+    assert fitted["scenes"] == result["scenes"][:kept]  # dropped from the END
+    assert fitted["omitted"] == 50 - kept
+    assert fitted["notice"]  # announced, never silent
+
+
+def test_fit_result_preserves_confirm_token_on_a_preview_write_shaped_payload():
+    # preview_write embeds a confirm_token alongside big list fields — trimming
+    # must never drop a non-list (or unrelated-list) scalar/field.
+    result = {
+        "valid": True,
+        "errors": None,
+        "unknown_categories": [],
+        "creating_categories": [{"id": f"c{i}", "name": "x" * 200} for i in range(30)],
+        "diff": {"added": [], "removed": [], "updated": []},
+        "confirm_token": "abc123",
+    }
+
+    fitted = budget.fit_result(result, budget=3_000)
+
+    assert budget.size_of(fitted) <= 3_000
+    assert fitted["confirm_token"] == "abc123"  # never dropped
+    assert fitted["valid"] is True
+    assert fitted["diff"] == {"added": [], "removed": [], "updated": []}
+    kept = len(fitted["creating_categories"])
+    assert 0 < kept < 30
+
+
+def test_fit_result_is_a_no_op_when_nothing_top_level_is_sheddable():
+    # preview_write's bulk can live inside a nested dict (`diff`), which this
+    # generic top-level-only pass cannot reach — an honest oversized result
+    # beats a broken one, same as fit_context with nothing left to shed.
+    result = {"diff": {"added": [{"x": "y" * 5_000}] * 5}, "confirm_token": "abc"}
+
+    fitted = budget.fit_result(result, budget=50)
+
+    assert fitted == result
+
+
+def test_fit_result_returns_non_dict_results_unchanged():
+    assert budget.fit_result([1, 2, 3], budget=1) == [1, 2, 3]
+    assert budget.fit_result("just a string", budget=1) == "just a string"
+
+
+def test_fit_result_floors_at_one_element_instead_of_returning_an_empty_list():
+    result = {"items": [{"x": "y" * 5_000}], "meta": "keep"}
+
+    fitted = budget.fit_result(result, budget=50)
+
+    assert fitted["items"] == result["items"]  # the oversized item is served, not dropped
+    assert fitted["meta"] == "keep"
+
+
+def test_fit_result_never_empties_a_multi_item_list_even_when_still_oversized():
+    result = {"items": [{"x": "y" * 5_000} for _ in range(3)]}
+
+    fitted = budget.fit_result(result, budget=50)
+
+    assert len(fitted["items"]) >= 1
+
+
+def test_fit_result_sheds_the_biggest_top_level_list_not_just_the_first():
+    result = {
+        "small_list": [{"a": 1}, {"a": 2}],
+        "big_list": [{"x": "y" * 200} for _ in range(40)],
+    }
+
+    fitted = budget.fit_result(result, budget=3_000)
+
+    assert fitted["small_list"] == result["small_list"]  # untouched
+    assert len(fitted["big_list"]) < 40
+
+
+def test_fit_result_does_not_mutate_the_input():
+    result = {"scenes": [{"name": f"s{i}", "x": "y" * 200} for i in range(50)]}
+    before = json.dumps(result)
+
+    budget.fit_result(result, budget=3_000)
+
+    assert json.dumps(result) == before

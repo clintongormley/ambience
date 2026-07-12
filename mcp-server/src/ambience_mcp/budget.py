@@ -210,3 +210,55 @@ def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, A
         return {"returned": kept_len, "omitted": omitted, "notice": notice}
 
     return _trim_list_to_fit(result, "traces", limit, derive_fields)
+
+
+def fit_result(result: Any, budget: int | None = None) -> Any:
+    """The generic backstop underneath `fit_context`/`fit_entities`/`fit_traces`:
+    applied to EVERY tool's return value at the server boundary (see
+    `server.py`'s `_BoundedFastMCP`), so a tool with no shape-aware strategy —
+    one of the 8 that had none, or a brand new one nobody has written a
+    strategy for yet — still degrades to a bounded result instead of shipping
+    an unbounded one.
+
+    Idempotent and cheap: a result already within budget (including one already
+    handled by a shape-aware strategy above) is returned unchanged, so this is a
+    no-op layered under those, not a replacement for them.
+
+    Fully generic, so it has no domain knowledge of any tool's shape: it finds
+    the single largest TOP-LEVEL list-valued field and drops items from its end,
+    floored at ONE element — never zero, the same no-livelock rule
+    `_trim_list_to_fit` encodes for `fit_entities`/`fit_traces`. Every other
+    field, list or not, is left untouched — e.g. `preview_write`'s
+    `confirm_token`, a scalar sibling of its (dict-shaped, not list-shaped)
+    `diff`, always survives a trim.
+
+    Returned unchanged if `result` isn't a dict, already fits, or has no
+    top-level list to shed (its bulk lives somewhere this generic pass cannot
+    reach, e.g. nested inside `preview_write`'s `diff`): an honest oversized
+    result beats a broken one, the same philosophy `fit_context` documents for
+    its own "nothing left to shed" case.
+    """
+    limit = max_result_chars() if budget is None else budget
+    if not isinstance(result, dict) or size_of(result) <= limit:
+        return result
+
+    list_fields = [(k, v) for k, v in result.items() if isinstance(v, list) and v]
+    if not list_fields:
+        return result  # nothing top-level to shed — an honest oversized result beats a broken one
+    key, rows = max(list_fields, key=lambda kv: size_of(kv[1]))
+    total = len(rows)
+
+    def derive_fields(kept_len: int) -> dict[str, Any]:
+        omitted = total - kept_len
+        if not omitted:
+            return {}
+        return {
+            "omitted": omitted,
+            "notice": (
+                f"This result was trimmed to fit the response budget: {key!r} was cut from "
+                f"{total} to {kept_len} items ({omitted} omitted). Narrow your request "
+                "(filters, a smaller page/limit, or a narrower scope) to see the rest."
+            ),
+        }
+
+    return _trim_list_to_fit(result, key, limit, derive_fields)

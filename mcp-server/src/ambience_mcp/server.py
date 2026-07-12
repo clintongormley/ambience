@@ -6,16 +6,56 @@ them, and a lean surface keeps the per-turn context footprint small."""
 
 from __future__ import annotations
 
+import functools
+from collections.abc import Callable
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from . import tools
+from .budget import fit_result
 from .config import load_config
 from .ha_client import ReconnectingClient, connect
 from .ledger import PreviewLedger
 
-mcp = FastMCP("ambience")
+
+def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap a tool coroutine so its return value always passes through
+    `budget.fit_result` before it reaches the client. Not something a tool
+    author calls themselves — `_BoundedFastMCP.add_tool` below applies it to
+    every registered tool automatically."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return fit_result(await fn(*args, **kwargs))
+
+    return wrapper
+
+
+class _BoundedFastMCP(FastMCP):
+    """A FastMCP that makes the result budget STRUCTURAL rather than something
+    each tool has to remember.
+
+    `budget.py`'s shape-aware strategies (`fit_context`/`fit_entities`/
+    `fit_traces`) used to be hand-wired into exactly 3 of the 11 tools — the
+    other 8 returned whatever the backend sent, unguarded. Overriding
+    `add_tool` (the method BOTH `@mcp.tool()` and any future direct
+    registration call under the hood) instead of decorating each `@mcp.tool()`
+    site means there is no second step to forget: register a tool with this
+    server at all, by any means, and `fit_result` runs on its result. A new
+    tool cannot silently ship an unbounded result the way the original 8 did.
+
+    `fit_result` early-returns once a result is already within budget, so this
+    is a no-op — not a second pass — for the 3 tools whose shape-aware
+    strategy already fitted the result in `tools.py`. It is the backstop
+    underneath them, not a replacement.
+    """
+
+    def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        super().add_tool(_bounded(fn), *args, **kwargs)
+
+
+mcp = _BoundedFastMCP("ambience")
 _ledger = PreviewLedger()
 _guide_cache = tools.GuideCache()
 _client: ReconnectingClient | None = None

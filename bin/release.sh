@@ -68,6 +68,18 @@ remote_ref_exists() {
   printf '%s\n' "$refs" | awk '{print $2}' | grep -qx "$1"
 }
 
+# True (0) when $1 is a bare non-negative integer. Used instead of a direct
+# `[ x -gt y ]` comparison wherever $1 might not be a number: that comparison exits 2
+# ("integer expression expected") on non-numeric input, and inside an `if` condition
+# bash reads ANY nonzero status as false under `set -e` — so a garbled value would
+# silently take the "not greater than" branch instead of the refusal this gate exists
+# to run. Checking first, with this, keeps the gate failing closed.
+_is_uint() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+}
+
 if remote_ref_exists "refs/tags/$TAG"; then
   echo "error: tag $TAG already exists on origin" >&2
   exit 1
@@ -105,12 +117,10 @@ MCP_PROTOCOL=$(python3 "$(dirname "$0")/check_mcp_protocol.py" \
 # Fail CLOSED on anything that isn't a bare non-negative integer, for the same reason
 # the PUBLISHED check below does: inside an `if`, `[ x -gt y ]`'s "integer expression
 # expected" status reads as false and would silently skip the refusal.
-case "$MCP_PROTOCOL" in
-  ''|*[!0-9]*)
-    echo "error: MCP_PROTOCOL did not read back as an integer (got: '${MCP_PROTOCOL}')." >&2
-    exit 1
-    ;;
-esac
+if ! _is_uint "$MCP_PROTOCOL"; then
+  echo "error: MCP_PROTOCOL did not read back as an integer (got: '${MCP_PROTOCOL}')." >&2
+  exit 1
+fi
 
 echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI…"
 # Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI
@@ -134,15 +144,13 @@ PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
 # subsumes the plain-emptiness check: an empty string, whitespace, HTML, or a
 # multi-line value (e.g. "0\nnote: deprecated" from a noisy `uv` warning) are
 # all rejected here, before they ever reach the comparison.
-case "$PUBLISHED" in
-  ''|*[!0-9]*)
-    echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
-    echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
-    echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
-    echo "   publish an mcp-v* tag first, then retry.)" >&2
-    exit 1
-    ;;
-esac
+if ! _is_uint "$PUBLISHED"; then
+  echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
+  echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
+  echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
+  echo "   publish an mcp-v* tag first, then retry.)" >&2
+  exit 1
+fi
 
 if [ "$MCP_PROTOCOL" -gt "$PUBLISHED" ]; then
   echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2

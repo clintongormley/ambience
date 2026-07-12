@@ -27,7 +27,10 @@ the MCP's has no `homeassistant`. Both Python files are parsed with `ast` and th
 package version is read from `pyproject.toml` with `tomllib`.
 
 Stdlib-only, like the other bin/check_* gates — CI's `quality` job installs nothing,
-so `packaging` is not available and PEP 440 comparison is vendored below.
+AND `.githooks/pre-push` runs this gate (via `make mcp-gate`) on a bare, uncontrolled
+`python3` with no venv activation, so every contributor's local interpreter would also
+have to guarantee `packaging` — which the repo cannot enforce. `packaging` is not
+available in either environment, so PEP 440 comparison is vendored below.
 
 Run: `python -m bin.check_mcp_protocol`
 """
@@ -36,10 +39,11 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import re
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 CONST = ROOT / "custom_components" / "ambience" / "const.py"
@@ -53,11 +57,12 @@ def _fail(message: str) -> NoReturn:
 
 
 # --- PEP 440 (a strict subset), vendored ------------------------------------------
-# `packaging` is NOT stdlib and this gate runs on a bare interpreter (CI's `quality`
-# job pip-installs nothing). A string compare will not do: `MIN_MCP_VERSION` and the
-# packaged version normalise differently ("0.2.0-rc.3" vs "0.2.0rc3" are the SAME
-# version), and "0.2.0rc10" < "0.2.0rc9" as strings — which would let a floor NEWER
-# than the shipped package pass.
+# `packaging` is NOT stdlib, and this gate runs on a bare interpreter in BOTH of its
+# environments (CI's `quality` job pip-installs nothing; `.githooks/pre-push` invokes
+# it via a plain, uncontrolled `python3`). A string compare will not do:
+# `MIN_MCP_VERSION` and the packaged version normalise differently ("0.2.0-rc.3" vs
+# "0.2.0rc3" are the SAME version), and "0.2.0rc10" < "0.2.0rc9" as strings — which
+# would let a floor NEWER than the shipped package pass.
 _VERSION_RE = re.compile(
     r"""^\s*v?
     (?:(?P<epoch>[0-9]+)!)?
@@ -158,32 +163,50 @@ def _module_level_assignments(tree: ast.Module, name: str) -> list[ast.Assign | 
         target = None
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             target = node.target.id
-        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
-            first = node.targets[0]
-            target = first.id if isinstance(first, ast.Name) else None
         elif isinstance(node, ast.Assign):
-            for candidate in node.targets:
-                if isinstance(candidate, ast.Name) and candidate.id == name:
-                    target = candidate.id
+            # Arity-agnostic: `a = 1` and the chained `a = b = 1` are the same shape
+            # here — a set of targets to search for `name` in — so one branch covers
+            # both single- and multi-target assignment.
+            target = next(
+                (t.id for t in node.targets if isinstance(t, ast.Name) and t.id == name), None
+            )
         if target == name and node.value is not None:
             found.append(node)
     return found
 
 
+@functools.cache
+def _parse(path: Path) -> ast.Module:
+    """Parse `path` once. `const.py` holds both MCP_PROTOCOL and MIN_MCP_VERSION, and
+    `main()` reads both per gate run — caching means the file is parsed once, not
+    twice, without either finder having to thread a shared tree through its signature
+    (tests call `find_mcp_protocol`/`find_min_mcp_version` directly, each with just a
+    path)."""
+    return ast.parse(path.read_text())
+
+
 def _last_value(path: Path, name: str) -> ast.expr:
     """The expression bound to `name` by the LAST module-level assignment to it."""
-    matches = _module_level_assignments(ast.parse(path.read_text()), name)
+    matches = _module_level_assignments(_parse(path), name)
     if not matches:
         _fail(f"no {name} found in {path}")
     return matches[-1].value
 
 
+def _find_constant(path: Path, name: str, expected: type) -> Any:
+    """The LAST module-level assignment to `name` in `path`, required to be a literal
+    of type `expected` — the shape shared by MCP_PROTOCOL (int) and MIN_MCP_VERSION
+    (str): both must be readable without executing code, so both fail loudly on
+    anything that isn't a plain literal of the right type."""
+    value = _last_value(path, name)
+    if not isinstance(value, ast.Constant) or not isinstance(value.value, expected):
+        _fail(f"{name} in {path} is not a {expected.__name__} literal")
+    return expected(value.value)
+
+
 def find_mcp_protocol(path: Path) -> int:
     """The integer assigned to MCP_PROTOCOL in const.py."""
-    value = _last_value(path, "MCP_PROTOCOL")
-    if not isinstance(value, ast.Constant) or not isinstance(value.value, int):
-        _fail(f"MCP_PROTOCOL in {path} is not an integer literal")
-    return int(value.value)
+    return _find_constant(path, "MCP_PROTOCOL", int)
 
 
 def find_min_mcp_version(path: Path) -> str:
@@ -193,10 +216,7 @@ def find_min_mcp_version(path: Path) -> str:
     hard refusal floor, and a gate cannot read a floor it has to execute code to
     compute.
     """
-    value = _last_value(path, "MIN_MCP_VERSION")
-    if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
-        _fail(f"MIN_MCP_VERSION in {path} is not a string literal")
-    return str(value.value)
+    return _find_constant(path, "MIN_MCP_VERSION", str)
 
 
 def find_package_version(path: Path) -> str:

@@ -36,7 +36,6 @@ def test_size_of_models_the_wire_payload_not_compact_json():
 
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
-        "ambience_ai_context": 1,
         "catalog": {"entity_summary": {"total": 3}},
         "actions": {
             "exposed": [{"id": f"light.a{i}"} for i in range(schema_count)],

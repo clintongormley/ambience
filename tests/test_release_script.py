@@ -17,6 +17,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "bin" / "release.sh"
 BUMP_SCRIPT = REPO_ROOT / "bin" / "bump-version.sh"
@@ -369,49 +371,31 @@ def test_allows_when_published_protocol_meets_or_exceeds(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_fails_closed_when_published_protocol_unavailable(tmp_path: Path):
-    """If the PyPI lookup can't determine what the published MCP speaks (network
-    down, published package predates the protocols/ package, ...), the gate must
-    fail closed rather than assume compatibility."""
-    _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "false"})
-    assert result.returncode != 0
-    combined = (result.stdout + result.stderr).lower()
-    assert "fails closed" in combined or "fail closed" in combined
-    branches = _git(
-        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
-    ).stdout
-    assert RELEASE_BRANCH not in branches
-
-
-def test_rejects_non_numeric_published_protocol(tmp_path: Path):
+@pytest.mark.parametrize(
+    "check_cmd",
+    ["false", "echo garbage", "printf '0\\nnote: x\\n'", "echo v0"],
+    ids=[
+        "unavailable",  # network down / published package predates protocols/
+        "non_numeric",  # garbled PyPI response
+        "multiline",  # a real (and here dangerously LOWER) digit plus a stray note line
+        "leading_non_digit",  # a version-prefixed tag (e.g. from a misconfigured probe)
+    ],
+)
+def test_rejects_an_unparseable_published_protocol(tmp_path: Path, check_cmd: str):
     """A PUBLISHED value that isn't a bare non-negative integer must be rejected
     before the `-gt` comparison, not silently pass. `[ "$MCP_PROTOCOL" -gt
     "$PUBLISHED" ]` exits 2 ("integer expression expected") on non-numeric input;
     inside an `if` condition that status reads as false under `set -e`, which
-    would let a garbled PyPI response fail OPEN instead of closed."""
-    _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo garbage"})
-    assert result.returncode != 0
-    combined = (result.stdout + result.stderr).lower()
-    assert "fails closed" in combined or "fail closed" in combined
-    branches = _git(
-        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
-    ).stdout
-    assert RELEASE_BRANCH not in branches
-
-
-def test_rejects_multiline_published_protocol(tmp_path: Path):
-    """A multi-line PUBLISHED value (e.g. a real digit followed by a stray `uv`
-    note on stderr that leaked into the captured output) must be rejected even
-    though its first line is a valid, and here dangerously LOWER, digit: the true
-    published protocol (0) is behind the fixture's backend protocol (1) --
-    exactly the deadlock Gate 2 exists to prevent -- so this must block, not
+    would let a garbled PyPI response fail OPEN instead of closed. This subsumes
+    the plain-emptiness check: an empty string, whitespace, HTML, or a multi-line
+    value (e.g. "0\\nnote: deprecated" from a noisy `uv` warning) are all rejected
+    here, before they ever reach the comparison — even when (the "multiline" case)
+    the first line is itself a valid, and here dangerously LOWER, digit: the true
+    published protocol (0) would be behind the fixture's backend protocol (1),
+    exactly the deadlock Gate 2 exists to prevent, so this must block rather than
     silently compare against a truncated/garbled reading."""
     _init_repo(tmp_path)
-    result = _run(
-        tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "printf '0\\nnote: x\\n'"}
-    )
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": check_cmd})
     assert result.returncode != 0
     combined = (result.stdout + result.stderr).lower()
     assert "fails closed" in combined or "fail closed" in combined
@@ -419,16 +403,6 @@ def test_rejects_multiline_published_protocol(tmp_path: Path):
         "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
     ).stdout
     assert RELEASE_BRANCH not in branches
-
-
-def test_rejects_published_protocol_with_leading_non_digit(tmp_path: Path):
-    """A value like `v0` (a version-prefixed tag echoed by a misconfigured probe)
-    is not a bare integer and must be rejected, not silently coerced."""
-    _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo v0"})
-    assert result.returncode != 0
-    combined = (result.stdout + result.stderr).lower()
-    assert "fails closed" in combined or "fail closed" in combined
 
 
 def test_warns_when_pypi_check_cmd_overridden(tmp_path: Path):

@@ -70,10 +70,15 @@ class ProtocolChangedError(HAError):
     """
 
 
-_UPDATE_AMBIENCE = (
-    "Your Ambience is too old for this ambience-mcp. Update Ambience (HACS) and "
-    "restart Home Assistant."
-)
+def _update_ambience(reason: str) -> str:
+    """The one remedy for an Ambience whose protocol/version this ambience-mcp
+    cannot work with: mirrors `_upgrade_mcp` below — a `reason` prefix, then the
+    fixed remedy — just naming HACS + a restart as the mechanism instead of `uvx`.
+    """
+    return f"{reason} Update Ambience (HACS) and restart Home Assistant."
+
+
+_UPDATE_AMBIENCE = _update_ambience("Your Ambience is too old for this ambience-mcp.")
 
 
 def _upgrade_mcp(reason: str) -> str:
@@ -284,9 +289,9 @@ class ReconnectingClient:
                 f"This Ambience speaks MCP protocol {protocol}; this ambience-mcp "
                 f"speaks {sorted(self._supported)}."
             )
-        return (
+        return _update_ambience(
             f"This ambience-mcp no longer supports MCP protocol {protocol} (it speaks "
-            f"{sorted(self._supported)}). Update Ambience (HACS)."
+            f"{sorted(self._supported)})."
         )
 
     async def _live(self) -> HAClient:
@@ -369,8 +374,13 @@ class ReconnectingClient:
     async def ready(self) -> int:
         """Connect and negotiate. Raises IncompatibleError if the pair cannot work
         together; otherwise returns the agreed protocol."""
-        await self._checked_live()
-        if self._protocol is None:
+        # `_live_for(None)` IS "checked-live, then read the agreed protocol": with no
+        # `agreed` to hold it to, it skips the ProtocolChangedError branch and just
+        # hands back what the handshake resolved. Going through it here — instead of
+        # re-deriving the same two steps and reading `self._protocol` directly — means
+        # there is exactly one place in this class that reads that shared mutable field.
+        _, protocol = await self._live_for(None)
+        if protocol is None:
             # A clean verdict (None) always sets _protocol — this would mean
             # _negotiate() returned None without agreeing a protocol, which is a
             # bug in _negotiate(), not a runtime condition callers can hit. Raise
@@ -381,7 +391,7 @@ class ReconnectingClient:
                 "ReconnectingClient.ready(): no compatibility verdict was set for "
                 "an agreed protocol — this is a bug in _negotiate()"
             )
-        return self._protocol
+        return protocol
 
     async def command_for(self, agreed: int | None, type: str, **payload: Any) -> dict[str, Any]:
         """Send a command on behalf of a caller that assumes protocol `agreed`.

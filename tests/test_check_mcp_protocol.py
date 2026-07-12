@@ -187,6 +187,16 @@ def test_find_protocols_ignores_assignment_inside_a_class(tmp_path):
     assert find_protocols(init) == {1}
 
 
+def test_find_mcp_protocol_handles_a_chained_assignment(tmp_path):
+    # `MCP_PROTOCOL = OTHER = 1` is a single ast.Assign node with TWO targets — the
+    # multi-target shape _module_level_assignments' arity-agnostic branch must still
+    # find `MCP_PROTOCOL` in, alongside the ordinary single-target `a = 1` shape.
+    const = tmp_path / "const.py"
+    const.write_text("MCP_PROTOCOL = OTHER = 1\n")
+
+    assert find_mcp_protocol(const) == 1
+
+
 def test_find_mcp_protocol_ignores_assignment_inside_a_function(tmp_path):
     const = tmp_path / "const.py"
     const.write_text(

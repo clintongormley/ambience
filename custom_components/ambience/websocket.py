@@ -1454,6 +1454,33 @@ async def _ws_ai_context(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/mcp/hello"})
+@websocket_api.async_response
+async def _ws_mcp_hello(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The MCP compatibility handshake — deliberately tiny.
+
+    Every earlier version check rode inside `ai_bundle`/`ai_context`, so on a house
+    big enough to overflow the AI client's token cap the diagnostic was rejected
+    along with the payload it was warning about. This is a handful of bytes: it
+    always arrives."""
+    from .ai_common import ambience_version
+    from .const import MCP_PROTOCOL, MIN_MCP_VERSION
+
+    connection.send_result(
+        msg["id"],
+        {
+            "protocol": MCP_PROTOCOL,
+            "ambience_version": await ambience_version(hass),
+            "min_mcp_version": MIN_MCP_VERSION,
+        },
+    )
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/entities/find",
@@ -1701,6 +1728,7 @@ _WS_HANDLERS = (
     _ws_scope_diagnostics,
     _ws_ai_bundle,
     _ws_ai_context,
+    _ws_mcp_hello,
     _ws_entities_find,
     _ws_ai_guide,
     _ws_simulate_inputs,

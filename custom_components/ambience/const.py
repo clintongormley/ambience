@@ -19,6 +19,27 @@ STORAGE_VERSION = 1
 # version (which tracks features, not bundle shape).
 AI_BUNDLE_VERSION = 1
 
+MCP_PROTOCOL = 1
+"""The backend↔MCP contract this install speaks.
+
+NOT a semver, and not either of the two real ones (the integration's, or
+ambience-mcp's). A single integer that bumps ONLY when the contract changes shape,
+so Ambience can ship 1.2.0 -> 2.0.0 without touching the MCP server at all.
+
+The `ambience-mcp` package ships one frozen adapter per protocol it supports and
+loads the one named here. `bin/check_mcp_protocol.py` asserts an adapter for this
+value exists in the repo; the release gate asserts one is published to PyPI.
+"""
+
+MIN_MCP_VERSION = "0.2.0-rc.3"
+"""The oldest `ambience-mcp` this backend will serve.
+
+The one thing MCP_PROTOCOL cannot express: "that client is known-broken, refuse
+it". Nothing about the backend is wrong for ambience-mcp 0.2.0-rc.2 — it simply
+fetched the fat bundle and blew the AI client's token limit on any real house. A
+protocol number cannot say that; this can.
+"""
+
 AI_CONTEXT_VERSION = 1
 """Structure version of the BOUNDED MCP export (`ambience/ai_context`). Versioned
 independently of AI_BUNDLE_VERSION: the fat download-and-paste bundle and the slim

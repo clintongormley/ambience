@@ -3,12 +3,19 @@
 Filtering makes a payload SMALLER; only a budget makes it BOUNDED. The backend
 already serves counts instead of rows, but two terms are still unbounded — a user
 can expose fifty actions (each schema ~1k chars), and a model can ask for a page
-of any size — so the last line of defence lives here, at the serialization
-boundary: an oversized payload DEGRADES, announced, instead of erroring.
+of any size.
 
-Truncation is always announced with the way to get the rest. A silently truncated
-catalog is worse than a hard error, because the model authors against entities it
-cannot see.
+Two layers enforce this. `fit_context`/`fit_entities`/`fit_traces` understand
+their tool's shape and DEGRADE it safely — truncating a paged/appendable list
+that is never written back wholesale, always announced with the way to get the
+rest. `fit_result`, the terminal backstop at the serialization boundary (see
+`server.py`'s `_BoundedFastMCP`), has no such shape knowledge, so it never
+trims: a result still over budget when it reaches that boundary is replaced by
+a small, bounded error object instead. A silently truncated catalog is worse
+than a hard error, because the model authors against entities it cannot see —
+and a truncated list that a write path treats as complete (e.g.
+`ambience_get_scope`'s `scenes`) is worse still, because it can silently
+delete data. See `fit_result`'s docstring for the full story.
 """
 
 from __future__ import annotations
@@ -199,13 +206,18 @@ def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, A
     total = len(traces) if isinstance(traces, list) else 0
 
     def derive_fields(kept_len: int) -> dict[str, Any]:
+        # The floor-at-one case (see _trim_list_to_fit) can return here with
+        # nothing actually omitted — an oversized single trace still over
+        # budget on its own. `omitted: 0` / `notice: None` would be noise in
+        # that case, so both keys are suppressed together, same as
+        # `fit_context`'s "nothing omitted" case.
         omitted = total - kept_len
+        if not omitted:
+            return {"returned": kept_len}
         notice = (
             f"Showing {kept_len} of {total} traces; the oldest {omitted} were "
             "omitted to fit the result budget. Call again with a smaller limit to see "
             "a different slice."
-            if omitted
-            else None
         )
         return {"returned": kept_len, "omitted": omitted, "notice": notice}
 
@@ -213,52 +225,57 @@ def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, A
 
 
 def fit_result(result: Any, budget: int | None = None) -> Any:
-    """The generic backstop underneath `fit_context`/`fit_entities`/`fit_traces`:
+    """The terminal backstop underneath `fit_context`/`fit_entities`/`fit_traces`:
     applied to EVERY tool's return value at the server boundary (see
     `server.py`'s `_BoundedFastMCP`), so a tool with no shape-aware strategy —
     one of the 8 that had none, or a brand new one nobody has written a
-    strategy for yet — still degrades to a bounded result instead of shipping
-    an unbounded one.
+    strategy for yet — still cannot ship an unbounded result.
 
     Idempotent and cheap: a result already within budget (including one already
     handled by a shape-aware strategy above) is returned unchanged, so this is a
     no-op layered under those, not a replacement for them.
 
-    Fully generic, so it has no domain knowledge of any tool's shape: it finds
-    the single largest TOP-LEVEL list-valued field and drops items from its end,
-    floored at ONE element — never zero, the same no-livelock rule
-    `_trim_list_to_fit` encodes for `fit_entities`/`fit_traces`. Every other
-    field, list or not, is left untouched — e.g. `preview_write`'s
-    `confirm_token`, a scalar sibling of its (dict-shaped, not list-shaped)
-    `diff`, always survives a trim.
+    This function used to trim the largest top-level list, generically, when a
+    result was still over budget here. That was a blunt instrument applied to
+    shapes it does not understand, and it was actively dangerous:
 
-    Returned unchanged if `result` isn't a dict, already fits, or has no
-    top-level list to shed (its bulk lives somewhere this generic pass cannot
-    reach, e.g. nested inside `preview_write`'s `diff`): an honest oversized
-    result beats a broken one, the same philosophy `fit_context` documents for
-    its own "nothing left to shed" case.
+    - `ambience_get_scope`'s `scenes` list has no shape-aware strategy of its
+      own, so an oversized scope got silently cut short. `ambience_apply_write`
+      treats a scope's scene list as the COMPLETE set to persist — any scene
+      left out is deleted — so a model that read a truncated `scenes`, and
+      followed the documented "carry forward every scene you mean to keep"
+      workflow, would silently delete the scenes it never saw. A generic trim
+      must never be able to feed a destructive write.
+    - Trimming the largest top-level list isn't necessarily trimming the BULK:
+      it could cut a small audit/blocking list (e.g. `get_guide`'s table of
+      contents, `get_context`'s `schemas_omitted`, `preview_write`'s
+      `unknown_categories`) while the real bulk sits elsewhere, untouched and
+      the result still over budget.
+    - When the bulk is nested (e.g. `preview_write`'s `diff.added/removed/
+      updated`), a top-level-only pass cannot reach it at all, so boundedness
+      was never actually structural for those shapes.
+
+    So: a result that is still over budget when it reaches this boundary is
+    never trimmed. It is replaced by a small, fixed-shape error object instead
+    — always bounded, never a truncation of the original payload, and
+    incapable of feeding a destructive write, because there is no partial list
+    within it for a caller to carry forward.
+
+    Returned unchanged if `result` isn't a dict or already fits.
     """
     limit = max_result_chars() if budget is None else budget
-    if not isinstance(result, dict) or size_of(result) <= limit:
+    if not isinstance(result, dict):
         return result
-
-    list_fields = [(k, v) for k, v in result.items() if isinstance(v, list) and v]
-    if not list_fields:
-        return result  # nothing top-level to shed — an honest oversized result beats a broken one
-    key, rows = max(list_fields, key=lambda kv: size_of(kv[1]))
-    total = len(rows)
-
-    def derive_fields(kept_len: int) -> dict[str, Any]:
-        omitted = total - kept_len
-        if not omitted:
-            return {}
-        return {
-            "omitted": omitted,
-            "notice": (
-                f"This result was trimmed to fit the response budget: {key!r} was cut from "
-                f"{total} to {kept_len} items ({omitted} omitted). Narrow your request "
-                "(filters, a smaller page/limit, or a narrower scope) to see the rest."
-            ),
-        }
-
-    return _trim_list_to_fit(result, key, limit, derive_fields)
+    size = size_of(result)
+    if size <= limit:
+        return result
+    return {
+        "error": "result_too_large",
+        "size_chars": size,
+        "budget_chars": limit,
+        "message": (
+            f"This result is {size} chars, over the {limit}-char budget, and cannot be "
+            "safely trimmed. Narrow the request (a filter, a smaller limit, or a "
+            "narrower scope), or use the Ambience panel."
+        ),
+    }

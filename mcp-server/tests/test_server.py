@@ -44,7 +44,12 @@ async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(mo
     """A brand-new tool that never calls any fit_* helper — exactly the shape of
     the 8 tools that had no guard before this fix — still cannot ship an
     unbounded result, because registration itself (add_tool, which @tool()
-    calls under the hood) applies the guard. Nothing about this tool opts in."""
+    calls under the hood) applies the guard. Nothing about this tool opts in.
+
+    fit_result no longer trims: an oversized result comes back as the small,
+    bounded error object, never a mangled truncation of the tool's own list
+    fields (see budget.fit_result's docstring for why a generic trim is
+    unsafe)."""
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "1000")
     probe = server._BoundedFastMCP("probe")
 
@@ -55,8 +60,8 @@ async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(mo
     _, structured = await probe.call_tool("oversized_tool", {})
 
     assert budget.size_of(structured) <= 1000
-    assert structured["omitted"] > 0
-    assert structured["items"]  # never trimmed to empty
+    assert structured["error"] == "result_too_large"
+    assert "items" not in structured
 
 
 async def test_list_categories_is_bounded_despite_having_no_fit_strategy(monkeypatch):
@@ -73,8 +78,25 @@ async def test_list_categories_is_bounded_despite_having_no_fit_strategy(monkeyp
     _, structured = await server.mcp.call_tool("ambience_list_categories", {})
 
     assert budget.size_of(structured) <= 1500
-    assert structured["omitted"] > 0
-    assert structured["categories"]
+    assert structured["error"] == "result_too_large"
+    assert "categories" not in structured
+
+
+async def test_a_sync_tool_is_bounded_too(monkeypatch):
+    """_bounded must not assume every tool is async — FastMCP supports sync
+    tools, and awaiting a sync function's return value directly would raise at
+    call time. Proves the sync branch actually applies fit_result."""
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "1000")
+    probe = server._BoundedFastMCP("probe")
+
+    @probe.tool()
+    def oversized_sync_tool() -> dict[str, object]:
+        return {"items": [{"x": "y" * 100} for _ in range(50)]}
+
+    _, structured = await probe.call_tool("oversized_sync_tool", {})
+
+    assert budget.size_of(structured) <= 1000
+    assert structured["error"] == "result_too_large"
 
 
 async def test_an_already_bounded_tool_result_passes_through_unchanged(monkeypatch):

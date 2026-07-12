@@ -22,6 +22,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     release still talks to older Ambience installs — which is what makes
     pointing one MCP server at two installs on different Ambience versions work.
 
+### Fixed
+
+- The "upgrade `ambience-mcp`" message now also tells you to remove any version
+    **pin** from your MCP config. Without that, the rest of the advice (clean
+    the cache, restart) is a no-op for anyone who pinned a version — the pin
+    reinstalls the same old build, and every tool call keeps failing.
+
 ### Changed
 
 - The AI guide response no longer carries `ambience_ai_bundle`, and the MCP

@@ -96,6 +96,12 @@ if [ -n "$md_changed" ]; then echo "› mdformat";    make lint-md; fi
 # --- Step 2: always-cheap i18n gates (parity, completeness, no-hardcoded) ---
 if [ -n "$backend_py_changed$trans_changed$bundle_src_changed" ]; then echo "› i18n"; make i18n; fi
 
+# --- Step 2b: the cross-package MCP protocol gate (stdlib-only, cheap) ---
+# CI's `quality` job runs this; without it here, bumping MCP_PROTOCOL (or the
+# MIN_MCP_VERSION floor) pushes green and goes red in CI. Any .py touch is enough
+# of a trigger — it parses three files and costs milliseconds.
+if [ -n "$py_changed$mcp_changed" ]; then echo "› mcp protocol gate"; make mcp-gate; fi
+
 # --- Step 3: changed-language tests + coverage ---
 if [ -n "$backend_py_changed" ];  then echo "› backend tests+coverage";  make coverage-py; fi
 if [ -n "$mcp_changed" ];         then echo "› mcp-server tests";         make mcp-tests; fi

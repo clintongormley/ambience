@@ -68,8 +68,8 @@ class _BoundedFastMCP(FastMCP):
 
     `fit_result` early-returns once a result is already within budget, so this
     is a no-op — not a second pass — for the 3 tools whose shape-aware
-    strategy already fitted the result in `tools.py`. It is the backstop
-    underneath them, not a replacement.
+    strategy already fitted the result in the protocol adapter (`protocols/v1.py`).
+    It is the backstop underneath them, not a replacement.
     """
 
     def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
@@ -148,8 +148,17 @@ async def ambience_find_entities(
       the lux sensors        → device_class="illuminance"
       anything named 'lamp'  → query="lamp"
     """
+    # By KEYWORD, not position: `BaseProtocol.find_entities` is declared
+    # `(*args, **kwargs)`, so a future `vN` that reorders or inserts a filter would
+    # misbind these silently — a query landing in `domain` looks like "no results",
+    # not like a bug.
     return await (await _protocol_()).find_entities(
-        query, domain, area_id, device_class, limit, cursor
+        query=query,
+        domain=domain,
+        area_id=area_id,
+        device_class=device_class,
+        limit=limit,
+        cursor=cursor,
     )
 
 

@@ -91,16 +91,26 @@ fi
 # an adapter for every protocol it supports). A NEW backend against an OLD MCP is a
 # DEADLOCK: every user is told "upgrade ambience-mcp" — to a version that does not
 # exist yet. `uvx` installs LATEST, so they cannot obey. Fail closed.
-MCP_PROTOCOL=$(python3 -c "
-import ast, pathlib
-tree = ast.parse(pathlib.Path('custom_components/ambience/const.py').read_text())
-for node in ast.walk(tree):
-    if isinstance(node, ast.Assign):
-        for t in node.targets:
-            if getattr(t, 'id', None) == 'MCP_PROTOCOL':
-                print(node.value.value); raise SystemExit(0)
-raise SystemExit('MCP_PROTOCOL not found')
-")
+#
+# The constant is extracted by Gate 1's script (`--print-protocol`), not by a second
+# `ast` walk of our own: two parsers of the same constant can disagree (this one only
+# handled `ast.Assign`, Gate 1 also handles `AnnAssign`), and the one that
+# under-reports is the one that lets a deadlock ship. One parser, one answer.
+MCP_PROTOCOL=$(python3 "$(dirname "$0")/check_mcp_protocol.py" \
+  --print-protocol --const custom_components/ambience/const.py) || {
+  echo "error: could not read MCP_PROTOCOL from custom_components/ambience/const.py" >&2
+  exit 1
+}
+
+# Fail CLOSED on anything that isn't a bare non-negative integer, for the same reason
+# the PUBLISHED check below does: inside an `if`, `[ x -gt y ]`'s "integer expression
+# expected" status reads as false and would silently skip the refusal.
+case "$MCP_PROTOCOL" in
+  ''|*[!0-9]*)
+    echo "error: MCP_PROTOCOL did not read back as an integer (got: '${MCP_PROTOCOL}')." >&2
+    exit 1
+    ;;
+esac
 
 echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI…"
 # Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI

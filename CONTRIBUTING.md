@@ -100,6 +100,32 @@ refuses to go first), and fails closed if PyPI cannot be reached.
 Ambience releases that do **not** bump `MCP_PROTOCOL` need no MCP release at
 all.
 
+### `MIN_MCP_VERSION` — the refusal floor
+
+`MIN_MCP_VERSION` (also in `const.py`) is the **oldest `ambience-mcp` this
+backend will serve**. It is the one thing `MCP_PROTOCOL` cannot express: *"that
+build is known-broken — refuse it"*. Nothing about the protocol was wrong for
+`ambience-mcp` 0.2.0-rc.2; it simply fetched the fat bundle and blew the AI
+client's token limit on any real house. A protocol number cannot say that; this
+can.
+
+It is the **strongest** refusal the backend can issue — the MCP checks it first,
+ahead of the protocol question — so it carries the strongest rule:
+
+> **It may never name an `ambience-mcp` that is not published yet.**
+
+`uvx` installs *latest*. A floor above the newest published `ambience-mcp` tells
+**every** user, on **every** tool call, to upgrade to a version that does not
+exist. It is a one-line edit with no adapter to write and no shape to re-record,
+which makes it the easiest of all these levers to pull by mistake — so
+`bin/check_mcp_protocol.py` (Gate 1, `make mcp-gate`) refuses any floor newer
+than the `ambience-mcp` in this repo, and Gate 2 refuses to release a backend
+before that `ambience-mcp` is on PyPI. Together they make the declared floor
+always installable.
+
+To raise it: bump `mcp-server/pyproject.toml`, tag `mcp-v<version>`, let it
+publish — **then** raise `MIN_MCP_VERSION` to it.
+
 ## Make targets
 
 Every gate is a `make` target so humans, the hook, and CI all run the exact same
@@ -112,6 +138,7 @@ command (see `Makefile`). Useful ones:
 | `make coverage-py` / `make coverage-js` | Tests with coverage gates                                                |
 | `make i18n`                             | All i18n gates (parity, shipped-locale completeness, no-hardcoded lints) |
 | `make translations`                     | Translation key-parity check                                             |
+| `make mcp-gate`                         | Gate 1: `MCP_PROTOCOL` has an adapter, `MIN_MCP_VERSION` is installable  |
 | `make build-check`                      | Rebuild bundle, fail on drift                                            |
 
 ## Markdown formatting

@@ -7,6 +7,7 @@ from ambience_mcp.ha_client import (
     HACommandError,
     HAConnectionError,
     IncompatibleError,
+    ProtocolChangedError,
     ReconnectingClient,
 )
 
@@ -119,17 +120,25 @@ async def test_every_command_raises_while_incompatible():
 async def test_no_message_ever_asks_for_a_downgrade():
     # The invariant: `uvx ambience-mcp` installs LATEST, so a user cannot follow
     # advice to install an older one. Every remedy must point forward.
+    #
+    # ALL FOUR incompatibility messages, not three. The "backend behind" one
+    # (supported={2,3}, backend says 1) is the only message not built by a shared
+    # helper — an inline f-string — so it is the only one that could be reworded
+    # with no test noticing. That is exactly what this test exists to prevent.
+    cases = [
+        ({"protocol": 2}, frozenset({1})),  # backend ahead → upgrade ambience-mcp
+        ({"protocol": 1}, frozenset({2, 3})),  # backend behind → update Ambience
+        ({"protocol": 1, "min_mcp_version": "9.9.9"}, frozenset({1})),  # below the floor
+        (HACommandError("unknown_command", "nope"), frozenset({1})),  # pre-handshake
+    ]
     messages = []
-    for hello in (
-        {"protocol": 2},
-        {"protocol": 1, "min_mcp_version": "9.9.9"},
-        HACommandError("unknown_command", "nope"),
-    ):
-        client, _ = _reconnecting(hello, mcp_version="0.2.0rc3")
+    for hello, supported in cases:
+        client, _ = _reconnecting(hello, supported=supported, mcp_version="0.2.0rc3")
         with pytest.raises(IncompatibleError) as exc:
             await client.ready()
         messages.append(str(exc.value).lower())
 
+    assert len(messages) == 4
     for message in messages:
         assert "older" not in message
         assert "downgrade" not in message
@@ -240,6 +249,90 @@ async def test_retry_after_reconnect_checks_the_new_verdict_before_sending():
 
     # The new client saw ONLY the hello — the tool command must never be sent.
     assert incompatible.calls == ["ambience/mcp/hello"]
+
+
+async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_to():
+    """Important 1: `_checked_live()` blocks INCOMPATIBLE protocols. A protocol that
+    is SUPPORTED but DIFFERENT sails straight through it — and the adapter was already
+    built, from the protocol agreed on the PREVIOUS handshake.
+
+    Scenario (MCP supports {1, 2}; the user upgrades Ambience 1 → 2, which restarts
+    HA): `_protocol_()` builds the V1 adapter from the cached protocol on a
+    stale-but-not-yet-known-dead client. The command fails on send (sent=False), the
+    retry reconnects and re-handshakes to protocol 2 — and, without this guard, sends
+    the V1 command to the V2 backend. That is the silent v1-adapter-reads-v2-payload
+    mismatch the frozen adapters exist to prevent.
+
+    Unreachable while PROTOCOLS == {1} (any other protocol is refused as
+    incompatible). Live the moment a `v2.py` ships.
+    """
+    stale = _HandshakeThenScriptedClient(
+        {"protocol": 1}, HAConnectionError("stale socket", sent=False)
+    )
+    upgraded = _HandshakeThenScriptedClient({"protocol": 2}, {"ok": True})
+    connections = [stale, upgraded]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1, 2}), mcp_version="0.2.0rc3"
+    )
+
+    assert await client.ready() == 1  # the V1 adapter is built from this
+
+    with pytest.raises(ProtocolChangedError, match="protocol 2"):
+        await client.command("ambience/ai_context")
+
+    # The V1 command never reached the V2 backend — only the handshake did.
+    assert upgraded.calls == ["ambience/mcp/hello"]
+    # And the loss is one call, not the session: the model retries, and the next
+    # `_protocol_()` derives the V2 adapter from the freshly agreed protocol.
+    assert await client.ready() == 2
+
+
+async def test_a_write_that_may_have_landed_is_still_never_re_sent():
+    """The protocol-change guard sits on the SAME retry path as the write-safety
+    rule, so lock that rule in here: a `/save` that reached HA (sent=True) and lost
+    only its reply must still raise rather than reconnect and re-apply."""
+    flaky = _HandshakeThenScriptedClient(
+        {"protocol": 1}, HAConnectionError("reply lost", sent=True)
+    )
+    connections = [flaky, _HandshakeThenScriptedClient({"protocol": 1}, {"ok": True})]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    with pytest.raises(HAConnectionError):
+        await client.command("ambience/area/save", scope={})
+
+    # It never reconnected — the second client was never taken from the list.
+    assert len(connections) == 1
+
+
+async def test_a_reconnect_to_the_same_protocol_still_retries():
+    """The guard must not break the ordinary HA-restart case it shares a path with:
+    same protocol on the far side => the command is re-sent, as before."""
+    stale = _HandshakeThenScriptedClient(
+        {"protocol": 1}, HAConnectionError("stale socket", sent=False)
+    )
+    fresh = _HandshakeThenScriptedClient({"protocol": 1}, {"ok": True})
+    connections = [stale, fresh]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    assert await client.ready() == 1
+    assert await client.command("ambience/ping") == {"ok": True}
+    assert fresh.calls == ["ambience/mcp/hello", "ambience/ping"]
 
 
 async def test_a_failed_handshake_closes_the_client_instead_of_leaking_it():

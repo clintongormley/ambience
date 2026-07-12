@@ -104,6 +104,11 @@ To connect to several Home Assistant installs, or to install a specific version,
 see the
 [mcp-server README](https://github.com/clintongormley/ambience/blob/stable/mcp-server/README.md).
 
+You almost certainly do not want a pinned version: one build works with every
+Ambience. And if Ambience ever asks you to upgrade `ambience-mcp`, a pin will
+keep reinstalling the old build, so the upgrade can never happen — remove the
+pin first.
+
 ## Your privacy
 
 Ambience removes your private data before it reaches the AI. See

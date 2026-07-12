@@ -346,8 +346,8 @@ def test_fit_result_returns_non_dict_results_unchanged():
 
 def test_fit_result_is_a_no_op_for_results_already_fitted_upstream():
     # fit_context/fit_entities/fit_traces already brought these shapes within
-    # budget in tools.py before fit_result ever sees them — the boundary must
-    # be a genuine no-op for them, not a second pass.
+    # budget in the protocol adapter (protocols/v1.py) before fit_result ever
+    # sees them — the boundary must be a genuine no-op for them, not a second pass.
     context = _context(2, 10)
     entities = _entities(3, 10)
     traces = _traces(3, 10)

@@ -79,8 +79,9 @@ def test_all_tool_wrappers_exist():
 
 # The result-budget boundary: budget.fit_result must run on EVERY tool's return
 # value, not just the 3 (get_context/find_entities/list_traces) that carry a
-# shape-aware fit_* strategy of their own in tools.py. These prove it is wired
-# in structurally (via _BoundedFastMCP.add_tool), not per-tool.
+# shape-aware fit_* strategy of their own in the protocol adapter
+# (protocols/v1.py). These prove it is wired in structurally (via
+# _BoundedFastMCP.add_tool), not per-tool.
 
 
 async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(monkeypatch):
@@ -145,7 +146,7 @@ async def test_a_sync_tool_is_bounded_too(monkeypatch):
 async def test_an_already_bounded_tool_result_passes_through_unchanged(monkeypatch):
     """fit_result early-returns once a result already fits, so the boundary
     guard is a genuine no-op — not a second trim pass — for the 3 tools whose
-    tools.py strategy already fitted the result."""
+    protocol adapter (protocols/v1.py) already fitted the result."""
 
     async def small_categories(self):
         return {"categories": [{"id": "lighting"}]}

@@ -58,6 +58,18 @@ class IncompatibleError(HAError):
     """
 
 
+class ProtocolChangedError(HAError):
+    """The backend's protocol changed under a reconnect, after the command was built.
+
+    Not an incompatibility — both protocols are supported. It is a TRANSIENT: the
+    caller's adapter was chosen from the protocol agreed on the previous handshake,
+    and the backend on the far side of the reconnect speaks a different one. Sending
+    a v1-shaped command to a v2 backend is precisely the silent mismatch the frozen
+    per-protocol adapters exist to prevent, so the command is dropped instead. The
+    next tool call re-derives the adapter from the new protocol and succeeds.
+    """
+
+
 _UPDATE_AMBIENCE = (
     "Your Ambience is too old for this ambience-mcp. Update Ambience (HACS) and "
     "restart Home Assistant."
@@ -65,11 +77,21 @@ _UPDATE_AMBIENCE = (
 
 
 def _upgrade_mcp(reason: str) -> str:
+    """The one remedy that gets a user from a too-old ambience-mcp to a working one.
+
+    Every clause is load-bearing, and the third exists because the remedy is otherwise
+    a NO-OP for anyone who followed the README's "Pinning a version" advice: a pinned
+    `ambience-mcp@0.2.0` reinstalls the same pinned build after any cache clean or
+    restart, so they would loop on this message forever. Naming the pin is the only
+    way out — and it points FORWARD (remove the pin => get latest), never at an older
+    or a specific version, which `uvx` could not install anyway.
+    """
     return (
         f"{reason} Upgrade ambience-mcp: quit your MCP client, run "
         "`uv cache clean ambience-mcp`, then restart it. (`uvx` caches the old "
         "version and the running server holds the cache lock, so the restart alone "
-        "is not enough.)"
+        "is not enough.) If your MCP config pins a version (e.g. args "
+        '`["ambience-mcp@0.2.0"]`), remove the pin — a pinned version never upgrades.'
     )
 
 
@@ -317,6 +339,32 @@ class ReconnectingClient:
             raise IncompatibleError(self._verdict)
         return client
 
+    async def _live_for(self, agreed: int | None) -> tuple[HAClient, int | None]:
+        """`_checked_live()`, then refuse to hand back a client whose protocol is no
+        longer the one `agreed` — the one the caller's adapter was built from.
+
+        `_checked_live()` blocks only INCOMPATIBLE protocols. A protocol that is
+        SUPPORTED but DIFFERENT sails straight through it: `_live()` can hand back a
+        stale-but-not-yet-known-dead client (the normal state right after an HA
+        restart), the adapter gets built from the cached protocol, and the reconnect
+        that discovers the new one happens later, inside `command()` — with no way to
+        tell the already-constructed adapter that the ground moved. Unreachable while
+        only one protocol exists; live the moment a `v2.py` ships, which is the whole
+        point of the frozen-adapter design.
+
+        Returns the live protocol so a caller that had none yet (a `command()` before
+        any `ready()`) adopts the one this handshake agreed.
+        """
+        client = await self._checked_live()
+        protocol = self._protocol
+        if agreed is not None and protocol != agreed:
+            raise ProtocolChangedError(
+                f"Home Assistant reconnected and now speaks MCP protocol {protocol} "
+                f"(it was {agreed}). This call was built for the old protocol, so it "
+                f"was NOT sent. Nothing is wrong — just try again."
+            )
+        return client, protocol
+
     async def ready(self) -> int:
         """Connect and negotiate. Raises IncompatibleError if the pair cannot work
         together; otherwise returns the agreed protocol."""
@@ -335,15 +383,23 @@ class ReconnectingClient:
         return self._protocol
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
+        # `agreed` is the protocol the CALLER's adapter was built from — read before
+        # anything can reconnect. `_live_for` refuses to send once the backend on the
+        # far side of a reconnect is a different (even if supported) protocol; losing
+        # one tool call is the safe direction, because the model just retries and the
+        # retry re-derives the adapter from the new protocol.
+        agreed = self._protocol
         try:
-            return await (await self._checked_live()).command(type, **payload)
+            client, agreed = await self._live_for(agreed)
+            return await client.command(type, **payload)
         except HAConnectionError as exc:
             # Never reached HA → always safe to re-send, read or write.
             # Reached HA but the reply was lost → safe only for a read; a write may
             # have been applied, and re-sending could apply it twice.
             if exc.sent and _mutates(type):
                 raise
-            return await (await self._checked_live()).command(type, **payload)
+            client, _ = await self._live_for(agreed)
+            return await client.command(type, **payload)
 
     async def close(self) -> None:
         if self._client is not None:

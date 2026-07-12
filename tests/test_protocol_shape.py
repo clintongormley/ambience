@@ -20,12 +20,26 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.ai_context import build_ai_context
 from custom_components.ambience.builtin_services import async_register_builtin_services
-from custom_components.ambience.const import DATA_STORE, DOMAIN, MCP_PROTOCOL
+from custom_components.ambience.const import (
+    DATA_STORE,
+    DATA_TRACE_BUFFER,
+    DOMAIN,
+    MCP_PROTOCOL,
+)
+from custom_components.ambience.engine import Explanation, PredicateResult, SceneEval
 from custom_components.ambience.entity_catalog import entity_rows, find_entities
 from custom_components.ambience.store import AmbienceStore
+from custom_components.ambience.trace import (
+    CauseKind,
+    Outcome,
+    TraceEvent,
+    TriggerCause,
+    UnitTrace,
+)
 
 GOLDEN = Path(__file__).parent / "fixtures" / "protocol_1_shapes.json"
 
@@ -43,15 +57,56 @@ _DRIFT = (
 )
 
 
+# Dicts whose KEYS are data, not structure: an area id, a domain, a service id, a
+# service field name. Their keys are collapsed to `*`, so the sub-shape underneath
+# stays pinned (a rename of `scene_count` still fails the gate) while the key itself
+# does not. Without this, seeding one more area into the fixture reads as "the
+# protocol-1 shape changed" — a false alarm that trains a maintainer to re-record the
+# golden without reading it, which is exactly how a REAL drift gets waved through.
+#
+# Wildcarding does NOT lose the empty-branch protection the `seeded` fixture exists
+# for: an empty dict still contributes only its container key, so a branch with no
+# `.*` under it is still visibly unpopulated.
+_VALUE_KEYED = frozenset(
+    {
+        # keyed by area id / domain / "<domain>.<device_class>"
+        "catalog.entity_summary.by_area",
+        "catalog.entity_summary.by_domain",
+        "catalog.entity_summary.by_device_class",
+        # keyed by area id / floor id
+        "config.areas",
+        "config.floors",
+        # keyed by the user's own definition names
+        "config.conditions.lux.custom",
+        "config.conditions.time_of_day.custom",
+        "definitions.lux_ranges.custom",
+        "definitions.periods.custom",
+        # keyed by exposed-action service id, then by that service's field names,
+        # then by selector type — all of which are the user's config and HA's
+        # services.yaml, not our payload structure
+        "actions.schemas",
+        "actions.schemas.*.fields",
+        "actions.schemas.*.fields.*.selector",
+        # keyed by the dispatched action's own service field names
+        "traces[].actions[].params",
+    }
+)
+
+
 def shape_of(value: Any, prefix: str = "") -> set[str]:
     """Every key path in a payload, ignoring values and list length.
 
     A list contributes the union of its items' shapes, so a house with two lights
-    and a house with two hundred produce the same shape."""
+    and a house with two hundred produce the same shape. A dict listed in
+    `_VALUE_KEYED` contributes the union of its VALUES' shapes under a single `*`
+    key, for the same reason.
+    """
     paths: set[str] = set()
     if isinstance(value, dict):
+        value_keyed = prefix in _VALUE_KEYED
         for key, sub in value.items():
-            path = f"{prefix}.{key}" if prefix else key
+            name = "*" if value_keyed else key
+            path = f"{prefix}.{name}" if prefix else name
             paths.add(path)
             paths |= shape_of(sub, path)
     elif isinstance(value, list):
@@ -136,9 +191,121 @@ async def seeded(hass: HomeAssistant) -> AmbienceStore:
     return store
 
 
+@pytest.fixture
+async def traced(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
+    """A real install with ONE fully-populated trace in the ring buffer.
+
+    Every optional field is filled — a cause with all five keys, a winner, dispatched
+    actions with params, and an explanation carrying evaluated AND unevaluated scenes
+    with predicates. A golden recorded from a thin trace (or worse, an empty list)
+    would pin only `traces`, and `fit_traces`' `result.get("traces")` contract plus
+    every key the MCP reads inside a record would be unguarded.
+    """
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    explanation = Explanation(
+        winner_index=1,
+        scenes=[
+            SceneEval(
+                index=0,
+                name="morning",
+                predicates=[
+                    PredicateResult(
+                        condition_key="time_of_day",
+                        passed=False,
+                        detail="not morning",
+                        entity_ids=("sun.sun",),
+                    )
+                ],
+                matched=False,
+                evaluated=True,
+            ),
+            SceneEval(
+                index=1,
+                name="evening",
+                predicates=[
+                    PredicateResult(
+                        condition_key="lux",
+                        passed=True,
+                        detail="dark (3 lx)",
+                        entity_ids=("sensor.lux",),
+                    )
+                ],
+                matched=True,
+                evaluated=True,
+            ),
+            # Never reached (the winner short-circuits) — and `disabled` scenes are
+            # skipped outright. Both still serialise, so both are in the shape.
+            SceneEval(index=2, name="night", predicates=[], matched=False, evaluated=False),
+        ],
+    )
+    unit = UnitTrace(
+        scope_kind="area",
+        scope_id="kitchen",
+        category="general",
+        switch_state="on",
+        outcome=Outcome.ACTED,
+        explanation=explanation,
+        winner_name="evening",
+        actions=[
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.lamp"],
+                "params": {"brightness_pct": 40},
+            }
+        ],
+        category_name="General",
+        scope_name="Kitchen",
+    )
+    buffer = hass.data[DOMAIN][DATA_TRACE_BUFFER]
+    buffer.clear()  # drop anything setup itself emitted, so the golden is ours alone
+    buffer.emit(
+        TraceEvent(
+            cause=TriggerCause(
+                kind=CauseKind.ENTITY,
+                entity_id="sensor.lux",
+                old="120",
+                new="3",
+                detail="lux fell",
+            ),
+            units=[unit],
+            event_id="e1",
+            timestamp="2026-07-12T10:00:00+00:00",
+        )
+    )
+    return mock_config_entry
+
+
 async def test_ai_context_shape_is_pinned(hass: HomeAssistant, seeded: AmbienceStore) -> None:
     assert_shape("ai_context", await build_ai_context(hass))
 
 
 async def test_entities_find_shape_is_pinned(hass: HomeAssistant, seeded: AmbienceStore) -> None:
     assert_shape("entities_find", find_entities(entity_rows(hass)))
+
+
+async def test_traces_list_shape_is_pinned(
+    hass: HomeAssistant, traced: MockConfigEntry, hass_ws_client: Any
+) -> None:
+    """The third protocol-1 payload. Pinned through the real websocket handler, not
+    by rebuilding the payload here, so the `traces` WRAPPER key is pinned too — that
+    is the key `budget.fit_traces` reads (`result.get("traces")`) to decide what to
+    trim, and a rename would silently disable the MCP's trace trimming.
+
+    `redact: true` because that is what the MCP's `list_traces` always sends; the
+    redaction rewrites values, not shape, but the gate must pin the payload the MCP
+    actually receives.
+    """
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/traces/list", "redact": True})
+    resp = await client.receive_json()
+
+    assert resp["success"] is True
+    # Shape FIRST, so a renamed key reports the actionable drift message rather than
+    # the bare KeyError the fixture guard below would raise.
+    assert_shape("traces_list", resp["result"])
+    # A golden recorded from an empty list would pin only `traces` and nothing inside
+    # a record — so guard the fixture, not just the payload.
+    assert resp["result"]["traces"], "an empty trace list would pin nothing"

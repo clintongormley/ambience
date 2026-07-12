@@ -124,15 +124,21 @@ which side to upgrade. It will never tell you to install an *older*
 `ambience-mcp`: `uvx` installs the latest, so that would be advice you could not
 follow.
 
-- *"Update Ambience"* — your Ambience is older than this server supports.
-- *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
-    refusing this build. Quit your MCP client, run
-    `uv cache clean ambience-mcp`, then restart it. The cache clean matters:
-    `uvx` caches the old version, and the running server holds the cache lock,
-    so restarting alone will not pick up the new one.
+- *"Update Ambience"* — your Ambience is older than this server supports. Update
+    it in HACS and restart Home Assistant. That is all: the restart drops the
+    websocket, the handshake re-runs on the next tool call, and the server heals
+    itself — **you do not need to restart the MCP server**.
 
-Fixing either side and reconnecting is enough — the handshake re-runs on
-reconnect, so you do not need to restart the MCP server itself.
+- *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
+    refusing this build. **This one does need a restart of the MCP server**, and
+    reconnecting alone will not do: the running process *is* the old version, so
+    it would only re-handshake its way to the same verdict. Quit your MCP
+    client, run `uv cache clean ambience-mcp`, then restart it. The cache clean
+    matters too: `uvx` caches the old version, and the running server holds the
+    cache lock, so restarting alone will not pick up the new one. And if your
+    config [pins a version](#pinning-a-version), remove the pin — a pinned
+    version never upgrades, so the cache clean would just reinstall the same
+    build.
 
 ## Turning it off
 
@@ -278,7 +284,14 @@ disable it without removing the file, add
 
 ### Pinning a version
 
-You normally never need this — one build spans Ambience versions. When you do:
+You normally never need this — one build spans Ambience versions.
+
+**A pin opts you out of the upgrade path.** If Ambience ever asks you to
+[upgrade `ambience-mcp`](#version-compatibility), a pinned config will keep
+reinstalling the pinned build no matter how often you clean the cache or
+restart, and every tool call will keep failing. Remove the pin to get out.
+
+When you do want one:
 
 - **A specific released version:** `uvx ambience-mcp@0.2.0` (args:
     `["ambience-mcp@0.2.0"]`).

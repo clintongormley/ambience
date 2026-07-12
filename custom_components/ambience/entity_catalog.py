@@ -162,8 +162,15 @@ def find_entities(
     name any entity in the house, and exposing a new action can make a previously
     irrelevant domain relevant — so nothing is hidden, it is merely paged.
 
-    Filters combine with AND. `cursor` is an integer offset into the matches,
-    which is stable because `rows` is sorted by `entity_id`.
+    Filters combine with AND. `cursor` is an integer offset into the matches.
+    Sorting `rows` by `entity_id` gives a stable ORDER across calls, not stable
+    OFFSETS: the catalog is live, so if an entity is added or removed between
+    two page fetches, every later row shifts by one position and the next
+    page's offset can skip (or repeat) exactly one row. Accepted as an
+    inherent tradeoff of offset paging over a mutable catalog, not something
+    this implementation guards against — a cursor-on-last-entity-id scheme
+    would avoid it but adds complexity offset paging doesn't need for a
+    same-session authoring walk.
 
     `device_class` accepts either form `entity_summary`'s `by_device_class` uses:
     domain-qualified (`"sensor.illuminance"`) or bare (`"illuminance"`). This is

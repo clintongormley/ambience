@@ -15,11 +15,22 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     instead of every entity, and a new `ambience_find_entities` tool searches
     and pages the catalog. Previously a house with ~1,500 entities produced a
     ~90k-token context that the AI client rejected outright.
+- Every MCP tool result is now bounded, so none can be rejected for size. When a
+    result does not fit, it says so and says how to get the rest — it is never
+    silently cut. Rewriting a large scope still works: `ambience_preview_write`
+    summarises its diff (every changed scene still listed, by name and by which
+    fields changed) rather than dumping every scene body.
 
 ### Changed
 
+- Scene-evaluation traces sent to the MCP server are now redacted, as the
+    downloadable AI bundle's already were. A trace can carry presence zone names
+    and the parameters of dispatched actions, including alarm codes and lock
+    PINs. The Home Assistant panel's own trace view is unchanged.
+
 - `ambience-mcp` now requires an Ambience that serves `ambience/ai_context`
     (this release or newer); it will tell you to upgrade if not.
+
 - The **Download AI bundle** flow is untouched: the downloaded bundle still
     carries the full entity catalog, because an AI you paste it into has no
     tools to look entities up with.

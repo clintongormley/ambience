@@ -41,6 +41,7 @@ from .const import (
 from .diagnostics import scope_diagnostics
 from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
+from .redact import redacted_traces
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     all_live_states,
@@ -1351,6 +1352,7 @@ async def _ws_live_subscribe(
     {
         vol.Required("type"): "ambience/traces/list",
         vol.Optional("limit"): vol.All(int, vol.Range(min=1)),
+        vol.Optional("redact", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -1359,12 +1361,25 @@ async def _ws_traces_list(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    """Recent traces, newest first.
+
+    Unredacted by default — the HA panel consumes this and needs the real
+    zone names/cause entities/action params to render diagnostics. Pass
+    `redact: true` (as the MCP server's list_traces always does) to get the
+    same redaction `ambience/ai_bundle` applies before a trace ever reaches an
+    external AI: presence causes, per-predicate location detail, and
+    security-domain action params (alarm codes, lock PINs) are all scrubbed.
+    """
     buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
     records = buffer.records() if buffer is not None else []
     limit = msg.get("limit")
     if limit is not None:
         records = records[:limit]
-    connection.send_result(msg["id"], {"traces": [buffered_unit_to_dict(r) for r in records]})
+    if msg.get("redact"):
+        traces = redacted_traces(hass, records)
+    else:
+        traces = [buffered_unit_to_dict(r) for r in records]
+    connection.send_result(msg["id"], {"traces": traces})
 
 
 @websocket_api.require_admin
@@ -1417,6 +1432,62 @@ async def _ws_ai_bundle(
     from .ai_bundle import build_ai_bundle
 
     connection.send_result(msg["id"], await build_ai_bundle(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/ai_context"})
+@websocket_api.async_response
+async def _ws_ai_context(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The BOUNDED authoring export an MCP client reads: the same catalog, actions
+    and definitions as the AI bundle, but with entity COUNTS instead of thousands
+    of rows, scene counts instead of scene lists, and no traces — because an MCP client has
+    ambience/entities/find, ambience/{scope}/get and ambience/traces/list to fetch
+    those on demand, and a hard cap on one result's size. The fat bundle stays for
+    the download-and-paste flow, where the AI has no tools."""
+    from .ai_context import build_ai_context
+
+    connection.send_result(msg["id"], await build_ai_context(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/entities/find",
+        vol.Optional("query"): vol.Any(str, None),
+        vol.Optional("domain"): vol.Any(str, [str], None),
+        vol.Optional("area_id"): vol.Any(str, [str], None),
+        vol.Optional("device_class"): vol.Any(str, [str], None),
+        vol.Optional("limit"): vol.Any(int, None),
+        vol.Optional("cursor"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_entities_find(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Search the entity catalog, one bounded page at a time. The AI context
+    carries only entity COUNTS, so this is how an MCP client reaches an actual
+    entity — nothing is hidden, it is merely paged."""
+    from .entity_catalog import entity_rows, find_entities
+
+    connection.send_result(
+        msg["id"],
+        find_entities(
+            entity_rows(hass),
+            query=msg.get("query"),
+            domain=msg.get("domain"),
+            area_id=msg.get("area_id"),
+            device_class=msg.get("device_class"),
+            limit=msg.get("limit"),
+            cursor=msg.get("cursor"),
+        ),
+    )
 
 
 @websocket_api.websocket_command(
@@ -1629,6 +1700,8 @@ _WS_HANDLERS = (
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_ai_bundle,
+    _ws_ai_context,
+    _ws_entities_find,
     _ws_ai_guide,
     _ws_simulate_inputs,
     _ws_simulate,

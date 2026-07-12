@@ -39,3 +39,43 @@ def diff_scopes(current: list[dict[str, Any]], proposed: list[dict[str, Any]]) -
         if k in cur and _comparable(cur[k]) != _comparable(pro[k])
     ]
     return {"added": added, "removed": removed, "updated": updated}
+
+
+def _identify(scene: dict[str, Any], index: int) -> dict[str, Any]:
+    """A compact, still-unique identifier for a scene: its name+category, plus a
+    positional `index` when it has no name — `diff_scopes` itself falls back to
+    position for unnamed scenes (see `_key`), so a `None` name is expected, not
+    an error, and must still be distinguishable in a summary."""
+    name = scene.get("name")
+    entry: dict[str, Any] = {"name": name, "category": scene.get("category")}
+    if not (isinstance(name, str) and name.strip()):
+        entry["index"] = index
+    return entry
+
+
+def _changed_fields(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
+    b, a = _comparable(before), _comparable(after)
+    return sorted(k for k in b.keys() | a.keys() if b.get(k) != a.get(k))
+
+
+def summarise_diff(changes: dict[str, list]) -> dict[str, list]:
+    """Elide scene BODIES from a `diff_scopes` result while keeping every entry.
+
+    `fit_preview` reaches for this when the full diff busts the result budget.
+    The safety rule it exists to uphold — a human must never approve a change
+    they cannot see — depends on every changed scene still being LISTED, not on
+    the full body being shown; the fields that make a diff entry "the scene the
+    AI wants to touch" are its name/category (and, for an update, which fields
+    actually changed), not its complete `actions`/`when`. So every entry in
+    `added`/`removed`/`updated` survives; only the body is dropped.
+    """
+    added = [_identify(scene, i) for i, scene in enumerate(changes.get("added", []))]
+    removed = [_identify(scene, i) for i, scene in enumerate(changes.get("removed", []))]
+    updated = [
+        {
+            **_identify(pair["after"], i),
+            "changed_fields": _changed_fields(pair["before"], pair["after"]),
+        }
+        for i, pair in enumerate(changes.get("updated", []))
+    ]
+    return {"added": added, "removed": removed, "updated": updated}

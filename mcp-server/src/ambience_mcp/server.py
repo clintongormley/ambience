@@ -1,4 +1,4 @@
-"""FastMCP glue: one connection, one preview ledger, ten thin tool wrappers.
+"""FastMCP glue: one connection, one preview ledger, eleven thin tool wrappers.
 
 Each wrapper delegates to ambience_mcp.tools; the docstring + type hints become
 the tool's MCP schema. Keep descriptions short — the client's tool-search reads
@@ -6,16 +6,73 @@ them, and a lean surface keeps the per-turn context footprint small."""
 
 from __future__ import annotations
 
+import functools
+import inspect
+from collections.abc import Callable
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from . import tools
+from .budget import fit_result
 from .config import load_config
 from .ha_client import ReconnectingClient, connect
 from .ledger import PreviewLedger
 
-mcp = FastMCP("ambience")
+
+def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap a tool callable so its return value always passes through
+    `budget.fit_result` before it reaches the client. Not something a tool
+    author calls themselves — `_BoundedFastMCP.add_tool` below applies it to
+    every registered tool automatically.
+
+    FastMCP supports both sync and async tool functions, so this picks the
+    matching wrapper shape via `inspect.iscoroutinefunction` — awaiting a sync
+    function's return value directly (rather than the function itself) would
+    raise at call time. Every tool registered on this server today is async,
+    so a sync tool has never actually hit this, but the whole point of
+    `_BoundedFastMCP` is that the guard applies no matter how a tool is
+    registered, so it must handle both."""
+
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            return fit_result(await fn(*args, **kwargs))
+
+        return async_wrapper
+
+    @functools.wraps(fn)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        return fit_result(fn(*args, **kwargs))
+
+    return sync_wrapper
+
+
+class _BoundedFastMCP(FastMCP):
+    """A FastMCP that makes the result budget STRUCTURAL rather than something
+    each tool has to remember.
+
+    `budget.py`'s shape-aware strategies (`fit_context`/`fit_entities`/
+    `fit_traces`) used to be hand-wired into exactly 3 of the 11 tools — the
+    other 8 returned whatever the backend sent, unguarded. Overriding
+    `add_tool` (the method BOTH `@mcp.tool()` and any future direct
+    registration call under the hood) instead of decorating each `@mcp.tool()`
+    site means there is no second step to forget: register a tool with this
+    server at all, by any means, and `fit_result` runs on its result. A new
+    tool cannot silently ship an unbounded result the way the original 8 did.
+
+    `fit_result` early-returns once a result is already within budget, so this
+    is a no-op — not a second pass — for the 3 tools whose shape-aware
+    strategy already fitted the result in `tools.py`. It is the backstop
+    underneath them, not a replacement.
+    """
+
+    def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        super().add_tool(_bounded(fn), *args, **kwargs)
+
+
+mcp = _BoundedFastMCP("ambience")
 _ledger = PreviewLedger()
 _guide_cache = tools.GuideCache()
 _client: ReconnectingClient | None = None
@@ -33,12 +90,48 @@ def _client_() -> ReconnectingClient:
 
 @mcp.tool()
 async def ambience_get_context() -> dict[str, Any]:
-    """Live Ambience authoring context: areas/floors/entities+state, exposed
-    actions and their field schemas, category/period/lux definitions, and recent
-    traces. Fetch this before authoring so every id and vocabulary word is real.
-    Scenes carry a per-category `rank` (1..N) — show that, not the raw
-    `priority`, when presenting scenes to a user."""
+    """Live Ambience authoring context: areas/floors, an entity SUMMARY (counts by
+    domain/area/device_class), exposed actions and their field schemas, and
+    category/period/lux definitions. Fetch this before authoring so every id and
+    vocabulary word is real.
+
+    It carries entity COUNTS, not entity rows — a real house has thousands. Use
+    ambience_find_entities to look up the actual entities you need, the summary to
+    discover what exists, ambience_get_scope for a scope's scenes, and
+    ambience_list_traces for traces."""
     return await tools.get_context(_client_())
+
+
+@mcp.tool()
+async def ambience_find_entities(
+    query: str | None = None,
+    domain: str | list[str] | None = None,
+    area_id: str | list[str] | None = None,
+    device_class: str | list[str] | None = None,
+    limit: int | None = None,
+    cursor: int | None = None,
+) -> dict[str, Any]:
+    """Look up entities in the live catalog. This is how you get entity ids —
+    ambience_get_context carries only COUNTS, because a real house has thousands
+    of entities.
+
+    Filters combine with AND; each of domain/area_id/device_class takes one value
+    or a list. `query` is a case-insensitive substring of the entity_id or name.
+    Results are paged: pass the returned `cursor` back to get the next page
+    (`cursor` is null on the last page). `limit` defaults to 50, max 200.
+
+    Everything is reachable here — an action can target any domain you expose, and
+    a `state`/`template` condition can reference ANY entity in the house, so
+    nothing is filtered out of the catalog, only paged.
+
+    Examples:
+      lights in the kitchen  → domain="light", area_id="kitchen"
+      the lux sensors        → device_class="illuminance"
+      anything named 'lamp'  → query="lamp"
+    """
+    return await tools.find_entities(
+        _client_(), query, domain, area_id, device_class, limit, cursor
+    )
 
 
 @mcp.tool()
@@ -117,7 +210,11 @@ async def ambience_apply_write(
 
 @mcp.tool()
 async def ambience_list_traces(limit: int | None = None) -> dict[str, Any]:
-    """Recent scene-evaluation traces for diagnosis ("why didn't my scene fire?")."""
+    """Recent scene-evaluation traces for diagnosis ("why didn't my scene fire?").
+
+    If the list is too big for one result, the oldest traces are dropped and the
+    result carries `omitted` and a `notice` saying so — ask again with a smaller
+    `limit` to see a different slice."""
     return await tools.list_traces(_client_(), limit)
 
 

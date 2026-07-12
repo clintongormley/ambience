@@ -120,10 +120,15 @@ costs almost nothing per turn.
 
 ## Tools
 
-`ambience_get_context`, `ambience_get_scope`, `ambience_get_guide`,
-`ambience_dry_run`, `ambience_validate`, `ambience_preview_write`,
-`ambience_apply_write`, `ambience_list_traces`, `ambience_list_categories`,
-`ambience_save_categories`.
+`ambience_get_context`, `ambience_find_entities`, `ambience_get_scope`,
+`ambience_get_guide`, `ambience_dry_run`, `ambience_validate`,
+`ambience_preview_write`, `ambience_apply_write`, `ambience_list_traces`,
+`ambience_list_categories`, `ambience_save_categories`.
+
+`ambience_get_context` carries entity COUNTS, not rows — a real house has
+thousands of entities. `ambience_find_entities` is the paged search that returns
+real entity ids to author with; nothing is filtered out of the catalog, only
+paged.
 
 `ambience_get_guide` fetches the scene-authoring guide (schema + cookbook) live
 from your install, so it always matches your Ambience version — no separately
@@ -135,6 +140,56 @@ installed guide to keep in sync.
 `ambience_preview_write` for the **exact** scope+scenes and pass back its
 `confirm_token`. Every write is a normal scope save — reversible via Ambience
 undo/redo.
+
+## The result budget
+
+An MCP client caps how much one tool result may return, so every result here is
+bounded — at any house size. The budget is **60,000 characters of the wire
+payload** (roughly 15k tokens), overridable with
+`AMBIENCE_MCP_MAX_RESULT_CHARS`.
+
+"Wire payload" is deliberate: FastMCP pretty-prints a result *and* repeats it as
+`structuredContent`, so what the client receives is ~2-3x the compact JSON.
+Measuring the compact form would under-count by up to 3x and let an "it fits"
+result sail through that the client then rejects.
+
+Nothing is ever **silently** truncated. A result that doesn't fit degrades in a
+way that says so, and says how to get the rest:
+
+| Tool                     | Over budget →                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `ambience_find_entities` | fewer rows, `cursor` re-pointed at the first row dropped, `truncated: true` — page on to reach the rest |
+| `ambience_list_traces`   | fewer traces + a `notice` saying how many were omitted                                                  |
+| `ambience_get_context`   | sheds action *schemas* biggest-first, naming them in `schemas_omitted` (action ids all remain)          |
+| `ambience_preview_write` | the diff is **summarised**, not cut — see below                                                         |
+| anything else            | `{"error": "result_too_large", ...}` — a small, honest refusal, never a partial payload                 |
+
+### Why a partial result is sometimes worse than none
+
+`ambience_apply_write` **replaces a whole scope** — any scene you leave out is
+deleted. So a *truncated* `ambience_get_scope` would be actively dangerous: read
+a short scene list, carry it forward, write it back, and the omitted scenes are
+gone. It is refused outright instead. Same for anything else with no safe way to
+shrink: an honest error beats a payload that quietly lies about what's in the
+house.
+
+The two tools that *do* shrink safely — `find_entities` and `list_traces` — are
+safe precisely because neither is written back wholesale, and both hand you a
+way to reach what was left out.
+
+### `preview_write` summarises its diff
+
+Replacing a full scope lists every scene twice in the diff (once removed, once
+added), which busts the budget on a large scope. Truncating that diff would be
+unsafe — it is the surface a human approves the write from.
+
+So when it doesn't fit, the scene **bodies** are elided and **every changed
+scene is still listed** — by name, category, and (for updates) which fields
+changed — with `diff_summarised: true`. A real 21-scene scope replaced wholesale
+drops from ~75,000 chars to ~7,700 while still naming all 21 changes. The
+`confirm_token` stays usable: you are approving a complete picture of *what*
+changes, just not the full body of each. Use `ambience_get_scope` or
+`ambience_dry_run` to inspect any one of them in detail.
 
 ______________________________________________________________________
 

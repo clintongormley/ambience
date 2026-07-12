@@ -371,7 +371,33 @@ real. Author against it. Shape:
 
 Presence/location data is redacted (person/device_tracker ids, zones, templates,
 workday/weather entities), so don't expect those values; reference people by the
-`person.*` ids you can still see in `catalog.entities`.
+`person.*` ids you can still see in `catalog.entities` (over MCP, where there is
+no `catalog.entities`, use `ambience_find_entities(domain="person")` instead —
+see "Over MCP: counts, not rows" below).
+
+### Over MCP: counts, not rows
+
+If you are reading this through the **Ambience MCP server**, you do not get the
+bundle above. `ambience_get_context` returns the same areas, floors, actions,
+definitions and settings, but with:
+
+- `catalog.entity_summary` (counts by domain, area and device class) **instead of**
+  `catalog.entities` — a real house has thousands of entities and they do not fit
+  in one tool result;
+- `scene_count` per scope instead of the scene lists;
+- no `traces`.
+
+Fetch the detail on demand, and prefer these over guessing:
+
+| You want           | Call                                              |
+| ------------------ | ------------------------------------------------- |
+| entity ids         | `ambience_find_entities(domain=…, area_id=…, query=…)` |
+| a scope's scenes   | `ambience_get_scope({kind, id})`                  |
+| why a scene didn't fire | `ambience_list_traces()`                     |
+
+Use `entity_summary` to discover what exists (it will tell you the house has five
+`sensor.illuminance` entities), then `ambience_find_entities` to get their ids.
+Nothing is hidden from you — the catalog is paged, not filtered.
 
 ### Reading the catalog — two traps
 

@@ -312,7 +312,7 @@ async def test_entities_skip_disabled_and_report_null_area(
 async def test_action_schemas_dedupe_and_skip_non_string_ids(
     hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from custom_components.ambience import ai_bundle
+    from custom_components.ambience import ai_bundle, ai_common
 
     monkeypatch.setattr(
         seeded_store,
@@ -323,7 +323,7 @@ async def test_action_schemas_dedupe_and_skip_non_string_ids(
     async def fake_schema(_hass: HomeAssistant, _service: str) -> dict:
         return {"fields": {}}
 
-    monkeypatch.setattr(ai_bundle, "get_service_schema", fake_schema)
+    monkeypatch.setattr(ai_common, "get_service_schema", fake_schema)
 
     bundle = await ai_bundle.build_ai_bundle(hass)
 
@@ -334,14 +334,14 @@ async def test_action_schemas_dedupe_and_skip_non_string_ids(
 async def test_action_schemas_tolerate_fetch_errors(
     hass: HomeAssistant, seeded_store: AmbienceStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from custom_components.ambience import ai_bundle
+    from custom_components.ambience import ai_bundle, ai_common
 
     monkeypatch.setattr(seeded_store, "get_exposed_actions", lambda: [{"id": "light.turn_on"}])
 
     async def boom(_hass: HomeAssistant, _service: str) -> dict:
         raise RuntimeError("service registry exploded")
 
-    monkeypatch.setattr(ai_bundle, "get_service_schema", boom)
+    monkeypatch.setattr(ai_common, "get_service_schema", boom)
 
     bundle = await ai_bundle.build_ai_bundle(hass)
 

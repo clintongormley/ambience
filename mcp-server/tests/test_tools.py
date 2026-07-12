@@ -4,7 +4,7 @@ import re
 import pytest
 from conftest import FakeClient
 
-from ambience_mcp import tools
+from ambience_mcp import budget, tools
 from ambience_mcp.ha_client import HACommandError
 from ambience_mcp.ledger import PreviewLedger, fingerprint
 
@@ -253,10 +253,117 @@ async def test_invalid_preview_does_not_record_a_usable_token():
         await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
 
 
+def _realistic_scene(prefix: str, i: int) -> dict:
+    # Sized to resemble a real scene body (predicate + a few actions with
+    # targets/data), not a toy fixture — the measured-on-a-real-house case this
+    # guards against is a full-scope replace busting the budget because every
+    # scene appears twice (removed + added).
+    return {
+        "name": f"{prefix} scene {i}",
+        "category": "lighting",
+        "when": {
+            "all": [
+                {"lux": {"max": 40}},
+                {"time": {"after": "18:00:00", "before": "23:30:00"}},
+                {"people": {"home": ["person.alice", "person.bob"]}},
+                {"day": {"any": ["mon", "tue", "wed", "thu", "fri"]}},
+            ]
+        },
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "target": {"entity_id": f"light.bedroom_lamp_{i}"},
+                "data": {"brightness_pct": 40 + i, "color_temp_kelvin": 2700, "transition": 2},
+            },
+            {
+                "service": "media_player.volume_set",
+                "target": {"entity_id": "media_player.bedroom"},
+                "data": {"volume_level": 0.2},
+            },
+            {
+                "service": "climate.set_temperature",
+                "target": {"entity_id": "climate.bedroom"},
+                "data": {"temperature": 20.5},
+            },
+        ],
+    }
+
+
+async def test_preview_write_summarises_a_wholesale_21_scene_scope_replace():
+    # The measured real-world case this feature exists for: redoing every scene
+    # in a scope lists each one TWICE (once removed, once added), which can bust
+    # the budget on a perfectly normal request. Today that would come back as
+    # {"error": "result_too_large"} — refused outright. It must now fit AND be
+    # flagged as summarised, never silently missing a scene.
+    scope = {"kind": "area", "id": "bedroom"}
+    current = [_realistic_scene("Old", i) for i in range(21)]
+    proposed = [_realistic_scene("New", i) for i in range(21)]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": current},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    ledger = PreviewLedger()
+
+    result = await tools.preview_write(client, scope, proposed, ledger)
+
+    assert result["valid"] is True
+    assert result["diff_summarised"] is True
+    assert result["notice"]
+    assert len(result["diff"]["removed"]) == 21
+    assert len(result["diff"]["added"]) == 21
+    assert {e["name"] for e in result["diff"]["removed"]} == {s["name"] for s in current}
+    assert {e["name"] for e in result["diff"]["added"]} == {s["name"] for s in proposed}
+    assert budget.size_of(result) <= budget.max_result_chars()
+    # The token still applies to the full (un-summarised) scene list, so a
+    # human approving the summarised diff can still actually apply the write.
+    assert result["confirm_token"] == fingerprint(scope, proposed)
+    ledger2 = PreviewLedger()
+    ledger2.record(result["confirm_token"])
+    apply_client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": proposed}}})
+    applied = await tools.apply_write(
+        apply_client, scope, proposed, result["confirm_token"], ledger2
+    )
+    assert applied["ok"] is True
+
+
 async def test_list_traces_passes_limit():
     client = FakeClient({"ambience/traces/list": {"traces": []}})
     await tools.list_traces(client, limit=5)
-    assert client.calls == [{"type": "ambience/traces/list", "limit": 5}]
+    assert client.calls == [{"type": "ambience/traces/list", "redact": True, "limit": 5}]
+
+
+async def test_list_traces_always_asks_for_redaction():
+    # ambience/traces/list is unredacted by default (the HA panel needs the raw
+    # feed) — this tool leaves the house for an external AI, so it must always
+    # request the redacted view, with or without an explicit limit.
+    client = FakeClient({"ambience/traces/list": {"traces": []}})
+    await tools.list_traces(client)
+    assert client.calls == [{"type": "ambience/traces/list", "redact": True}]
+
+
+async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(monkeypatch):
+    # ambience/traces/list has no default cap on the backend, so an unguarded MCP
+    # tool could hand back the whole (possibly huge) buffer — the exact unbounded
+    # result this module exists to prevent, reached through a different tool.
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/traces/list": {
+                "traces": [{"unit": f"u{i}", "reason": "x" * 100} for i in range(50)]
+            }
+        }
+    )
+
+    result = await tools.list_traces(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["omitted"] > 0
+    assert result["notice"]
 
 
 async def test_dry_run_house_uses_house_selector():
@@ -302,24 +409,6 @@ async def test_get_scope_keeps_priority_and_pinned_alongside_rank():
     assert scene["pinned"] is True
 
 
-async def test_get_context_ranks_scenes_in_every_bundle_scope():
-    bundle = {
-        "catalog": {"areas": []},
-        "config": {
-            "areas": {
-                "lr": {"scenes": [{"name": "A", "category": "c"}, {"name": "B", "category": "c"}]}
-            },
-            "floors": {"g": {"scenes": [{"name": "F", "category": "c"}]}},
-            "house": {"scenes": [{"name": "H", "category": "c"}]},
-        },
-    }
-    client = FakeClient({"ambience/ai_bundle": bundle})
-    result = await tools.get_context(client)
-    assert [s["rank"] for s in result["config"]["areas"]["lr"]["scenes"]] == [1, 2]
-    assert result["config"]["floors"]["g"]["scenes"][0]["rank"] == 1
-    assert result["config"]["house"]["scenes"][0]["rank"] == 1
-
-
 async def test_get_scope_leaves_non_dict_scenes_untouched():
     # Ranking is a convenience, not load-bearing. If a future bundle changed a
     # scenes element's shape, ranking must skip and return the list untouched
@@ -340,17 +429,161 @@ async def test_get_scope_skips_ranking_for_whole_list_when_any_scene_non_dict():
     assert "rank" not in result["scenes"][0]
 
 
-async def test_get_context_still_warns_when_scene_shape_unrecognised():
-    # The fail-open promise must hold end to end: a too-new bundle whose scenes no
-    # longer match the expected shape must still reach the format warning, not crash
-    # in the rank annotation before the warning is ever attached.
-    newer = tools.SUPPORTED_AI_BUNDLE + 1
-    bundle = {"ambience_ai_bundle": newer, "config": {"house": {"scenes": ["sceneref-1"]}}}
-    client = FakeClient({"ambience/ai_bundle": bundle})
+async def test_get_context_reads_ai_context_not_the_fat_bundle():
+    client = FakeClient(
+        {"ambience/ai_context": {"ambience_ai_context": 1, "catalog": {"entity_summary": {}}}}
+    )
+
     result = await tools.get_context(client)
+
+    assert client.calls == [{"type": "ambience/ai_context"}]
+    assert result["ambience_ai_context"] == 1
+
+
+async def test_get_context_on_an_old_backend_says_to_upgrade():
+    client = FakeClient({"ambience/ai_context": HACommandError("unknown_command", "nope")})
+
+    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
+        await tools.get_context(client)
+
+
+async def test_get_context_warns_when_the_backend_is_newer_than_us():
+    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 99}})
+
+    result = await tools.get_context(client)
+
     assert "warning" in result
-    assert str(newer) in result["warning"]  # pins the format branch, not the version branch
-    assert result["config"]["house"]["scenes"] == ["sceneref-1"]
+    assert "ambience-mcp" in result["warning"]
+
+
+async def test_get_context_does_not_warn_when_the_backend_format_matches():
+    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 1}})
+
+    result = await tools.get_context(client)
+
+    assert "warning" not in result
+
+
+async def test_get_context_does_not_warn_when_the_format_field_is_absent():
+    client = FakeClient({"ambience/ai_context": {}})
+
+    result = await tools.get_context(client)
+
+    assert "warning" not in result
+
+
+async def test_get_context_propagates_other_command_errors():
+    # Mirrors test_get_guide_propagates_other_command_errors: only unknown_command
+    # is converted to a ToolError; every other HACommandError must pass through
+    # untouched rather than be swallowed or misreported.
+    client = FakeClient({"ambience/ai_context": HACommandError("validation_error", "boom")})
+    with pytest.raises(HACommandError):
+        await tools.get_context(client)
+
+
+async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/ai_context": {
+                "ambience_ai_context": 1,
+                "actions": {
+                    "exposed": [{"id": f"light.a{i}"} for i in range(10)],
+                    "schemas": {f"light.a{i}": {"f": "x" * 500} for i in range(10)},
+                },
+            }
+        }
+    )
+
+    result = await tools.get_context(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["schemas_omitted"]
+
+
+async def test_find_entities_forwards_only_the_given_filters():
+    client = FakeClient({"ambience/entities/find": {"entities": [], "total_matches": 0}})
+
+    await tools.find_entities(client, domain="light", area_id="kitchen")
+
+    assert client.calls == [
+        {"type": "ambience/entities/find", "domain": "light", "area_id": "kitchen"}
+    ]
+
+
+async def test_find_entities_omits_unset_filters_entirely():
+    # Sending explicit nulls would make the backend's vol.Optional pointless.
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client)
+
+    assert client.calls == [{"type": "ambience/entities/find"}]
+
+
+async def test_find_entities_forwards_paging():
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client, query="lux", limit=10, cursor=20)
+
+    assert client.calls == [
+        {"type": "ambience/entities/find", "query": "lux", "limit": 10, "cursor": 20}
+    ]
+
+
+async def test_find_entities_forwards_a_zero_cursor():
+    # A zero cursor is falsy but legitimately SET and must be forwarded.
+    # If the filter check were "simplified" from `if value is not None` to
+    # `if value`, cursor=0 would be silently dropped, breaking pagination.
+    client = FakeClient({"ambience/entities/find": {"entities": []}})
+
+    await tools.find_entities(client, cursor=0)
+
+    assert client.calls == [{"type": "ambience/entities/find", "cursor": 0}]
+
+
+async def test_find_entities_trims_an_oversized_page_and_repoints_the_cursor(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "2000")
+    client = FakeClient(
+        {
+            "ambience/entities/find": {
+                "entities": [
+                    {"entity_id": f"light.l{i:03d}", "name": "n" * 100} for i in range(50)
+                ],
+                "total_matches": 500,
+                "offset": 0,
+                "returned": 50,
+                "cursor": 50,
+                "truncated": True,
+            }
+        }
+    )
+
+    result = await tools.find_entities(client)
+
+    from ambience_mcp import budget
+
+    assert budget.size_of(result) <= 2000
+    assert result["cursor"] == result["returned"]  # offset 0 + kept
+    assert result["truncated"] is True
+
+
+async def test_find_entities_on_an_old_backend_says_to_upgrade():
+    # Mirrors test_get_context_on_an_old_backend_says_to_upgrade: find_entities is
+    # just as load-bearing as get_context and must fail the same actionable way
+    # against a pre-ai_context backend, not surface a raw unknown_command.
+    client = FakeClient({"ambience/entities/find": HACommandError("unknown_command", "nope")})
+
+    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
+        await tools.find_entities(client)
+
+
+async def test_find_entities_propagates_other_command_errors():
+    client = FakeClient({"ambience/entities/find": HACommandError("validation_error", "boom")})
+
+    with pytest.raises(HACommandError):
+        await tools.find_entities(client)
 
 
 async def test_preview_write_strips_rank_before_backend():
@@ -682,36 +915,3 @@ async def test_apply_write_fails_open_when_probe_unsupported():
     )
     result = await tools.apply_write(client, scope, scenes, token, ledger)
     assert result["ok"] is True
-
-
-async def test_get_context_warns_when_backend_bundle_format_is_newer():
-    newer = tools.SUPPORTED_AI_BUNDLE + 1
-    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": newer}})
-    result = await tools.get_context(client)
-    assert "warning" in result
-    assert str(newer) in result["warning"]
-
-
-async def test_get_context_no_warning_when_backend_bundle_format_supported():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_ai_bundle": tools.SUPPORTED_AI_BUNDLE}})
-    result = await tools.get_context(client)
-    assert "warning" not in result
-
-
-async def test_get_context_no_warning_when_bundle_format_absent():
-    client = FakeClient({"ambience/ai_bundle": {"config": {}}})
-    result = await tools.get_context(client)
-    assert "warning" not in result
-
-
-async def test_get_context_warns_when_backend_older_than_min():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.0.0"}})
-    result = await tools.get_context(client)
-    assert "warning" in result
-    assert "1.0.0" in result["warning"]
-
-
-async def test_get_context_no_warning_when_backend_at_min():
-    client = FakeClient({"ambience/ai_bundle": {"ambience_version": "1.1.0"}})
-    result = await tools.get_context(client)
-    assert "warning" not in result

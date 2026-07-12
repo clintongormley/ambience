@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from .budget import fit_context, fit_entities, fit_preview, fit_traces
 from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
 
-SUPPORTED_AI_BUNDLE = 1
-"""Highest `ambience_ai_bundle` structure version this server understands. A
+SUPPORTED_AI_CONTEXT = 1
+"""Highest `ambience_ai_context` structure version this server understands. A
 backend reporting a higher value is newer than this server, so get_context
 attaches a `warning` telling the user to update it."""
 
@@ -108,41 +109,57 @@ def _strip_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{k: v for k, v in scene.items() if k != "rank"} for scene in scenes]
 
 
-def _iter_scope_configs(config: dict[str, Any]):
-    """Yield each scope config ({"scenes": [...]}) in a bundle's config: every
-    area, every floor, and the house."""
-    for group_key in ("areas", "floors"):
-        group = config.get(group_key)
-        if isinstance(group, dict):
-            yield from (cfg for cfg in group.values() if isinstance(cfg, dict))
-    house = config.get("house")
-    if isinstance(house, dict):
-        yield house
+def _unavailable_message(command: str) -> str:
+    """The sentence shown when a command doesn't exist on the connected backend
+    yet — same wording for every "your Ambience is too old" case, command name
+    swapped in. See `_command_or_upgrade`."""
+    return (
+        f"Your Ambience is too old for this ambience-mcp: it does not serve {command}. "
+        "Upgrade Ambience, or pin an older ambience-mcp."
+    )
+
+
+async def _command_or_upgrade(client: Any, command: str, **payload: Any) -> dict[str, Any]:
+    """Run an HA command that only exists on a recent-enough Ambience, turning
+    the backend's generic `unknown_command` into an actionable ToolError that
+    names the command and tells the model what to do about it. Every other
+    HACommandError passes through untouched — only "the backend predates this
+    command" gets rewritten; a real validation/internal error must reach the
+    caller as-is.
+
+    Shared by `get_context` and `find_entities`, which used to each carry an
+    identical try/except doing this by hand. `get_guide` has a similar check
+    but returns `{"unavailable": True, ...}` instead of raising, so it is left
+    alone rather than folded in here.
+    """
+    try:
+        return await client.command(command, **payload)
+    except HACommandError as exc:
+        if exc.code == "unknown_command":
+            raise ToolError(_unavailable_message(command)) from exc
+        raise
 
 
 async def get_context(client: Any) -> dict[str, Any]:
-    bundle = await client.command("ambience/ai_bundle")
-    config = bundle.get("config")
-    if isinstance(config, dict):
-        for scope_cfg in _iter_scope_configs(config):
-            if isinstance(scope_cfg.get("scenes"), list):
-                scope_cfg["scenes"] = _with_ranks(scope_cfg["scenes"])
-    ambver = _parse_version(bundle.get("ambience_version"))
-    backend_format = bundle.get("ambience_ai_bundle")
-    if ambver is not None and ambver < MIN_AMBIENCE_VERSION:
-        bundle["warning"] = (
-            f"Your Ambience ({bundle.get('ambience_version')}) is older than this MCP "
-            f"server needs (>= {_version_str(MIN_AMBIENCE_VERSION)}). Reads work, but "
-            "writes will be refused — update Ambience, or pin an older ambience-mcp."
+    """The bounded authoring context: counts, not rows.
+
+    Reads `ambience/ai_context`, NOT the fat `ambience/ai_bundle` — that one still
+    exists for the download-and-paste flow, where the AI has no tools and needs
+    everything inline, but at ~90k tokens it cannot be returned as a tool result.
+    Entity rows come from `find_entities`, scene lists from `get_scope`, traces
+    from `list_traces`.
+    """
+    context = await _command_or_upgrade(client, "ambience/ai_context")
+
+    backend_format = context.get("ambience_ai_context")
+    if isinstance(backend_format, int) and backend_format > SUPPORTED_AI_CONTEXT:
+        context["warning"] = (
+            f"This Ambience install speaks AI-context format {backend_format}, but this "
+            f"MCP server understands up to {SUPPORTED_AI_CONTEXT}. The server is out of "
+            "date and some fields may be missing — ask the user to restart their MCP "
+            "client, or pin a newer ambience-mcp."
         )
-    elif isinstance(backend_format, int) and backend_format > SUPPORTED_AI_BUNDLE:
-        bundle["warning"] = (
-            f"This Ambience install speaks AI-bundle format {backend_format}, but this "
-            f"MCP server understands up to {SUPPORTED_AI_BUNDLE}. The server is out of "
-            "date and some fields may be missing — ask the user to restart Claude, or "
-            "pin a newer ambience-mcp source."
-        )
-    return bundle
+    return fit_context(context)
 
 
 async def get_scope(client: Any, scope: dict[str, Any]) -> dict[str, Any]:
@@ -344,14 +361,16 @@ async def preview_write(
     # so apply_write rejects it until the caller fixes the problem.
     if valid:
         ledger.record(token)
-    return {
-        "valid": valid,
-        "errors": errors,
-        "unknown_categories": unknown,
-        "creating_categories": creating,
-        "diff": changes,
-        "confirm_token": token,
-    }
+    return fit_preview(
+        {
+            "valid": valid,
+            "errors": errors,
+            "unknown_categories": unknown,
+            "creating_categories": creating,
+            "diff": changes,
+            "confirm_token": token,
+        }
+    )
 
 
 async def apply_write(
@@ -395,11 +414,50 @@ async def apply_write(
     )
 
 
+async def find_entities(
+    client: Any,
+    query: str | None = None,
+    domain: str | list[str] | None = None,
+    area_id: str | list[str] | None = None,
+    device_class: str | list[str] | None = None,
+    limit: int | None = None,
+    cursor: int | None = None,
+) -> dict[str, Any]:
+    """Search the live entity catalog, one bounded page at a time.
+
+    Only the filters the caller actually set are forwarded — sending explicit
+    nulls would defeat the backend's `vol.Optional` schema.
+    """
+    payload: dict[str, Any] = {
+        key: value
+        for key, value in (
+            ("query", query),
+            ("domain", domain),
+            ("area_id", area_id),
+            ("device_class", device_class),
+            ("limit", limit),
+            ("cursor", cursor),
+        )
+        if value is not None
+    }
+    result = await _command_or_upgrade(client, "ambience/entities/find", **payload)
+    return fit_entities(result)
+
+
 async def list_traces(client: Any, limit: int | None = None) -> dict[str, Any]:
-    payload: dict[str, Any] = {}
+    """Recent scene-evaluation traces, always redacted.
+
+    `ambience/traces/list` is unredacted by default because the HA panel
+    consumes it and needs the real detail — but a trace can carry presence
+    causes (zone names), rendered-template location detail, and unredacted
+    alarm codes/lock PINs in dispatched action params. This tool leaves the
+    house for an external AI, so it always asks for the same redaction the AI
+    bundle applies (`redact=True`), never the panel's raw feed.
+    """
+    payload: dict[str, Any] = {"redact": True}
     if limit is not None:
         payload["limit"] = limit
-    return await client.command("ambience/traces/list", **payload)
+    return fit_traces(await client.command("ambience/traces/list", **payload))
 
 
 async def list_categories(client: Any) -> dict[str, Any]:

@@ -7,6 +7,7 @@ them, and a lean surface keeps the per-turn context footprint small."""
 from __future__ import annotations
 
 import functools
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -20,16 +21,32 @@ from .ledger import PreviewLedger
 
 
 def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """Wrap a tool coroutine so its return value always passes through
+    """Wrap a tool callable so its return value always passes through
     `budget.fit_result` before it reaches the client. Not something a tool
     author calls themselves — `_BoundedFastMCP.add_tool` below applies it to
-    every registered tool automatically."""
+    every registered tool automatically.
+
+    FastMCP supports both sync and async tool functions, so this picks the
+    matching wrapper shape via `inspect.iscoroutinefunction` — awaiting a sync
+    function's return value directly (rather than the function itself) would
+    raise at call time. Every tool registered on this server today is async,
+    so a sync tool has never actually hit this, but the whole point of
+    `_BoundedFastMCP` is that the guard applies no matter how a tool is
+    registered, so it must handle both."""
+
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            return fit_result(await fn(*args, **kwargs))
+
+        return async_wrapper
 
     @functools.wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return fit_result(await fn(*args, **kwargs))
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        return fit_result(fn(*args, **kwargs))
 
-    return wrapper
+    return sync_wrapper
 
 
 class _BoundedFastMCP(FastMCP):

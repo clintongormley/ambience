@@ -30,7 +30,7 @@ async def test_ai_context_returns_a_summary_not_entity_rows(
 
     assert msg["success"]
     result = msg["result"]
-    assert result["ambience_ai_context"] == 1
+    assert "ambience_ai_context" not in result
     assert "entity_summary" in result["catalog"]
     assert "entities" not in result["catalog"]
     assert "traces" not in result

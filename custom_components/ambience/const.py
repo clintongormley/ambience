@@ -40,11 +40,6 @@ fetched the fat bundle and blew the AI client's token limit on any real house. A
 protocol number cannot say that; this can.
 """
 
-AI_CONTEXT_VERSION = 1
-"""Structure version of the BOUNDED MCP export (`ambience/ai_context`). Versioned
-independently of AI_BUNDLE_VERSION: the fat download-and-paste bundle and the slim
-MCP context are different shapes for different consumers and evolve separately."""
-
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"

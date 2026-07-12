@@ -27,7 +27,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .ai_common import action_schemas, ambience_version, areas, floors
-from .const import AI_CONTEXT_VERSION, DATA_STORE, DOMAIN
+from .const import DATA_STORE, DOMAIN
 from .entity_catalog import entity_rows, entity_summary
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
@@ -61,7 +61,6 @@ async def build_ai_context(hass: HomeAssistant) -> dict[str, Any]:
     store = hass.data[DOMAIN][DATA_STORE]
     exposed = store.get_exposed_actions()
     return {
-        "ambience_ai_context": AI_CONTEXT_VERSION,
         "ambience_version": await ambience_version(hass),
         "generated_at": dt_util.utcnow().isoformat(),
         "catalog": {

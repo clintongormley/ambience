@@ -110,8 +110,8 @@ async def test_traces_list_no_buffer_returns_empty(hass, installed, hass_ws_clie
 
 def _seed_pii_trace(hass) -> BufferSink:
     """A trace whose cause is a person entity's zone change and whose action
-    is a lock unlock carrying a PIN — the two PII/secret carriers FIX 4
-    guards: the unredacted feed must show them (panel behaviour unchanged),
+    is a lock unlock carrying a PIN — the two PII/secret carriers this route
+    can leak: the unredacted feed must show them (panel behaviour unchanged),
     the redacted feed must not (what the MCP server always requests)."""
     buffer = _seed_buffer(hass)
     buffer.emit(

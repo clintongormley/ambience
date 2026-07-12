@@ -1443,8 +1443,8 @@ async def _ws_ai_context(
     msg: dict[str, Any],
 ) -> None:
     """The BOUNDED authoring export an MCP client reads: the same catalog, actions
-    and definitions as the AI bundle, but with entity COUNTS instead of 1,534 rows,
-    scene counts instead of scene lists, and no traces — because an MCP client has
+    and definitions as the AI bundle, but with entity COUNTS instead of thousands
+    of rows, scene counts instead of scene lists, and no traces — because an MCP client has
     ambience/entities/find, ambience/{scope}/get and ambience/traces/list to fetch
     those on demand, and a hard cap on one result's size. The fat bundle stays for
     the download-and-paste flow, where the AI has no tools."""

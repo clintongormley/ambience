@@ -156,8 +156,8 @@ async def get_context(client: Any) -> dict[str, Any]:
         context["warning"] = (
             f"This Ambience install speaks AI-context format {backend_format}, but this "
             f"MCP server understands up to {SUPPORTED_AI_CONTEXT}. The server is out of "
-            "date and some fields may be missing — ask the user to restart Claude, or "
-            "pin a newer ambience-mcp."
+            "date and some fields may be missing — ask the user to restart their MCP "
+            "client, or pin a newer ambience-mcp."
         )
     return fit_context(context)
 

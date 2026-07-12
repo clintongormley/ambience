@@ -74,8 +74,9 @@ def entity_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Counts, not rows — what the MCP context carries in place of the catalog.
 
     This is the model's *discovery* mechanism: it is how an AI learns the house
-    has five illuminance sensors without being handed 1,534 entities. Size is
-    O(domains + areas + device_classes), so it stays small at any house size.
+    has five illuminance sensors without being handed every entity in it (a real
+    house has thousands). Size is O(domains + areas + device_classes), so it
+    stays small at any house size.
 
     An entity with no area (or no device class) is absent from that map but still
     counted in `total` and `by_domain`, so the counts never lie about the whole.

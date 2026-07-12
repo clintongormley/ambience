@@ -128,8 +128,10 @@ def _split_device_classes(classes: set[str]) -> tuple[set[str], set[tuple[str, s
     (`"sensor.illuminance"`), because `sensor.occupancy` and
     `binary_sensor.occupancy` are different things. A value containing a `.` is
     that qualified form: split it and require BOTH the domain and the device
-    class to match. A value with no `.` is the bare, pre-existing form: it
-    matches the device class alone, regardless of domain.
+    class to match. A value with no `.` is the bare form (`"illuminance"`): it
+    matches the device class alone, regardless of domain. `find_entities`
+    accepts both, so a key read straight from `entity_summary` can be passed
+    back unchanged.
     """
     bare: set[str] = set()
     qualified: set[tuple[str, str]] = set()

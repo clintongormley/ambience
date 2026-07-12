@@ -408,7 +408,9 @@ real. Author against it. Shape:
 
 Presence/location data is redacted (person/device_tracker ids, zones, templates,
 workday/weather entities), so don't expect those values; reference people by the
-`person.*` ids you can still see in `catalog.entities`.
+`person.*` ids you can still see in `catalog.entities` (over MCP, where there is
+no `catalog.entities`, use `ambience_find_entities(domain="person")` instead —
+see "Over MCP: counts, not rows" below).
 
 ### Over MCP: counts, not rows
 

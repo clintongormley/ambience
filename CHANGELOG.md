@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.3] - 2026-07-12
+
 ### Added
 
 - The MCP server can now work with houses of any size. `ambience_get_context`

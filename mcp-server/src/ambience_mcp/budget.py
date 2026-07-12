@@ -5,10 +5,13 @@ already serves counts instead of rows, but two terms are still unbounded — a u
 can expose fifty actions (each schema ~1k chars), and a model can ask for a page
 of any size.
 
-Two layers enforce this. `fit_context`/`fit_entities`/`fit_traces` understand
-their tool's shape and DEGRADE it safely — truncating a paged/appendable list
-that is never written back wholesale, always announced with the way to get the
-rest. `fit_result`, the terminal backstop at the serialization boundary (see
+Two layers enforce this. `fit_context`/`fit_entities`/`fit_traces`/`fit_preview`
+understand their tool's shape and DEGRADE it safely — truncating a paged/
+appendable list that is never written back wholesale, always announced with
+the way to get the rest. `fit_preview` is the odd one out: `preview_write`'s
+diff is NOT appendable/truncatable (see its own docstring for why), so it
+degrades by summarising instead — same idea, different mechanism. `fit_result`,
+the terminal backstop at the serialization boundary (see
 `server.py`'s `_BoundedFastMCP`), has no such shape knowledge, so it never
 trims: a result still over budget when it reaches that boundary is replaced by
 a small, bounded error object instead. A silently truncated catalog is worse
@@ -24,6 +27,8 @@ import json
 import os
 from collections.abc import Callable
 from typing import Any
+
+from .diff import summarise_diff
 
 DEFAULT_MAX_RESULT_CHARS = 60_000
 """~15k tokens at a conservative 4 chars/token — well under a 25k-token client cap.
@@ -222,6 +227,50 @@ def fit_traces(result: dict[str, Any], budget: int | None = None) -> dict[str, A
         return {"returned": kept_len, "omitted": omitted, "notice": notice}
 
     return _trim_list_to_fit(result, "traces", limit, derive_fields)
+
+
+def fit_preview(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:
+    """Elide `preview_write`'s diff BODIES, never its ENTRIES, when the full diff
+    busts the budget.
+
+    `diff_scopes` lists full scene bodies, and replacing a whole scope lists
+    every scene TWICE (once in `removed`, once in `added`) — a normal
+    "redo my scenes" request can double the scope's size and bust the budget on
+    its own. Trimming here would be unsafe in the way `fit_result`'s docstring
+    warns about generic trims being unsafe: the diff is the surface a human
+    approves a write from, and `apply_write` REPLACES the whole scope, so
+    dropping an entry would let someone approve changes they never saw.
+
+    So this never drops an entry. It replaces `diff` with `summarise_diff(diff)`
+    — same `added`/`removed`/`updated` shape, same COUNT in each list, just
+    scene bodies swapped for compact identifiers (name/category, and which
+    fields changed for an update) — and leaves every other field, especially
+    `confirm_token`, untouched: the token still applies to the exact payload
+    previewed, and the summarised diff still lists every scene it covers.
+
+    If the summarised result is STILL over budget (pathological — thousands of
+    changed scenes), this leaves it alone; `fit_result`, the terminal backstop,
+    will replace it with the bounded error object. There is no second
+    truncation path here — see `fit_result`'s docstring for why a generic trim
+    of a still-oversized result is never safe.
+    """
+    limit = max_result_chars() if budget is None else budget
+    if size_of(result) <= limit:
+        return result
+    diff = result.get("diff")
+    if not isinstance(diff, dict):
+        return result  # nothing this strategy understands — leave it for fit_result
+    return {
+        **result,
+        "diff": summarise_diff(diff),
+        "diff_summarised": True,
+        "notice": (
+            "Scene bodies were elided from `diff` to fit the response budget. Every "
+            "changed scene is still listed (added/removed/updated, by name/category), "
+            "just without its full body. Use ambience_get_scope or ambience_dry_run to "
+            "inspect a specific scene's detail."
+        ),
+    }
 
 
 def fit_result(result: Any, budget: int | None = None) -> Any:

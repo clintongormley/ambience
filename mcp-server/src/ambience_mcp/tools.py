@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .budget import fit_context, fit_entities, fit_traces
+from .budget import fit_context, fit_entities, fit_preview, fit_traces
 from .diff import diff_scopes
 from .ha_client import HACommandError
 from .ledger import PreviewLedger, fingerprint
@@ -361,14 +361,16 @@ async def preview_write(
     # so apply_write rejects it until the caller fixes the problem.
     if valid:
         ledger.record(token)
-    return {
-        "valid": valid,
-        "errors": errors,
-        "unknown_categories": unknown,
-        "creating_categories": creating,
-        "diff": changes,
-        "confirm_token": token,
-    }
+    return fit_preview(
+        {
+            "valid": valid,
+            "errors": errors,
+            "unknown_categories": unknown,
+            "creating_categories": creating,
+            "diff": changes,
+            "confirm_token": token,
+        }
+    )
 
 
 async def apply_write(

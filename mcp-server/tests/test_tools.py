@@ -4,7 +4,7 @@ import re
 import pytest
 from conftest import FakeClient
 
-from ambience_mcp import tools
+from ambience_mcp import budget, tools
 from ambience_mcp.ha_client import HACommandError
 from ambience_mcp.ledger import PreviewLedger, fingerprint
 
@@ -251,6 +251,82 @@ async def test_invalid_preview_does_not_record_a_usable_token():
     # Token was returned for reference but never recorded, so apply is gated out.
     with pytest.raises(tools.ToolError, match="preview_write"):
         await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
+
+
+def _realistic_scene(prefix: str, i: int) -> dict:
+    # Sized to resemble a real scene body (predicate + a few actions with
+    # targets/data), not a toy fixture — the measured-on-a-real-house case this
+    # guards against is a full-scope replace busting the budget because every
+    # scene appears twice (removed + added).
+    return {
+        "name": f"{prefix} scene {i}",
+        "category": "lighting",
+        "when": {
+            "all": [
+                {"lux": {"max": 40}},
+                {"time": {"after": "18:00:00", "before": "23:30:00"}},
+                {"people": {"home": ["person.alice", "person.bob"]}},
+                {"day": {"any": ["mon", "tue", "wed", "thu", "fri"]}},
+            ]
+        },
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "target": {"entity_id": f"light.bedroom_lamp_{i}"},
+                "data": {"brightness_pct": 40 + i, "color_temp_kelvin": 2700, "transition": 2},
+            },
+            {
+                "service": "media_player.volume_set",
+                "target": {"entity_id": "media_player.bedroom"},
+                "data": {"volume_level": 0.2},
+            },
+            {
+                "service": "climate.set_temperature",
+                "target": {"entity_id": "climate.bedroom"},
+                "data": {"temperature": 20.5},
+            },
+        ],
+    }
+
+
+async def test_preview_write_summarises_a_wholesale_21_scene_scope_replace():
+    # The measured real-world case this feature exists for: redoing every scene
+    # in a scope lists each one TWICE (once removed, once added), which can bust
+    # the budget on a perfectly normal request. Today that would come back as
+    # {"error": "result_too_large"} — refused outright. It must now fit AND be
+    # flagged as summarised, never silently missing a scene.
+    scope = {"kind": "area", "id": "bedroom"}
+    current = [_realistic_scene("Old", i) for i in range(21)]
+    proposed = [_realistic_scene("New", i) for i in range(21)]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": current},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "lighting"}]},
+        }
+    )
+    ledger = PreviewLedger()
+
+    result = await tools.preview_write(client, scope, proposed, ledger)
+
+    assert result["valid"] is True
+    assert result["diff_summarised"] is True
+    assert result["notice"]
+    assert len(result["diff"]["removed"]) == 21
+    assert len(result["diff"]["added"]) == 21
+    assert {e["name"] for e in result["diff"]["removed"]} == {s["name"] for s in current}
+    assert {e["name"] for e in result["diff"]["added"]} == {s["name"] for s in proposed}
+    assert budget.size_of(result) <= budget.max_result_chars()
+    # The token still applies to the full (un-summarised) scene list, so a
+    # human approving the summarised diff can still actually apply the write.
+    assert result["confirm_token"] == fingerprint(scope, proposed)
+    ledger2 = PreviewLedger()
+    ledger2.record(result["confirm_token"])
+    apply_client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": proposed}}})
+    applied = await tools.apply_write(
+        apply_client, scope, proposed, result["confirm_token"], ledger2
+    )
+    assert applied["ok"] is True
 
 
 async def test_list_traces_passes_limit():

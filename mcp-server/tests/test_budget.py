@@ -364,3 +364,152 @@ def test_fit_result_does_not_mutate_the_input():
     budget.fit_result(result, budget=3_000)
 
     assert json.dumps(result) == before
+
+
+# fit_preview: preview_write's shape-aware strategy. Replacing a whole scope
+# lists every scene TWICE (once removed, once added), which can bust the
+# budget on a perfectly normal "redo my scenes" request. Unlike fit_entities/
+# fit_traces this never drops an ENTRY — only the scene BODY — because the
+# diff is the surface a human approves a destructive write from.
+
+
+def _preview_scene(prefix: str, i: int, size: int) -> dict:
+    return {"name": f"{prefix}{i}", "category": "c", "actions": "x" * size}
+
+
+def _preview(added: int, removed: int, updated: int, size: int) -> dict:
+    diff = {
+        "added": [_preview_scene("a", i, size) for i in range(added)],
+        "removed": [_preview_scene("r", i, size) for i in range(removed)],
+        "updated": [
+            {
+                "before": {**_preview_scene("u", i, size), "when": {"lux": 1}},
+                "after": {**_preview_scene("u", i, size), "when": {"lux": 2}},
+            }
+            for i in range(updated)
+        ],
+    }
+    return {
+        "valid": True,
+        "errors": None,
+        "unknown_categories": [],
+        "creating_categories": [],
+        "diff": diff,
+        "confirm_token": "tok-abc123",
+    }
+
+
+def test_fit_preview_leaves_a_small_result_untouched():
+    result = _preview(1, 1, 1, 10)
+
+    assert budget.fit_preview(result, budget=10_000) == result
+
+
+def test_fit_preview_summarises_when_over_budget_without_dropping_any_entry():
+    result = _preview(20, 20, 5, 300)
+    full_diff = result["diff"]
+    full_names = {s["name"] for s in full_diff["added"]} | {s["name"] for s in full_diff["removed"]}
+    assert budget.size_of(result) > 8_000  # sanity: this case really is over budget
+
+    fitted = budget.fit_preview(result, budget=8_000)
+
+    assert budget.size_of(fitted) <= 8_000
+    assert fitted["diff_summarised"] is True
+    assert fitted["notice"]  # announced, never silent
+    # The property that must never regress: every changed scene is still
+    # listed, by name — only the bodies were elided.
+    assert len(fitted["diff"]["added"]) == len(full_diff["added"])
+    assert len(fitted["diff"]["removed"]) == len(full_diff["removed"])
+    assert len(fitted["diff"]["updated"]) == len(full_diff["updated"])
+    summarised_names = {e["name"] for e in fitted["diff"]["added"]} | {
+        e["name"] for e in fitted["diff"]["removed"]
+    }
+    assert summarised_names == full_names
+
+
+def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
+    result = _preview(20, 20, 5, 300)
+
+    fitted = budget.fit_preview(result, budget=3_000)
+
+    assert fitted["confirm_token"] == result["confirm_token"]
+    assert fitted["valid"] == result["valid"]
+    assert fitted["errors"] == result["errors"]
+    assert fitted["unknown_categories"] == result["unknown_categories"]
+    assert fitted["creating_categories"] == result["creating_categories"]
+
+
+def test_fit_preview_updated_entries_carry_changed_fields_not_priority_or_pinned():
+    before = {
+        "name": "Evening",
+        "category": "c",
+        "actions": "off " * 100,
+        "priority": 5,
+        "pinned": True,
+    }
+    after = {
+        "name": "Evening",
+        "category": "c",
+        "actions": "on " * 100,
+        "priority": 99,
+        "pinned": False,
+    }
+    result = {
+        "valid": True,
+        "errors": None,
+        "unknown_categories": [],
+        "creating_categories": [],
+        "diff": {"added": [], "removed": [], "updated": [{"before": before, "after": after}]},
+        "confirm_token": "tok",
+    }
+
+    fitted = budget.fit_preview(result, budget=50)
+
+    entry = fitted["diff"]["updated"][0]
+    assert entry["changed_fields"] == ["actions"]
+
+
+def test_fit_preview_handles_an_unnamed_scene_without_crashing():
+    result = _preview(0, 0, 0, 0)
+    result["diff"] = {
+        "added": [{"category": "c", "actions": "x" * 5_000}],
+        "removed": [],
+        "updated": [],
+    }
+
+    fitted = budget.fit_preview(result, budget=50)
+
+    assert fitted["diff"]["added"] == [{"name": None, "category": "c", "index": 0}]
+
+
+def test_fit_preview_with_no_diff_key_returns_what_it_has():
+    result = {"other": "x" * 5_000}
+
+    assert budget.fit_preview(result, budget=100) == result
+
+
+def test_fit_preview_leaves_a_still_oversized_summary_for_fit_result_to_bound():
+    # Pathological: thousands of changed scenes, so even the summarised diff
+    # doesn't fit. fit_preview must not grow a second truncation path here —
+    # it hands back the (still oversized) summary, and fit_result, the
+    # terminal backstop, is the one that replaces it with the bounded error.
+    result = _preview(2_000, 0, 0, 10)
+
+    fitted = budget.fit_preview(result, budget=50)
+
+    assert fitted["diff_summarised"] is True
+    assert len(fitted["diff"]["added"]) == 2_000
+    assert budget.size_of(fitted) > 50
+
+    final = budget.fit_result(fitted, budget=50)
+
+    assert final["error"] == "result_too_large"
+
+
+def test_fit_preview_does_not_mutate_the_input():
+    result = _preview(20, 20, 5, 300)
+    before = json.dumps(result)
+
+    budget.fit_preview(result, budget=3_000)
+
+    assert json.dumps(result) == before

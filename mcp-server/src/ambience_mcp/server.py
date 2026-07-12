@@ -1,8 +1,9 @@
 """FastMCP glue: one connection, one preview ledger, eleven thin tool wrappers.
 
-Each wrapper delegates to ambience_mcp.tools; the docstring + type hints become
-the tool's MCP schema. Keep descriptions short — the client's tool-search reads
-them, and a lean surface keeps the per-turn context footprint small."""
+Each wrapper delegates to the protocol adapter the backend asked for (see
+`protocols/`); the docstring + type hints become the tool's MCP schema. Keep
+descriptions short — the client's tool-search reads them, and a lean surface keeps
+the per-turn context footprint small."""
 
 from __future__ import annotations
 
@@ -14,11 +15,13 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import tools
 from .budget import fit_result
 from .config import load_config
 from .ha_client import ReconnectingClient, connect
 from .ledger import PreviewLedger
+from .protocols import PROTOCOLS
+from .protocols.base import BaseProtocol
+from .tools import GuideCache
 
 
 def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -75,28 +78,33 @@ class _BoundedFastMCP(FastMCP):
 
 mcp = _BoundedFastMCP("ambience")
 _ledger = PreviewLedger()
-_guide_cache = tools.GuideCache()
+_guide_cache = GuideCache()
 _client: ReconnectingClient | None = None
 
 
 def _client_() -> ReconnectingClient:
     """The one HA connection. It reconnects and re-sends a command that never left
-    us (an HA restart closes the socket), so tools see a live link and never have
-    to reason about retry-safety themselves — see ReconnectingClient.
-
-    `supported_protocols` is hardcoded to {1} rather than read from a registry:
-    the `protocols/` adapter package (which will own the real `PROTOCOLS` mapping
-    and wire `.ready()`'s agreed protocol into an adapter) lands in the next task.
-    Until then this only has to match the one protocol the backend speaks today."""
+    us (an HA restart closes the socket), so tools see a live link and never have to
+    reason about retry-safety themselves — see ReconnectingClient."""
     global _client
     if _client is None:
         _client = ReconnectingClient(
             connect,
             load_config,
-            supported_protocols=frozenset({1}),
+            supported_protocols=frozenset(PROTOCOLS),
             mcp_version=version("ambience-mcp"),
         )
     return _client
+
+
+async def _protocol_() -> BaseProtocol:
+    """The adapter for whatever protocol this backend speaks.
+
+    `ready()` handshakes (once per connection) and raises IncompatibleError if the
+    pair cannot work together — so every tool fails with an actionable "upgrade
+    THIS side" message instead of half-working."""
+    client = _client_()
+    return PROTOCOLS[await client.ready()](client, _ledger, _guide_cache)
 
 
 @mcp.tool()
@@ -110,7 +118,7 @@ async def ambience_get_context() -> dict[str, Any]:
     ambience_find_entities to look up the actual entities you need, the summary to
     discover what exists, ambience_get_scope for a scope's scenes, and
     ambience_list_traces for traces."""
-    return await tools.get_context(_client_())
+    return await (await _protocol_()).get_context()
 
 
 @mcp.tool()
@@ -140,8 +148,8 @@ async def ambience_find_entities(
       the lux sensors        → device_class="illuminance"
       anything named 'lamp'  → query="lamp"
     """
-    return await tools.find_entities(
-        _client_(), query, domain, area_id, device_class, limit, cursor
+    return await (await _protocol_()).find_entities(
+        query, domain, area_id, device_class, limit, cursor
     )
 
 
@@ -151,7 +159,7 @@ async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
     scope = {"kind": "area"|"floor"|"house", "id": "<area_or_floor_id>"} (omit id for house).
     Each scene carries a per-category `rank` (1..N, evaluation order); present that
     plus the 📌 pin marker, never the raw internal `priority` number."""
-    return await tools.get_scope(_client_(), scope)
+    return await (await _protocol_()).get_scope(scope)
 
 
 @mcp.tool()
@@ -164,20 +172,20 @@ async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
     section=<name> to read one. Start with "Config schema" and "Condition
     cookbook"; read "Reading a diagnostic bundle" when diagnosing why a scene
     did not fire."""
-    return await tools.get_guide(_client_(), _guide_cache, section)
+    return await (await _protocol_()).get_guide(section)
 
 
 @mcp.tool()
 async def ambience_dry_run(scope: dict[str, Any]) -> dict[str, Any]:
     """Preview which scene currently wins for a scope, with the evaluation trace
     (including shadowing). Read-only. scope shape as in ambience_get_scope."""
-    return await tools.dry_run(_client_(), scope)
+    return await (await _protocol_()).dry_run(scope)
 
 
 @mcp.tool()
 async def ambience_validate(scenes: list[dict[str, Any]]) -> dict[str, Any]:
     """Structurally validate a proposed list of scenes (raises on invalid)."""
-    return await tools.validate(_client_(), scenes)
+    return await (await _protocol_()).validate(scenes)
 
 
 @mcp.tool()
@@ -194,7 +202,7 @@ async def ambience_preview_write(
     blocked (no usable token) — declare them here or create them with
     ambience_save_categories. Show the diff to the user; pass the token to
     ambience_apply_write to commit."""
-    return await tools.preview_write(_client_(), scope, scenes, _ledger, new_categories)
+    return await (await _protocol_()).preview_write(scope, scenes, new_categories)
 
 
 @mcp.tool()
@@ -214,9 +222,7 @@ async def ambience_apply_write(
     categories you did not mean to touch. Unlike a pasted import block there is no
     merge mode. So: ambience_get_scope first, carry forward every scene you mean to
     keep, and check the preview's `removed` list before committing."""
-    return await tools.apply_write(
-        _client_(), scope, scenes, confirm_token, _ledger, new_categories
-    )
+    return await (await _protocol_()).apply_write(scope, scenes, confirm_token, new_categories)
 
 
 @mcp.tool()
@@ -226,19 +232,19 @@ async def ambience_list_traces(limit: int | None = None) -> dict[str, Any]:
     If the list is too big for one result, the oldest traces are dropped and the
     result carries `omitted` and a `notice` saying so — ask again with a smaller
     `limit` to see a different slice."""
-    return await tools.list_traces(_client_(), limit)
+    return await (await _protocol_()).list_traces(limit)
 
 
 @mcp.tool()
 async def ambience_list_categories() -> dict[str, Any]:
     """List the scene categories (id + name + icon/color)."""
-    return await tools.list_categories(_client_())
+    return await (await _protocol_()).list_categories()
 
 
 @mcp.tool()
 async def ambience_save_categories(categories: list[dict[str, Any]]) -> dict[str, Any]:
     """Create/update scene categories. Each item = {id, name, icon?, color?}."""
-    return await tools.save_categories(_client_(), categories)
+    return await (await _protocol_()).save_categories(categories)
 
 
 def main() -> None:

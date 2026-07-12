@@ -24,6 +24,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- Asking the AI something while Home Assistant is still starting up no longer
+    latches a permanent, wrong *"Update Ambience"* on a perfectly current
+    Ambience. Ambience registers its websocket commands when it finishes setting
+    up, which is well after Home Assistant starts accepting connections — so for
+    a few seconds after every restart the handshake gets "no such command",
+    which is indistinguishable from a genuinely old Ambience. That verdict is no
+    longer cached: the next tool call re-asks on the same connection, so the
+    moment Ambience is up the server heals itself, with no reconnect and no
+    MCP-server restart. (A genuinely old Ambience still gets the "update
+    Ambience" message on every call, which is still the fix.)
 - The "upgrade `ambience-mcp`" message now also tells you to remove any version
     **pin** from your MCP config. Without that, the rest of the advice (clean
     the cache, restart) is a no-op for anyone who pinned a version — the pin

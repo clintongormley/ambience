@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 from packaging.version import InvalidVersion, Version
 
@@ -98,6 +98,28 @@ def _upgrade_mcp(reason: str) -> str:
         "is not enough.) If your MCP config pins a version (e.g. args "
         '`["ambience-mcp@0.2.0"]`), remove the pin — a pinned version never upgrades.'
     )
+
+
+class _Verdict(NamedTuple):
+    """The outcome of one handshake: the incompatibility message (None when the pair
+    can work together), plus whether that answer may be CACHED for the life of the
+    connection.
+
+    Every verdict derived from a payload Ambience actually SENT is `sticky`: it can only
+    change when the backend changes, which means restarting HA, which drops the socket —
+    so the next connection re-handshakes anyway.
+
+    A verdict derived from Ambience's SILENCE is not. `ambience/mcp/hello` is registered
+    when Ambience's config entry sets up; HA's websocket API and auth come up in early
+    bootstrap, long before any custom integration. So after every HA restart there is a
+    window in which an authenticated socket gets `unknown_command` from a perfectly
+    current Ambience. Caching that would tell such a user to "update Ambience" for the
+    life of the connection — and following the README's remedy (update, restart HA, ask
+    again) walks them straight back into the same window. It must be re-derived instead.
+    """
+
+    message: str | None
+    sticky: bool
 
 
 class Transport(Protocol):
@@ -249,16 +271,47 @@ class ReconnectingClient:
         self._supported = supported_protocols
         self._mcp_version = mcp_version
         self._verdict: str | None = None  # the incompatibility message, if any
+        # Whether `_verdict` may be cached for the life of this connection. See
+        # `_Verdict`: a verdict derived from Ambience's silence must be re-derived.
+        self._verdict_sticky = True
         self._protocol: int | None = None
 
-    async def _negotiate(self, client: HAClient) -> str | None:
-        """Handshake over a freshly-connected client. Returns the incompatibility
-        message, or None when the pair can work together."""
+    def _own_version(self) -> Version:
+        """This ambience-mcp's own version, parsed.
+
+        Split out from the backend's floor because the two unparseable cases have
+        OPPOSITE right answers: a floor we cannot read is "no floor stated" (conservative
+        — the backend never meant to refuse anyone we cannot understand it as refusing),
+        while a version of OURSELVES we cannot read is a packaging bug in this build.
+        Swallowing that one — as a single try/except around both would — silently
+        disables the refusal floor entirely, which is the backend's strongest safety
+        valve. Ignore the backend's garbage; fail loudly on our own.
+        """
+        try:
+            return Version(self._mcp_version)
+        except InvalidVersion as exc:
+            raise RuntimeError(
+                f"ambience-mcp cannot parse its OWN version ({self._mcp_version!r}), so "
+                f"the minimum-version floor this Ambience declares cannot be enforced. "
+                f"This is a packaging bug in ambience-mcp, not a problem with Ambience."
+            ) from exc
+
+    async def _negotiate(self, client: HAClient) -> _Verdict:
+        """Handshake over `client`. Returns the incompatibility message (None when the
+        pair can work together) and whether that answer may be cached — see `_Verdict`."""
         try:
             hello = await client.command("ambience/mcp/hello")
         except HACommandError as exc:
             if exc.code == "unknown_command":
-                return _UPDATE_AMBIENCE  # predates the handshake entirely
+                # Either a genuinely pre-handshake Ambience, or — indistinguishably, and
+                # far more often — a current one whose config entry has not finished
+                # setting up yet (HA answers `unknown_command` for the whole startup
+                # window; see `_Verdict`). The message must still be raised on every call,
+                # because for the old Ambience it is the correct and only remedy. What it
+                # must NOT be is CACHED: `sticky=False` re-derives it on the next tool
+                # call, over this same healthy socket, so a current Ambience heals the
+                # instant its setup completes — no reconnect, no MCP-server restart.
+                return _Verdict(_UPDATE_AMBIENCE, sticky=False)
             raise
 
         # The backend refusing THIS client outranks any protocol question: it is the
@@ -266,13 +319,16 @@ class ReconnectingClient:
         floor = hello.get("min_mcp_version")
         if isinstance(floor, str):
             try:
-                too_old = Version(self._mcp_version) < Version(floor)
+                required = Version(floor)
             except InvalidVersion:
-                too_old = False  # no floor we understand == no floor stated
-            if too_old:
-                return _upgrade_mcp(
-                    f"This Ambience needs ambience-mcp >= {floor}; you are running "
-                    f"{self._mcp_version}."
+                required = None  # no floor we understand == no floor stated
+            if required is not None and self._own_version() < required:
+                return _Verdict(
+                    _upgrade_mcp(
+                        f"This Ambience needs ambience-mcp >= {floor}; you are running "
+                        f"{self._mcp_version}."
+                    ),
+                    sticky=True,
                 )
 
         protocol = hello.get("protocol")
@@ -280,19 +336,51 @@ class ReconnectingClient:
         # replying {"protocol": true} would otherwise "agree" a protocol of True —
         # exclude it explicitly so a bool is treated as missing/invalid.
         if not isinstance(protocol, int) or isinstance(protocol, bool):
-            return _UPDATE_AMBIENCE  # pre-protocol: silence never grants permission
+            # pre-protocol: silence never grants permission. Sticky, unlike the
+            # `unknown_command` above: the backend ANSWERED, it just said nothing we
+            # can use, and that answer cannot change without a restart.
+            return _Verdict(_UPDATE_AMBIENCE, sticky=True)
+        if not self._supported:
+            # Unreachable in a shipped build (Gate 1 refuses a repo whose PROTOCOLS is
+            # empty), but `supported_protocols` is the one value this class does not
+            # derive itself — it is INJECTED. Empty, `max()` below would raise a bare
+            # ValueError on every tool call, replacing the actionable message this whole
+            # design exists to deliver with a traceback.
+            return _Verdict(
+                _upgrade_mcp("This ambience-mcp ships no MCP protocol adapters."),
+                sticky=True,
+            )
         if protocol in self._supported:
             self._protocol = protocol
-            return None
+            return _Verdict(None, sticky=True)
         if protocol > max(self._supported):
-            return _upgrade_mcp(
-                f"This Ambience speaks MCP protocol {protocol}; this ambience-mcp "
-                f"speaks {sorted(self._supported)}."
+            return _Verdict(
+                _upgrade_mcp(
+                    f"This Ambience speaks MCP protocol {protocol}; this ambience-mcp "
+                    f"speaks {sorted(self._supported)}."
+                ),
+                sticky=True,
             )
-        return _update_ambience(
-            f"This ambience-mcp no longer supports MCP protocol {protocol} (it speaks "
-            f"{sorted(self._supported)})."
+        return _Verdict(
+            _update_ambience(
+                f"This ambience-mcp no longer supports MCP protocol {protocol} (it speaks "
+                f"{sorted(self._supported)})."
+            ),
+            sticky=True,
         )
+
+    async def _handshake(self, client: HAClient) -> None:
+        """Negotiate over `client` and record the verdict. The caller holds `self._lock`.
+
+        Clears the previous verdict FIRST, so neither a stale one nor a half-set one can
+        survive a handshake that raises part-way through.
+        """
+        self._protocol = None
+        self._verdict = None
+        self._verdict_sticky = True
+        verdict = await self._negotiate(client)
+        self._verdict = verdict.message
+        self._verdict_sticky = verdict.sticky
 
     async def _live(self) -> HAClient:
         # Reconnect if we have no client yet, or the last one broke on a transport
@@ -313,10 +401,8 @@ class ReconnectingClient:
                     # Changing the backend's protocol means restarting HA, which
                     # drops the socket, so a stale verdict cannot survive the very
                     # upgrade that would change it. That makes this self-healing.
-                    self._protocol = None
-                    self._verdict = None  # don't let the previous connection's verdict linger
                     try:
-                        self._verdict = await self._negotiate(client)
+                        await self._handshake(client)
                     except BaseException:
                         # The handshake itself failed (bad auth, dropped socket
                         # mid-hello, ...). The client was never published to
@@ -326,6 +412,19 @@ class ReconnectingClient:
                             await client.close()
                         raise
                     self._client = client
+                    return client
+        # The connection is HEALTHY, so the branch above will never run again on it —
+        # which is exactly why a verdict derived from Ambience's silence cannot be left
+        # to stand here. `unknown_command` means "Ambience is not answering yet", and it
+        # stops being true the moment its config entry finishes setting up, with no
+        # reconnect to trigger a fresh handshake. So re-derive it: one extra hello per
+        # tool call, but ONLY while in that error state (a clean verdict is sticky, so
+        # the happy path still handshakes exactly once per connection).
+        if not self._verdict_sticky:
+            async with self._lock:
+                client = self._client
+                if client is not None and not client.closed and not self._verdict_sticky:
+                    await self._handshake(client)
         return self._client
 
     async def _checked_live(self) -> HAClient:
@@ -447,7 +546,13 @@ async def connect(ws_url: str, token: str) -> HAClient:
     client = HAClient(_WebsocketsTransport(connection))
     try:
         await client.authenticate(token)
-    except Exception:
-        await connection.close()  # don't leak the socket on a bad token / failed handshake
+    except BaseException:
+        # BaseException, not Exception — `asyncio.CancelledError` is a BaseException, and
+        # a tool call cancelled mid-auth is precisely when this socket would be abandoned
+        # with nobody left holding a reference to close it. `_live()` guards its own
+        # handshake the same way, but cannot help here: this failure happens INSIDE
+        # `self._connect(...)`, before it has a client to close.
+        with contextlib.suppress(Exception):
+            await connection.close()  # don't leak the socket on a bad token / a cancel
         raise
     return client

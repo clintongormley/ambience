@@ -347,3 +347,52 @@ async def test_command_times_out_and_marks_the_client_closed(monkeypatch):
     with pytest.raises(HAConnectionError):
         await client.command("ambience/dry_run", house=True)
     assert client.closed is True
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [BaseException, Exception],
+    ids=["cancelled", "auth_rejected"],
+)
+async def test_connect_never_leaks_the_socket_when_auth_does_not_complete(monkeypatch, failure):
+    """`connect()` owns the raw websocket until `authenticate()` returns; if auth does
+    not complete, nothing else holds a reference and the socket (plus its reader/keepalive
+    tasks) leaks.
+
+    `asyncio.CancelledError` is a BaseException, so an `except Exception` here misses the
+    one case most likely to hit it — an MCP client cancelling a tool call while the auth
+    round trip is in flight. `_live()` guards its handshake with `except BaseException`
+    for exactly this hazard but cannot help: this happens INSIDE `self._connect(...)`,
+    before it has a client to close.
+    """
+    import asyncio
+    import sys
+    import types
+
+    from ambience_mcp import ha_client
+
+    raised = asyncio.CancelledError() if failure is BaseException else RuntimeError("boom")
+
+    class _Connection:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def send(self, data: str) -> None: ...
+
+        async def recv(self) -> str:
+            raise raised
+
+        async def close(self) -> None:
+            self.closed = True
+
+    connection = _Connection()
+
+    async def _connect(url, **kwargs):
+        return connection
+
+    monkeypatch.setitem(sys.modules, "websockets", types.SimpleNamespace(connect=_connect))
+
+    with pytest.raises(BaseException):  # noqa: B017,PT011 — CancelledError OR HAConnectionError
+        await ha_client.connect("ws://ha.local/api/websocket", "token")
+
+    assert connection.closed is True

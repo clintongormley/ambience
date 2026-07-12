@@ -18,9 +18,13 @@ gate holds both to the same rule — *never ask a user for something they cannot
    re-record: the easiest of all the levers to pull, and until this check the only
    one with no guardrail.
 
-   Composed with Gate 2 (`bin/release.sh` refuses to release the backend before the
-   MCP that speaks its protocol is published), this makes the declared floor always
-   installable.
+   But the version in `mcp-server/pyproject.toml` is what this repo would ship, not
+   what a user can `uvx` today — the post-release bump routinely runs it AHEAD of
+   PyPI. So this check alone does not make the floor installable; it only makes it
+   *shippable*. The floor is held to the PUBLISHED package by `bin/release.sh`'s
+   Gate 2, which calls back into this script (`--check-floor-against <version>`) with
+   the version PyPI reports, so both halves of the rule use ONE PEP 440 comparator
+   (the vendored one below) rather than two that can disagree.
 
 Cross-package, so it imports NEITHER: the backend's venv has no `ambience_mcp`, and
 the MCP's has no `homeassistant`. Both Python files are parsed with `ast` and the
@@ -39,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import functools
 import re
 import sys
 from pathlib import Path
@@ -175,13 +178,12 @@ def _module_level_assignments(tree: ast.Module, name: str) -> list[ast.Assign | 
     return found
 
 
-@functools.cache
 def _parse(path: Path) -> ast.Module:
-    """Parse `path` once. `const.py` holds both MCP_PROTOCOL and MIN_MCP_VERSION, and
-    `main()` reads both per gate run — caching means the file is parsed once, not
-    twice, without either finder having to thread a shared tree through its signature
-    (tests call `find_mcp_protocol`/`find_min_mcp_version` directly, each with just a
-    path)."""
+    """Parse `path`. Deliberately NOT cached: an `@functools.cache` here (added to save
+    the second parse of `const.py`, which holds both MCP_PROTOCOL and MIN_MCP_VERSION)
+    makes the parsed tree sticky per-path for the life of the process, so any in-process
+    caller that reads a path, rewrites it, and reads it again silently gets the STALE
+    tree. Parsing one small file twice per CI job is not a cost worth that."""
     return ast.parse(path.read_text())
 
 
@@ -199,9 +201,23 @@ def _find_constant(path: Path, name: str, expected: type) -> Any:
     (str): both must be readable without executing code, so both fail loudly on
     anything that isn't a plain literal of the right type."""
     value = _last_value(path, name)
-    if not isinstance(value, ast.Constant) or not isinstance(value.value, expected):
+    literal = value.value if isinstance(value, ast.Constant) else None
+    # `isinstance(True, int)` is True, so a bare type check would pass `MCP_PROTOCOL =
+    # True` and then COERCE it to 1 — a gate reporting a value the backend never had.
+    # The runtime rejects a bool protocol explicitly (`ha_client._negotiate` excludes
+    # `isinstance(protocol, bool)`), so the backend would broadcast `{"protocol": true}`,
+    # every client would be told to update Ambience, and updating could not help. The
+    # value the gate feeds that runtime must be held to the same rule.
+    if isinstance(literal, bool) and expected is not bool:
+        _fail(
+            f"{name} in {path} is a bool ({literal!r}), not a {expected.__name__}.\n"
+            f"  `isinstance(True, int)` is True in Python, but the MCP client rejects a "
+            f"bool protocol outright — the backend would broadcast it, every client "
+            f"would be told to update Ambience, and no update could fix it."
+        )
+    if not isinstance(value, ast.Constant) or not isinstance(literal, expected):
         _fail(f"{name} in {path} is not a {expected.__name__} literal")
-    return expected(value.value)
+    return expected(literal)
 
 
 def find_mcp_protocol(path: Path) -> int:
@@ -267,21 +283,46 @@ def _check_adapter_exists(protocol: int, adapters: set[int]) -> None:
         )
 
 
-def _check_floor_is_installable(floor: str, packaged: str) -> None:
+def _check_floor_is_installable(floor: str, available: str, *, source: str, remedy: str) -> None:
+    """Refuse a MIN_MCP_VERSION newer than the `available` ambience-mcp.
+
+    Called twice with two different `available`s, because they answer two different
+    questions and only the pair closes the hole:
+
+    - the version in THIS REPO's `mcp-server/pyproject.toml` (Gate 1, `make mcp-gate`):
+      "is this floor even shippable?" It runs on every push, but the repo version is
+      routinely AHEAD of PyPI (the post-release bump), so passing it does not mean a
+      user can install the floor.
+    - the version PyPI reports (Gate 2, from `bin/release.sh` via
+      `--check-floor-against`): "can a user actually GET it?" `uvx` installs latest
+      PUBLISHED, so this is the one that decides whether the floor is a real refusal.
+    """
     floor_key = version_key(floor, what="MIN_MCP_VERSION")
-    packaged_key = version_key(packaged, what="mcp-server/pyproject.toml [project] version")
-    if floor_key > packaged_key:
+    available_key = version_key(available, what=source)
+    if floor_key > available_key:
         _fail(
-            f"the integration declares MIN_MCP_VERSION={floor!r}, but the ambience-mcp "
-            f"in this repo is {packaged!r}.\n"
+            f"the integration declares MIN_MCP_VERSION={floor!r}, but {source} is "
+            f"{available!r}.\n"
             f"  MIN_MCP_VERSION is a HARD REFUSAL: every client below it is told, on "
             f"every tool call, to upgrade ambience-mcp. `uvx` installs LATEST, so a "
             f"floor above the newest package is advice no user can follow — the exact "
             f"deadlock the release gate exists to prevent.\n"
-            f"  Lower MIN_MCP_VERSION in custom_components/ambience/const.py, or raise "
-            f"the version in mcp-server/pyproject.toml and publish that ambience-mcp "
-            f"FIRST (tag mcp-v<version>)."
+            f"  {remedy}"
         )
+
+
+_REPO_SOURCE = "the ambience-mcp in this repo (mcp-server/pyproject.toml [project] version)"
+_REPO_REMEDY = (
+    "Lower MIN_MCP_VERSION in custom_components/ambience/const.py, or raise the version "
+    "in mcp-server/pyproject.toml and publish that ambience-mcp FIRST (tag mcp-v<version>)."
+)
+_PYPI_SOURCE = "the published ambience-mcp on PyPI"
+_PYPI_REMEDY = (
+    "Publish that ambience-mcp FIRST (tag mcp-v<version>, let it reach PyPI), or lower "
+    "MIN_MCP_VERSION in custom_components/ambience/const.py to a published version. "
+    "Raising the floor is exactly as coupled to an MCP release as bumping MCP_PROTOCOL "
+    "is — see CONTRIBUTING.md."
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -302,6 +343,17 @@ def main(argv: list[str] | None = None) -> int:
             "is exactly ONE parser of the constant — two that disagree is a seam."
         ),
     )
+    parser.add_argument(
+        "--check-floor-against",
+        metavar="PUBLISHED_VERSION",
+        help=(
+            "compare MIN_MCP_VERSION against the PUBLISHED ambience-mcp version and exit "
+            "nonzero if the floor is newer. bin/release.sh's Gate 2 uses this so there is "
+            "exactly ONE PEP 440 comparator — the vendored one here, pinned by a "
+            "differential test to the `packaging` ordering the MCP runtime enforces the "
+            "same floor with. Fails closed on a version it cannot parse."
+        ),
+    )
     args = parser.parse_args(argv if argv is not None else [])
 
     protocol = find_mcp_protocol(args.const)
@@ -309,11 +361,22 @@ def main(argv: list[str] | None = None) -> int:
         print(protocol)
         return 0
 
+    if args.check_floor_against is not None:
+        floor = find_min_mcp_version(args.const)
+        _check_floor_is_installable(
+            floor, args.check_floor_against, source=_PYPI_SOURCE, remedy=_PYPI_REMEDY
+        )
+        print(
+            f"check_mcp_protocol: MIN_MCP_VERSION={floor} <= published ambience-mcp "
+            f"{args.check_floor_against} ✓"
+        )
+        return 0
+
     adapters = find_protocols(args.registry)
     _check_adapter_exists(protocol, adapters)
     floor = find_min_mcp_version(args.const)
     packaged = find_package_version(args.pyproject)
-    _check_floor_is_installable(floor, packaged)
+    _check_floor_is_installable(floor, packaged, source=_REPO_SOURCE, remedy=_REPO_REMEDY)
 
     print(
         f"check_mcp_protocol: MCP_PROTOCOL={protocol}, adapters={sorted(adapters)}, "

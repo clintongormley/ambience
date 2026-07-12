@@ -34,10 +34,28 @@ value exists in the repo; the release gate asserts one is published to PyPI.
 MIN_MCP_VERSION = "0.2.0-rc.3"
 """The oldest `ambience-mcp` this backend will serve.
 
-The one thing MCP_PROTOCOL cannot express: "that client is known-broken, refuse
-it". Nothing about the backend is wrong for ambience-mcp 0.2.0-rc.2 — it simply
-fetched the fat bundle and blew the AI client's token limit on any real house. A
-protocol number cannot say that; this can.
+The one thing MCP_PROTOCOL cannot express: "that build handshakes fine, but it is
+known-broken — refuse it". A protocol number can only say the contract changed
+shape; this can single out a bad release of an unchanged contract.
+
+It can only refuse a client that ASKS. The floor is read in the MCP's `_negotiate`,
+which runs only when the client sends `ambience/mcp/hello` — so it binds FUTURE
+clients (every one of which handshakes), and cannot touch a PRE-handshake client. An
+ambience-mcp older than the first handshake-capable release never asks: it connects,
+authenticates, and calls `ambience/ai_bundle` / `ambience/ai_context` directly, and
+this backend serves it exactly as before. (Those clients are refused a different way,
+by the client itself: `unknown_command` on the hello.)
+
+So this value is deliberately inert today. It sits at the first release that speaks
+the handshake, which is the lowest value that can refuse nothing — every client able
+to read the floor is, by construction, at least that version. That is the correct
+resting state: a floor is a REFUSAL, and there is nothing to refuse yet.
+
+Raising it is exactly as coupled to an MCP release as bumping MCP_PROTOCOL is: `uvx`
+installs LATEST, so a floor above the newest PUBLISHED ambience-mcp refuses every user
+and points them at a package that does not exist. Publish the ambience-mcp first, then
+raise this to it (`bin/check_mcp_protocol.py` and `bin/release.sh` both enforce that;
+see CONTRIBUTING.md).
 """
 
 DATA_EXPOSED_ACTIONS = "exposed_actions"

@@ -129,6 +129,12 @@ follow.
     websocket, the handshake re-runs on the next tool call, and the server heals
     itself — **you do not need to restart the MCP server**.
 
+    You may also see this message for a few seconds *while* Home Assistant is
+    starting: Ambience answers the handshake only once it has finished setting
+    up, and until then it looks the same as an Ambience that is too old. Ask
+    again in a moment — the server re-checks on every call while in this state,
+    so it clears itself as soon as Ambience is up.
+
 - *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
     refusing this build. **This one does need a restart of the MCP server**, and
     reconnecting alone will not do: the running process *is* the old version, so

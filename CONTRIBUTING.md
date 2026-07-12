@@ -97,34 +97,50 @@ So: tag `mcp-v<version>` and let it publish, **then** run `bin/release.sh`. The
 release script enforces this (it asks PyPI what the published MCP speaks and
 refuses to go first), and fails closed if PyPI cannot be reached.
 
-Ambience releases that do **not** bump `MCP_PROTOCOL` need no MCP release at
-all.
+Ambience releases that do **not** bump `MCP_PROTOCOL` need no MCP release at all
+— **unless they raise `MIN_MCP_VERSION`**, which is coupled to an MCP release in
+exactly the same way (see below).
 
 ### `MIN_MCP_VERSION` — the refusal floor
 
 `MIN_MCP_VERSION` (also in `const.py`) is the **oldest `ambience-mcp` this
 backend will serve**. It is the one thing `MCP_PROTOCOL` cannot express: *"that
-build is known-broken — refuse it"*. Nothing about the protocol was wrong for
-`ambience-mcp` 0.2.0-rc.2; it simply fetched the fat bundle and blew the AI
-client's token limit on any real house. A protocol number cannot say that; this
-can.
+build handshakes fine, but it is known-broken — refuse it"*. A protocol number
+can only say the contract changed shape; this singles out a bad release of an
+unchanged one.
 
-It is the **strongest** refusal the backend can issue — the MCP checks it first,
-ahead of the protocol question — so it carries the strongest rule:
+It can only refuse a client that **asks**. The floor is read during the
+`ambience/mcp/hello` handshake, so it binds every **future** `ambience-mcp`
+(they all handshake) and cannot touch a **pre-handshake** one — an old client
+never sends the hello, it just calls `ambience/ai_context` directly. That is why
+the current value is inert: it names the first handshake-capable release, which
+is the lowest value that refuses nobody. A floor is a refusal, and there is
+nothing to refuse yet.
+
+It is also the **strongest** refusal the backend can issue — the MCP checks it
+first, ahead of the protocol question — so it carries the strongest rule:
 
 > **It may never name an `ambience-mcp` that is not published yet.**
 
-`uvx` installs *latest*. A floor above the newest published `ambience-mcp` tells
-**every** user, on **every** tool call, to upgrade to a version that does not
-exist. It is a one-line edit with no adapter to write and no shape to re-record,
-which makes it the easiest of all these levers to pull by mistake — so
-`bin/check_mcp_protocol.py` (Gate 1, `make mcp-gate`) refuses any floor newer
-than the `ambience-mcp` in this repo, and Gate 2 refuses to release a backend
-before that `ambience-mcp` is on PyPI. Together they make the declared floor
-always installable.
+`uvx` installs *latest*. A floor above the newest **published** `ambience-mcp`
+tells **every** user, on **every** tool call, to upgrade to a version that does
+not exist. It is a one-line edit with no adapter to write and no shape to
+re-record, which makes it the easiest of all these levers to pull by mistake —
+so two gates hold it:
 
-To raise it: bump `mcp-server/pyproject.toml`, tag `mcp-v<version>`, let it
-publish — **then** raise `MIN_MCP_VERSION` to it.
+- `bin/check_mcp_protocol.py` (Gate 1, `make mcp-gate`, runs on every push)
+    refuses a floor newer than the `ambience-mcp` **in this repo**. That makes
+    the floor *shippable* — but the repo version routinely runs ahead of PyPI
+    (the post-release bump), so it does not yet make it *installable*.
+- `bin/release.sh` (Gate 2) asks PyPI for the **published** `ambience-mcp` — its
+    protocol *and* its version — and refuses the release if the backend's
+    protocol is ahead of it, **or** if `MIN_MCP_VERSION` names something newer
+    than it. It fails closed if PyPI cannot be reached or its answer cannot be
+    read.
+
+To raise it: bump `mcp-server/pyproject.toml`, tag `mcp-v<version>`, **let it
+publish** — then raise `MIN_MCP_VERSION` to it and release Ambience. Same order
+as a protocol bump, for the same reason.
 
 ## Make targets
 

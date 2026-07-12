@@ -42,16 +42,18 @@ def _clean_env(extra: dict | None = None) -> dict:
     BUILD_CMD / AI_DOCS_CMD default to a no-op so the frontend-build and AI-docs
     freshness guards pass without a real toolchain; individual tests override them.
 
-    MCP_PYPI_CHECK_CMD defaults to echoing the fixture's own MCP_PROTOCOL (see
-    _init_repo's const.py) so Gate 2 passes without hitting the real network/PyPI;
-    tests exercising Gate 2 itself override it to simulate other published protocols.
+    MCP_PYPI_CHECK_CMD stands in for the real PyPI lookup, which answers on one line
+    with BOTH fields Gate 2 needs: "<protocol> <version>". The default satisfies the
+    fixture repo (see _init_repo's const.py: MCP_PROTOCOL=1, MIN_MCP_VERSION=0.1.0) so
+    Gate 2 passes without hitting the real network/PyPI; tests exercising Gate 2 itself
+    override it to simulate other published protocols and versions.
     """
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
     }
     env.setdefault("BUILD_CMD", "true")
     env.setdefault("AI_DOCS_CMD", "true")
-    env.setdefault("MCP_PYPI_CHECK_CMD", "echo 1")
+    env.setdefault("MCP_PYPI_CHECK_CMD", "echo '1 0.2.0'")
     if extra:
         env.update(extra)
     return env
@@ -116,8 +118,10 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
     (comp / "frontend").mkdir(parents=True)
     (comp / "manifest.json").write_text('{\n  "domain": "ambience",\n  "version": "0.1.0"\n}\n')
     (comp / "frontend" / "ambience-panel.js").write_text("// built bundle\n")
-    # Gate 2 (release.sh) reads MCP_PROTOCOL out of const.py via an AST walk.
-    (comp / "const.py").write_text("MCP_PROTOCOL = 1\n")
+    # Gate 2 (release.sh) reads BOTH constants out of const.py, through
+    # bin/check_mcp_protocol.py: MCP_PROTOCOL (--print-protocol) and MIN_MCP_VERSION
+    # (--check-floor-against, which compares it with the PUBLISHED ambience-mcp).
+    (comp / "const.py").write_text('MCP_PROTOCOL = 1\nMIN_MCP_VERSION = "0.1.0"\n')
 
     # The npm package ships with the integration, so its version is kept in
     # lockstep with the manifest. The lockfile carries the root version twice
@@ -340,18 +344,20 @@ def test_rejects_main_behind_origin(tmp_path: Path):
     assert "up to date" in combined or "behind" in combined
 
 
-# --- Gate 2: never release a backend before the MCP that speaks its protocol ---
-# The fixture's const.py fixes MCP_PROTOCOL=1 (see _init_repo); MCP_PYPI_CHECK_CMD
-# stands in for the real `uvx --no-cache --from ambience-mcp ...` PyPI lookup so
-# these stay fast and network-free (default env is "echo 1", used by every other
-# test in this file to make Gate 2 a no-op while exercising unrelated behaviour).
+# --- Gate 2: never release a backend the published ambience-mcp cannot satisfy ---
+# The fixture's const.py fixes MCP_PROTOCOL=1 and MIN_MCP_VERSION="0.1.0" (see
+# _init_repo); MCP_PYPI_CHECK_CMD stands in for the real `uvx --no-cache --from
+# ambience-mcp ...` PyPI lookup so these stay fast and network-free. The real lookup
+# answers on one line with BOTH fields: "<protocol> <version>". The default is
+# "echo '1 0.2.0'", used by every other test in this file to make Gate 2 a no-op while
+# exercising unrelated behaviour.
 
 
 def test_rejects_when_mcp_protocol_ahead_of_published(tmp_path: Path):
     """A backend release that speaks a protocol newer than the published MCP must
     be refused — this is the deadlock Gate 2 exists to prevent."""
     _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo 0"})
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '0 0.2.0'"})
     assert result.returncode != 0
     combined = (result.stdout + result.stderr).lower()
     assert "protocol" in combined
@@ -367,13 +373,105 @@ def test_allows_when_published_protocol_meets_or_exceeds(tmp_path: Path):
     """A published MCP that already speaks the backend's protocol (or newer) must
     not block the release."""
     _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo 2"})
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '2 0.2.0'"})
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# --- Gate 2b: MIN_MCP_VERSION must name a PUBLISHED ambience-mcp ---
+# Gate 1 (bin/check_mcp_protocol.py) only holds the floor to the version in THIS REPO's
+# mcp-server/pyproject.toml — which the post-release bump routinely runs AHEAD of PyPI.
+# So a maintainer could bump pyproject.toml to 0.4.0, raise MIN_MCP_VERSION to "0.4.0",
+# pass Gate 1 (0.4.0 <= 0.4.0), pass the protocol half of Gate 2 (the protocol never
+# moved — and CONTRIBUTING says a release that doesn't bump MCP_PROTOCOL needs no MCP
+# release at all), and ship a backend that refuses EVERY user: `uvx` installs the latest
+# PUBLISHED (0.3.0), which is below the floor, and there is nothing to upgrade to.
+
+
+def test_rejects_when_min_mcp_version_is_newer_than_published(tmp_path: Path):
+    """The hole Gate 1's docstring claimed Gate 2 closed, and did not."""
+    _init_repo(tmp_path)
+    const = tmp_path / "custom_components" / "ambience" / "const.py"
+    const.write_text('MCP_PROTOCOL = 1\nMIN_MCP_VERSION = "0.4.0"\n')
+    _git("commit", "-aqm", "raise the floor", cwd=tmp_path)
+
+    # The published ambience-mcp speaks the right protocol — only the floor is out of
+    # reach, so nothing but this check can catch it.
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '1 0.3.0'"})
+    assert result.returncode != 0
+    combined = result.stdout + result.stderr
+    assert "MIN_MCP_VERSION" in combined
+    assert "0.4.0" in combined and "0.3.0" in combined
+    assert "publish" in combined.lower()
+    # Must fail before any mutation.
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
+
+
+@pytest.mark.parametrize(
+    ("floor", "published"),
+    [("0.3.0", "0.3.0"), ("0.1.0", "0.3.0"), ("0.2.0rc9", "0.2.0rc10")],
+    ids=["equal", "older", "pep440_not_string_ordering"],
+)
+def test_allows_a_floor_at_or_below_the_published_version(tmp_path: Path, floor, published):
+    """Equal is fine (the floor names the newest published build), older is the normal
+    state — and the ordering is PEP 440, not a string compare, which would call
+    "0.2.0rc9" NEWER than "0.2.0rc10" and block a perfectly releasable backend."""
+    _init_repo(tmp_path)
+    const = tmp_path / "custom_components" / "ambience" / "const.py"
+    const.write_text(f'MCP_PROTOCOL = 1\nMIN_MCP_VERSION = "{floor}"\n')
+    # --allow-empty: the "older" case rewrites the fixture's own floor, so there may be
+    # nothing to commit — the release only needs a CLEAN tree, not a new commit.
+    _git("commit", "-aqm", "set the floor", "--allow-empty", cwd=tmp_path)
+
+    result = _run(
+        tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": f"echo '1 {published}'"}
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_rejects_a_floor_newer_than_published_under_pep440_ordering(tmp_path: Path):
+    """The string-compare trap in the blocking direction: "0.2.0rc10" > "0.2.0rc9" as
+    versions, but `[ "0.2.0rc10" \\> "0.2.0rc9" ]` is FALSE as strings. A shell compare
+    would let this floor — one no user can install — through."""
+    _init_repo(tmp_path)
+    const = tmp_path / "custom_components" / "ambience" / "const.py"
+    const.write_text('MCP_PROTOCOL = 1\nMIN_MCP_VERSION = "0.2.0rc10"\n')
+    _git("commit", "-aqm", "raise the floor", cwd=tmp_path)
+
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '1 0.2.0rc9'"})
+    assert result.returncode != 0
+    assert "MIN_MCP_VERSION" in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(
     "check_cmd",
-    ["false", "echo garbage", "printf '0\\nnote: x\\n'", "echo v0"],
+    ["echo '1 not-a-version'", "echo '1 0.2.0+dirty'", "echo 1"],
+    ids=[
+        "garbage_version",  # a garbled PyPI reply
+        "local_segment",  # unpublishable, and NEWER than the plain version to `packaging`
+        "version_missing",  # a one-field reply (e.g. a stale pre-two-field override)
+    ],
+)
+def test_rejects_an_unreadable_published_version(tmp_path: Path, check_cmd: str):
+    """The floor half of Gate 2 must fail CLOSED on a published version it cannot read.
+    A version it cannot compare is not a version it may ignore: shrugging here ships the
+    exact refuse-every-user release the gate exists to prevent."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": check_cmd})
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "fails closed" in combined or "fail closed" in combined
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
+
+
+@pytest.mark.parametrize(
+    "check_cmd",
+    ["false", "echo 'garbage 0.2.0'", "printf '0 0.2.0\\nnote: x\\n'", "echo 'v0 0.2.0'"],
     ids=[
         "unavailable",  # network down / published package predates protocols/
         "non_numeric",  # garbled PyPI response
@@ -382,15 +480,15 @@ def test_allows_when_published_protocol_meets_or_exceeds(tmp_path: Path):
     ],
 )
 def test_rejects_an_unparseable_published_protocol(tmp_path: Path, check_cmd: str):
-    """A PUBLISHED value that isn't a bare non-negative integer must be rejected
+    """A published PROTOCOL that isn't a bare non-negative integer must be rejected
     before the `-gt` comparison, not silently pass. `[ "$MCP_PROTOCOL" -gt
-    "$PUBLISHED" ]` exits 2 ("integer expression expected") on non-numeric input;
-    inside an `if` condition that status reads as false under `set -e`, which
+    "$PUBLISHED_PROTOCOL" ]` exits 2 ("integer expression expected") on non-numeric
+    input; inside an `if` condition that status reads as false under `set -e`, which
     would let a garbled PyPI response fail OPEN instead of closed. This subsumes
     the plain-emptiness check: an empty string, whitespace, HTML, or a multi-line
-    value (e.g. "0\\nnote: deprecated" from a noisy `uv` warning) are all rejected
+    value (e.g. "0 0.2.0\\nnote: deprecated" from a noisy `uv` warning) are all rejected
     here, before they ever reach the comparison — even when (the "multiline" case)
-    the first line is itself a valid, and here dangerously LOWER, digit: the true
+    the first line is itself a well-formed, and here dangerously LOWER, reply: the true
     published protocol (0) would be behind the fixture's backend protocol (1),
     exactly the deadlock Gate 2 exists to prevent, so this must block rather than
     silently compare against a truncated/garbled reading."""
@@ -411,7 +509,7 @@ def test_warns_when_pypi_check_cmd_overridden(tmp_path: Path):
     identical failure class to the stale `uv` cache incident that prompted this
     whole gate. The override must announce itself on stderr."""
     _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo 1"})
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '1 0.2.0'"})
     assert result.returncode == 0, result.stdout + result.stderr
     assert "MCP_PYPI_CHECK_CMD" in result.stderr
     assert "overrid" in result.stderr.lower()

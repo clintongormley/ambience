@@ -62,6 +62,116 @@ async def test_pre_protocol_backend_says_upgrade_ambience():
         await client.ready()
 
 
+async def test_an_unknown_command_verdict_is_never_cached():
+    """Critical 1. `ambience/mcp/hello` is registered when Ambience's config entry sets
+    up; HA's websocket API and auth come up in EARLY BOOTSTRAP, long before any custom
+    integration. So for a window after every HA restart — seconds, or much longer under a
+    ConfigEntryNotReady backoff — an authenticated socket gets `unknown_command` from a
+    perfectly CURRENT Ambience.
+
+    Latching that verdict makes it permanent: the connection is healthy, so `_live()`
+    never reconnects, so the handshake never re-runs, so every tool call for the life of
+    the client tells a fully up-to-date user to update Ambience. It must be RE-DERIVED on
+    the next call instead — on the same socket, with no reconnect."""
+    fake = FakeClient(
+        {
+            "ambience/mcp/hello": HACommandError("unknown_command", "nope"),
+            "ambience/ping": {"ok": True},
+        }
+    )
+    sockets = 0
+
+    async def connect(ws_url: str, token: str) -> Any:
+        nonlocal sockets
+        sockets += 1
+        return fake
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+        await client.command("ambience/ping")
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+        await client.command("ambience/ping")
+
+    # The second call re-sent the hello on the SAME connection — no cached verdict, and
+    # no reconnect. (And the tool command was still never sent to the backend.)
+    assert [c["type"] for c in fake.calls] == ["ambience/mcp/hello"] * 2
+    assert sockets == 1
+
+
+async def test_a_backend_that_finishes_setting_up_heals_the_next_call_with_no_reconnect():
+    """Critical 1, the payoff. The README promises exactly this flow — "update it in
+    HACS and restart Home Assistant… the handshake re-runs and the server heals itself" —
+    and a user who OBEYS it lands inside HA's startup window, where a latched verdict
+    would tell them to do the very thing they just did, forever.
+
+    The heal must need no reconnect and no MCP-server restart: the same healthy socket,
+    one more hello."""
+    fake = FakeClient(
+        {
+            "ambience/mcp/hello": HACommandError("unknown_command", "not set up yet"),
+            "ambience/ping": {"ok": True},
+        }
+    )
+    sockets = 0
+
+    async def connect(ws_url: str, token: str) -> Any:
+        nonlocal sockets
+        sockets += 1
+        return fake
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    with pytest.raises(IncompatibleError):
+        await client.command("ambience/ping")
+
+    # Ambience's config entry finishes setting up and registers its ws commands.
+    fake.results["ambience/mcp/hello"] = {"protocol": 1, "min_mcp_version": "0.2.0-rc.3"}
+
+    assert await client.command("ambience/ping") == {"ok": True}
+    assert await client.ready() == 1
+    assert sockets == 1, "healed on the existing connection — no reconnect"
+    # And once the verdict is CLEAN it is cached again: the heal costs one hello, not one
+    # per call forever.
+    assert [c["type"] for c in fake.calls] == [
+        "ambience/mcp/hello",  # the refusal
+        "ambience/mcp/hello",  # re-derived on the next call...
+        "ambience/ping",  # ...and it healed
+    ]
+
+
+async def test_a_genuinely_old_backend_still_says_update_ambience_on_every_call():
+    """The other side of Critical 1: not caching the verdict must not SOFTEN it. An
+    Ambience that predates the handshake answers `unknown_command` forever, and its user
+    must keep getting the one instruction that helps — on every call, before anything is
+    sent."""
+    client, fake = _reconnecting(HACommandError("unknown_command", "nope"))
+
+    for _ in range(3):
+        with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+            await client.command("ambience/ping")
+
+    # Every call re-asked (and never sent the tool command to the backend).
+    assert [c["type"] for c in fake.calls] == ["ambience/mcp/hello"] * 3
+
+
+async def test_a_clean_verdict_is_still_cached_across_many_calls():
+    """The happy path must NOT pay for the fix: a verdict Ambience actually sent can only
+    change by restarting HA, which drops the socket — so it stays cached, one handshake
+    per connection, however many tool calls ride on it."""
+    client, fake = _reconnecting({"protocol": 1, "min_mcp_version": "0.2.0-rc.3"})
+
+    for _ in range(5):
+        assert await client.command("ambience/ping") == {"ok": True}
+
+    hellos = [c for c in fake.calls if c["type"] == "ambience/mcp/hello"]
+    assert len(hellos) == 1
+
+
 async def test_a_client_below_the_backend_floor_is_refused():
     client, _ = _reconnecting(
         {"protocol": 1, "min_mcp_version": "0.2.0-rc.3"}, mcp_version="0.2.0rc2"
@@ -446,6 +556,48 @@ async def test_ready_raises_instead_of_asserting_when_protocol_is_unset():
 
     with pytest.raises(RuntimeError, match="_negotiate"):
         await client.ready()
+
+
+async def test_an_mcp_with_no_adapters_says_so_instead_of_dying_in_max():
+    """`supported_protocols` is the one value this class does not derive itself — it is
+    INJECTED. Empty, `max(self._supported)` raises a bare ValueError on every tool call,
+    replacing the actionable "which side to upgrade" message the whole design exists to
+    deliver with a traceback. Unreachable in a shipped build (Gate 1 refuses an empty
+    PROTOCOLS), but this is the seam where an unvalidated injection lands."""
+    client, _ = _reconnecting({"protocol": 1}, supported=frozenset())
+
+    with pytest.raises(IncompatibleError) as exc:
+        await client.ready()
+    assert "no MCP protocol adapters" in str(exc.value)
+    assert "uv cache clean" in str(exc.value)  # still the actionable upgrade remedy
+
+
+async def test_an_unparseable_version_of_OURSELVES_fails_loudly_not_silently():
+    """The two InvalidVersion cases have OPPOSITE right answers, so one shared
+    `except InvalidVersion` cannot serve both:
+
+    - a floor from the BACKEND we cannot parse == no floor stated → pass (conservative:
+      the backend never meant to refuse a client we cannot read it as refusing). Locked in
+      by `test_unparseable_min_mcp_version_states_no_floor_and_passes`.
+    - a version of OURSELVES we cannot parse is a packaging bug in this build. Swallowing
+      it silently disables the refusal floor — the backend's strongest safety valve — for
+      precisely the malformed build most likely to need refusing.
+    """
+    client, _ = _reconnecting(
+        {"protocol": 1, "min_mcp_version": "0.3.0"}, mcp_version="not-a-version"
+    )
+
+    with pytest.raises(RuntimeError, match="(?i)own version") as exc:
+        await client.ready()
+    assert not isinstance(exc.value, IncompatibleError)  # our bug, not the user's
+
+
+async def test_our_own_version_is_only_parsed_when_a_floor_is_stated():
+    """The corollary: a backend that states no floor asks nothing of our version, so it
+    must not be the thing that breaks the connection."""
+    client, _ = _reconnecting({"protocol": 1}, mcp_version="not-a-version")
+
+    assert await client.ready() == 1
 
 
 async def test_bool_protocol_is_not_treated_as_valid():

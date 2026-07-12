@@ -85,6 +85,37 @@ def test_mcp_protocol_not_an_integer_literal_is_an_error(tmp_path):
         find_mcp_protocol(const)
 
 
+def test_a_bool_mcp_protocol_is_refused(tmp_path, capsys):
+    """`isinstance(True, int)` is True in Python, so a bare type check passes
+    `MCP_PROTOCOL = True` and then coerces it to 1 — the gate would report a value the
+    backend never had. The RUNTIME rejects a bool protocol explicitly (`_negotiate`
+    excludes `isinstance(protocol, bool)`), so the backend would broadcast
+    `{"protocol": true}`, EVERY client would be told to update Ambience, and updating
+    could not help. The gate that feeds that runtime must hold the same line."""
+    const = tmp_path / "const.py"
+    const.write_text("MCP_PROTOCOL = True\n")
+
+    with pytest.raises(SystemExit):
+        find_mcp_protocol(const)
+
+    err = capsys.readouterr().err
+    assert "bool" in err
+
+
+def test_parse_is_not_cached_between_reads(tmp_path):
+    """The finders must always read what is ON DISK. An `@functools.cache` on the parse
+    (a micro-optimisation to save one re-parse of const.py per run) makes the tree sticky
+    per-path for the life of the process, so an in-process caller that reads a path,
+    rewrites it, and reads it again silently gets the STALE value — in a gate, the one
+    failure mode that must never happen."""
+    const = tmp_path / "const.py"
+    const.write_text("MCP_PROTOCOL = 1\n")
+    assert find_mcp_protocol(const) == 1
+
+    const.write_text("MCP_PROTOCOL = 2\n")
+    assert find_mcp_protocol(const) == 2
+
+
 def test_protocols_not_a_dict_literal_is_an_error(tmp_path):
     init = tmp_path / "__init__.py"
     init.write_text("PROTOCOLS = dict(one=1)\n")  # not an ast.Dict literal
@@ -327,6 +358,63 @@ def test_an_unparseable_pyproject_is_an_error(tmp_path):
 
     with pytest.raises(SystemExit):
         find_package_version(pyproject)
+
+
+# --- --check-floor-against: the floor vs the PUBLISHED ambience-mcp ------------------
+# Gate 1 above compares the floor with THIS REPO's mcp-server/pyproject.toml, which the
+# post-release bump routinely runs ahead of PyPI — so passing it does not mean a user
+# can install the floor. `bin/release.sh`'s Gate 2 calls back in through this flag with
+# the version PyPI reports, so the two halves share ONE PEP 440 comparator.
+
+
+def test_check_floor_against_refuses_a_floor_newer_than_published(tmp_path, capsys):
+    """The deadlock Gate 1 alone cannot see: pyproject.toml says 0.4.0 (so Gate 1 is
+    happy), the protocol never moved (so the protocol half of Gate 2 is happy), and PyPI
+    still only has 0.3.0 — every user is told to upgrade to a package that does not
+    exist."""
+    argv = _repo(tmp_path, floor="0.4.0", packaged="0.4.0")
+
+    with pytest.raises(SystemExit) as exc_info:
+        main([*argv, "--check-floor-against", "0.3.0"])
+
+    assert exc_info.value.code == 1
+    err = capsys.readouterr().err
+    assert "MIN_MCP_VERSION='0.4.0'" in err
+    assert "'0.3.0'" in err
+    assert "PyPI" in err
+
+
+@pytest.mark.parametrize("published", ["0.2.0-rc.3", "0.3.0", "0.2.0rc3"])
+def test_check_floor_against_passes_at_or_below_published(tmp_path, published):
+    """Equal (in any legal spelling) and older both pass — the floor names something a
+    `uvx` user can actually get."""
+    assert main([*_repo(tmp_path), "--check-floor-against", published]) == 0
+
+
+def test_check_floor_against_is_pep440_not_string_ordering(tmp_path):
+    # "0.2.0rc9" > "0.2.0rc10" as STRINGS: a shell `[ x \> y ]` would block this
+    # releasable pair and pass the unreleasable one below.
+    assert main([*_repo(tmp_path, floor="0.2.0rc9"), "--check-floor-against", "0.2.0rc10"]) == 0
+
+    with pytest.raises(SystemExit):
+        main([*_repo(tmp_path, floor="0.2.0rc10"), "--check-floor-against", "0.2.0rc9"])
+
+
+@pytest.mark.parametrize("published", ["", "not-a-version", "0.2.0-rc.3+dirty"])
+def test_check_floor_against_fails_closed_on_an_unreadable_published_version(tmp_path, published):
+    """A published version the gate cannot compare is not one it may ignore: an
+    unreachable/garbled PyPI must never read as 'the floor is fine'. (The local segment
+    is refused outright — PyPI cannot host it, and `packaging` orders it ABOVE the plain
+    version, so measuring a floor against it would silently pass a refuse-everyone
+    release.)"""
+    with pytest.raises(SystemExit):
+        main([*_repo(tmp_path), "--check-floor-against", published])
+
+
+def test_check_floor_against_fails_closed_on_an_unreadable_floor(tmp_path):
+    """The other half of the same comparison."""
+    with pytest.raises(SystemExit):
+        main([*_repo(tmp_path, floor="not-a-version"), "--check-floor-against", "9.9.9"])
 
 
 # --- the vendored PEP 440 comparison ------------------------------------------------

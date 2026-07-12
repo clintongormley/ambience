@@ -98,11 +98,24 @@ if git remote get-url origin >/dev/null 2>&1; then
   fi
 fi
 
-# --- Gate 2: never release a backend before the MCP that speaks its protocol -------
+# --- Gate 2: never release a backend the published ambience-mcp cannot satisfy ------
+# TWO demands, one rule — never ask a user for something they cannot get:
+#
+#   a) MCP_PROTOCOL must be spoken by the PUBLISHED ambience-mcp.
+#   b) MIN_MCP_VERSION must NAME a PUBLISHED ambience-mcp.
+#
 # The coupling is one-directional. A NEW MCP against an OLD backend is fine (it ships
 # an adapter for every protocol it supports). A NEW backend against an OLD MCP is a
 # DEADLOCK: every user is told "upgrade ambience-mcp" — to a version that does not
 # exist yet. `uvx` installs LATEST, so they cannot obey. Fail closed.
+#
+# (b) is NOT covered by Gate 1: that one holds the floor to the version in THIS REPO's
+# mcp-server/pyproject.toml, which the post-release bump routinely runs ahead of PyPI.
+# A maintainer who bumps pyproject.toml and raises the floor to match passes Gate 1,
+# passes (a) (the protocol never moved, so CONTRIBUTING says no MCP release is needed),
+# and ships a backend that refuses EVERY user — pointing them at a package that was
+# never published. So the lookup asks PyPI for the published VERSION as well as the
+# protocol, and the floor is compared against it.
 #
 # The constant is extracted by Gate 1's script (`--print-protocol`), not by a second
 # `ast` walk of our own: two parsers of the same constant can disagree (this one only
@@ -125,6 +138,12 @@ fi
 echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI…"
 # Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI
 # lookup instead of hitting the real network on every pre-flight-check test.
+#
+# ONE lookup answers both questions — the protocol the published ambience-mcp speaks
+# AND its version — on a single line: "<protocol> <version>" (e.g. "1 0.2.0rc3"). One
+# `uvx --no-cache` resolution, so the two answers cannot disagree about which release
+# they describe, and the cache is still bypassed (a stale `uv` cache is what caused the
+# original incident: the gate must ask PyPI, never a cache).
 MCP_PYPI_CHECK_CMD="${MCP_PYPI_CHECK_CMD:-}"
 if [ -n "$MCP_PYPI_CHECK_CMD" ]; then
   # A stale exported override is the same failure class as the stale `uv` cache
@@ -132,35 +151,66 @@ if [ -n "$MCP_PYPI_CHECK_CMD" ]; then
   # Announce it so an accidental bypass is visible in the release log.
   echo "warning: Gate 2's PyPI lookup is overridden by MCP_PYPI_CHECK_CMD — not asking PyPI" >&2
 else
-  MCP_PYPI_CHECK_CMD='uvx --no-cache --from ambience-mcp python -c "from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS))"'
+  MCP_PYPI_CHECK_CMD='uvx --no-cache --from ambience-mcp python -c "import importlib.metadata as md; from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS), md.version(\"ambience-mcp\"))"'
 fi
 PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
 
-# Reject anything that isn't a bare non-negative integer BEFORE the `-gt`
-# comparison below. `[ "$MCP_PROTOCOL" -gt "$PUBLISHED" ]` returns exit status 2
-# ("integer expression expected") on a non-numeric PUBLISHED; inside an `if`
-# condition, `set -e` does not fire and bash reads status 2 as false, so the
-# refusal branch would be silently skipped and the release would proceed. This
-# subsumes the plain-emptiness check: an empty string, whitespace, HTML, or a
-# multi-line value (e.g. "0\nnote: deprecated" from a noisy `uv` warning) are
-# all rejected here, before they ever reach the comparison.
-if ! _is_uint "$PUBLISHED"; then
+# Split the reply into its two fields. Anything that is not EXACTLY one line of exactly
+# two fields — empty, a multi-line answer (e.g. "0\nnote: deprecated" from a noisy `uv`
+# warning), a stray third field — is blanked here, so the fail-closed checks below
+# refuse it rather than silently reading a truncated or garbled value.
+PUBLISHED_PROTOCOL=""
+PUBLISHED_VERSION=""
+PUBLISHED_EXTRA=""
+case "$PUBLISHED" in
+  *$'\n'*) PUBLISHED="" ;;
+esac
+read -r PUBLISHED_PROTOCOL PUBLISHED_VERSION PUBLISHED_EXTRA <<<"$PUBLISHED" || true
+if [ -n "$PUBLISHED_EXTRA" ]; then
+  PUBLISHED_PROTOCOL=""
+  PUBLISHED_VERSION=""
+fi
+
+# Reject a protocol that isn't a bare non-negative integer BEFORE the `-gt` comparison
+# below. `[ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOL" ]` returns exit status 2 ("integer
+# expression expected") on a non-numeric value; inside an `if` condition, `set -e` does
+# not fire and bash reads status 2 as false, so the refusal branch would be silently
+# skipped and the release would proceed. This subsumes the plain-emptiness check: an
+# empty string, whitespace, HTML, or a multi-line value are all rejected here, before
+# they ever reach the comparison.
+if ! _is_uint "$PUBLISHED_PROTOCOL"; then
   echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
   echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
+  echo "  (Expected one line, '<protocol> <version>'; got: '${PUBLISHED}')" >&2
   echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
   echo "   publish an mcp-v* tag first, then retry.)" >&2
   exit 1
 fi
 
-if [ "$MCP_PROTOCOL" -gt "$PUBLISHED" ]; then
+if [ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOL" ]; then
   echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2
-  echo "  ambience-mcp only speaks ${PUBLISHED}." >&2
+  echo "  ambience-mcp only speaks ${PUBLISHED_PROTOCOL}." >&2
   echo "" >&2
   echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
   echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
   exit 1
 fi
-echo "  published ambience-mcp speaks protocol ${PUBLISHED} ✓"
+echo "  published ambience-mcp ${PUBLISHED_VERSION} speaks protocol ${PUBLISHED_PROTOCOL} ✓"
+
+# The refusal floor must name a PUBLISHED ambience-mcp — see the header above. The
+# PEP 440 comparison is delegated to Gate 1's script (`--check-floor-against`), not
+# re-implemented here: two implementations of one ordering is precisely the seam this
+# branch already closed once, and a shell `[ x \> y ]` string compare would call
+# "0.2.0rc10" OLDER than "0.2.0rc9". It fails CLOSED on a version it cannot parse — an
+# empty PUBLISHED_VERSION (a one-field reply) included.
+if ! python3 "$(dirname "$0")/check_mcp_protocol.py" \
+  --const custom_components/ambience/const.py \
+  --check-floor-against "$PUBLISHED_VERSION"; then
+  echo "error: MIN_MCP_VERSION does not name a published ambience-mcp (see above)." >&2
+  echo "  The gate fails CLOSED: a floor above the newest PUBLISHED ambience-mcp tells" >&2
+  echo "  every user, on every tool call, to upgrade to a version that does not exist." >&2
+  exit 1
+fi
 
 MANIFEST="custom_components/ambience/manifest.json"
 BRANCH="chore/release"

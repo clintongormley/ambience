@@ -1,7 +1,14 @@
+from typing import Any
+
 import pytest
 from conftest import FakeClient
 
-from ambience_mcp.ha_client import HACommandError, IncompatibleError, ReconnectingClient
+from ambience_mcp.ha_client import (
+    HACommandError,
+    HAConnectionError,
+    IncompatibleError,
+    ReconnectingClient,
+)
 
 
 def _reconnecting(hello, *, supported=frozenset({1}), mcp_version="0.2.0rc3"):
@@ -38,7 +45,10 @@ async def test_backend_ahead_says_upgrade_the_mcp_server():
 async def test_backend_behind_says_upgrade_ambience():
     client, _ = _reconnecting({"protocol": 1}, supported=frozenset({2, 3}))
 
-    with pytest.raises(IncompatibleError, match="(?i)ambience"):
+    # match="(?i)ambience" would also match the upgrade-ambience-mcp messages
+    # (they say "ambience-mcp" too) — proving only that *some* IncompatibleError
+    # was raised, not that it named the right side. Pin the actual text.
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
         await client.ready()
 
 
@@ -166,3 +176,119 @@ async def test_two_servers_against_different_backends_are_independent():
 
     assert await home.ready() == 1
     assert await test_box.ready() == 2
+
+
+class _HandshakeThenScriptedClient:
+    """An HAClient stand-in whose hello is scripted once, then replays scripted
+    outcomes for subsequent commands — for testing the interaction between the
+    reconnect-retry path and a re-handshake on the new connection."""
+
+    def __init__(self, hello: Any, *outcomes: Any) -> None:
+        self._hello = hello
+        self._outcomes = list(outcomes)
+        self.closed = False
+        self.calls: list[str] = []
+
+    async def command(self, type: str, **payload: Any) -> Any:
+        self.calls.append(type)
+        if type == "ambience/mcp/hello":
+            if isinstance(self._hello, Exception):
+                raise self._hello
+            return self._hello
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            if isinstance(outcome, HAConnectionError):
+                self.closed = True
+            raise outcome
+        return outcome
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _cfg() -> Any:
+    return type("Cfg", (), {"ws_url": "ws://x", "token": "t"})()
+
+
+async def test_retry_after_reconnect_checks_the_new_verdict_before_sending():
+    """Critical 1: `command()`'s reconnect-retry must not send to a backend the
+    *retry's own* `_live()` call just declared incompatible.
+
+    Scenario: a compatible link is established, then the socket goes stale (an
+    HA restart after an Ambience upgrade). The next command fails on send
+    (sent=False) and triggers the retry. The retry's `_live()` reconnects and
+    re-handshakes — and discovers the new backend speaks an unsupported
+    protocol. The retry must raise IncompatibleError instead of sending the
+    tool command to the backend it just declared incompatible."""
+    stale = _HandshakeThenScriptedClient(
+        {"protocol": 1}, HAConnectionError("stale socket", sent=False)
+    )
+    incompatible = _HandshakeThenScriptedClient({"protocol": 2}, {"ok": True})
+    connections = [stale, incompatible]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    assert await client.ready() == 1  # first connection: compatible
+
+    with pytest.raises(IncompatibleError):
+        await client.command("ambience/ping")
+
+    # The new client saw ONLY the hello — the tool command must never be sent.
+    assert incompatible.calls == ["ambience/mcp/hello"]
+
+
+async def test_a_failed_handshake_closes_the_client_instead_of_leaking_it():
+    """Important 2: a hello that itself raises (e.g. `unauthorized` for a
+    non-admin token) must not abandon the freshly-connected client. It was never
+    published to `self._client`, so nothing else will ever close it — leaving it
+    open leaks a socket (+ reader/keepalive tasks) on every single tool call,
+    forever."""
+    fakes = [
+        FakeClient({"ambience/mcp/hello": HACommandError("unauthorized", "no admin")})
+        for _ in range(2)
+    ]
+    connections = iter(fakes)
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return next(connections)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    with pytest.raises(HACommandError, match="unauthorized"):
+        await client.ready()
+    with pytest.raises(HACommandError, match="unauthorized"):
+        await client.ready()
+
+    # Every failed handshake attempt closed its own client — none leaked.
+    assert all(fake.closed for fake in fakes)
+
+
+async def test_ready_raises_instead_of_asserting_when_protocol_is_unset():
+    """Minor 4: `assert` is stripped under `python -O`, where `ready()` would
+    silently return `None` and Task 6's `PROTOCOLS[await client.ready()]` would
+    raise an opaque `KeyError: None`. Simulate the "clean verdict but no agreed
+    protocol" state directly (unreachable through `_negotiate` as written) to
+    prove the guard is a real `raise`, not an assertion."""
+    client, _ = _reconnecting({"protocol": 1})
+    await client.ready()
+    client._protocol = None  # the "should never happen" state the guard covers
+
+    with pytest.raises(RuntimeError, match="_negotiate"):
+        await client.ready()
+
+
+async def test_bool_protocol_is_not_treated_as_valid():
+    """Minor 8: `bool` is an `int` subclass, and `True in frozenset({1})` is
+    `True` — so `{"protocol": True}` must not silently "agree" protocol True.
+    Without the `not isinstance(protocol, bool)` guard this would pass."""
+    client, _ = _reconnecting({"protocol": True}, supported=frozenset({1}))
+
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+        await client.ready()

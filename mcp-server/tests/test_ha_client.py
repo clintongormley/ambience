@@ -249,6 +249,34 @@ async def test_does_not_resend_a_command_that_reached_home_assistant():
     assert fresh.sent == []  # never re-sent
 
 
+async def test_a_failed_connect_is_retried_for_a_non_mutating_command():
+    """Important 3: before Task 5's handshake, a `connect()` failure (not just a
+    mid-command socket drop) still got a second connect attempt for a read —
+    `command()`'s first `_live()` call was inside the try/except. Task 5 moved
+    that first call outside the try, so a `connect()` failure (which defaults
+    to `sent=True`) propagated on the very first attempt instead of retrying.
+    Folding both `_live()` calls behind `_checked_live()` inside the same
+    try/except (the Critical-1 fix) restores this."""
+    fake = _ScriptedClient({"scenes": []})
+    attempts = [HAConnectionError("unreachable", sent=True), None]
+
+    async def _connect(ws_url: str, token: str):
+        outcome = attempts.pop(0)
+        if outcome is not None:
+            raise outcome
+        return fake
+
+    client = ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
+
+    assert await client.command("ambience/house/get") == {"scenes": []}
+    assert fake.sent == ["ambience/house/get"]
+
+
 async def test_a_resend_that_fails_again_propagates():
     first = _ScriptedClient(HAConnectionError("stale", sent=False))
     second = _ScriptedClient(HAConnectionError("still dead", sent=False))

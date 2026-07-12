@@ -249,7 +249,10 @@ class ReconnectingClient:
                 )
 
         protocol = hello.get("protocol")
-        if not isinstance(protocol, int):
+        # bool is an int subclass (`isinstance(True, int)` is True), so a backend
+        # replying {"protocol": true} would otherwise "agree" a protocol of True —
+        # exclude it explicitly so a bool is treated as missing/invalid.
+        if not isinstance(protocol, int) or isinstance(protocol, bool):
             return _UPDATE_AMBIENCE  # pre-protocol: silence never grants permission
         if protocol in self._supported:
             self._protocol = protocol
@@ -284,33 +287,63 @@ class ReconnectingClient:
                     # drops the socket, so a stale verdict cannot survive the very
                     # upgrade that would change it. That makes this self-healing.
                     self._protocol = None
-                    self._verdict = await self._negotiate(client)
+                    self._verdict = None  # don't let the previous connection's verdict linger
+                    try:
+                        self._verdict = await self._negotiate(client)
+                    except BaseException:
+                        # The handshake itself failed (bad auth, dropped socket
+                        # mid-hello, ...). The client was never published to
+                        # self._client, so nothing else will ever close it —
+                        # release it now or every subsequent call leaks a socket.
+                        with contextlib.suppress(Exception):
+                            await client.close()
+                        raise
                     self._client = client
         return self._client
+
+    async def _checked_live(self) -> HAClient:
+        """`_live()`, then re-check the verdict it may have just set.
+
+        A single `_verdict` check at the top of `command()`/`ready()` is not
+        enough: the reconnect-and-retry path calls `_live()` a second time, and
+        *that* call can be the one that reconnects, re-handshakes, and discovers
+        incompatibility. Every call to `_live()` that might send a command must
+        be paired with a fresh verdict check, or the retry can send a tool
+        command to a backend it just declared incompatible.
+        """
+        client = await self._live()
+        if self._verdict is not None:
+            # Raise BEFORE sending: an incompatible pair must not touch the backend.
+            raise IncompatibleError(self._verdict)
+        return client
 
     async def ready(self) -> int:
         """Connect and negotiate. Raises IncompatibleError if the pair cannot work
         together; otherwise returns the agreed protocol."""
-        await self._live()
-        if self._verdict is not None:
-            raise IncompatibleError(self._verdict)
-        assert self._protocol is not None  # a clean verdict always sets it
+        await self._checked_live()
+        if self._protocol is None:
+            # A clean verdict (None) always sets _protocol — this would mean
+            # _negotiate() returned None without agreeing a protocol, which is a
+            # bug in _negotiate(), not a runtime condition callers can hit. Raise
+            # rather than `assert`: assertions are stripped under `python -O`,
+            # and a bare None here would surface downstream as an opaque
+            # `KeyError: None` from `PROTOCOLS[await client.ready()]`.
+            raise RuntimeError(
+                "ReconnectingClient.ready(): no compatibility verdict was set for "
+                "an agreed protocol — this is a bug in _negotiate()"
+            )
         return self._protocol
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
-        await self._live()
-        if self._verdict is not None:
-            # Raise BEFORE sending: an incompatible pair must not touch the backend.
-            raise IncompatibleError(self._verdict)
         try:
-            return await (await self._live()).command(type, **payload)
+            return await (await self._checked_live()).command(type, **payload)
         except HAConnectionError as exc:
             # Never reached HA → always safe to re-send, read or write.
             # Reached HA but the reply was lost → safe only for a read; a write may
             # have been applied, and re-sending could apply it twice.
             if exc.sent and _mutates(type):
                 raise
-            return await (await self._live()).command(type, **payload)
+            return await (await self._checked_live()).command(type, **payload)
 
     async def close(self) -> None:
         if self._client is not None:

@@ -42,3 +42,6 @@ class FakeClient:
         if isinstance(value, Exception):
             raise value
         return value
+
+    async def close(self) -> None:
+        self.closed = True

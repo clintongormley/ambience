@@ -1,6 +1,6 @@
 [project]
 name = "ambience-mcp"
-version = "0.2.0-rc.2"
+version = "0.2.0-rc.3"
 description = "Local MCP server for authoring Home Assistant Ambience scenes"
 requires-python = ">=3.11"
 dependencies = [

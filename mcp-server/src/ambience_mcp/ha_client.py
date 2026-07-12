@@ -347,13 +347,14 @@ class ReconnectingClient:
         SUPPORTED but DIFFERENT sails straight through it: `_live()` can hand back a
         stale-but-not-yet-known-dead client (the normal state right after an HA
         restart), the adapter gets built from the cached protocol, and the reconnect
-        that discovers the new one happens later, inside `command()` — with no way to
-        tell the already-constructed adapter that the ground moved. Unreachable while
-        only one protocol exists; live the moment a `v2.py` ships, which is the whole
-        point of the frozen-adapter design.
+        that discovers the new one happens later — inside this call's own retry, or in
+        a CONCURRENT tool call, with no way to tell either already-constructed adapter
+        that the ground moved. Hence `agreed` is the adapter's, not `self._protocol`.
+        Unreachable while only one protocol exists; live the moment a `v2.py` ships,
+        which is the whole point of the frozen-adapter design.
 
-        Returns the live protocol so a caller that had none yet (a `command()` before
-        any `ready()`) adopts the one this handshake agreed.
+        Returns the live protocol so a caller that had none yet (a bare `command()`,
+        with no adapter behind it) adopts the one this handshake agreed.
         """
         client = await self._checked_live()
         protocol = self._protocol
@@ -382,13 +383,23 @@ class ReconnectingClient:
             )
         return self._protocol
 
-    async def command(self, type: str, **payload: Any) -> dict[str, Any]:
-        # `agreed` is the protocol the CALLER's adapter was built from — read before
-        # anything can reconnect. `_live_for` refuses to send once the backend on the
-        # far side of a reconnect is a different (even if supported) protocol; losing
-        # one tool call is the safe direction, because the model just retries and the
-        # retry re-derives the adapter from the new protocol.
-        agreed = self._protocol
+    async def command_for(self, agreed: int | None, type: str, **payload: Any) -> dict[str, Any]:
+        """Send a command on behalf of a caller that assumes protocol `agreed`.
+
+        `agreed` comes from the CALLER — the protocol its adapter was built for (see
+        `BaseProtocol.protocol`) — and never from `self._protocol`, which is shared
+        mutable state that any concurrent tool call can move under us. MCP clients
+        dispatch tool calls as parallel tasks over this one client, so re-reading the
+        current protocol here would compare the caller's assumption against nothing at
+        all: two tool calls can both build a V1 adapter, the first can reconnect into a
+        protocol-2 backend, and the second's V1 command would then find `_protocol == 2`
+        "agreed" and go out — the exact v1-adapter-hits-a-v2-backend mismatch the frozen
+        adapters exist to prevent.
+
+        `None` means "no adapter behind this call" (a bare `command()`): it adopts
+        whatever protocol the handshake agrees, and only the retry inside this one call
+        is then held to it.
+        """
         try:
             client, agreed = await self._live_for(agreed)
             return await client.command(type, **payload)
@@ -400,6 +411,15 @@ class ReconnectingClient:
                 raise
             client, _ = await self._live_for(agreed)
             return await client.command(type, **payload)
+
+    async def command(self, type: str, **payload: Any) -> dict[str, Any]:
+        """An unpinned command: it adopts the protocol this connection agrees.
+
+        The tools do NOT come through here — they go through their adapter, which pins
+        the protocol it was built for (`command_for`). This is for callers that have no
+        protocol assumption to hold yet.
+        """
+        return await self.command_for(None, type, **payload)
 
     async def close(self) -> None:
         if self._client is not None:

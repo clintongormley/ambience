@@ -24,7 +24,7 @@ def _v1(
 ) -> ProtocolV1:
     """The adapter under test. The ledger and guide cache are server-held state, so
     a test that spans preview→apply (or two guide fetches) must pass the same one."""
-    return ProtocolV1(client, ledger or PreviewLedger(), cache or tools.GuideCache())
+    return ProtocolV1(client, ledger or PreviewLedger(), cache or tools.GuideCache(), protocol=1)
 
 
 async def test_get_scope_area_uses_area_get():

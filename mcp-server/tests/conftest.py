@@ -34,6 +34,7 @@ class FakeClient:
     def __init__(self, results: dict[str, Any] | None = None) -> None:
         self.results = results or {}
         self.calls: list[dict[str, Any]] = []
+        self.agreed: list[int | None] = []
         self.closed = False
 
     async def command(self, type: str, **payload: Any) -> dict[str, Any]:
@@ -42,6 +43,16 @@ class FakeClient:
         if isinstance(value, Exception):
             raise value
         return value
+
+    async def command_for(self, agreed: int | None, type: str, **payload: Any) -> dict[str, Any]:
+        """The pinned form a protocol adapter uses (see `ReconnectingClient.command_for`).
+
+        The agreed protocol is recorded SEPARATELY from the payload — it is an
+        assertion the caller makes about the connection, not a wire field — so
+        `calls` stays the exact command the backend would see.
+        """
+        self.agreed.append(agreed)
+        return await self.command(type, **payload)
 
     async def close(self) -> None:
         self.closed = True

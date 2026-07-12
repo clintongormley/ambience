@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 from conftest import FakeClient
 
+from ambience_mcp import server
 from ambience_mcp.ha_client import (
     HACommandError,
     HAConnectionError,
@@ -10,6 +11,7 @@ from ambience_mcp.ha_client import (
     ProtocolChangedError,
     ReconnectingClient,
 )
+from ambience_mcp.protocols.v1 import ProtocolV1
 
 
 def _reconnecting(hello, *, supported=frozenset({1}), mcp_version="0.2.0rc3"):
@@ -252,16 +254,17 @@ async def test_retry_after_reconnect_checks_the_new_verdict_before_sending():
 
 
 async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_to():
-    """Important 1: `_checked_live()` blocks INCOMPATIBLE protocols. A protocol that
-    is SUPPORTED but DIFFERENT sails straight through it — and the adapter was already
-    built, from the protocol agreed on the PREVIOUS handshake.
+    """Important 1, the WITHIN-A-CALL case: `_checked_live()` blocks INCOMPATIBLE
+    protocols. A protocol that is SUPPORTED but DIFFERENT sails straight through it.
 
     Scenario (MCP supports {1, 2}; the user upgrades Ambience 1 → 2, which restarts
-    HA): `_protocol_()` builds the V1 adapter from the cached protocol on a
-    stale-but-not-yet-known-dead client. The command fails on send (sent=False), the
-    retry reconnects and re-handshakes to protocol 2 — and, without this guard, sends
-    the V1 command to the V2 backend. That is the silent v1-adapter-reads-v2-payload
-    mismatch the frozen adapters exist to prevent.
+    HA): the command goes out on a stale-but-not-yet-known-dead client, fails on send
+    (sent=False), and the retry reconnects and re-handshakes to protocol 2 — and,
+    without this guard, re-sends the protocol-1 command to the V2 backend. That is the
+    silent v1-adapter-reads-v2-payload mismatch the frozen adapters exist to prevent.
+
+    The CONCURRENT case — two adapters in flight over the one shared client, which no
+    re-read of `self._protocol` can save — is the next test.
 
     Unreachable while PROTOCOLS == {1} (any other protocol is refused as
     incompatible). Live the moment a `v2.py` ships.
@@ -282,7 +285,7 @@ async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_
     assert await client.ready() == 1  # the V1 adapter is built from this
 
     with pytest.raises(ProtocolChangedError, match="protocol 2"):
-        await client.command("ambience/ai_context")
+        await client.command_for(1, "ambience/ai_context")
 
     # The V1 command never reached the V2 backend — only the handshake did.
     assert upgraded.calls == ["ambience/mcp/hello"]
@@ -291,10 +294,73 @@ async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_
     assert await client.ready() == 2
 
 
-async def test_a_write_that_may_have_landed_is_still_never_re_sent():
+async def test_a_second_adapter_in_flight_is_never_sent_to_the_new_protocol(monkeypatch):
+    """Important 1, the CONCURRENT case — the one a single call chain cannot show.
+
+    MCP clients dispatch tool calls as parallel tasks, and every one of them shares the
+    single `ReconnectingClient`. Nothing serialises them, so the protocol an adapter was
+    built for CANNOT be recovered by re-reading the client's current `_protocol`: a
+    sibling call can move it between the handshake and the send.
+
+      1. Tool calls A and B both handshake protocol 1 → both build a V1 adapter.
+      2. A's command hits the stale socket, reconnects, re-handshakes → the backend now
+         speaks protocol 2 → A is correctly dropped.
+      3. B still holds its V1 adapter — and the client's `_protocol` now says 2. If the
+         "agreed" protocol were re-read from the client here, B's V1 command would
+         "agree" with the V2 backend and go out: exactly the v1-adapter-reads-a-v2-
+         payload mismatch the frozen adapters exist to prevent.
+
+    So the assumption travels WITH the adapter (`BaseProtocol.protocol` →
+    `ReconnectingClient.command_for`), and B raises instead of sending.
+
+    Driven through the real `server._protocol_()` — the construction under test is
+    precisely "what does a tool call hold while another one reconnects".
+    """
+    stale = _HandshakeThenScriptedClient(
+        {"protocol": 1}, HAConnectionError("stale socket", sent=False)
+    )
+    upgraded = _HandshakeThenScriptedClient({"protocol": 2}, {"ok": True}, {"ok": True})
+    connections = [stale, upgraded]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1, 2}), mcp_version="0.2.0rc3"
+    )
+    monkeypatch.setattr(server, "_client_", lambda: client)
+
+    # Two tool calls, in flight together, over the one client.
+    call_a = await server._protocol_()
+    call_b = await server._protocol_()
+    assert isinstance(call_a, ProtocolV1) and isinstance(call_b, ProtocolV1)
+    assert call_a.protocol == 1 and call_b.protocol == 1
+
+    # A reconnects into the protocol-2 backend and is dropped...
+    with pytest.raises(ProtocolChangedError, match="protocol 2"):
+        await call_a.get_context()
+    assert client._protocol == 2  # ...and the shared state has moved under B's feet.
+
+    # B's V1 adapter must NOT send to that backend.
+    with pytest.raises(ProtocolChangedError, match="protocol 2"):
+        await call_b.get_context()
+
+    # Neither V1 command reached the V2 backend: it has seen only the handshake.
+    assert upgraded.calls == ["ambience/mcp/hello"]
+    # The loss is those calls, not the session — the next tool call derives its adapter
+    # from the freshly agreed protocol.
+    assert await client.ready() == 2
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+async def test_a_write_that_may_have_landed_is_still_never_re_sent(pinned):
     """The protocol-change guard sits on the SAME retry path as the write-safety
     rule, so lock that rule in here: a `/save` that reached HA (sent=True) and lost
-    only its reply must still raise rather than reconnect and re-apply."""
+    only its reply must still raise rather than reconnect and re-apply.
+
+    Both entry points, because both are real: `command()` (unpinned) and the
+    `command_for()` an adapter uses for every tool call.
+    """
     flaky = _HandshakeThenScriptedClient(
         {"protocol": 1}, HAConnectionError("reply lost", sent=True)
     )
@@ -307,8 +373,13 @@ async def test_a_write_that_may_have_landed_is_still_never_re_sent():
         connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
     )
 
+    save = (
+        client.command_for(1, "ambience/area/save", scope={})
+        if pinned
+        else client.command("ambience/area/save", scope={})
+    )
     with pytest.raises(HAConnectionError):
-        await client.command("ambience/area/save", scope={})
+        await save
 
     # It never reconnected — the second client was never taken from the list.
     assert len(connections) == 1

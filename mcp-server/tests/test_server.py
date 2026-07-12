@@ -58,6 +58,10 @@ async def test_the_backends_protocol_chooses_the_adapter(monkeypatch):
     assert protocol.client is client
     assert protocol.ledger is server._ledger
     assert protocol.guide_cache is server._guide_cache
+    # The adapter is told WHICH protocol it was looked up under, and carries it into
+    # every command it sends — the client cannot re-derive it from shared state that a
+    # concurrent tool call may have moved. See ReconnectingClient.command_for.
+    assert protocol.protocol == 1
 
 
 def test_all_tool_wrappers_exist():

@@ -102,9 +102,16 @@ async def _protocol_() -> BaseProtocol:
 
     `ready()` handshakes (once per connection) and raises IncompatibleError if the
     pair cannot work together — so every tool fails with an actionable "upgrade
-    THIS side" message instead of half-working."""
+    THIS side" message instead of half-working.
+
+    The negotiated protocol is BOTH the key the adapter is looked up under and the
+    assumption the adapter carries into every command it sends (`BaseProtocol.protocol`).
+    Parallel tool calls each get their own adapter over the one shared client, so an
+    adapter that has to state its protocol is the only thing that can outlive a
+    reconnect underneath it — see `ReconnectingClient.command_for`."""
     client = _client_()
-    return PROTOCOLS[await client.ready()](client, _ledger, _guide_cache)
+    protocol = await client.ready()
+    return PROTOCOLS[protocol](client, _ledger, _guide_cache, protocol=protocol)
 
 
 @mcp.tool()

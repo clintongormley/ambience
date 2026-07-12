@@ -27,7 +27,7 @@ class ProtocolV1(BaseProtocol):
         needs everything inline, but at ~90k tokens it cannot be returned as a tool
         result. Entity rows come from `find_entities`, scene lists from `get_scope`,
         traces from `list_traces`."""
-        return fit_context(await self.client.command("ambience/ai_context"))
+        return fit_context(await self.command("ambience/ai_context"))
 
     async def find_entities(
         self,
@@ -55,7 +55,7 @@ class ProtocolV1(BaseProtocol):
             )
             if value is not None
         }
-        return fit_entities(await self.client.command("ambience/entities/find", **payload))
+        return fit_entities(await self.command("ambience/entities/find", **payload))
 
     async def list_traces(self, limit: int | None = None) -> dict[str, Any]:
         """Recent scene-evaluation traces, always redacted.
@@ -68,4 +68,4 @@ class ProtocolV1(BaseProtocol):
         payload: dict[str, Any] = {"redact": True}
         if limit is not None:
             payload["limit"] = limit
-        return fit_traces(await self.client.command("ambience/traces/list", **payload))
+        return fit_traces(await self.command("ambience/traces/list", **payload))

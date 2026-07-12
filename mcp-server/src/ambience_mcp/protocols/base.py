@@ -33,10 +33,34 @@ from ..tools import (
 class BaseProtocol:
     """Talks to one Ambience over an HAClient. Subclassed per protocol version."""
 
-    def __init__(self, client: Any, ledger: PreviewLedger, guide_cache: GuideCache) -> None:
+    def __init__(
+        self,
+        client: Any,
+        ledger: PreviewLedger,
+        guide_cache: GuideCache,
+        *,
+        protocol: int,
+    ) -> None:
         self.client = client
         self.ledger = ledger
         self.guide_cache = guide_cache
+        # The protocol this adapter was BUILT for — the key it was looked up under in
+        # PROTOCOLS. Every command it sends carries it (see `command`), so the client
+        # can refuse to put a v1-shaped command on a backend that has since reconnected
+        # at v2. Required, not defaulted: an adapter that does not know its own protocol
+        # cannot state the assumption it is asking the client to hold.
+        self.protocol = protocol
+
+    async def command(self, type: str, **payload: Any) -> dict[str, Any]:
+        """Every backend call an adapter makes goes through here — pinned to the
+        protocol the adapter was built for.
+
+        Not `self.client.command(...)`: the client's own idea of the current protocol
+        is shared mutable state that a CONCURRENT tool call can change (an HA restart
+        under a parallel command reconnects and re-handshakes). Only the adapter holds
+        the vN assumption, so only the adapter can supply it.
+        """
+        return await self.client.command_for(self.protocol, type, **payload)
 
     # --- protocol-specific: every subclass MUST implement these three ---
 
@@ -53,7 +77,7 @@ class BaseProtocol:
 
     async def get_scope(self, scope: dict[str, Any]) -> dict[str, Any]:
         kind, sid = _parse_scope(scope)
-        result = await self.client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))
+        result = await self.command(f"ambience/{kind}/get", **_id_payload(kind, sid))
         if isinstance(result.get("scenes"), list):
             result["scenes"] = _with_ranks(result["scenes"])
         return result
@@ -70,7 +94,7 @@ class BaseProtocol:
         """
         held = {"have_version": self.guide_cache.version} if self.guide_cache.version else {}
         try:
-            payload = await self.client.command("ambience/ai_guide", **held)
+            payload = await self.command("ambience/ai_guide", **held)
         except HACommandError as exc:
             if exc.code == "unknown_command":
                 return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
@@ -99,16 +123,12 @@ class BaseProtocol:
         kind, sid = _parse_scope(scope)
         # dry_run uses HA's shared scope selector, which marks house with `house: True`
         # rather than an id key; area/floor reuse the same id selector as get/save.
-        return await self.client.command(
-            "ambience/dry_run", **(_id_payload(kind, sid) or {"house": True})
-        )
+        return await self.command("ambience/dry_run", **(_id_payload(kind, sid) or {"house": True}))
 
     async def validate(self, scenes: list[dict[str, Any]]) -> dict[str, Any]:
         # Strip the read-only `rank` annotation, like the write paths, so a caller that
         # validates scenes it just read never leaks it to the backend validator.
-        return await self.client.command(
-            "ambience/validate", config={"scenes": _strip_ranks(scenes)}
-        )
+        return await self.command("ambience/validate", config={"scenes": _strip_ranks(scenes)})
 
     async def preview_write(
         self,
@@ -119,7 +139,7 @@ class BaseProtocol:
         kind, sid = _parse_scope(scope)
         scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
         new_categories = new_categories or []
-        current = (await self.client.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
+        current = (await self.command(f"ambience/{kind}/get", **_id_payload(kind, sid))).get(
             "scenes", []
         )
         # `current` is backend-sourced, so a too-new/unknown bundle could reshape it (same
@@ -130,7 +150,7 @@ class BaseProtocol:
         if not isinstance(current, list) or not all(isinstance(scene, dict) for scene in current):
             current = []
         try:
-            await self.client.command("ambience/validate", config={"scenes": scenes})
+            await self.command("ambience/validate", config={"scenes": scenes})
             valid, errors = True, None
         except HACommandError as exc:
             valid, errors = False, exc.message
@@ -138,7 +158,7 @@ class BaseProtocol:
         # on save, so an unflagged typo would commit something other than the previewed
         # diff. A category counts as known if it already exists OR is declared in
         # new_categories (created on apply); anything else blocks the write.
-        cat_list = await self.client.command("ambience/categories/list")
+        cat_list = await self.command("ambience/categories/list")
         existing_ids = {c.get("id") for c in cat_list.get("categories", [])}
         known = existing_ids | {c.get("id") for c in new_categories}
         unknown = sorted(
@@ -187,11 +207,11 @@ class BaseProtocol:
         # categories/save replaces wholesale) so a scene's new category exists instead
         # of being coerced to General.
         if new_categories:
-            existing = (await self.client.command("ambience/categories/list")).get("categories", [])
-            await self.client.command(
+            existing = (await self.command("ambience/categories/list")).get("categories", [])
+            await self.command(
                 "ambience/categories/save", categories=_merge_categories(existing, new_categories)
             )
-        return await self.client.command(
+        return await self.command(
             f"ambience/{kind}/save",
             config={"scenes": scenes},
             change={"action": "import", "scene_name": None},
@@ -200,7 +220,7 @@ class BaseProtocol:
         )
 
     async def list_categories(self) -> dict[str, Any]:
-        return await self.client.command("ambience/categories/list")
+        return await self.command("ambience/categories/list")
 
     async def save_categories(self, categories: list[dict[str, Any]]) -> dict[str, Any]:
-        return await self.client.command("ambience/categories/save", categories=categories)
+        return await self.command("ambience/categories/save", categories=categories)

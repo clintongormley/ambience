@@ -342,3 +342,103 @@ def test_version_key_rejects_garbage():
         version_key("banana", what="test")
     with pytest.raises(SystemExit):
         version_key(3, what="test")
+
+
+# The spread the differential below compares. Every entry is a version this repo could
+# plausibly hold in MIN_MCP_VERSION or mcp-server/pyproject.toml, plus the spellings
+# that break a naive compare: the two spellings of the SAME rc (a false "newer" here
+# refuses every current user), rc9 vs rc10 (string ordering gets it backwards), an rc
+# vs its final, `1.0` vs `1.0.0`, and dev/post/alpha/beta/epoch.
+_SPREAD = (
+    "0.1.0",
+    "0.2.0-rc.3",
+    "0.2.0rc3",
+    "0.2.0rc9",
+    "0.2.0rc10",
+    "0.2.0",
+    "0.2.1",
+    "0.3.0",
+    "1.0",
+    "1.0.0",
+    "1.0.0a1",
+    "1.0.0b2",
+    "1.0.0rc1",
+    "1.0.0rc1.dev1",
+    "1.0.0.dev1",
+    "1.0.0.post1",
+    "1.0.0.post1.dev1",
+    "2.0.0",
+    "1!0.1.0",
+)
+
+
+def _sign(left, right) -> int:
+    return (left > right) - (left < right)
+
+
+def test_vendored_pep440_agrees_with_packaging_on_every_pair():
+    """The differential: the vendored comparison must order versions EXACTLY as real
+    `packaging.version.Version` does.
+
+    The two implementations are not interchangeable by choice — they are two halves of
+    ONE decision. This gate (stdlib-only: CI's `quality` job pip-installs nothing) says
+    "MIN_MCP_VERSION is installable"; the MCP runtime (`ha_client._negotiate`, which has
+    `packaging`) enforces the same floor against the client's own version. Wherever the
+    two orderings disagree, the gate passes a release whose runtime then refuses users —
+    the exact deadlock the gate exists to prevent.
+
+    Hand-picked assertions cannot hold that line: they did not catch the local-segment
+    divergence (`0.2.0-rc.3+dirty` > `0.2.0-rc.3` for `packaging`, EQUAL for a vendored
+    key that dropped the segment → gate PASS, runtime refuse-all). This compares every
+    pair, so a divergence has nowhere to hide.
+
+    `packaging` is a Home Assistant dependency, so it is importable in the test venv —
+    it is only the zero-install `quality` job that lacks it. Imported here, never in
+    `bin/check_mcp_protocol.py`.
+    """
+    from itertools import combinations
+
+    from packaging.version import Version
+
+    for left, right in combinations(_SPREAD, 2):
+        ours = _sign(version_key(left, what="test"), version_key(right, what="test"))
+        theirs = _sign(Version(left), Version(right))
+        assert ours == theirs, (
+            f"vendored PEP 440 disagrees with packaging on {left!r} vs {right!r}: "
+            f"vendored says {ours}, packaging says {theirs}. The gate and the MCP "
+            f"runtime must order versions identically."
+        )
+
+
+def test_a_local_version_segment_fails_closed(capsys):
+    """The divergence that a wildcard-shrug would have shipped: `packaging` orders
+    `0.2.0-rc.3+dirty` ABOVE `0.2.0-rc.3`, so a floor carrying a local segment refuses
+    every client at runtime — while a vendored key that merely IGNORED the segment
+    would call the two equal and pass the gate. A local version cannot be published to
+    PyPI either, so it can never be a floor a user could install. Fail, loudly."""
+    with pytest.raises(SystemExit):
+        version_key("0.2.0-rc.3+dirty", what="MIN_MCP_VERSION")
+
+    err = capsys.readouterr().err
+    assert "local version segment" in err
+    assert "MIN_MCP_VERSION" in err
+
+
+def test_a_floor_with_a_local_segment_is_refused_by_the_gate(tmp_path, capsys):
+    """End to end, because this is the shape the bug takes in the wild: the gate would
+    have PASSED (floor == packaged, once the segment is dropped) and every user of the
+    released Ambience would then have been refused by the runtime."""
+    with pytest.raises(SystemExit):
+        main(_repo(tmp_path, floor="0.2.0-rc.3+dirty", packaged="0.2.0-rc.3"))
+
+    assert "local version segment" in capsys.readouterr().err
+
+
+def test_a_packaged_version_with_a_local_segment_is_refused_by_the_gate(tmp_path, capsys):
+    """The other side of the same comparison: a dirty-tree version in
+    mcp-server/pyproject.toml is not a package anyone can install, so the gate must not
+    quietly measure the floor against it."""
+    with pytest.raises(SystemExit):
+        main(_repo(tmp_path, floor="0.2.0-rc.3", packaged="0.2.0-rc.3+dirty"))
+
+    assert "local version segment" in capsys.readouterr().err

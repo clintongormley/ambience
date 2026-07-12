@@ -9,7 +9,7 @@ from ambience_mcp.tools import GuideCache
 
 
 def _v1(results=None):
-    return ProtocolV1(FakeClient(results or {}), PreviewLedger(), GuideCache())
+    return ProtocolV1(FakeClient(results or {}), PreviewLedger(), GuideCache(), protocol=1)
 
 
 def test_protocol_1_is_registered():
@@ -21,10 +21,42 @@ def test_every_registered_protocol_is_a_base_protocol():
         assert issubclass(protocol, BaseProtocol)
 
 
+async def test_every_adapter_command_carries_the_protocol_it_was_built_for():
+    """The adapter — not the client's current, shared, mutable `_protocol` — is what
+    holds the vN assumption, so EVERY command it sends must state it. A tool that
+    reached for `self.client.command(...)` directly would bypass the protocol-change
+    guard and could put a v1-shaped command on a v2 backend.
+
+    `protocol=7` (a protocol that does not exist) so this cannot pass by coincidence
+    with the one protocol that does.
+    """
+    client = FakeClient(
+        {
+            "ambience/house/get": {"scenes": []},
+            "ambience/categories/list": {"categories": []},
+            "ambience/ai_context": {"catalog": {"entity_summary": {}}},
+        }
+    )
+    adapter = ProtocolV1(client, PreviewLedger(), GuideCache(), protocol=7)
+
+    await adapter.get_scope({"kind": "house"})
+    await adapter.list_categories()
+    await adapter.get_context()
+
+    assert client.agreed == [7, 7, 7]
+    # ...and every command still went through the client — the pin is out-of-band,
+    # not a payload key smuggled onto the wire.
+    assert client.calls == [
+        {"type": "ambience/house/get"},
+        {"type": "ambience/categories/list"},
+        {"type": "ambience/ai_context"},
+    ]
+
+
 async def test_base_refuses_to_guess_a_protocol_specific_tool():
     # A new protocol adapter that forgets one of the three must fail loudly, not
     # silently inherit another protocol's behaviour.
-    base = BaseProtocol(FakeClient(), PreviewLedger(), GuideCache())
+    base = BaseProtocol(FakeClient(), PreviewLedger(), GuideCache(), protocol=1)
 
     for call in (base.get_context(), base.find_entities(), base.list_traces()):
         with pytest.raises(NotImplementedError):

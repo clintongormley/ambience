@@ -81,16 +81,33 @@ _VALUE_KEYED = frozenset(
         "config.conditions.time_of_day.custom",
         "definitions.lux_ranges.custom",
         "definitions.periods.custom",
-        # keyed by exposed-action service id, then by that service's field names,
-        # then by selector type — all of which are the user's config and HA's
-        # services.yaml, not our payload structure
+        # keyed by exposed-action service id, then by that service's field names —
+        # the user's config and HA's services.yaml, not our payload structure
         "actions.schemas",
         "actions.schemas.*.fields",
-        "actions.schemas.*.fields.*.selector",
         # keyed by the dispatched action's own service field names
         "traces[].actions[].params",
     }
 )
+
+# Branches whose INSIDE is not ours at all: we pin the key and stop.
+#
+# A field's `selector` is HA's own vocabulary, copied verbatim out of a services.yaml
+# (`number: {min, max, step, unit_of_measurement}`, `select: {options, multiple,
+# custom_value, sort}`, `entity: {filter: [{domain}]}`, ...). The MCP never reads
+# inside one — it hands the schema to the model as-is — so nothing in there is part of
+# the protocol contract, and every selector kind has a different body.
+#
+# Wildcarding the selector TYPE (as `_VALUE_KEYED` did) is not enough, and that is the
+# point: it collapses the type key but still descends into the body, so adding an
+# ordinary `select` field to services.yaml adds `...selector.*.options`/`.multiple`/
+# `.custom_value`/`.sort` — and an `entity` filter adds a whole `...selector.*.*[]`
+# branch — each of which the gate would report as protocol-1 drift and demand an
+# MCP_PROTOCOL bump plus a v2 adapter FOR ADDING A SERVICE FIELD. services.yaml grows;
+# a gate that cries wolf there is a gate maintainers learn to re-record blindly.
+#
+# The `selector` key itself stays pinned, so renaming or dropping it is still caught.
+_OPAQUE = frozenset({"actions.schemas.*.fields.*.selector"})
 
 
 def shape_of(value: Any, prefix: str = "") -> set[str]:
@@ -99,9 +116,11 @@ def shape_of(value: Any, prefix: str = "") -> set[str]:
     A list contributes the union of its items' shapes, so a house with two lights
     and a house with two hundred produce the same shape. A dict listed in
     `_VALUE_KEYED` contributes the union of its VALUES' shapes under a single `*`
-    key, for the same reason.
+    key, for the same reason. A path in `_OPAQUE` contributes nothing below itself.
     """
     paths: set[str] = set()
+    if prefix in _OPAQUE:
+        return paths  # the key is pinned by our caller; its contents are HA's, not ours
     if isinstance(value, dict):
         value_keyed = prefix in _VALUE_KEYED
         for key, sub in value.items():
@@ -132,6 +151,106 @@ def assert_shape(name: str, payload: Any) -> None:
                 removed=sorted(expected - actual) or "none",
             )
         )
+
+
+# --- the wildcards themselves: they must silence NOISE without silencing DRIFT -------
+# A `_VALUE_KEYED`/`_OPAQUE` entry is a hole in the gate. Each one is here to stop a
+# false alarm (fixture data, HA's services.yaml) from reading as a protocol change —
+# and each one must still let a REAL rename through. These pin both halves, on a
+# hand-built payload, so the gate's own reach is tested rather than assumed.
+def _schema(field: dict[str, Any]) -> dict[str, Any]:
+    """The `actions.schemas` branch of ai_context, with one service and one field."""
+    return {
+        "actions": {
+            "schemas": {
+                "light.turn_on": {
+                    "name": "Turn on",
+                    "fields": {"brightness_pct": field},
+                    "target": {"entity": [{"domain": "light"}]},
+                }
+            }
+        }
+    }
+
+
+_NUMBER_FIELD = {
+    "name": "Brightness",
+    "description": "0-100",
+    "required": False,
+    "selector": {"number": {"min": 0, "max": 100, "step": 1}},
+}
+
+
+def test_a_new_service_field_selector_is_not_protocol_drift():
+    """MIN-1: the whole point of wildcarding this branch. `services.yaml` grows, and a
+    new field's selector is HA's vocabulary, not our payload structure — a `select`
+    (options/multiple/custom_value/sort) or an `entity` filter must NOT be reported as
+    "the protocol-1 shape changed, bump MCP_PROTOCOL and write a v2 adapter".
+
+    Wildcarding only the selector TYPE would not achieve this: the body keys would
+    still be walked. Hence `_OPAQUE`.
+    """
+    number = shape_of(_schema(_NUMBER_FIELD))
+
+    select = shape_of(
+        _schema(
+            {
+                "name": "Effect",
+                "description": "which effect",
+                "required": False,
+                "selector": {
+                    "select": {
+                        "options": [{"value": "a", "label": "A"}],
+                        "multiple": False,
+                        "custom_value": True,
+                        "sort": True,
+                    }
+                },
+            }
+        )
+    )
+    entity = shape_of(
+        _schema(
+            {
+                "name": "Target",
+                "description": "which entity",
+                "required": True,
+                "selector": {"entity": {"filter": [{"domain": "light"}]}},
+            }
+        )
+    )
+
+    assert select == number
+    assert entity == number
+    # ...and the selector key itself is still pinned, so dropping it IS drift.
+    assert "actions.schemas.*.fields.*.selector" in number
+
+
+def test_a_rename_inside_a_wildcarded_branch_is_still_drift():
+    """The other half: the wildcards must not blunt the gate. Each of these is a REAL
+    protocol-1 break that the v1 adapter (and the model reading its output) would trip
+    over, and each lives inside a branch some wildcard collapses."""
+    baseline = shape_of(_schema(_NUMBER_FIELD))
+
+    # `fields` -> `parameters`: the rename the enriched fixture exists to catch.
+    renamed = _schema(_NUMBER_FIELD)
+    schema = renamed["actions"]["schemas"]["light.turn_on"]
+    schema["parameters"] = schema.pop("fields")
+    assert shape_of(renamed) != baseline
+
+    # A field's own keys are ours (we choose to forward name/description/required).
+    dropped = _schema({**_NUMBER_FIELD, "mandatory": _NUMBER_FIELD["required"]})
+    del dropped["actions"]["schemas"]["light.turn_on"]["fields"]["brightness_pct"]["required"]
+    assert shape_of(dropped) != baseline
+
+    # The `selector` key itself — opaque INSIDE, pinned as a key.
+    no_selector = _schema({k: v for k, v in _NUMBER_FIELD.items() if k != "selector"})
+    assert shape_of(no_selector) != baseline
+
+    # And one level up: the service entry's own keys.
+    no_target = _schema(_NUMBER_FIELD)
+    del no_target["actions"]["schemas"]["light.turn_on"]["target"]
+    assert shape_of(no_target) != baseline
 
 
 @pytest.fixture

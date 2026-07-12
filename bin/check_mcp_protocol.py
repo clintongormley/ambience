@@ -90,12 +90,32 @@ def version_key(raw: object, *, what: str) -> tuple:
 
     Ordering (PEP 440 §"Summary of permitted suffixes and relative ordering"):
     dev < pre < final < post, with the release segment's trailing zeros stripped so
-    `1.0` == `1.0.0`. The local segment (`+local`) is ignored: it never
-    distinguishes a published `ambience-mcp` and is noise for a floor comparison.
+    `1.0` == `1.0.0`. Pinned to real `packaging.version.Version` by a differential
+    test (`tests/test_check_mcp_protocol.py`), because this gate and the MCP runtime
+    that enforces the same floor MUST agree: the runtime uses `packaging`, and any
+    ordering this vendored subset gets differently is a floor that passes the gate
+    and then refuses users.
+
+    A LOCAL segment (`1.2.3+local`) is refused outright rather than ignored. Ignoring
+    it is precisely where the two implementations diverge — `packaging` orders
+    `1.0.0 < 1.0.0+local`, so a floor of `0.2.0-rc.3+dirty` against a packaged
+    `0.2.0-rc.3` would pass a gate that dropped the segment and then make the runtime
+    refuse EVERY client. It is also unreleasable: PyPI rejects local versions, so a
+    floor carrying one names a build no user can install.
     """
     match = _VERSION_RE.match(raw) if isinstance(raw, str) else None
     if match is None:
         _fail(f"{what} is not a PEP 440 version: {raw!r}")
+    if match["local"]:
+        _fail(
+            f"{what} has a PEP 440 local version segment: {raw!r}.\n"
+            f"  A local version (the `+...` suffix) cannot be uploaded to PyPI, so no "
+            f"user can ever install it — and the MCP client compares the floor with "
+            f"real `packaging` ordering, where {raw!r} is NEWER than the same version "
+            f"without the suffix. A floor like this refuses every client.\n"
+            f"  Use the plain release version (probably a stale editable/dirty-tree "
+            f"build leaking into the value)."
+        )
 
     epoch = int(match["epoch"] or 0)
     release = tuple(int(part) for part in match["release"].split("."))

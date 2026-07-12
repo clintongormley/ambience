@@ -33,13 +33,17 @@ def _fail(message: str) -> None:
 def find_mcp_protocol(path: Path) -> int:
     """The integer assigned to MCP_PROTOCOL in const.py.
 
-    If the module assigns MCP_PROTOCOL more than once at module level, the LAST
-    assignment wins — that is what Python actually binds at runtime, and reporting
-    an earlier, stale assignment would misreport what is in effect.
+    Only DIRECT module-level statements (`tree.body`) are considered, in source
+    order — not `ast.walk`, which is breadth-first and so does not reflect
+    execution order once nesting (an `if`, a function, a class) is involved. For
+    module-level code, source order IS execution order, so "last of the direct
+    module-level statements" is the assignment Python actually binds at runtime.
+    A same-named assignment nested inside a function or class body is ignored:
+    it is not the module constant.
     """
     tree = ast.parse(path.read_text())
     matches = []
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == "MCP_PROTOCOL":
@@ -55,13 +59,15 @@ def find_mcp_protocol(path: Path) -> int:
 def find_protocols(path: Path) -> set[int]:
     """The keys of the PROTOCOLS dict in protocols/__init__.py.
 
-    If PROTOCOLS is assigned more than once at module level, the LAST assignment
-    wins (see find_mcp_protocol) — reporting a stale earlier assignment could
-    over-report the supported set and let a real mismatch pass silently.
+    Only DIRECT module-level statements (`tree.body`) are considered, in source
+    order — see find_mcp_protocol for why that (and not `ast.walk`) is required
+    for "last assignment wins" to actually match what Python binds at runtime.
+    Reporting a stale earlier assignment could over-report the supported set and
+    let a real mismatch pass silently, which is the one thing a gate must never do.
     """
     tree = ast.parse(path.read_text())
     matches = []
-    for node in ast.walk(tree):
+    for node in tree.body:
         target = None
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             target = node.target.id

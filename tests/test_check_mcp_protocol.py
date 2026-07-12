@@ -103,6 +103,62 @@ def test_find_protocols_last_assignment_wins_when_shrinking(tmp_path):
     assert find_protocols(init) == {1}
 
 
+def test_find_protocols_ignores_nested_assignment_executed_first(tmp_path):
+    # ast.walk is breadth-first, so it would visit the nested `if` assignment
+    # AFTER the top-level one despite it executing BEFORE it, and report the
+    # stale, larger set. Module-level source order must win instead.
+    init = tmp_path / "__init__.py"
+    init.write_text(
+        "if True:\n    PROTOCOLS = {1: object, 2: object, 3: object}\nPROTOCOLS = {1: object}\n"
+    )
+
+    assert find_protocols(init) == {1}
+
+
+def test_find_mcp_protocol_ignores_nested_assignment_executed_first(tmp_path):
+    # Same blind spot as above, for find_mcp_protocol.
+    const = tmp_path / "const.py"
+    const.write_text("if True:\n    MCP_PROTOCOL = 3\nMCP_PROTOCOL = 1\n")
+
+    assert find_mcp_protocol(const) == 1
+
+
+def test_find_protocols_ignores_assignment_inside_a_function(tmp_path):
+    # A same-named local inside a function body is not the module constant.
+    init = tmp_path / "__init__.py"
+    init.write_text(
+        "PROTOCOLS: dict[int, type] = {1: object}\n"
+        "\n"
+        "def _unrelated():\n"
+        "    PROTOCOLS = {1: object, 2: object, 3: object}\n"
+        "    return PROTOCOLS\n"
+    )
+
+    assert find_protocols(init) == {1}
+
+
+def test_find_protocols_ignores_assignment_inside_a_class(tmp_path):
+    # A same-named class attribute is not the module constant either.
+    init = tmp_path / "__init__.py"
+    init.write_text(
+        "PROTOCOLS: dict[int, type] = {1: object}\n"
+        "\n"
+        "class _Unrelated:\n"
+        "    PROTOCOLS = {1: object, 2: object, 3: object}\n"
+    )
+
+    assert find_protocols(init) == {1}
+
+
+def test_find_mcp_protocol_ignores_assignment_inside_a_function(tmp_path):
+    const = tmp_path / "const.py"
+    const.write_text(
+        "MCP_PROTOCOL = 1\n\ndef _unrelated():\n    MCP_PROTOCOL = 99\n    return MCP_PROTOCOL\n"
+    )
+
+    assert find_mcp_protocol(const) == 1
+
+
 def test_main_fails_on_a_protocol_mismatch(tmp_path, capsys):
     const = tmp_path / "const.py"
     const.write_text("MCP_PROTOCOL = 2\n")

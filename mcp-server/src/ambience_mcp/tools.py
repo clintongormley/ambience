@@ -109,15 +109,35 @@ def _strip_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{k: v for k, v in scene.items() if k != "rank"} for scene in scenes]
 
 
-_CONTEXT_UNAVAILABLE_MESSAGE = (
-    "Your Ambience is too old for this ambience-mcp: it does not serve "
-    "ambience/ai_context. Upgrade Ambience, or pin an older ambience-mcp."
-)
+def _unavailable_message(command: str) -> str:
+    """The sentence shown when a command doesn't exist on the connected backend
+    yet — same wording for every "your Ambience is too old" case, command name
+    swapped in. See `_command_or_upgrade`."""
+    return (
+        f"Your Ambience is too old for this ambience-mcp: it does not serve {command}. "
+        "Upgrade Ambience, or pin an older ambience-mcp."
+    )
 
-_FIND_ENTITIES_UNAVAILABLE_MESSAGE = (
-    "Your Ambience is too old for this ambience-mcp: it does not serve "
-    "ambience/entities/find. Upgrade Ambience, or pin an older ambience-mcp."
-)
+
+async def _command_or_upgrade(client: Any, command: str, **payload: Any) -> dict[str, Any]:
+    """Run an HA command that only exists on a recent-enough Ambience, turning
+    the backend's generic `unknown_command` into an actionable ToolError that
+    names the command and tells the model what to do about it. Every other
+    HACommandError passes through untouched — only "the backend predates this
+    command" gets rewritten; a real validation/internal error must reach the
+    caller as-is.
+
+    Shared by `get_context` and `find_entities`, which used to each carry an
+    identical try/except doing this by hand. `get_guide` has a similar check
+    but returns `{"unavailable": True, ...}` instead of raising, so it is left
+    alone rather than folded in here.
+    """
+    try:
+        return await client.command(command, **payload)
+    except HACommandError as exc:
+        if exc.code == "unknown_command":
+            raise ToolError(_unavailable_message(command)) from exc
+        raise
 
 
 async def get_context(client: Any) -> dict[str, Any]:
@@ -129,12 +149,7 @@ async def get_context(client: Any) -> dict[str, Any]:
     Entity rows come from `find_entities`, scene lists from `get_scope`, traces
     from `list_traces`.
     """
-    try:
-        context = await client.command("ambience/ai_context")
-    except HACommandError as exc:
-        if exc.code == "unknown_command":
-            raise ToolError(_CONTEXT_UNAVAILABLE_MESSAGE) from exc
-        raise
+    context = await _command_or_upgrade(client, "ambience/ai_context")
 
     backend_format = context.get("ambience_ai_context")
     if isinstance(backend_format, int) and backend_format > SUPPORTED_AI_CONTEXT:
@@ -423,12 +438,7 @@ async def find_entities(
         )
         if value is not None
     }
-    try:
-        result = await client.command("ambience/entities/find", **payload)
-    except HACommandError as exc:
-        if exc.code == "unknown_command":
-            raise ToolError(_FIND_ENTITIES_UNAVAILABLE_MESSAGE) from exc
-        raise
+    result = await _command_or_upgrade(client, "ambience/entities/find", **payload)
     return fit_entities(result)
 
 

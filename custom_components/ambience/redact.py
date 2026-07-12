@@ -8,6 +8,7 @@ what gets blanked.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.components.diagnostics import REDACTED, async_redact_data
@@ -148,6 +149,22 @@ def redact_scene_actions(scope_config: Any) -> Any:
     return {**scope_config, "scenes": [_redact_scene(s) for s in scope_config["scenes"]]}
 
 
+def map_scope_configs(config: dict[str, Any], fn: Callable[[Any], Any]) -> dict[str, Any]:
+    """A shallow copy of `config` with `fn` applied to every area/floor/house
+    scope config (the same `areas`/`floors`/`house` shape `store.as_dict()`
+    dumps). Shared by `redact_store` (transform: `redact_scene_actions`) and
+    `ai_context._thin_config` (transform: `_thin_scope`) so the two exports
+    can't drift on which scopes get walked. Never mutates `config`."""
+    out = dict(config)
+    for container_key in ("areas", "floors"):
+        container = out.get(container_key)
+        if isinstance(container, dict):
+            out[container_key] = {sid: fn(cfg) for sid, cfg in container.items()}
+    if isinstance(out.get("house"), dict):
+        out["house"] = fn(out["house"])
+    return out
+
+
 def redact_store(dump: Any) -> Any:
     """Full store redaction for the diagnostics dump and the AI bundle config:
     the key-based presence/location scrub of `redact`, PLUS the value-based
@@ -156,12 +173,7 @@ def redact_store(dump: Any) -> Any:
     out = redact(dump)
     if not isinstance(out, dict):
         return out
-    for container_key in ("areas", "floors"):
-        container = out.get(container_key)
-        if isinstance(container, dict):
-            out[container_key] = {sid: redact_scene_actions(cfg) for sid, cfg in container.items()}
-    if isinstance(out.get("house"), dict):
-        out["house"] = redact_scene_actions(out["house"])
+    out = map_scope_configs(out, redact_scene_actions)
     if isinstance(out.get("exposed_actions"), list):
         out["exposed_actions"] = [redact_exposed_action(e) for e in out["exposed_actions"]]
     return out

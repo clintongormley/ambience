@@ -31,7 +31,7 @@ from .const import AI_CONTEXT_VERSION, DATA_STORE, DOMAIN
 from .entity_catalog import entity_rows, entity_summary
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .redact import redact_exposed_action, redact_store
+from .redact import map_scope_configs, redact_exposed_action, redact_store
 from .services_meta import get_service_schema
 
 
@@ -54,16 +54,7 @@ def _thin_config(config: dict[str, Any]) -> dict[str, Any]:
     `exposed_assistants`, `categories`) is ~3.2k that NO other command serves, so
     dropping the config wholesale would lose house-level settings the model needs.
     """
-    thinned = dict(config)
-    for group_key in ("areas", "floors"):
-        group = thinned.get(group_key)
-        if isinstance(group, dict):
-            thinned[group_key] = {
-                scope_id: _thin_scope(scope_config) for scope_id, scope_config in group.items()
-            }
-    if isinstance(thinned.get("house"), dict):
-        thinned["house"] = _thin_scope(thinned["house"])
-    return thinned
+    return map_scope_configs(config, _thin_scope)
 
 
 async def build_ai_context(hass: HomeAssistant) -> dict[str, Any]:

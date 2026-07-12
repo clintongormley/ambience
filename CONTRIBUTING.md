@@ -78,6 +78,28 @@ Releases follow a **cut → soak → flip** flow:
 A manual `workflow_dispatch` on the **docs** workflow can redeploy the docs for
 a chosen tag (or the current latest) if you ever need to reseed the site.
 
+### Releasing a protocol bump
+
+`MCP_PROTOCOL` (in `custom_components/ambience/const.py`) is the backend↔MCP
+contract. It is **not** either semver, and it bumps only when the contract
+changes shape.
+
+**When it bumps, publish the MCP server first.** The coupling is
+one-directional:
+
+- A **new MCP** against an **old backend** is fine — it ships a frozen adapter
+    for every protocol it supports and loads the one the backend asks for.
+- A **new backend** against an **old MCP** is a deadlock: users are told
+    "upgrade ambience-mcp", and `uvx` installs latest — which does not speak the
+    new protocol yet.
+
+So: tag `mcp-v<version>` and let it publish, **then** run `bin/release.sh`. The
+release script enforces this (it asks PyPI what the published MCP speaks and
+refuses to go first), and fails closed if PyPI cannot be reached.
+
+Ambience releases that do **not** bump `MCP_PROTOCOL` need no MCP release at
+all.
+
 ## Make targets
 
 Every gate is a `make` target so humans, the hook, and CI all run the exact same

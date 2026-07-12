@@ -86,6 +86,49 @@ if git remote get-url origin >/dev/null 2>&1; then
   fi
 fi
 
+# --- Gate 2: never release a backend before the MCP that speaks its protocol -------
+# The coupling is one-directional. A NEW MCP against an OLD backend is fine (it ships
+# an adapter for every protocol it supports). A NEW backend against an OLD MCP is a
+# DEADLOCK: every user is told "upgrade ambience-mcp" — to a version that does not
+# exist yet. `uvx` installs LATEST, so they cannot obey. Fail closed.
+MCP_PROTOCOL=$(python3 -c "
+import ast, pathlib
+tree = ast.parse(pathlib.Path('custom_components/ambience/const.py').read_text())
+for node in ast.walk(tree):
+    if isinstance(node, ast.Assign):
+        for t in node.targets:
+            if getattr(t, 'id', None) == 'MCP_PROTOCOL':
+                print(node.value.value); raise SystemExit(0)
+raise SystemExit('MCP_PROTOCOL not found')
+")
+
+echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI…"
+# Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI
+# lookup instead of hitting the real network on every pre-flight-check test.
+MCP_PYPI_CHECK_CMD="${MCP_PYPI_CHECK_CMD:-}"
+if [ -z "$MCP_PYPI_CHECK_CMD" ]; then
+  MCP_PYPI_CHECK_CMD='uvx --no-cache --from ambience-mcp python -c "from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS))"'
+fi
+PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
+
+if [ -z "$PUBLISHED" ]; then
+  echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
+  echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
+  echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
+  echo "   publish an mcp-v* tag first, then retry.)" >&2
+  exit 1
+fi
+
+if [ "$MCP_PROTOCOL" -gt "$PUBLISHED" ]; then
+  echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2
+  echo "  ambience-mcp only speaks ${PUBLISHED}." >&2
+  echo "" >&2
+  echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
+  echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
+  exit 1
+fi
+echo "  published ambience-mcp speaks protocol ${PUBLISHED} ✓"
+
 MANIFEST="custom_components/ambience/manifest.json"
 BRANCH="chore/release"
 

@@ -39,12 +39,17 @@ def _clean_env(extra: dict | None = None) -> dict:
 
     BUILD_CMD / AI_DOCS_CMD default to a no-op so the frontend-build and AI-docs
     freshness guards pass without a real toolchain; individual tests override them.
+
+    MCP_PYPI_CHECK_CMD defaults to echoing the fixture's own MCP_PROTOCOL (see
+    _init_repo's const.py) so Gate 2 passes without hitting the real network/PyPI;
+    tests exercising Gate 2 itself override it to simulate other published protocols.
     """
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
     }
     env.setdefault("BUILD_CMD", "true")
     env.setdefault("AI_DOCS_CMD", "true")
+    env.setdefault("MCP_PYPI_CHECK_CMD", "echo 1")
     if extra:
         env.update(extra)
     return env
@@ -109,6 +114,8 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
     (comp / "frontend").mkdir(parents=True)
     (comp / "manifest.json").write_text('{\n  "domain": "ambience",\n  "version": "0.1.0"\n}\n')
     (comp / "frontend" / "ambience-panel.js").write_text("// built bundle\n")
+    # Gate 2 (release.sh) reads MCP_PROTOCOL out of const.py via an AST walk.
+    (comp / "const.py").write_text("MCP_PROTOCOL = 1\n")
 
     # The npm package ships with the integration, so its version is kept in
     # lockstep with the manifest. The lockfile carries the root version twice
@@ -329,6 +336,52 @@ def test_rejects_main_behind_origin(tmp_path: Path):
     assert result.returncode != 0
     combined = (result.stdout + result.stderr).lower()
     assert "up to date" in combined or "behind" in combined
+
+
+# --- Gate 2: never release a backend before the MCP that speaks its protocol ---
+# The fixture's const.py fixes MCP_PROTOCOL=1 (see _init_repo); MCP_PYPI_CHECK_CMD
+# stands in for the real `uvx --no-cache --from ambience-mcp ...` PyPI lookup so
+# these stay fast and network-free (default env is "echo 1", used by every other
+# test in this file to make Gate 2 a no-op while exercising unrelated behaviour).
+
+
+def test_rejects_when_mcp_protocol_ahead_of_published(tmp_path: Path):
+    """A backend release that speaks a protocol newer than the published MCP must
+    be refused — this is the deadlock Gate 2 exists to prevent."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo 0"})
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "protocol" in combined
+    assert "publish" in combined  # tells the operator to publish the MCP first
+    # Must fail before any mutation: still on main, no release branch.
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
+
+
+def test_allows_when_published_protocol_meets_or_exceeds(tmp_path: Path):
+    """A published MCP that already speaks the backend's protocol (or newer) must
+    not block the release."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo 2"})
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_fails_closed_when_published_protocol_unavailable(tmp_path: Path):
+    """If the PyPI lookup can't determine what the published MCP speaks (network
+    down, published package predates the protocols/ package, ...), the gate must
+    fail closed rather than assume compatibility."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "false"})
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "fails closed" in combined or "fail closed" in combined
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
 
 
 def test_bumps_manifest_and_creates_versionless_branch(tmp_path: Path):

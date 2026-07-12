@@ -41,6 +41,7 @@ from .const import (
 from .diagnostics import scope_diagnostics
 from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
+from .redact import redacted_traces
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     all_live_states,
@@ -1351,6 +1352,7 @@ async def _ws_live_subscribe(
     {
         vol.Required("type"): "ambience/traces/list",
         vol.Optional("limit"): vol.All(int, vol.Range(min=1)),
+        vol.Optional("redact", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -1359,12 +1361,25 @@ async def _ws_traces_list(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    """Recent traces, newest first.
+
+    Unredacted by default — the HA panel consumes this and needs the real
+    zone names/cause entities/action params to render diagnostics. Pass
+    `redact: true` (as the MCP server's list_traces always does) to get the
+    same redaction `ambience/ai_bundle` applies before a trace ever reaches an
+    external AI: presence causes, per-predicate location detail, and
+    security-domain action params (alarm codes, lock PINs) are all scrubbed.
+    """
     buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
     records = buffer.records() if buffer is not None else []
     limit = msg.get("limit")
     if limit is not None:
         records = records[:limit]
-    connection.send_result(msg["id"], {"traces": [buffered_unit_to_dict(r) for r in records]})
+    if msg.get("redact"):
+        traces = redacted_traces(hass, records)
+    else:
+        traces = [buffered_unit_to_dict(r) for r in records]
+    connection.send_result(msg["id"], {"traces": traces})
 
 
 @websocket_api.require_admin

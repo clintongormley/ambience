@@ -242,8 +242,16 @@ def buffer_records(hass: HomeAssistant) -> list[BufferedUnit]:
     return buffer.records() if buffer is not None else []
 
 
-def redacted_traces(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Every buffered trace, serialised and fully redacted."""
-    return async_redact_data(
-        [redact_trace(buffered_unit_to_dict(r)) for r in buffer_records(hass)], TO_REDACT
-    )
+def redacted_traces(
+    hass: HomeAssistant, records: list[BufferedUnit] | None = None
+) -> list[dict[str, Any]]:
+    """Buffered traces, serialised and fully redacted.
+
+    Defaults to every buffered trace (`buffer_records(hass)`); pass `records`
+    to redact a specific subset (e.g. `ambience/traces/list`'s already-limited
+    page, or `scope_diagnostics`'s per-unit filter) through this SAME rule
+    rather than duplicating it at the call site.
+    """
+    if records is None:
+        records = buffer_records(hass)
+    return async_redact_data([redact_trace(buffered_unit_to_dict(r)) for r in records], TO_REDACT)

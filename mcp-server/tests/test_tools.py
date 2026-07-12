@@ -256,7 +256,16 @@ async def test_invalid_preview_does_not_record_a_usable_token():
 async def test_list_traces_passes_limit():
     client = FakeClient({"ambience/traces/list": {"traces": []}})
     await tools.list_traces(client, limit=5)
-    assert client.calls == [{"type": "ambience/traces/list", "limit": 5}]
+    assert client.calls == [{"type": "ambience/traces/list", "redact": True, "limit": 5}]
+
+
+async def test_list_traces_always_asks_for_redaction():
+    # ambience/traces/list is unredacted by default (the HA panel needs the raw
+    # feed) — this tool leaves the house for an external AI, so it must always
+    # request the redacted view, with or without an explicit limit.
+    client = FakeClient({"ambience/traces/list": {"traces": []}})
+    await tools.list_traces(client)
+    assert client.calls == [{"type": "ambience/traces/list", "redact": True}]
 
 
 async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(monkeypatch):

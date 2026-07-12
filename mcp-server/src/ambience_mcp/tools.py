@@ -443,7 +443,16 @@ async def find_entities(
 
 
 async def list_traces(client: Any, limit: int | None = None) -> dict[str, Any]:
-    payload: dict[str, Any] = {}
+    """Recent scene-evaluation traces, always redacted.
+
+    `ambience/traces/list` is unredacted by default because the HA panel
+    consumes it and needs the real detail — but a trace can carry presence
+    causes (zone names), rendered-template location detail, and unredacted
+    alarm codes/lock PINs in dispatched action params. This tool leaves the
+    house for an external AI, so it always asks for the same redaction the AI
+    bundle applies (`redact=True`), never the panel's raw feed.
+    """
+    payload: dict[str, Any] = {"redact": True}
     if limit is not None:
         payload["limit"] = limit
     return fit_traces(await client.command("ambience/traces/list", **payload))

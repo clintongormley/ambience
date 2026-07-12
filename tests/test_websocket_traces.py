@@ -8,7 +8,13 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DOMAIN
-from custom_components.ambience.trace import BufferSink, TraceEvent, TriggerCause, UnitTrace
+from custom_components.ambience.trace import (
+    BufferSink,
+    CauseKind,
+    TraceEvent,
+    TriggerCause,
+    UnitTrace,
+)
 from custom_components.ambience.websocket import async_register_commands
 
 
@@ -100,6 +106,64 @@ async def test_traces_list_no_buffer_returns_empty(hass, installed, hass_ws_clie
     resp = await _ws_send(hass_ws_client, type="ambience/traces/list")
     assert resp["success"]
     assert resp["result"]["traces"] == []
+
+
+def _seed_pii_trace(hass) -> BufferSink:
+    """A trace whose cause is a person entity's zone change and whose action
+    is a lock unlock carrying a PIN — the two PII/secret carriers FIX 4
+    guards: the unredacted feed must show them (panel behaviour unchanged),
+    the redacted feed must not (what the MCP server always requests)."""
+    buffer = _seed_buffer(hass)
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind=CauseKind.ENTITY, entity_id="person.alice", old="work", new="home"),
+            [
+                UnitTrace(
+                    "area",
+                    "front_door",
+                    "General",
+                    "on",
+                    "acted",
+                    None,
+                    actions=[{"service": "lock.unlock", "params": {"code": "1234"}}],
+                )
+            ],
+            event_id="e1",
+            timestamp="2026-06-01T00:00:00",
+        )
+    )
+    return buffer
+
+
+async def test_traces_list_is_unredacted_by_default(hass, installed, hass_ws_client) -> None:
+    # No `redact` flag — the HA panel's behaviour, unchanged: the real cause
+    # entity and the real PIN are both present.
+    _seed_pii_trace(hass)
+
+    resp = await _ws_send(hass_ws_client, type="ambience/traces/list")
+
+    assert resp["success"]
+    trace = resp["result"]["traces"][0]
+    assert trace["cause"]["entity_id"] == "person.alice"
+    assert trace["cause"]["new"] == "home"
+    assert trace["actions"][0]["params"]["code"] == "1234"
+
+
+async def test_traces_list_redacts_when_asked(hass, installed, hass_ws_client) -> None:
+    # `redact: true` — what ambience-mcp's list_traces always sends. The same
+    # redaction ambience/ai_bundle applies must scrub the person cause and the
+    # lock PIN before the trace reaches an external AI.
+    from homeassistant.components.diagnostics import REDACTED
+
+    _seed_pii_trace(hass)
+
+    resp = await _ws_send(hass_ws_client, type="ambience/traces/list", redact=True)
+
+    assert resp["success"]
+    trace = resp["result"]["traces"][0]
+    assert trace["cause"]["entity_id"] == REDACTED
+    assert trace["cause"]["new"] == REDACTED
+    assert trace["actions"][0]["params"]["code"] == REDACTED
 
 
 async def test_traces_list_rejects_non_positive_limit(hass, installed, hass_ws_client) -> None:

@@ -30,7 +30,6 @@ async def test_ai_guide_returns_guide_and_version_stamps(hass, installed, hass_w
 
     assert resp["success"] is True
     result = resp["result"]
-    assert result["ambience_ai_bundle"] == 1
     # With the integration fully set up, the running version resolves to a string.
     assert isinstance(result["ambience_version"], str) and result["ambience_version"]
     # The full shipped guide markdown (carries the generator banner).
@@ -49,7 +48,6 @@ async def test_ai_guide_unchanged_when_version_matches(hass, installed, hass_ws_
     assert result["unchanged"] is True
     assert "guide" not in result  # a matching version skips the transfer
     assert result["ambience_version"] == first["ambience_version"]
-    assert result["ambience_ai_bundle"] == 1
 
 
 async def test_ai_guide_returns_guide_when_version_differs(hass, installed, hass_ws_client) -> None:
@@ -58,3 +56,12 @@ async def test_ai_guide_returns_guide_when_version_differs(hass, installed, hass
     result = resp["result"]
     assert "guide" in result
     assert "unchanged" not in result
+
+
+async def test_guide_does_not_stamp_the_bundle_version(hass, installed, hass_ws_client) -> None:
+    # The guide is not the bundle. Nothing reads this field, and the MCP server used
+    # to echo it to the model as a version describing a payload it never fetches.
+    msg = await _ws_send(hass_ws_client, type="ambience/ai_guide")
+
+    assert msg["success"]
+    assert "ambience_ai_bundle" not in msg["result"]

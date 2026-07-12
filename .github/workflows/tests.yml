@@ -144,6 +144,8 @@ jobs:
       # All i18n checks are stdlib-only — no dependencies to install.
       - name: i18n gates (parity, completeness, no-hardcoded)
         run: make i18n
+      - name: MCP protocol gate
+        run: make mcp-gate
 
   mcp-server:
     # Unit tests for the standalone mcp-server package. Isolated deps via uv, so

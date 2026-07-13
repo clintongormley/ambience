@@ -134,6 +134,122 @@ def test_fit_context_matches_the_linear_reference(limit):
     assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
 
 
+@pytest.mark.parametrize("limit", [0, 1, 10, 50, 100])
+def test_fit_context_matches_the_linear_reference_at_extreme_limits(limit):
+    # Limits small enough that nothing (or almost nothing) fits — the
+    # boundary where the bisection's `hi` bound (shedding EVERY schema) is
+    # never verified to fit, so the "honest oversized result" path is what
+    # gets exercised here rather than a found fitting shed count.
+    context = _context(12, 300)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
+def _uneven_context(sizes: list[int | None], keys: list[str] | None = None) -> dict:
+    """Like `_context`, but each schema's size (and optionally key) is given
+    explicitly, so tests can build wildly uneven shapes — a huge schema next
+    to tiny or empty ones, long key names on tiny values, etc. `None` means an
+    empty-dict value."""
+    schemas = {}
+    for i, size in enumerate(sizes):
+        key = keys[i] if keys else f"light.a{i}"
+        schemas[key] = {} if size is None else {"fields": {"f": "x" * size}}
+    return {
+        "catalog": {"entity_summary": {"total": len(sizes)}},
+        "actions": {"exposed": [{"id": k} for k in schemas], "schemas": schemas},
+    }
+
+
+@pytest.mark.parametrize(
+    "sizes",
+    [
+        [5000, 0, 0, 0],
+        [5000, 1, 1, 1, 1],
+        [0, 0, 0, 5000],
+        [200, 100, 50, 25, 12, 6, 3, 1, 0],
+        [None, None, None, 3000],
+        [3000, None, None],
+    ],
+)
+@pytest.mark.parametrize("limit", [10, 100, 500, 1_000, 5_000, 50_000])
+def test_fit_context_matches_the_linear_reference_with_wildly_uneven_schema_sizes(sizes, limit):
+    # `ordered` sorts biggest-first, so a real payload can shed one huge
+    # schema and be left with several tiny (or empty-dict) ones — the shape
+    # most likely to stress the monotonicity the bisection relies on.
+    context = _uneven_context(sizes)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
+def test_fit_context_matches_the_linear_reference_with_tiny_values_and_long_keys():
+    # A long key name on a tiny (or empty) value is the adversarial case for
+    # the CONTRACT `fit_context` relies on: shedding that entry frees almost
+    # no bytes from `schemas`, while its long name still costs bytes in
+    # `schemas_omitted`. The key's own bytes appear (and cancel) in both
+    # places regardless of length, so this must still match the oracle.
+    context = _uneven_context([0, 0, 0, 5000], keys=["z" * 200, "z" * 150, "z" * 100, "a"])
+
+    for limit in (10, 100, 500, 1_000, 5_000, 50_000):
+        assert budget.fit_context(context, budget=limit) == _linear_context_reference(
+            context, limit
+        )
+
+
+def _context_candidate_sizes(context: dict) -> list[int]:
+    """size_of(candidate(shed)) for every shed from 1 to len(ordered), using
+    the exact same construction fit_context itself uses internally."""
+    actions = context["actions"]
+    schemas = actions["schemas"]
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+    sizes = []
+    for shed in range(1, len(ordered) + 1):
+        dropped = set(ordered[:shed])
+        candidate = {
+            **context,
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
+        }
+        sizes.append(size_of(candidate))
+    return sizes
+
+
+# The guard beyond the docs: pin the actual invariant fit_context's bisection
+# depends on (see its inline "CONTRACT this relies on" comment in budget.py)
+# — size_of(candidate(shed)) strictly decreases as shed increases, with no
+# exceptions anywhere in range. If a future edit changes what `candidate`
+# carries (e.g. a per-schema summary alongside the omitted name) in a way
+# that stops dominating the shed entry's own bytes, this should fail here,
+# loudly and by name, instead of the bisection silently diverging from the
+# linear oracle.
+@pytest.mark.parametrize("schema_size", [0, 1, 5, 50, 500, 5_000])
+@pytest.mark.parametrize("schema_count", [2, 3, 5, 10, 30, 60])
+def test_context_candidate_size_is_strictly_monotonic_as_shed_increases(schema_count, schema_size):
+    context = _context(schema_count, schema_size)
+
+    sizes = _context_candidate_sizes(context)
+
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
+
+
+def test_context_candidate_size_is_strictly_monotonic_with_uneven_sizes_and_long_keys():
+    # Same property, but for the adversarial uneven-sizes/long-keys shapes
+    # above, where the "removed value's bytes dominate the added key's
+    # bytes" argument is closest to the margin.
+    context = _uneven_context([5000, 1, 1, 1, 1])
+    sizes = _context_candidate_sizes(context)
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
+
+    context = _uneven_context([0, 0, 0, 5000], keys=["z" * 200, "z" * 150, "z" * 100, "a"])
+    sizes = _context_candidate_sizes(context)
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
+
+
 def _entities(count: int, size: int) -> dict:
     return {
         "entities": [{"entity_id": f"light.l{i:04d}", "name": "n" * size} for i in range(count)],

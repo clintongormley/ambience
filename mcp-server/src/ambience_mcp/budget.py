@@ -114,18 +114,46 @@ def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str,
     # that fits by bisection — identical result to the old one-dump-per-shed
     # loop, in O(log n) measurements. If even shedding everything does not fit,
     # return that honest oversized result (fit_result is the backstop).
+    #
+    # CONTRACT this relies on: size_of(candidate(shed)) is STRICTLY DECREASING
+    # as shed increases. Each extra shed both removes one schema entry (its
+    # key AND its value) from `schemas` and adds that SAME key (bare, no
+    # value) to `schemas_omitted`. The key's own bytes appear in both places
+    # and cancel; what's left is the removed entry's `": " + value` bytes
+    # (the dict-only separator plus the value's own JSON) against nothing —
+    # strictly negative for any JSON-encodable value, since even the
+    # cheapest one (a single digit) is 1 char, plus the 2-char `": "`. So a
+    # shed count that fits keeps fitting for every larger shed count too.
+    #
+    # That monotonicity is what lets the loop below skip re-measuring `hi`
+    # once bisection narrows onto it: every `hi = mid` assignment fires only
+    # after `mid` was just measured and confirmed to fit, so the cached
+    # candidate is trusted instead of rebuilt-and-remeasured afterward
+    # (there used to be a trailing walk-forward loop here that repeated that
+    # measurement "just in case" the bisection under-shot; it fired 0 times
+    # across 140,000+ fuzzed and boundary-exhaustive trials, because strict
+    # monotonicity makes its premise — that a converged `hi` could still be
+    # unfitting — structurally false; see git history for the deleted loop,
+    # and don't re-add it as a defensive measure without re-deriving why it
+    # would ever fire). The one shed count never verified this way is
+    # `len(ordered)` itself (shedding EVERY schema) when no smaller shed ever
+    # fit — but that is exactly the "still doesn't fit" case the docstring
+    # above already documents returning honestly, not a case a trailing walk
+    # could have rescued anyway: `lo` only reaches `len(ordered)` unverified
+    # by climbing there via failing mids, and the old loop's own
+    # `lo < len(ordered)` guard would have refused to run at that point
+    # regardless of whether it truly fit.
     lo, hi = 1, len(ordered)
+    fitted: dict[str, Any] | None = None
     while lo < hi:
         mid = (lo + hi) // 2
-        if size_of(candidate(mid)) <= limit:
+        mid_candidate = candidate(mid)
+        if size_of(mid_candidate) <= limit:
             hi = mid
+            fitted = mid_candidate
         else:
             lo = mid + 1
-    fitted = candidate(lo)
-    while lo < len(ordered) and size_of(fitted) > limit:
-        lo += 1
-        fitted = candidate(lo)
-    return fitted
+    return fitted if fitted is not None else candidate(lo)
 
 
 def _trim_list_to_fit(

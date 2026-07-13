@@ -192,17 +192,20 @@ class HAClient:
         # Same contract as command(): a genuine auth rejection is HAAuthError,
         # but a dropped socket / malformed or non-object frame becomes
         # HAConnectionError so callers never see raw json/transport exceptions.
+        # Both recvs are bounded: this runs while the reconnect lock is held,
+        # so a peer that opens the socket but never speaks (a half-configured
+        # reverse proxy) would otherwise wedge every tool call forever.
         try:
-            first = json.loads(await self._transport.recv())
+            first = json.loads(await asyncio.wait_for(self._transport.recv(), _COMMAND_TIMEOUT))
             if first.get("type") != "auth_required":
                 raise HAAuthError(f"expected auth_required, got {first.get('type')!r}")
             await self._transport.send(json.dumps({"type": "auth", "access_token": token}))
-            reply = json.loads(await self._transport.recv())
+            reply = json.loads(await asyncio.wait_for(self._transport.recv(), _COMMAND_TIMEOUT))
             if reply.get("type") != "auth_ok":
                 raise HAAuthError(reply.get("message") or "authentication failed")
         except HAAuthError:
             raise
-        except Exception as exc:  # transport dropped / malformed or non-object frame
+        except Exception as exc:  # transport dropped / timeout / malformed frame
             self._closed = True
             raise HAConnectionError(f"websocket connection failed during auth: {exc}") from exc
 

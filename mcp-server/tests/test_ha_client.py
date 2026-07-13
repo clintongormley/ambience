@@ -1,8 +1,10 @@
+import asyncio
 import json
 
 import pytest
 from conftest import FakeTransport
 
+from ambience_mcp import ha_client
 from ambience_mcp.ha_client import (
     HAAuthError,
     HAClient,
@@ -536,3 +538,29 @@ async def test_connect_never_leaks_the_socket_when_auth_does_not_complete(monkey
         await ha_client.connect("ws://ha.local/api/websocket", "token")
 
     assert connection.closed is True
+
+
+async def test_authentication_times_out_instead_of_hanging(monkeypatch):
+    """connect()'s open_timeout bounds the socket OPEN; nothing bounded the
+    auth frames. A proxy that completes the websocket upgrade but never
+    forwards a frame must fail fast (the reconnect lock is held throughout),
+    not hang every tool call forever."""
+    monkeypatch.setattr(ha_client, "_COMMAND_TIMEOUT", 0.05)
+
+    class _SilentTransport:
+        def __init__(self):
+            self.closed = False
+
+        async def send(self, data):
+            pass
+
+        async def recv(self):
+            await asyncio.Event().wait()  # never resolves
+
+        async def close(self):
+            self.closed = True
+
+    client = HAClient(_SilentTransport())
+    with pytest.raises(HAConnectionError):
+        await client.authenticate("token")
+    assert client.closed

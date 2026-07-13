@@ -156,7 +156,9 @@ def _trim_list_to_fit(
     Bails out unchanged if `result[key]` is missing, not a list, or empty —
     there is nothing to trim.
 
-    Bisects instead of dropping one row per full re-measure — see the inline comment.
+    Bisects instead of dropping one row per full re-measure — see the inline
+    comment below for the shape this relies on and why the top boundary is
+    handled separately from the rest.
     """
     rows = result.get(key)
     if not isinstance(rows, list) or not rows:
@@ -165,14 +167,34 @@ def _trim_list_to_fit(
     def candidate(kept_len: int) -> dict[str, Any]:
         return {**result, key: rows[:kept_len], **derive_fields(kept_len)}
 
-    # Size grows monotonically with kept rows, so bisect for the largest length
-    # that fits — O(log n) full measurements instead of one per dropped row
-    # (which re-serialized a >60k-char dict up to len(rows) times, on the event
-    # loop, stalling every concurrent tool call). derive_fields can nudge sizes
-    # by a few chars (cursor digits, the traces notice), so the bisection
-    # result is verified against the EXACT dict returned and nudged down if
-    # needed — measure-what-you-return still holds.
-    lo, hi = 1, len(rows)
+    # CONTRACT this relies on: size is near-monotonic in kept_len (dropping a
+    # row never costs more than a few chars back — a cursor/omitted-count
+    # digit flipping), with at most ONE discontinuity, at the very top
+    # (kept_len == len(rows)): both current callers gate an on/off field
+    # there (fit_traces's ~150-char `notice`, present for every kept_len <
+    # len(rows) and ABSENT only at kept_len == len(rows); fit_entities's
+    # `cursor`/`truncated` similarly can only flip at that same point, since
+    # `next_cursor` cannot cross `total` anywhere below it). That is a large
+    # jump, not a nudge, so it cannot be bisected across safely — see the
+    # reviewer finding pinned by
+    # test_trim_matches_the_linear_reference_at_the_reviewers_counterexample.
+    #
+    # So the top candidate is measured directly first — same as the linear
+    # oracle in test_budget.py, which always tests the untrimmed list before
+    # popping anything — and only the strictly-smaller candidates, which all
+    # share the SAME on/off state (never being the top), are bisected. Within
+    # that range there is no more discontinuity to miss: each dropped row
+    # removes at least a few chars of real content, which dominates any
+    # digit-width nudge in the recomputed fields, so size is genuinely
+    # non-increasing as kept_len decreases — bisection is safe there, and the
+    # trailing walk-down is just a defensive correction for that nudge, not a
+    # rescue from a missed discontinuity.
+    n = len(rows)
+    full = candidate(n)
+    if n == 1 or size_of(full) <= limit:
+        return full
+
+    lo, hi = 1, n - 1
     while lo < hi:
         mid = (lo + hi + 1) // 2
         if size_of(candidate(mid)) <= limit:

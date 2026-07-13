@@ -553,3 +553,62 @@ def test_trim_returns_a_result_that_fits_or_a_single_row():
     fitted = _trim_list_to_fit(result, "entities", 3_000, lambda n: {"returned": n})
     assert len(fitted["entities"]) >= 1
     assert size_of(fitted) <= 3_000 or len(fitted["entities"]) == 1
+
+
+def _traces_derive_fields(total):
+    """A faithful reproduction of `fit_traces`'s own `derive_fields`: the
+    ~150-char `notice` is present for every `kept_len < total` and ABSENT at
+    `kept_len == total` — the on/off field the bisection must not be fooled
+    by. `total` is `len(rows)` here, exactly as it is inside `fit_traces`
+    (there is no separate "total_matches" for traces, unlike entities)."""
+
+    def derive(kept_len):
+        omitted = total - kept_len
+        if not omitted:
+            return {"returned": kept_len}
+        notice = (
+            f"Showing {kept_len} of {total} traces; the oldest {omitted} were "
+            "omitted to fit the result budget. Call again with a smaller limit to see "
+            "a different slice."
+        )
+        return {"returned": kept_len, "omitted": omitted, "notice": notice}
+
+    return derive
+
+
+@pytest.mark.parametrize("limit", [50, 200, 236, 300, 400, 455, 500, 510, 600, 5_000, 50_000])
+@pytest.mark.parametrize("n_rows", [1, 2, 3, 4, 5, 8, 15, 30])
+def test_trim_matches_the_linear_reference_for_the_traces_shaped_on_off_notice(n_rows, limit):
+    # Unlike the entities-shaped derive above (only cursor DIGITS change size),
+    # this derive_fields flips a ~150-char field on/off exactly at the top
+    # boundary (kept_len == len(rows)) — the discontinuity the bisection must
+    # not miss. Sweeping both n_rows and limit across the boundary covers the
+    # discontinuity itself, not just one lucky value.
+    rows = [{"t": ""} for _ in range(n_rows)]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(n_rows)
+
+    assert _trim_list_to_fit(result, "traces", limit, derive) == _linear_trim_reference(
+        result, "traces", limit, derive
+    )
+
+
+def test_trim_matches_the_linear_reference_at_the_reviewers_counterexample():
+    # Pinned regression for the CRITICAL finding on task 13: bisection assumed
+    # payload size grows monotonically with kept rows, but fit_traces's
+    # derive_fields is an ON/OFF field (the notice) that is ABSENT at
+    # kept_len == total and PRESENT for every kept_len < total — a
+    # discontinuity at the top boundary, not the "few chars" nudge the old
+    # comment described. Dropping from 3 rows (no notice) to 2 rows (notice
+    # appears) INCREASES the total size, so a bisection that only ever
+    # corrects downward can land on 1 row and never look back at 3, which
+    # fits all along.
+    rows = [{"t": ""}, {"t": ""}, {"t": ""}]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(3)
+
+    fast = _trim_list_to_fit(result, "traces", 455, derive)
+    slow = _linear_trim_reference(result, "traces", 455, derive)
+
+    assert fast == slow
+    assert len(fast["traces"]) == 3  # the linear oracle keeps every row here

@@ -146,6 +146,56 @@ follow.
     version never upgrades, so the cache clean would just reinstall the same
     build.
 
+    If your Ambience is a **pre-release**, that message will also tell you to
+    allow pre-releases — see below. It is not optional: without it, `uvx`
+    reinstalls the same build every time and the upgrade never happens.
+
+## Testing an Ambience pre-release
+
+**Your `ambience-mcp` channel must match your Ambience channel.**
+
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it        |
+| -------------------------------- | ----------------------------------- | --------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | plain `uvx` (default) |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow`  |
+
+A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
+not install one by default**: it skips pre-releases whenever a final release
+exists, so it would keep handing you the last stable `ambience-mcp` — which may
+be too old for the beta you are testing. You would be told to upgrade, clean the
+cache, restart, and land on the same build again.
+
+So if you run an Ambience beta, opt the MCP server into the same channel:
+
+```json
+{
+  "mcpServers": {
+    "ambience": {
+      "command": "uvx",
+      "args": ["--prerelease=allow", "--from", "ambience-mcp", "ambience-mcp"],
+      "env": {
+        "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
+        "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
+      }
+    }
+  }
+}
+```
+
+Claude Code:
+
+```sh
+claude mcp add ambience --scope user \
+  --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
+  --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
+  -- uvx --prerelease=allow --from ambience-mcp ambience-mcp
+```
+
+This is **not** a [pin](#pinning-a-version) — it widens what `uvx` may install
+rather than fixing it, so you keep getting the newest build and the upgrade path
+still works. When you go back to a final Ambience, drop the flag: leaving it on
+would keep you on `ambience-mcp` release candidates you did not ask for.
+
 ## Turning it off
 
 - **Live, this session:** `/mcp` → select `ambience` → Disconnect (no restart).

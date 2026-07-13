@@ -20,6 +20,7 @@ from bin.check_mcp_protocol import (
     find_min_mcp_version,
     find_package_version,
     find_protocols,
+    is_prerelease,
     main,
     version_key,
 )
@@ -415,6 +416,79 @@ def test_check_floor_against_fails_closed_on_an_unreadable_floor(tmp_path):
     """The other half of the same comparison."""
     with pytest.raises(SystemExit):
         main([*_repo(tmp_path, floor="not-a-version"), "--check-floor-against", "9.9.9"])
+
+
+# --- --is-prerelease: which ambience-mcp CHANNEL does a release belong to? -----------
+# `uvx --from ambience-mcp` uses uv's default prerelease strategy, which EXCLUDES
+# pre-releases whenever a final release exists. So a PRE-RELEASE Ambience — paired with a
+# PRE-RELEASE ambience-mcp — must be gated against (and tested with) `--prerelease=allow`,
+# and a FINAL one against the plain, final-only channel. `bin/release.sh`'s Gate 2 asks
+# this about the version it is cutting; the answer comes from the same vendored PEP 440
+# machinery as every other version question, not a second `case "$VERSION" in *-rc.*`.
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["1.6.0-rc.1", "1.6.0rc1", "1.6.0-alpha.1", "1.6.0-beta.2", "1.6.0a1", "1.6.0.dev1"],
+)
+def test_a_prerelease_version_is_a_prerelease(version):
+    """Every spelling bin/bump-version.sh's semver check accepts (`-alpha.N`, `-beta.N`,
+    `-rc.N`), plus the PEP 440 forms they normalise to, and a dev build."""
+    assert is_prerelease(version, what="test") is True
+
+
+@pytest.mark.parametrize("version", ["1.6.0", "1.6", "1.6.0.post1", "1!1.6.0"])
+def test_a_final_version_is_not_a_prerelease(version):
+    """A final release — including a post-release, which `packaging` also calls final.
+    Getting this wrong sends a stable release to the pre-release channel, where an rc
+    ambience-mcp would satisfy a gate that a plain `uvx` user could never satisfy."""
+    assert is_prerelease(version, what="test") is False
+
+
+@pytest.mark.parametrize("version", ["", "banana", "1.6.0+dirty", 3])
+def test_is_prerelease_fails_closed_on_anything_it_cannot_classify(version):
+    """A version the gate cannot read is not one it may guess a channel for: guessing
+    "final" would probe the wrong PyPI channel and pass a release nobody can use."""
+    with pytest.raises(SystemExit):
+        is_prerelease(version, what="test")
+
+
+def test_is_prerelease_agrees_with_packaging_on_every_version():
+    """The differential, in the same style as the ordering one below: `packaging` is what
+    the MCP RUNTIME uses to decide whether the backend is a pre-release (and so whether to
+    tell the user to allow pre-releases). If the gate and the runtime disagree about what
+    a pre-release IS, one of them is talking about a channel the other never probed."""
+    from packaging.version import Version
+
+    for raw in _SPREAD:
+        assert is_prerelease(raw, what="test") == Version(raw).is_prerelease, raw
+
+
+def test_is_prerelease_flag_prints_true_for_a_prerelease(capsys):
+    """bin/release.sh's Gate 2 reads this on stdout — a bare `true`/`false`, nothing else,
+    because it `case`s on the exact string and fails closed on anything unrecognised."""
+    assert main(["--is-prerelease", "1.6.0-rc.1"]) == 0
+    assert capsys.readouterr().out.strip() == "true"
+
+    assert main(["--is-prerelease", "1.6.0"]) == 0
+    assert capsys.readouterr().out.strip() == "false"
+
+
+def test_is_prerelease_flag_asks_nothing_of_the_repo(tmp_path):
+    """It answers a question about a version STRING, so it must not fail (or pass) for
+    reasons that have nothing to do with the release being cut — an unreadable const.py
+    included."""
+    const = tmp_path / "const.py"
+    const.write_text("OTHER = 1\n")
+
+    assert main(["--const", str(const), "--is-prerelease", "1.6.0-rc.1"]) == 0
+
+
+def test_is_prerelease_flag_fails_closed_on_garbage(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        main([*_repo(tmp_path), "--is-prerelease", "not-a-version"])
+
+    assert "not a PEP 440 version" in capsys.readouterr().err
 
 
 # --- the vendored PEP 440 comparison ------------------------------------------------

@@ -81,7 +81,43 @@ def _update_ambience(reason: str) -> str:
 _UPDATE_AMBIENCE = _update_ambience("Your Ambience is too old for this ambience-mcp.")
 
 
-def _upgrade_mcp(reason: str) -> str:
+def _prerelease_clause(ambience_version: object) -> str:
+    """The extra clause an "upgrade ambience-mcp" remedy needs when the BACKEND is a
+    pre-release — and nothing at all when it is not.
+
+    A pre-release Ambience is paired with a pre-release `ambience-mcp`, and a plain
+    `uvx --from ambience-mcp` cannot see one: uv's default prerelease strategy skips
+    pre-releases whenever a final release exists. So the moment any final ambience-mcp
+    is published, a beta tester on the documented (unpinned, plain-`uvx`) config who is
+    told to "upgrade ambience-mcp" would clean the cache, restart, resolve that same
+    final build again, and loop forever — the exact unfollowable advice this handshake
+    exists to make unreachable. `--prerelease=allow` is the only way out, and it points
+    FORWARD: it WIDENS what uv may resolve, never asking for a pinned or an earlier
+    build (which `uvx` could not install anyway).
+
+    Conservative, and deliberately one-directional:
+    - absent / null / not a string / unparseable `ambience_version` → no clause. The
+      verdict never changes; only the wording does. A backend we cannot read a version
+      from is not one we may guess a channel for.
+    - a FINAL backend → no clause. Telling a stable user to allow pre-releases is bad
+      advice in the other direction: it would quietly move them onto rc builds.
+    """
+    if not isinstance(ambience_version, str):
+        return ""
+    try:
+        if not Version(ambience_version).is_prerelease:
+            return ""
+    except InvalidVersion:
+        return ""
+    return (
+        f" This Ambience ({ambience_version}) is a PRE-RELEASE, so your MCP client must "
+        "allow pre-releases too, or `uvx` will keep reinstalling the newest FINAL "
+        'ambience-mcp: use args `["--prerelease=allow", "--from", "ambience-mcp", '
+        '"ambience-mcp"]`.'
+    )
+
+
+def _upgrade_mcp(reason: str, *, ambience_version: object = None) -> str:
     """The one remedy that gets a user from a too-old ambience-mcp to a working one.
 
     Every clause is load-bearing, and the third exists because the remedy is otherwise
@@ -90,6 +126,11 @@ def _upgrade_mcp(reason: str) -> str:
     restart, so they would loop on this message forever. Naming the pin is the only
     way out — and it points FORWARD (remove the pin => get latest), never at an older
     or a specific version, which `uvx` could not install anyway.
+
+    `ambience_version` is the backend's own version, straight off the hello. It adds the
+    pre-release channel clause (see `_prerelease_clause`) when — and only when — the
+    backend is a pre-release, for the same reason as the pin clause: without it, the
+    rest of the remedy is a no-op for the one user it is aimed at.
     """
     return (
         f"{reason} Upgrade ambience-mcp: quit your MCP client, run "
@@ -97,6 +138,7 @@ def _upgrade_mcp(reason: str) -> str:
         "version and the running server holds the cache lock, so the restart alone "
         "is not enough.) If your MCP config pins a version (e.g. args "
         '`["ambience-mcp@0.2.0"]`), remove the pin — a pinned version never upgrades.'
+        f"{_prerelease_clause(ambience_version)}"
     )
 
 
@@ -314,6 +356,15 @@ class ReconnectingClient:
                 return _Verdict(_UPDATE_AMBIENCE, sticky=False)
             raise
 
+        # The backend's OWN version — not a compatibility input (the protocol and the
+        # floor decide that), but it decides which ambience-mcp CHANNEL the "upgrade
+        # ambience-mcp" remedy has to name: a pre-release Ambience is paired with a
+        # pre-release ambience-mcp, which a plain `uvx` will never resolve. It only ever
+        # changes the message's WORDING — see `_prerelease_clause` — so an absent,
+        # null, or unparseable value simply omits a clause and every verdict below
+        # stands exactly as it would have.
+        ambience_version = hello.get("ambience_version")
+
         # The backend refusing THIS client outranks any protocol question: it is the
         # one thing a protocol number cannot express ("that build is known-broken").
         floor = hello.get("min_mcp_version")
@@ -326,7 +377,8 @@ class ReconnectingClient:
                 return _Verdict(
                     _upgrade_mcp(
                         f"This Ambience needs ambience-mcp >= {floor}; you are running "
-                        f"{self._mcp_version}."
+                        f"{self._mcp_version}.",
+                        ambience_version=ambience_version,
                     ),
                     sticky=True,
                 )
@@ -357,7 +409,8 @@ class ReconnectingClient:
             return _Verdict(
                 _upgrade_mcp(
                     f"This Ambience speaks MCP protocol {protocol}; this ambience-mcp "
-                    f"speaks {sorted(self._supported)}."
+                    f"speaks {sorted(self._supported)}.",
+                    ambience_version=ambience_version,
                 ),
                 sticky=True,
             )

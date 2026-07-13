@@ -104,6 +104,9 @@ fi
 #   a) MCP_PROTOCOL must be spoken by the PUBLISHED ambience-mcp.
 #   b) MIN_MCP_VERSION must NAME a PUBLISHED ambience-mcp.
 #
+# "PUBLISHED" means published IN THIS RELEASE'S CHANNEL — the ambience-mcp this
+# release's users will actually resolve. See the channel block below.
+#
 # The coupling is one-directional. A NEW MCP against an OLD backend is fine (it ships
 # an adapter for every protocol it supports). A NEW backend against an OLD MCP is a
 # DEADLOCK: every user is told "upgrade ambience-mcp" — to a version that does not
@@ -135,7 +138,46 @@ if ! _is_uint "$MCP_PROTOCOL"; then
   exit 1
 fi
 
-echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI…"
+# Which ambience-mcp CHANNEL is this release's? Your ambience-mcp channel must match
+# your Ambience channel:
+#
+#   a FINAL Ambience   → the newest FINAL ambience-mcp        (plain `uvx`)
+#   a PRE-RELEASE one  → the newest PRE-RELEASE-or-final one  (`uvx --prerelease=allow`)
+#
+# `uvx --from ambience-mcp` (no specifier) uses uv's default prerelease strategy, which
+# EXCLUDES pre-releases whenever a final release exists. So once any final ambience-mcp
+# is published, the plain probe below can no longer SEE the rc that a pre-release
+# Ambience is paired with: it would resolve the older final, report its protocol, and
+# refuse a perfectly legitimate rc release — while the beta tester's own (documented,
+# unpinned) `uvx` config resolved that same final and looped forever on "upgrade
+# ambience-mcp". A gate must ask about the channel it is actually releasing into.
+#
+# The pre-release/final question is answered by Gate 1's script, for the same reason the
+# protocol is: it owns the repo's one vendored PEP 440 implementation, and a second one
+# here (a `case "$VERSION" in *-rc.*`, say) is a parser that can disagree with it. Fails
+# CLOSED — a version we cannot classify gets no channel guess.
+RELEASE_IS_PRERELEASE=$(python3 "$(dirname "$0")/check_mcp_protocol.py" \
+  --is-prerelease "$VERSION") || RELEASE_IS_PRERELEASE=""
+
+case "$RELEASE_IS_PRERELEASE" in
+  true)
+    MCP_CHANNEL_FLAG="--prerelease=allow"
+    MCP_CHANNEL_LABEL="pre-release channel"
+    ;;
+  false)
+    MCP_CHANNEL_FLAG=""
+    MCP_CHANNEL_LABEL="final channel"
+    ;;
+  *)
+    echo "error: could not tell whether ${VERSION} is a pre-release or a final release." >&2
+    echo "  The gate fails CLOSED: without the channel it cannot ask PyPI the right" >&2
+    echo "  question — a pre-release Ambience must be checked against the pre-release" >&2
+    echo "  ambience-mcp channel, which a plain \`uvx\` never resolves." >&2
+    exit 1
+    ;;
+esac
+
+echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyPI (${MCP_CHANNEL_LABEL})…"
 # Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI
 # lookup instead of hitting the real network on every pre-flight-check test.
 #
@@ -143,7 +185,9 @@ echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyP
 # AND its version — on a single line: "<protocol> <version>" (e.g. "1 0.2.0rc3"). One
 # `uvx --no-cache` resolution, so the two answers cannot disagree about which release
 # they describe, and the cache is still bypassed (a stale `uv` cache is what caused the
-# original incident: the gate must ask PyPI, never a cache).
+# original incident: the gate must ask PyPI, never a cache). The channel flag rides on
+# that same resolution, so the VERSION the floor is measured against is the one from the
+# channel this release ships into.
 MCP_PYPI_CHECK_CMD="${MCP_PYPI_CHECK_CMD:-}"
 if [ -n "$MCP_PYPI_CHECK_CMD" ]; then
   # A stale exported override is the same failure class as the stale `uv` cache
@@ -151,7 +195,9 @@ if [ -n "$MCP_PYPI_CHECK_CMD" ]; then
   # Announce it so an accidental bypass is visible in the release log.
   echo "warning: Gate 2's PyPI lookup is overridden by MCP_PYPI_CHECK_CMD — not asking PyPI" >&2
 else
-  MCP_PYPI_CHECK_CMD='uvx --no-cache --from ambience-mcp python -c "import importlib.metadata as md; from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS), md.version(\"ambience-mcp\"))"'
+  # Assembled from single-quoted halves so the inner `\"` escapes (which the eval'd
+  # `python -c "…"` needs) survive verbatim while $MCP_CHANNEL_FLAG still expands.
+  MCP_PYPI_CHECK_CMD='uvx --no-cache '"${MCP_CHANNEL_FLAG:+$MCP_CHANNEL_FLAG }"'--from ambience-mcp python -c "import importlib.metadata as md; from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS), md.version(\"ambience-mcp\"))"'
 fi
 PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
 
@@ -180,6 +226,7 @@ fi
 # they ever reach the comparison.
 if ! _is_uint "$PUBLISHED_PROTOCOL"; then
   echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
+  echo "  (Asked the ${MCP_CHANNEL_LABEL}, because ${VERSION} ships into it.)" >&2
   echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
   echo "  (Expected one line, '<protocol> <version>'; got: '${PUBLISHED}')" >&2
   echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
@@ -189,13 +236,19 @@ fi
 
 if [ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOL" ]; then
   echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2
-  echo "  ambience-mcp only speaks ${PUBLISHED_PROTOCOL}." >&2
+  echo "  ambience-mcp in the ${MCP_CHANNEL_LABEL} (${PUBLISHED_VERSION}) only speaks" >&2
+  echo "  ${PUBLISHED_PROTOCOL}." >&2
   echo "" >&2
   echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
   echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
+  echo "" >&2
+  echo "  The CHANNEL is part of the rule: ${VERSION} is a ${MCP_CHANNEL_LABEL} release, so" >&2
+  echo "  it is measured against the ambience-mcp its users will actually resolve. A FINAL" >&2
+  echo "  Ambience needs a FINAL ambience-mcp — an rc does not count, because a plain" >&2
+  echo "  \`uvx\` never installs one. See CONTRIBUTING.md." >&2
   exit 1
 fi
-echo "  published ambience-mcp ${PUBLISHED_VERSION} speaks protocol ${PUBLISHED_PROTOCOL} ✓"
+echo "  published ambience-mcp ${PUBLISHED_VERSION} (${MCP_CHANNEL_LABEL}) speaks protocol ${PUBLISHED_PROTOCOL} ✓"
 
 # The refusal floor must name a PUBLISHED ambience-mcp — see the header above. The
 # PEP 440 comparison is delegated to Gate 1's script (`--check-floor-against`), not

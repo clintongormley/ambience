@@ -503,6 +503,143 @@ def test_rejects_an_unparseable_published_protocol(tmp_path: Path, check_cmd: st
     assert RELEASE_BRANCH not in branches
 
 
+# --- Gate 2c: the release CHANNEL — your ambience-mcp channel must match Ambience's ---
+# `uvx --from ambience-mcp` (no specifier) uses uv's default prerelease strategy, which
+# EXCLUDES pre-releases whenever a final release exists. Today every published
+# ambience-mcp is an rc, so uv falls back to the newest rc and the plain probe works by
+# accident. The moment a FINAL ambience-mcp ships, it stops working: an rc Ambience
+# paired with an rc ambience-mcp would be measured against the older FINAL one, and a
+# legitimate rc release would be refused — while the beta tester's own unpinned `uvx`
+# resolved that same final and looped forever on "upgrade ambience-mcp".
+#
+# So Gate 2 probes the channel the release being cut ships into. These tests stub `uvx`
+# on PATH (rather than MCP_PYPI_CHECK_CMD) so what is asserted is the REAL command line
+# release.sh builds — the override would hide exactly the thing under test.
+
+
+# The fakes live OUTSIDE the repo (tmp_path/…, repo at tmp_path/repo): anything written
+# inside it is an untracked file, and release.sh's very first pre-flight refuses a dirty
+# tree — the gate under test would never even run.
+def _channel_repo(tmp_path: Path, *, protocol: int = 1, floor: str = "0.1.0") -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    const = repo / "custom_components" / "ambience" / "const.py"
+    const.write_text(f'MCP_PROTOCOL = {protocol}\nMIN_MCP_VERSION = "{floor}"\n')
+    _git("commit", "-aqm", "set the protocol and the floor", "--allow-empty", cwd=repo)
+    return repo
+
+
+def _fake_uvx(tmp_path: Path, body: str) -> dict:
+    """Put a fake `uvx` on PATH and disarm the MCP_PYPI_CHECK_CMD override, so release.sh
+    builds and runs its REAL PyPI probe — the command line under test. Overriding the whole
+    command instead would hide the very thing these tests are about. `body` is the fake's
+    payload; it sees the probe's own arguments in "$@"."""
+    fake_bin = tmp_path / "fake_bin"
+    fake_bin.mkdir()
+    (fake_bin / "uvx").write_text(f"#!/usr/bin/env bash\n{body}\n")
+    (fake_bin / "uvx").chmod(0o755)
+    return {"PATH": f"{fake_bin}:{os.environ['PATH']}", "MCP_PYPI_CHECK_CMD": ""}
+
+
+def test_a_prerelease_release_probes_the_prerelease_channel(tmp_path: Path):
+    """An rc Ambience must be checked against the newest PRE-RELEASE-or-final
+    ambience-mcp — the one its testers will actually resolve."""
+    repo = _channel_repo(tmp_path)
+    args_log = tmp_path / "uvx_args.txt"
+    env = _fake_uvx(tmp_path, f'echo "$@" > {args_log}\necho "1 0.2.0"')
+
+    result = _run(repo, "0.2.0-rc.1", "--no-push", env=env)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    invocation = args_log.read_text()
+    assert "--prerelease=allow" in invocation
+    assert "--no-cache" in invocation  # never a cache — the gate must ask PyPI
+    assert "--from ambience-mcp" in invocation
+    assert "pre-release channel" in result.stdout  # the log is honest about what it asked
+
+
+def test_a_final_release_probes_the_final_channel(tmp_path: Path):
+    """And a final Ambience must NOT: allowing pre-releases here would let an rc
+    ambience-mcp satisfy a gate that a plain-`uvx` stable user never could."""
+    repo = _channel_repo(tmp_path)
+    args_log = tmp_path / "uvx_args.txt"
+    env = _fake_uvx(tmp_path, f'echo "$@" > {args_log}\necho "1 0.2.0"')
+
+    result = _run(repo, "0.2.0", "--no-push", env=env)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    invocation = args_log.read_text()
+    assert "--prerelease" not in invocation
+    assert "--no-cache" in invocation
+    assert "--from ambience-mcp" in invocation
+    assert "final channel" in result.stdout
+
+
+# A channel-aware fake PyPI, and the exact state a maintainer is in mid-rc: the FINAL
+# channel's newest ambience-mcp (1.0.0) speaks protocol 1; the PRE-RELEASE channel also
+# has the freshly tagged 1.1.0rc1, which speaks protocol 2.
+_CHANNEL_AWARE_PYPI = """
+case "$*" in
+  *--prerelease=allow*) echo "2 1.1.0rc1" ;;
+  *) echo "1 1.0.0" ;;
+esac
+"""
+
+
+def test_a_prerelease_release_is_allowed_by_a_prerelease_mcp(tmp_path: Path):
+    """The bug this closes. The backend speaks protocol 2 and an ambience-mcp that speaks
+    protocol 2 IS published — as an rc, alongside its own Ambience rc. The plain probe
+    could not see it (uv skips pre-releases once a final exists), resolved the older FINAL
+    1.0.0, and refused a legitimate release."""
+    repo = _channel_repo(tmp_path, protocol=2)
+
+    result = _run(repo, "0.2.0-rc.1", "--no-push", env=_fake_uvx(tmp_path, _CHANNEL_AWARE_PYPI))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1.1.0rc1" in result.stdout  # it really did read the rc's answer
+
+
+def test_a_final_release_is_blocked_when_only_a_prerelease_mcp_speaks_the_protocol(tmp_path: Path):
+    """The other half — and NOT a bug: cutting FINAL Ambience against that same PyPI must
+    still BLOCK. An rc ambience-mcp is invisible to a plain `uvx`, so every stable user of
+    this release would be told to upgrade to a build they cannot install. A final Ambience
+    needs a final ambience-mcp published first."""
+    repo = _channel_repo(tmp_path, protocol=2)
+
+    result = _run(repo, "0.2.0", "--no-push", env=_fake_uvx(tmp_path, _CHANNEL_AWARE_PYPI))
+    assert result.returncode != 0
+    combined = result.stdout + result.stderr
+    assert "protocol" in combined.lower()
+    assert "1.0.0" in combined  # it measured against the FINAL channel's answer
+    assert "final channel" in combined
+    # Must fail before any mutation.
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=repo, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
+
+
+def test_a_floor_naming_the_rc_mcp_is_releasable_as_an_rc(tmp_path: Path):
+    """The floor half of Gate 2 rides on the SAME probe, so it inherits the channel: an rc
+    Ambience whose MIN_MCP_VERSION names the rc ambience-mcp is releasable, because the
+    testers it refuses below that floor can install their way out of it."""
+    repo = _channel_repo(tmp_path, floor="1.1.0rc1")
+
+    result = _run(repo, "0.2.0-rc.1", "--no-push", env=_fake_uvx(tmp_path, _CHANNEL_AWARE_PYPI))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_that_same_floor_blocks_a_final_release(tmp_path: Path):
+    """...and on a FINAL release that very floor is a refusal nobody can escape: a plain
+    `uvx` resolves 1.0.0, and the only ambience-mcp above the floor is an rc it will never
+    install."""
+    repo = _channel_repo(tmp_path, floor="1.1.0rc1")
+
+    result = _run(repo, "0.2.0", "--no-push", env=_fake_uvx(tmp_path, _CHANNEL_AWARE_PYPI))
+    assert result.returncode != 0
+    assert "MIN_MCP_VERSION" in result.stdout + result.stderr
+
+
 def test_warns_when_pypi_check_cmd_overridden(tmp_path: Path):
     """A maintainer with a stale exported MCP_PYPI_CHECK_CMD (e.g. left over from
     debugging Gate 2 itself) silently disables a fail-closed release gate --

@@ -26,6 +26,13 @@ gate holds both to the same rule — *never ask a user for something they cannot
    the version PyPI reports, so both halves of the rule use ONE PEP 440 comparator
    (the vendored one below) rather than two that can disagree.
 
+This script is also the repo's single answer to "what does this version string mean?".
+Besides the two checks above it exposes `--print-protocol` and `--check-floor-against`
+for `bin/release.sh`'s Gate 2, and `--is-prerelease`, which tells Gate 2 which
+ambience-mcp RELEASE CHANNEL a release belongs to (a pre-release Ambience pairs with a
+pre-release `ambience-mcp`, which a plain `uvx` will never resolve). All of them share
+the one vendored PEP 440 implementation below — two that can disagree is a seam.
+
 Cross-package, so it imports NEITHER: the backend's venv has no `ambience_mcp`, and
 the MCP's has no `homeassistant`. Both Python files are parsed with `ast` and the
 package version is read from `pyproject.toml` with `tomllib`.
@@ -145,6 +152,29 @@ def version_key(raw: object, *, what: str) -> tuple:
     post_key = -1 if post is None else post
     dev_key = (1, 0) if dev is None else (0, dev)  # a dev release sorts first
     return (epoch, release, pre_key, post_key, dev_key)
+
+
+def is_prerelease(raw: object, *, what: str) -> bool:
+    """Whether `raw` is a PEP 440 PRE-RELEASE (an rc/alpha/beta, or any `.devN` build).
+
+    This is the RELEASE CHANNEL question, and it decides which `ambience-mcp` a release
+    is measured against: `uvx --from ambience-mcp` uses uv's default prerelease strategy,
+    which SKIPS pre-releases whenever a final release exists. So a pre-release Ambience —
+    which pairs with a pre-release ambience-mcp — must be gated against (and its testers
+    must install from) the channel that can actually see it: `uvx --prerelease=allow`.
+    `bin/release.sh`'s Gate 2 asks this about the version being cut. See CONTRIBUTING.md.
+
+    Derived from `version_key`, not a second parse: one regex, one failure path, one
+    answer. The key already carries the distinction — `pre_key[0] < 1` is a pre-release
+    marker (0) or a bare dev release (-1), and `dev_key[0] == 0` is a `.devN` suffix —
+    which is exactly `packaging.version.Version.is_prerelease` (`pre is not None or dev
+    is not None`), pinned to it by a differential test.
+
+    Fails CLOSED, like everything else here: a version string it cannot parse is not a
+    version it may guess a channel for.
+    """
+    _epoch, _release, pre_key, _post_key, dev_key = version_key(raw, what=what)
+    return pre_key[0] < 1 or dev_key[0] == 0
 
 
 # --- extraction --------------------------------------------------------------------
@@ -344,6 +374,18 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--is-prerelease",
+        metavar="VERSION",
+        help=(
+            "print 'true' if VERSION is a PEP 440 pre-release (rc/alpha/beta/dev), 'false' "
+            "if it is a final release, and exit nonzero if it cannot be classified. "
+            "bin/release.sh's Gate 2 uses this to pick the ambience-mcp CHANNEL it probes "
+            "(a pre-release Ambience pairs with a pre-release ambience-mcp, which plain "
+            "`uvx` will not resolve), so the answer comes from the SAME vendored PEP 440 "
+            "machinery as every other version question here — not a second parser."
+        ),
+    )
+    parser.add_argument(
         "--check-floor-against",
         metavar="PUBLISHED_VERSION",
         help=(
@@ -355,6 +397,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv if argv is not None else [])
+
+    if args.is_prerelease is not None:
+        # Asks nothing of const.py: this is a question about the version STRING being
+        # released, not about the repo — answer it before touching any file, so a
+        # release run cannot fail here for an unrelated reason.
+        pre = is_prerelease(args.is_prerelease, what="the version being released")
+        print("true" if pre else "false")
+        return 0
 
     protocol = find_mcp_protocol(args.const)
     if args.print_protocol:

@@ -233,15 +233,27 @@ async def test_no_message_ever_asks_for_a_downgrade():
     # The invariant: `uvx ambience-mcp` installs LATEST, so a user cannot follow
     # advice to install an older one. Every remedy must point forward.
     #
-    # ALL FOUR incompatibility messages, not three. The "backend behind" one
+    # ALL SIX incompatibility messages, not four. The "backend behind" one
     # (supported={2,3}, backend says 1) is the only message not built by a shared
     # helper — an inline f-string — so it is the only one that could be reworded
     # with no test noticing. That is exactly what this test exists to prevent.
+    #
+    # The last two are the PRE-RELEASE-backend wordings, which carry an extra clause
+    # (`--prerelease=allow`). It is the one remedy that could plausibly be written as a
+    # backwards step ("pin the rc"), and it must not be: `--prerelease=allow` WIDENS
+    # what uv may resolve — it never names an earlier or a pinned build.
     cases = [
         ({"protocol": 2}, frozenset({1})),  # backend ahead → upgrade ambience-mcp
         ({"protocol": 1}, frozenset({2, 3})),  # backend behind → update Ambience
         ({"protocol": 1, "min_mcp_version": "9.9.9"}, frozenset({1})),  # below the floor
         (HACommandError("unknown_command", "nope"), frozenset({1})),  # pre-handshake
+        # ...and the same two "upgrade ambience-mcp" verdicts against a PRE-RELEASE
+        # backend, which is a different message.
+        ({"protocol": 2, "ambience_version": "1.6.0-rc.1"}, frozenset({1})),
+        (
+            {"protocol": 1, "min_mcp_version": "9.9.9", "ambience_version": "1.6.0-rc.1"},
+            frozenset({1}),
+        ),
     ]
     messages = []
     for hello, supported in cases:
@@ -250,11 +262,97 @@ async def test_no_message_ever_asks_for_a_downgrade():
             await client.ready()
         messages.append(str(exc.value).lower())
 
-    assert len(messages) == 4
+    assert len(messages) == 6
     for message in messages:
         assert "older" not in message
         assert "downgrade" not in message
         assert "pin an older" not in message
+    # And the new clause really is in the swept set — otherwise this test would go on
+    # passing while saying nothing about it.
+    assert sum("--prerelease=allow" in message for message in messages) == 2
+
+
+# --- the release CHANNEL: a pre-release backend needs a pre-release ambience-mcp ------
+# `uvx --from ambience-mcp` uses uv's default prerelease strategy, which SKIPS
+# pre-releases whenever a final release exists. So the moment any final ambience-mcp is
+# published, a beta tester running a pre-release Ambience on the documented (unpinned,
+# plain-`uvx`) config who is told to "upgrade ambience-mcp" cleans the cache, restarts,
+# resolves that same final build again — and loops forever. The remedy must name
+# `--prerelease=allow`, or it is advice they cannot follow, which is the one thing this
+# whole handshake exists to make unreachable.
+
+
+@pytest.mark.parametrize(
+    "hello",
+    [
+        # backend ahead of us → upgrade ambience-mcp
+        {"protocol": 2, "ambience_version": "1.6.0-rc.1"},
+        # below the backend's refusal floor → also upgrade ambience-mcp
+        {"protocol": 1, "min_mcp_version": "9.9.9", "ambience_version": "1.6.0-rc.1"},
+    ],
+    ids=["protocol_ahead", "below_the_floor"],
+)
+async def test_a_prerelease_backend_tells_the_user_to_allow_prereleases(hello):
+    """BOTH "upgrade ambience-mcp" verdicts, because both are reachable from a
+    pre-release backend and either one alone would strand the tester."""
+    client, _ = _reconnecting(hello, supported=frozenset({1}), mcp_version="0.2.0rc3")
+
+    with pytest.raises(IncompatibleError) as exc:
+        await client.ready()
+
+    message = str(exc.value)
+    assert "--prerelease=allow" in message
+    assert "1.6.0-rc.1" in message  # names the pre-release it is talking about
+    assert "uv cache clean" in message  # ...and keeps the rest of the remedy
+
+
+async def test_a_final_backend_is_never_told_to_allow_prereleases():
+    """The other direction, and just as important: telling a STABLE user to allow
+    pre-releases would quietly move them onto rc builds. The clause is opt-in to the
+    channel the backend is actually on."""
+    client, _ = _reconnecting(
+        {"protocol": 2, "ambience_version": "1.6.0"}, supported=frozenset({1})
+    )
+
+    with pytest.raises(IncompatibleError) as exc:
+        await client.ready()
+
+    assert "--prerelease" not in str(exc.value)
+    assert "uv cache clean" in str(exc.value)  # the ordinary remedy is untouched
+
+
+@pytest.mark.parametrize(
+    "hello",
+    [
+        {"protocol": 2},  # absent
+        {"protocol": 2, "ambience_version": None},  # null (ambience_version() may be None)
+        {"protocol": 2, "ambience_version": "not-a-version"},  # unparseable
+        {"protocol": 2, "ambience_version": 16},  # not even a string
+    ],
+    ids=["absent", "null", "unparseable", "not_a_string"],
+)
+async def test_an_unreadable_ambience_version_omits_the_clause_and_changes_no_verdict(hello):
+    """`ambience_version` is a MESSAGE input, never a compatibility one. A backend whose
+    version we cannot read (the backend's own `ambience_version()` can return None) must
+    still get exactly the verdict the protocol and the floor dictate — we just cannot say
+    which channel it is on, so we say nothing about channels. Never crash, never block,
+    never soften."""
+    client, _ = _reconnecting(hello, supported=frozenset({1}), mcp_version="0.2.0rc3")
+
+    with pytest.raises(IncompatibleError) as exc:
+        await client.ready()
+
+    message = str(exc.value)
+    assert "--prerelease" not in message
+    assert "uv cache clean" in message  # the verdict, and the rest of the remedy, stand
+
+
+async def test_a_prerelease_backend_we_can_work_with_is_not_nagged_about_channels():
+    """The clause rides on the "upgrade ambience-mcp" remedy, not on the pre-release-ness
+    of the backend: a compatible pair says nothing at all, whatever channel it is on."""
+    client, _ = _reconnecting({"protocol": 1, "ambience_version": "1.6.0-rc.1"})
+
+    assert await client.ready() == 1
 
 
 async def test_re_handshakes_after_a_reconnect():

@@ -428,3 +428,30 @@ async def test_traces_list_shape_is_pinned(
     # A golden recorded from an empty list would pin only `traces` and nothing inside
     # a record — so guard the fixture, not just the payload.
     assert resp["result"]["traces"], "an empty trace list would pin nothing"
+
+
+def test_mcp_diff_transient_fields_match_the_backends():
+    """diff.py must ignore exactly the per-scene hints the backend injects
+    (websocket_helpers._TRANSIENT_SCENE_FIELDS) — a new backend annotation
+    that diff.py doesn't know makes every re-submitted-unchanged scene show
+    as 'updated', turning the human approval surface into noise. The packages
+    cannot import each other (separate venvs), so the MCP literal is read
+    with ast, like bin/check_mcp_protocol.py reads MCP_PROTOCOL."""
+    import ast
+    from pathlib import Path
+
+    from custom_components.ambience.websocket_helpers import _TRANSIENT_SCENE_FIELDS
+
+    diff_py = Path(__file__).parents[1] / "mcp-server" / "src" / "ambience_mcp" / "diff.py"
+    module = ast.parse(diff_py.read_text())
+    for node in module.body:
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "_TRANSIENT_FIELDS"
+        ):
+            mcp_fields = ast.literal_eval(node.value)
+            break
+    else:
+        pytest.fail("no module-level _TRANSIENT_FIELDS assignment in mcp-server diff.py")
+    assert mcp_fields == set(_TRANSIENT_SCENE_FIELDS)

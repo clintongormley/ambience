@@ -212,7 +212,8 @@ async def ambience_preview_write(
 ) -> dict[str, Any]:
     """Preview a full scope write WITHOUT committing. Returns validity, a
     before/after diff (added/updated/removed), any unknown_categories, the
-    categories it will create (creating_categories), and a confirm_token. Declare
+    categories it will create (creating_categories), the existing categories it
+    will overwrite (updating_categories, before/after), and a confirm_token. Declare
     any new category a scene uses in new_categories ([{id, name, icon?, color?}]);
     they are created on apply. If unknown_categories is non-empty the write is
     blocked (no usable token) — declare them here or create them with

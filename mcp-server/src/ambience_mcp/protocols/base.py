@@ -183,8 +183,8 @@ class BaseProtocol:
         # diff. A category counts as known if it already exists OR is declared in
         # new_categories (created on apply); anything else blocks the write.
         cat_list = await self.command("ambience/categories/list")
-        existing_ids = {c.get("id") for c in cat_list.get("categories", [])}
-        known = existing_ids | {c.get("id") for c in new_categories}
+        existing_by_id = {c.get("id"): c for c in cat_list.get("categories", [])}
+        known = set(existing_by_id) | {c.get("id") for c in new_categories}
         # A falsy category (`""`) is excluded here, not just an absent/None one: it
         # passes `isinstance(..., str)` but is never a registered id, so without this
         # exclusion it would land in `unknown` and trip THIS gate first with a
@@ -216,7 +216,15 @@ class BaseProtocol:
                 "every scene must name a category (the backend silently moves "
                 f"uncategorised scenes to General): scene index(es) {joined} have none"
             )
-        creating = [c for c in new_categories if c.get("id") not in existing_ids]
+        creating = [c for c in new_categories if c.get("id") not in existing_by_id]
+        # apply's _merge_categories REPLACES a re-declared existing category
+        # wholesale — a rename or a dropped icon is a real mutation the human
+        # must see. A byte-identical redeclare is a no-op and stays quiet.
+        updating = [
+            {"before": existing_by_id[c.get("id")], "after": c}
+            for c in new_categories
+            if c.get("id") in existing_by_id and c != existing_by_id[c.get("id")]
+        ]
         changes = diff_scopes(current, scenes)
         token = fingerprint(_scope_key(kind, sid), scenes, new_categories)
         # Only a fully-valid payload (schema OK + every category known) gets an applyable
@@ -230,6 +238,7 @@ class BaseProtocol:
                 "errors": errors,
                 "unknown_categories": unknown,
                 "creating_categories": creating,
+                "updating_categories": updating,
                 "diff": changes,
                 "confirm_token": token,
             }

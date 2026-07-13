@@ -287,6 +287,46 @@ async def test_preview_write_accepts_declared_new_categories():
     assert ledger.consume(result["confirm_token"]) is True  # a usable, applyable token
 
 
+async def test_preview_write_surfaces_category_mutations():
+    """apply's _merge_categories REPLACES a re-declared existing category
+    wholesale (rename, icon/color drop). The preview must show that mutation —
+    creating_categories only covers genuinely-new ids."""
+    stored = {"id": "comfort", "name": "Comfort", "icon": "mdi:sofa"}
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [stored]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": "comfort", "actions": []}],
+        new_categories=[{"id": "comfort", "name": "Comfort v2"}],
+    )
+    assert result["creating_categories"] == []
+    assert result["updating_categories"] == [
+        {"before": stored, "after": {"id": "comfort", "name": "Comfort v2"}}
+    ]
+
+
+async def test_preview_write_does_not_flag_a_noop_redeclare():
+    stored = {"id": "comfort", "name": "Comfort"}
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [stored]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": "comfort", "actions": []}],
+        new_categories=[dict(stored)],
+    )
+    assert result["updating_categories"] == []
+
+
 async def test_apply_write_creates_declared_categories_before_saving():
     scope = {"kind": "area", "id": "lr"}
     scenes = [{"name": "Film", "category": "movie_night"}]

@@ -16,8 +16,8 @@ from ..diff import diff_scopes
 from ..ha_client import HACommandError
 from ..ledger import PreviewLedger, fingerprint
 from ..tools import (
-    _GUIDE_UNAVAILABLE_MESSAGE,
     _GUIDE_USAGE,
+    CommandUnavailable,
     GuideCache,
     ToolError,
     _id_payload,
@@ -59,8 +59,23 @@ class BaseProtocol:
         is shared mutable state that a CONCURRENT tool call can change (an HA restart
         under a parallel command reconnects and re-handshakes). Only the adapter holds
         the vN assumption, so only the adapter can supply it.
+
+        `unknown_command` is rewritten: this adapter exists because THIS connection
+        handshook successfully, so the backend cannot be too old — its commands are
+        unregistered right now (a config-entry reload after an options save, or the
+        integration was disabled). The raw error carried no remedy at all.
         """
-        return await self.client.command_for(self.protocol, type, **payload)
+        try:
+            return await self.client.command_for(self.protocol, type, **payload)
+        except HACommandError as exc:
+            if exc.code == "unknown_command":
+                raise CommandUnavailable(
+                    f"Home Assistant reports {type!r} is unavailable, but this Ambience "
+                    "answered the protocol handshake on this same connection — it is "
+                    "reloading (an options save does that) or was disabled. Wait a moment "
+                    "and try again; if it persists, re-enable the Ambience integration."
+                ) from exc
+            raise
 
     # --- protocol-specific: every subclass MUST implement these three ---
 
@@ -89,16 +104,14 @@ class BaseProtocol:
         With no `section`, returns the list of section names (a table of contents).
         With a `section`, returns just that section's text. The full guide is ~25k
         tokens and does not fit in a single tool result, which is why there is no
-        "give me all of it" mode. Old backends that predate the command return
-        {unavailable: true} instead of raising.
+        "give me all of it" mode. A backend caught mid config-entry-reload (or
+        disabled) returns {unavailable: true} instead of raising — see `command`.
         """
         held = {"have_version": self.guide_cache.version} if self.guide_cache.version else {}
         try:
             payload = await self.command("ambience/ai_guide", **held)
-        except HACommandError as exc:
-            if exc.code == "unknown_command":
-                return {"unavailable": True, "message": _GUIDE_UNAVAILABLE_MESSAGE}
-            raise
+        except CommandUnavailable as exc:
+            return {"unavailable": True, "message": str(exc)}
 
         if payload.get("unchanged"):
             # We only claim a version we actually hold, so the cache is populated here.

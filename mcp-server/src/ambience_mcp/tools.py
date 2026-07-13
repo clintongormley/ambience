@@ -15,6 +15,15 @@ class ToolError(RuntimeError):
     """A tool was called with an invalid argument (surfaced to the model)."""
 
 
+class CommandUnavailable(ToolError):
+    """A protocol-guaranteed command answered `unknown_command`.
+
+    Raised only from a negotiated adapter (see `BaseProtocol.command`), which
+    exists only after this connection's handshake succeeded — so the backend
+    is NOT too old; its commands are momentarily unregistered (a config-entry
+    reload) or gone until re-enabled (the integration was disabled)."""
+
+
 def _parse_scope(scope: dict[str, Any]) -> tuple[str, str | None]:
     kind = scope.get("kind")
     if kind == "house":
@@ -65,12 +74,6 @@ def _with_ranks(scenes: list[Any]) -> list[Any]:
 def _strip_ranks(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drop the read-only `rank` annotation so it never reaches the store."""
     return [{k: v for k, v in scene.items() if k != "rank"} for scene in scenes]
-
-
-_GUIDE_UNAVAILABLE_MESSAGE = (
-    "This Ambience version does not serve the authoring guide yet — upgrade "
-    "Ambience, or use the static skill guide."
-)
 
 
 _GUIDE_USAGE = (

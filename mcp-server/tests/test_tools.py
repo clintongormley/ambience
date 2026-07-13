@@ -934,12 +934,18 @@ async def test_get_guide_rejects_an_unknown_section_and_lists_the_real_ones():
     assert "guide" not in result
 
 
-async def test_get_guide_reports_unavailable_on_old_backend():
+async def test_get_guide_reports_unavailable_during_a_reload_not_an_old_backend():
+    """An adapter only exists after this connection's handshake succeeded, so
+    `unknown_command` here can never mean an old Ambience — the 'old backend'
+    framing this test used to assert is obsolete: a pre-handshake backend never
+    reaches get_guide, the verdict blocks it first. It means a config-entry
+    reload (an options save) or the integration being disabled."""
     client = FakeClient(
         {"ambience/ai_guide": HACommandError("unknown_command", "Unknown command.")}
     )
     result = await _v1(client).get_guide()
     assert result["unavailable"] is True
+    assert "reload" in result["message"]
     assert "guide" not in result
 
 

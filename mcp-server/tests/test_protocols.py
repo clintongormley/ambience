@@ -4,11 +4,12 @@ from pathlib import Path
 import pytest
 from conftest import FakeClient
 
+from ambience_mcp.ha_client import HACommandError
 from ambience_mcp.ledger import PreviewLedger
 from ambience_mcp.protocols import PROTOCOLS
 from ambience_mcp.protocols.base import BaseProtocol
 from ambience_mcp.protocols.v1 import ProtocolV1
-from ambience_mcp.tools import GuideCache
+from ambience_mcp.tools import CommandUnavailable, GuideCache
 
 _PROTOCOLS_DIR = Path(__file__).resolve().parent.parent / "src" / "ambience_mcp" / "protocols"
 
@@ -191,3 +192,21 @@ async def test_preview_write_routes_validation_through_the_validate_method():
         [{"name": "A", "category": "mood", "actions": []}],
     )
     assert len(calls) == 1
+
+
+async def test_unknown_command_after_a_handshake_says_reloading_not_too_old():
+    """An adapter only exists after this connection handshook successfully, so
+    unknown_command here can never mean 'old Ambience' — it means the config
+    entry is reloading (an options save) or was disabled. The raw error told
+    the model nothing."""
+    protocol = _v1({"ambience/ai_context": HACommandError("unknown_command", "Unknown command.")})
+    with pytest.raises(CommandUnavailable) as err:
+        await protocol.get_context()
+    assert "reload" in str(err.value)
+
+
+async def test_get_guide_still_degrades_gracefully_when_unavailable():
+    protocol = _v1({"ambience/ai_guide": HACommandError("unknown_command", "Unknown command.")})
+    result = await protocol.get_guide()
+    assert result["unavailable"] is True
+    assert "reload" in result["message"]

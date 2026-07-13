@@ -394,9 +394,9 @@ class ReconnectingClient:
         # replying {"protocol": true} would otherwise "agree" a protocol of True —
         # exclude it explicitly so a bool is treated as missing/invalid.
         if not isinstance(protocol, int) or isinstance(protocol, bool):
-            # pre-protocol: silence never grants permission. Sticky, unlike the
-            # `unknown_command` above: the backend ANSWERED, it just said nothing we
-            # can use, and that answer cannot change without a restart.
+            # pre-protocol: silence never grants permission — the backend ANSWERED,
+            # it just said nothing we can use. Re-derived per call like every
+            # failure outcome — see `_Negotiated`.
             return _Negotiated(_UPDATE_AMBIENCE, None)
         if not self._supported:
             # Unreachable in a shipped build (Gate 1 refuses a repo whose PROTOCOLS is
@@ -552,14 +552,14 @@ class ReconnectingClient:
         # `_live_for(None)` IS "verdict-checked live, then read the agreed protocol":
         # with no `agreed` to hold it to, it skips the ProtocolChangedError branch and
         # just hands back what the handshake resolved. Going through it here — instead
-        # of re-deriving the same two steps and reading `self._protocol` directly —
-        # means there is exactly one place in this class that reads that shared
-        # mutable field.
+        # of re-deriving the same two steps and reading `self._negotiated` directly —
+        # reuses the one IncompatibleError check `_live_for` already does, rather than
+        # duplicating it.
         _, protocol = await self._live_for(None)
         if protocol is None:
-            # A clean verdict (None) always sets _protocol — this would mean
-            # _negotiate() returned None without agreeing a protocol, which is a
-            # bug in _negotiate(), not a runtime condition callers can hit. Raise
+            # A clean outcome (message=None) always carries a protocol — this would
+            # mean _negotiate() returned a clean outcome without agreeing one, which is
+            # a bug in _negotiate(), not a runtime condition callers can hit. Raise
             # rather than `assert`: assertions are stripped under `python -O`,
             # and a bare None here would surface downstream as an opaque
             # `KeyError: None` from `PROTOCOLS[await client.ready()]`.
@@ -573,14 +573,14 @@ class ReconnectingClient:
         """Send a command on behalf of a caller that assumes protocol `agreed`.
 
         `agreed` comes from the CALLER — the protocol its adapter was built for (see
-        `BaseProtocol.protocol`) — and never from `self._protocol`, which is shared
+        `BaseProtocol.protocol`) — and never from `self._negotiated`, which is shared
         mutable state that any concurrent tool call can move under us. MCP clients
         dispatch tool calls as parallel tasks over this one client, so re-reading the
         current protocol here would compare the caller's assumption against nothing at
         all: two tool calls can both build a V1 adapter, the first can reconnect into a
-        protocol-2 backend, and the second's V1 command would then find `_protocol == 2`
-        "agreed" and go out — the exact v1-adapter-hits-a-v2-backend mismatch the frozen
-        adapters exist to prevent.
+        protocol-2 backend, and the second's V1 command would then find
+        `_negotiated.protocol == 2` "agreed" and go out — the exact
+        v1-adapter-hits-a-v2-backend mismatch the frozen adapters exist to prevent.
 
         `None` means "no adapter behind this call" (a bare `command()`): it adopts
         whatever protocol the handshake agrees, and only the retry inside this one call

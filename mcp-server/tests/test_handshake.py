@@ -464,7 +464,7 @@ async def test_retry_after_reconnect_checks_the_new_verdict_before_sending():
 
 
 async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_to():
-    """Important 1, the WITHIN-A-CALL case: `_checked_live()` blocks INCOMPATIBLE
+    """Important 1, the WITHIN-A-CALL case: `_live_for()` blocks INCOMPATIBLE
     protocols. A protocol that is SUPPORTED but DIFFERENT sails straight through it.
 
     Scenario (MCP supports {1, 2}; the user upgrades Ambience 1 → 2, which restarts
@@ -474,7 +474,7 @@ async def test_a_supported_but_different_protocol_after_a_reconnect_is_not_sent_
     silent v1-adapter-reads-v2-payload mismatch the frozen adapters exist to prevent.
 
     The CONCURRENT case — two adapters in flight over the one shared client, which no
-    re-read of `self._protocol` can save — is the next test.
+    re-read of `self._negotiated.protocol` can save — is the next test.
 
     Unreachable while PROTOCOLS == {1} (any other protocol is refused as
     incompatible). Live the moment a `v2.py` ships.
@@ -509,16 +509,17 @@ async def test_a_second_adapter_in_flight_is_never_sent_to_the_new_protocol(monk
 
     MCP clients dispatch tool calls as parallel tasks, and every one of them shares the
     single `ReconnectingClient`. Nothing serialises them, so the protocol an adapter was
-    built for CANNOT be recovered by re-reading the client's current `_protocol`: a
-    sibling call can move it between the handshake and the send.
+    built for CANNOT be recovered by re-reading the client's current
+    `_negotiated.protocol`: a sibling call can move it between the handshake and the
+    send.
 
       1. Tool calls A and B both handshake protocol 1 → both build a V1 adapter.
       2. A's command hits the stale socket, reconnects, re-handshakes → the backend now
          speaks protocol 2 → A is correctly dropped.
-      3. B still holds its V1 adapter — and the client's `_protocol` now says 2. If the
-         "agreed" protocol were re-read from the client here, B's V1 command would
-         "agree" with the V2 backend and go out: exactly the v1-adapter-reads-a-v2-
-         payload mismatch the frozen adapters exist to prevent.
+      3. B still holds its V1 adapter — and the client's `_negotiated.protocol` now
+         says 2. If the "agreed" protocol were re-read from the client here, B's V1
+         command would "agree" with the V2 backend and go out: exactly the
+         v1-adapter-reads-a-v2-payload mismatch the frozen adapters exist to prevent.
 
     So the assumption travels WITH the adapter (`BaseProtocol.protocol` →
     `ReconnectingClient.command_for`), and B raises instead of sending.
@@ -622,7 +623,7 @@ async def test_a_hello_that_times_out_does_not_condemn_the_callers_write():
     can itself raise `HAConnectionError(sent=True)` from its OWN recv path (a
     `_COMMAND_TIMEOUT` — a live-but-stalled HA). That flag is the truth about the HELLO.
 
-    It then propagates `_negotiate` → `_live()` → `_checked_live()` → `_live_for()` →
+    It then propagates `_negotiate` → `_handshake` → `_live()` → `_live_for()` →
     straight into `command_for`'s `except HAConnectionError`, which reads `exc.sent`
     against the CALLER's command type. One command's flag answering for another: the
     caller's `/save` is refused as "may already have been applied" when the connection
@@ -923,6 +924,11 @@ async def test_a_concurrent_call_during_a_re_derive_never_sees_a_half_set_state(
     release.set()
     assert await task1 == 1
     assert await task2 == 1
+    # Exactly 2 hellos: the initial failing verdict, then ONE shared re-derive.
+    # Pins the double-checked-lock re-read in `_live` — without it, task2 would
+    # find the pre-lock verdict still failing and fire its own redundant hello
+    # (3 total) instead of seeing task1's fresh clean outcome once it gets the lock.
+    assert client.hello_count == 2
 
 
 async def test_an_incompatible_verdict_heals_after_the_prescribed_upgrade():

@@ -257,7 +257,7 @@ async def test_a_failed_connect_is_retried_for_a_non_mutating_command():
     `command()`'s first `_live()` call was inside the try/except. Task 5 moved
     that first call outside the try, so a `connect()` failure (which defaults
     to `sent=True`) propagated on the very first attempt instead of retrying.
-    Folding both `_live()` calls behind `_checked_live()` inside the same
+    Folding both `_live()` calls behind `_live_for()` inside the same
     try/except (the Critical-1 fix) restores this."""
     fake = _ScriptedClient({"scenes": []})
     attempts = [HAConnectionError("unreachable", sent=True), None]

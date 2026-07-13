@@ -60,13 +60,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     against the final channel.
 - The AI's dry-run preview is now redacted like traces already were: who is home
     (by name) and security action params (lock PINs, alarm codes) no longer
-    leave the home in `ambience_dry_run` results — once your `ambience-mcp` is a
-    build that actually asks for it. Redaction is requested by the MCP client,
-    not enforced by the backend, so a cached pre-upgrade `ambience-mcp` still
-    gets an unredacted result, with no warning; if `ambience_dry_run` results
-    look unredacted, quit your MCP client, run `uv cache clean ambience-mcp`,
-    remove any version pin, and restart it. Older backends that cannot redact at
-    all still get a visible notice instead of a silent leak.
+    leave the home in `ambience_dry_run` results. Redaction is now the
+    backend's DEFAULT — `ambience/dry_run` redacts unless a caller explicitly
+    passes `redact: false` — so even a cached, pre-upgrade `ambience-mcp` (which
+    never sends the flag at all) gets a redacted result with no action needed.
+    A build too old to understand the `redact` key at all still gets a visible
+    notice instead of a silent leak.
 - `list_traces` and the diagnostics download now redact two more kinds of
     predicate detail, the same widened set `ambience_dry_run` above respects:
     `unavailable` (the friendly names of currently-down entities, which can

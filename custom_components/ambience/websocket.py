@@ -598,11 +598,18 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     {
         vol.Required("type"): "ambience/dry_run",
         **_SCOPE_SELECTOR_SCHEMA,
-        # The MCP server always asks for redaction: the plan carries presence/
-        # location-revealing describes (people, template, unavailable, occupancy)
-        # and raw action params (lock/alarm codes) that must not leave the home
-        # to an external AI. The panel omits it and gets the real detail.
-        vol.Optional("redact", default=False): bool,
+        # Default to redacted: there is no panel caller of this command (it does
+        # not appear anywhere in frontend/src or the built bundle) — the only
+        # live consumer is the MCP server, handing this plan to an external AI.
+        # The plan carries presence/location-revealing describes (people,
+        # template, unavailable, occupancy) and raw action params (lock/alarm
+        # codes), so a caller that omits the flag must get the SAFE result. That
+        # matters concretely: an `ambience-mcp` published before this backend
+        # gained redaction never sends `redact` at all, and must not be handed
+        # secrets just because it doesn't know to ask for safety. A future panel
+        # that wants the real detail ships alongside this backend and can opt in
+        # explicitly with `redact: false`.
+        vol.Optional("redact", default=True): bool,
     }
 )
 @websocket_api.async_response

@@ -803,9 +803,13 @@ async def _save_lockup_scene(hass_ws_client, area_id: str) -> None:
     assert save["success"] is True
 
 
-async def test_dry_run_does_not_redact_secrets_by_default(
+async def test_dry_run_redacts_secrets_by_default(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
+    """An omitted `redact` key must get the SAFE result: the only live caller of
+    this command is the MCP server, and a stale, pre-redaction `ambience-mcp`
+    never sends the flag at all — it must not be handed a lock code just
+    because it doesn't know to ask for safety."""
     await _save_lockup_scene(hass_ws_client, area_id)
     resp = await _ws_send(
         hass_ws_client,
@@ -814,7 +818,10 @@ async def test_dry_run_does_not_redact_secrets_by_default(
         area_id=area_id,
     )
     assert resp["success"] is True
-    assert resp["result"]["actions"][0]["params"] == {"code": "1234"}
+    assert resp["result"]["actions"][0]["params"] == {"code": REDACTED}
+    for plan in resp["result"]["categories"].values():
+        for action in plan["actions"]:
+            assert action.get("params", {}).get("code") in (None, REDACTED)
 
 
 async def test_dry_run_redacts_secrets_when_asked(
@@ -833,6 +840,23 @@ async def test_dry_run_redacts_secrets_when_asked(
     for plan in resp["result"]["categories"].values():
         for action in plan["actions"]:
             assert action.get("params", {}).get("code") in (None, REDACTED)
+
+
+async def test_dry_run_does_not_redact_secrets_when_opted_out(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """`redact: false` is the explicit opt-out a future panel caller (shipped
+    alongside this backend) could use to get the real detail."""
+    await _save_lockup_scene(hass_ws_client, area_id)
+    resp = await _ws_send(
+        hass_ws_client,
+        id=12,
+        type="ambience/dry_run",
+        area_id=area_id,
+        redact=False,
+    )
+    assert resp["success"] is True
+    assert resp["result"]["actions"][0]["params"] == {"code": "1234"}
 
 
 async def test_dry_run_returns_per_category_results(

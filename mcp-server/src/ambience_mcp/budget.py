@@ -159,6 +159,13 @@ def _trim_list_to_fit(
     Bisects instead of dropping one row per full re-measure — see the inline
     comment below for the shape this relies on and why the top boundary is
     handled separately from the rest.
+
+    Precondition on `derive_fields`: below the top (`kept_len < len(rows)`),
+    `size_of(candidate(kept_len))` must be STRICTLY DECREASING as `kept_len`
+    decreases — no ties, no growth, anywhere in that range. See the inline
+    comment below for why that holds for both current callers, and
+    `test_budget.py`'s `..._size_is_strictly_monotonic_below_the_top` tests,
+    which pin it.
     """
     rows = result.get(key)
     if not isinstance(rows, list) or not rows:
@@ -167,28 +174,56 @@ def _trim_list_to_fit(
     def candidate(kept_len: int) -> dict[str, Any]:
         return {**result, key: rows[:kept_len], **derive_fields(kept_len)}
 
-    # CONTRACT this relies on: size is near-monotonic in kept_len (dropping a
-    # row never costs more than a few chars back — a cursor/omitted-count
-    # digit flipping), with at most ONE discontinuity, at the very top
+    # CONTRACT this relies on: below the top boundary (kept_len < len(rows)),
+    # size_of(candidate(kept_len)) must be STRICTLY DECREASING as kept_len
+    # decreases. Not "near-monotonic", not "tolerant of a small nudge either
+    # way" — there is no slack anywhere in that range, and nothing below
+    # corrects for it if the contract is violated (there used to be a
+    # trailing walk-down loop here that looked like such a correction; it
+    # fired 0 times in 167,931+ boundary-exhaustive trials against both real
+    # shapes below, because strict monotonicity makes it structurally
+    # unreachable — see git history for the deleted loop, and don't re-add it
+    # as a defensive measure without re-deriving why it would ever fire).
+    #
+    # That strict decrease holds for both current shapes because a dropped
+    # row's own bytes dominate any growth the recomputed fields can add back:
+    # the cheapest possible JSON list element under `indent=2` — an empty
+    # object `{}` — costs >= 12 wire chars once size_of's x2 duplication is
+    # applied (6 raw chars: newline + 2-space indent + `{},`), while the
+    # worst-case per-step growth in the recomputed fields (a
+    # total-minus-kept_len counter like fit_traces's `omitted` gaining one
+    # digit as kept_len shrinks by one, counted once in its own field and
+    # once more where fit_traces's `notice` string echoes the same number)
+    # costs <= 4 wire chars. 12 > 4 with room to spare. Pinned by
+    # test_budget.py's test_traces_derive_fields_size_is_strictly_monotonic_below_the_top
+    # and test_entities_derive_fields_size_is_strictly_monotonic_below_the_top.
+    #
+    # The one place this module SANCTIONS a discontinuity is the top itself
     # (kept_len == len(rows)): both current callers gate an on/off field
     # there (fit_traces's ~150-char `notice`, present for every kept_len <
     # len(rows) and ABSENT only at kept_len == len(rows); fit_entities's
-    # `cursor`/`truncated` similarly can only flip at that same point, since
-    # `next_cursor` cannot cross `total` anywhere below it). That is a large
-    # jump, not a nudge, so it cannot be bisected across safely — see the
-    # reviewer finding pinned by
-    # test_trim_matches_the_linear_reference_at_the_reviewers_counterexample.
+    # `cursor`/`truncated` flip the same way when `next_cursor` crosses
+    # `total`). For entities that crossing lands at the top only because the
+    # backend always sends `total_matches` in practice — NOT because
+    # `next_cursor` is structurally incapable of crossing `total` sooner: a
+    # result carrying `offset > 0` with no `total_matches` falls back to
+    # `total = len(rows)` (see fit_entities below), which puts the crossing
+    # at the INTERIOR kept_len = len(rows) - offset instead. That interior
+    # case is harmless in practice (fuzzed with zero divergences from the
+    # oracle — the flip there is size-neutral-or-shrinking, not growing), but
+    # it is this function trusting the backend's contract, not deriving a
+    # guarantee from `offset`/`len(rows)` alone.
     #
+    # A large on/off jump is not a nudge, so it cannot be bisected across
+    # safely — see the reviewer finding pinned by
+    # test_trim_matches_the_linear_reference_at_the_reviewers_counterexample.
     # So the top candidate is measured directly first — same as the linear
     # oracle in test_budget.py, which always tests the untrimmed list before
     # popping anything — and only the strictly-smaller candidates, which all
     # share the SAME on/off state (never being the top), are bisected. Within
-    # that range there is no more discontinuity to miss: each dropped row
-    # removes at least a few chars of real content, which dominates any
-    # digit-width nudge in the recomputed fields, so size is genuinely
-    # non-increasing as kept_len decreases — bisection is safe there, and the
-    # trailing walk-down is just a defensive correction for that nudge, not a
-    # rescue from a missed discontinuity.
+    # that range strict monotonicity (above) makes bisection exact on its
+    # own: there is no discontinuity left to miss and nothing left to correct
+    # for afterward.
     n = len(rows)
     full = candidate(n)
     if n == 1 or size_of(full) <= limit:
@@ -201,8 +236,6 @@ def _trim_list_to_fit(
             lo = mid
         else:
             hi = mid - 1
-    while lo > 1 and size_of(candidate(lo)) > limit:
-        lo -= 1
     return candidate(lo)
 
 

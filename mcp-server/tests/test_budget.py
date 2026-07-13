@@ -547,6 +547,27 @@ def test_trim_matches_the_linear_reference(limit):
     )
 
 
+@pytest.mark.parametrize("limit", [200, 1_000, 5_000, 50_000])
+def test_trim_matches_the_linear_reference_at_the_entities_cursor_flip_boundary(limit):
+    # The test above (total_matches=500, offset=40, n=120) never actually
+    # reaches total_matches, so `more` is True at every kept_len including the
+    # top — the cursor-flips-to-null / truncated-flips-to-False discontinuity
+    # (kept_len == len(rows), the same kind of on/off flip fit_traces's
+    # notice hits) is never exercised for entities. Setting
+    # total_matches == offset + n makes it flip exactly at the top.
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * (i % 37)} for i in range(120)]
+    result = {"entities": rows, "total_matches": 160, "offset": 40}  # 160 == 40 + 120
+
+    def derive(kept_len):
+        next_cursor = 40 + kept_len
+        more = next_cursor < 160
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    assert _trim_list_to_fit(result, "entities", limit, derive) == _linear_trim_reference(
+        result, "entities", limit, derive
+    )
+
+
 def test_trim_returns_a_result_that_fits_or_a_single_row():
     rows = [{"entity_id": f"light.l{i}", "blob": "y" * 400} for i in range(80)]
     result = {"entities": rows, "total_matches": 80, "offset": 0}
@@ -612,3 +633,58 @@ def test_trim_matches_the_linear_reference_at_the_reviewers_counterexample():
 
     assert fast == slow
     assert len(fast["traces"]) == 3  # the linear oracle keeps every row here
+
+
+# The guard beyond the docs: pin the actual invariant the bisection in
+# _trim_list_to_fit depends on (see its inline "CONTRACT this relies on"
+# comment in budget.py) — below the top boundary, size strictly decreases as
+# kept_len shrinks by one — for BOTH real derive_fields shapes. If a future
+# edit adds a fatter conditional field to either one, this should fail here,
+# loudly and by name, instead of the trim silently diverging from the linear
+# oracle the way the reviewer's counterexample above did.
+
+
+def _below_top_sizes(result, key, derive_fields, n_rows):
+    """size_of(candidate(k)) for k = 1..n_rows, replicating exactly the
+    candidate `_trim_list_to_fit` itself measures — not a stand-in shape."""
+    rows = result[key]
+    return [size_of({**result, key: rows[:k], **derive_fields(k)}) for k in range(1, n_rows + 1)]
+
+
+@pytest.mark.parametrize("row_size", [0, 1, 5, 40, 200])
+@pytest.mark.parametrize("n_rows", [2, 3, 5, 10, 30, 60, 100])
+def test_traces_derive_fields_size_is_strictly_monotonic_below_the_top(n_rows, row_size):
+    rows = [{"unit": f"u{i}", "reason": "x" * row_size} for i in range(n_rows)]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(n_rows)
+
+    sizes = _below_top_sizes(result, "traces", derive, n_rows)
+    # Drop the top (kept_len == n_rows) — its on/off `notice` discontinuity
+    # is sanctioned and separately covered by the reviewer's-counterexample
+    # and traces-shaped-on-off-notice tests above; this test is only about
+    # the range where no such discontinuity is allowed.
+    below_top = sizes[:-1]
+    for smaller_kept_size, larger_kept_size in zip(below_top, below_top[1:], strict=False):
+        assert smaller_kept_size < larger_kept_size
+
+
+@pytest.mark.parametrize("row_size", [0, 1, 5, 40, 200])
+@pytest.mark.parametrize("n_rows", [2, 3, 5, 10, 30, 60, 100])
+def test_entities_derive_fields_size_is_strictly_monotonic_below_the_top(n_rows, row_size):
+    offset = 40
+    # total_matches kept comfortably above offset + n_rows so the top-of-range
+    # cursor-flip discontinuity (covered separately by the entities-cursor-
+    # flip-boundary test above) never lands inside the range checked here.
+    total = offset + n_rows + 1_000
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * row_size} for i in range(n_rows)]
+    result = {"entities": rows, "total_matches": total, "offset": offset}
+
+    def derive(kept_len):
+        next_cursor = offset + kept_len
+        more = next_cursor < total
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    sizes = _below_top_sizes(result, "entities", derive, n_rows)
+    below_top = sizes[:-1]
+    for smaller_kept_size, larger_kept_size in zip(below_top, below_top[1:], strict=False):
+        assert smaller_kept_size < larger_kept_size

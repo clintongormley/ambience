@@ -46,10 +46,16 @@ authenticates, and calls `ambience/ai_bundle` / `ambience/ai_context` directly, 
 this backend serves it exactly as before. (Those clients are refused a different way,
 by the client itself: `unknown_command` on the hello.)
 
-So this value is deliberately inert today. It sits at the first release that speaks
-the handshake, which is the lowest value that can refuse nothing — every client able
-to read the floor is, by construction, at least that version. That is the correct
-resting state: a floor is a REFUSAL, and there is nothing to refuse yet.
+So this value is deliberately inert today. It does NOT name the first
+handshake-capable release — `mcp-v0.2.0-rc.3` is already tagged and published, and is
+the last PRE-handshake build (no `protocols/` package, never sends
+`ambience/mcp/hello`). The first release that actually speaks the handshake is
+whatever this backend's own release publishes to `ambience-mcp`, and it will need a
+newer version string than this one (0.2.0-rc.3 is taken). So this value names a
+version BELOW the first handshake-capable release, which is what makes it refuse
+nothing: any client able to read the floor already handshook successfully, so it is,
+by construction, running something newer than this. That is the correct resting
+state: a floor is a REFUSAL, and there is nothing to refuse yet.
 
 Raising it is exactly as coupled to an MCP release as bumping MCP_PROTOCOL is: `uvx`
 installs LATEST, so a floor above the newest PUBLISHED ambience-mcp refuses every user

@@ -150,9 +150,14 @@ It can only refuse a client that **asks**. The floor is read during the
 `ambience/mcp/hello` handshake, so it binds every **future** `ambience-mcp`
 (they all handshake) and cannot touch a **pre-handshake** one — an old client
 never sends the hello, it just calls `ambience/ai_context` directly. That is why
-the current value is inert: it names the first handshake-capable release, which
-is the lowest value that refuses nobody. A floor is a refusal, and there is
-nothing to refuse yet.
+the current value is inert: `mcp-v0.2.0-rc.3` is already published, and is the
+**last pre-handshake** release (no `protocols/` package, never sends the hello) —
+not the first one that speaks it. The floor names a version **below** the first
+handshake-capable release (whatever version this backend's own release actually
+publishes), which is the lowest value that refuses nobody: any client able to read
+the floor already handshook successfully, so it is, by construction, running
+something newer than this. A floor is a refusal, and there is nothing to refuse
+yet.
 
 It is also the **strongest** refusal the backend can issue — the MCP checks it
 first, ahead of the protocol question — so it carries the strongest rule:

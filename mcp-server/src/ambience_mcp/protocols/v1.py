@@ -4,7 +4,9 @@ FROZEN. Once this ships in a release it is never edited except to fix a bug in i
 own protocol handling — a released Ambience speaking protocol 1 will be talking to
 this file forever. New behaviour goes in a new `v2.py`.
 
-Protocol 1 is the contract introduced in Ambience 1.1.0-rc.3:
+Protocol 1 is the contract introduced by the Ambience release that ships the
+`ambience/mcp/hello` handshake (this branch) — NOT Ambience 1.1.0-rc.3, which
+predates the handshake and never sends `ambience/mcp/hello` at all:
   - `ambience/ai_context`   — entity COUNTS, not rows; scene counts, not scene lists
   - `ambience/entities/find` — the paged catalog search that keeps every entity reachable
   - `ambience/traces/list`   — honours `redact: true`

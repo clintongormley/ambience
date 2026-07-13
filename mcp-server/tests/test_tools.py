@@ -96,6 +96,21 @@ async def test_dry_run_propagates_errors_other_than_invalid_format():
         await _v1(client).dry_run({"kind": "house"})
 
 
+async def test_dry_run_escalates_a_mid_reload_unknown_command_instead_of_retrying_unredacted():
+    """The `except HACommandError` in `dry_run` exists ONLY to retry without
+    `redact` for a pre-redaction backend (invalid_format). `command()` rewrites
+    an `unknown_command` (a config-entry reload, or the integration disabled)
+    into `CommandUnavailable`, which is a ToolError, NOT an HACommandError — it
+    must escape this except clause untouched, and specifically must NOT be
+    mistaken for the redaction-fallback trigger: the adapter must not retry the
+    command without redact=True."""
+    client = FakeClient({"ambience/dry_run": HACommandError("unknown_command", "Unknown command.")})
+    with pytest.raises(tools.CommandUnavailable, match="reload"):
+        await _v1(client).dry_run({"kind": "house"})
+    # exactly the one (redacted) attempt was made — no unredacted retry
+    assert client.calls == [{"type": "ambience/dry_run", "house": True, "redact": True}]
+
+
 async def test_validate_wraps_scenes_in_config():
     client = FakeClient({"ambience/validate": {"ok": True}})
     await _v1(client).validate([{"name": "X", "category": "c"}])
@@ -359,6 +374,26 @@ async def test_preview_write_reports_validation_error():
     result = await _v1(client).preview_write({"kind": "area", "id": "lr"}, [{"category": "c"}])
     assert result["valid"] is False
     assert result["errors"] == "bad predicate"
+
+
+async def test_preview_write_escalates_a_mid_reload_unknown_command_instead_of_valid_false():
+    """`ambience/validate` answering `unknown_command` mid-reload (a config-entry
+    reload after an options save, or the integration disabled) must NOT be folded
+    into `valid=False` — that reported a transient reload window to the AI as
+    'your scenes are invalid', driving it to rewrite perfectly good scenes.
+    `command()` rewrites it into `CommandUnavailable`, a ToolError (not an
+    HACommandError), so the `except HACommandError` here must not catch it —
+    it escapes preview_write as an actionable, reload-specific error instead."""
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": HACommandError("unknown_command", "Unknown command."),
+        }
+    )
+    with pytest.raises(tools.CommandUnavailable, match="reload"):
+        await _v1(client).preview_write(scope, scenes)
 
 
 async def test_apply_write_requires_matching_token_from_preview():

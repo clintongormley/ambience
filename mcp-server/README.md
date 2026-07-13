@@ -172,7 +172,7 @@ So if you run an Ambience beta, opt the MCP server into the same channel:
   "mcpServers": {
     "ambience": {
       "command": "uvx",
-      "args": ["--prerelease=allow", "--from", "ambience-mcp", "ambience-mcp"],
+      "args": ["--prerelease=allow", "ambience-mcp"],
       "env": {
         "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
         "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
@@ -182,14 +182,27 @@ So if you run an Ambience beta, opt the MCP server into the same channel:
 }
 ```
 
-Claude Code:
+**Claude Code** (terminal, and the VS Code extension) — the same command you
+used above, with `--prerelease=allow` added.
+
+Mac and Linux:
 
 ```sh
 claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
   --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
-  -- uvx --prerelease=allow --from ambience-mcp ambience-mcp
+  -- uvx --prerelease=allow ambience-mcp
 ```
+
+Windows:
+
+```text
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx --prerelease=allow ambience-mcp
+```
+
+If you already added `ambience`, remove it first
+(`claude mcp remove ambience --scope user`) — re-adding with the same name does
+not overwrite the old entry's args.
 
 This is **not** a [pin](#pinning-a-version) — it widens what `uvx` may install
 rather than fixing it, so you keep getting the newest build and the upgrade path

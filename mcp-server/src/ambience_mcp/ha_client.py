@@ -112,8 +112,8 @@ def _prerelease_clause(ambience_version: object) -> str:
     return (
         f" This Ambience ({ambience_version}) is a PRE-RELEASE, so your MCP client must "
         "allow pre-releases too, or `uvx` will keep reinstalling the newest FINAL "
-        'ambience-mcp: use args `["--prerelease=allow", "--from", "ambience-mcp", '
-        '"ambience-mcp"]`.'
+        'ambience-mcp: use args `["--prerelease=allow", "ambience-mcp"]` '
+        "(`uvx --prerelease=allow ambience-mcp`)."
     )
 
 

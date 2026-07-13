@@ -117,7 +117,7 @@ would keep giving you the last stable `ambience-mcp`, which may be too old for
 the beta. Use these `args` instead:
 
 ```json
-["--prerelease=allow", "--from", "ambience-mcp", "ambience-mcp"]
+["--prerelease=allow", "ambience-mcp"]
 ```
 
 This is not a pin — you still get the newest build, and upgrades still work.

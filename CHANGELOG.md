@@ -44,10 +44,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     be told to upgrade, do exactly as asked, and get the same build back, for
     ever. When your Ambience is a pre-release, the "upgrade `ambience-mcp`"
     message now says so and gives you the config that can actually reach it
-    (`uvx --prerelease=allow --from ambience-mcp ambience-mcp`); a final
-    Ambience is never told to allow pre-releases. The release gate matches: it
-    checks a pre-release Ambience against the pre-release `ambience-mcp`
-    channel, and a final one against the final channel.
+    (`uvx --prerelease=allow ambience-mcp`); a final Ambience is never told to
+    allow pre-releases. The release gate matches: it checks a pre-release
+    Ambience against the pre-release `ambience-mcp` channel, and a final one
+    against the final channel.
 
 ### Changed
 

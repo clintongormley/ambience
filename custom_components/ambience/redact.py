@@ -207,6 +207,13 @@ def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _redact_actions(actions: list[Any]) -> list[Any]:
+    """Every action in `actions` run through `redact_action`. Shared by
+    `redact_trace` and `redact_plan` so the same action-list scrub isn't
+    duplicated between them."""
+    return [redact_action(a) for a in actions]
+
+
 def _redact_explanation(explanation: dict[str, Any]) -> dict[str, Any]:
     """A copy of an `Explanation` dict with every scene's predicates run through
     `redact_predicate`. Shared by `redact_trace` and `redact_plan` so the same
@@ -238,7 +245,7 @@ def redact_plan(plan: Any) -> Any:
         return plan
     out = dict(plan)
     if isinstance(out.get("actions"), list):
-        out["actions"] = [redact_action(a) for a in out["actions"]]
+        out["actions"] = _redact_actions(out["actions"])
     described = out.get("snapshots_described")
     if isinstance(described, dict):
         out["snapshots_described"] = {
@@ -274,7 +281,7 @@ def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
         cause["new"] = REDACTED
     out["cause"] = cause
     if isinstance(out.get("actions"), list):
-        out["actions"] = [redact_action(a) for a in out["actions"]]
+        out["actions"] = _redact_actions(out["actions"])
     if isinstance(out.get("explanation"), dict):
         out["explanation"] = _redact_explanation(out["explanation"])
     return out

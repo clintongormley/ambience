@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.4] - 2026-07-13
+
 ### Added
 
 - The MCP server and Ambience now agree on a **protocol** at connect time, so an

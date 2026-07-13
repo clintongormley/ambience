@@ -171,7 +171,10 @@ class BaseProtocol:
         if not isinstance(current, list) or not all(isinstance(scene, dict) for scene in current):
             current = []
         try:
-            await self.command("ambience/validate", config={"scenes": scenes})
+            # Through the METHOD, not an inline command: a vN override of
+            # validate() must govern the preview gate too. (_strip_ranks in
+            # validate() is idempotent on the already-stripped list.)
+            await self.validate(scenes)
             valid, errors = True, None
         except HACommandError as exc:
             valid, errors = False, exc.message

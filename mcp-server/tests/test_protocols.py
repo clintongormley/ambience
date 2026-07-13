@@ -165,3 +165,29 @@ async def test_get_guide_no_longer_echoes_the_bundle_version():
     result = await protocol.get_guide()
 
     assert "ambience_ai_bundle" not in result
+
+
+async def test_preview_write_routes_validation_through_the_validate_method():
+    """A vN adapter that overrides validate() (renamed command, extra field)
+    must be honoured by preview_write too — an inline command here would keep
+    sending the v1 shape and silently split the two validation paths."""
+    calls = []
+
+    class _Tracking(ProtocolV1):
+        async def validate(self, scenes):
+            calls.append(scenes)
+            return await super().validate(scenes)
+
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    adapter = _Tracking(client, PreviewLedger(), GuideCache(), protocol=1)
+    await adapter.preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": "mood", "actions": []}],
+    )
+    assert len(calls) == 1

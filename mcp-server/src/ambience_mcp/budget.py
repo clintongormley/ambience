@@ -97,19 +97,34 @@ def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str,
     if not isinstance(schemas, dict) or not schemas:
         return context  # nothing left to shed — an honest oversized result beats a crash
 
-    kept = dict(schemas)
-    omitted: list[str] = []
-    fitted = context
-    for name in sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True):
-        del kept[name]
-        omitted.append(name)
-        fitted = {
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+
+    def candidate(shed: int) -> dict[str, Any]:
+        dropped = set(ordered[:shed])
+        return {
             **context,
-            "actions": {**actions, "schemas": kept},
-            "schemas_omitted": sorted(omitted),
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
         }
-        if size_of(fitted) <= limit:
-            break
+
+    # Shedding order is fixed (biggest first), so find the SMALLEST shed count
+    # that fits by bisection — identical result to the old one-dump-per-shed
+    # loop, in O(log n) measurements. If even shedding everything does not fit,
+    # return that honest oversized result (fit_result is the backstop).
+    lo, hi = 1, len(ordered)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if size_of(candidate(mid)) <= limit:
+            hi = mid
+        else:
+            lo = mid + 1
+    fitted = candidate(lo)
+    while lo < len(ordered) and size_of(fitted) > limit:
+        lo += 1
+        fitted = candidate(lo)
     return fitted
 
 
@@ -140,17 +155,33 @@ def _trim_list_to_fit(
 
     Bails out unchanged if `result[key]` is missing, not a list, or empty —
     there is nothing to trim.
+
+    Bisects instead of dropping one row per full re-measure — see the inline comment.
     """
     rows = result.get(key)
     if not isinstance(rows, list) or not rows:
         return result
 
-    kept = list(rows)
-    while True:
-        candidate = {**result, key: kept, **derive_fields(len(kept))}
-        if size_of(candidate) <= limit or len(kept) <= 1:
-            return candidate
-        kept.pop()
+    def candidate(kept_len: int) -> dict[str, Any]:
+        return {**result, key: rows[:kept_len], **derive_fields(kept_len)}
+
+    # Size grows monotonically with kept rows, so bisect for the largest length
+    # that fits — O(log n) full measurements instead of one per dropped row
+    # (which re-serialized a >60k-char dict up to len(rows) times, on the event
+    # loop, stalling every concurrent tool call). derive_fields can nudge sizes
+    # by a few chars (cursor digits, the traces notice), so the bisection
+    # result is verified against the EXACT dict returned and nudged down if
+    # needed — measure-what-you-return still holds.
+    lo, hi = 1, len(rows)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if size_of(candidate(mid)) <= limit:
+            lo = mid
+        else:
+            hi = mid - 1
+    while lo > 1 and size_of(candidate(lo)) > limit:
+        lo -= 1
+    return candidate(lo)
 
 
 def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:

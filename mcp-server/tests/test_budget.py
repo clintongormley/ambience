@@ -3,6 +3,7 @@ import json
 import pytest
 
 from ambience_mcp import budget
+from ambience_mcp.budget import _trim_list_to_fit, size_of
 
 
 def test_max_result_chars_defaults():
@@ -516,3 +517,39 @@ def test_fit_preview_does_not_mutate_the_input():
     budget.fit_preview(result, budget=3_000)
 
     assert json.dumps(result) == before
+
+
+def _linear_trim_reference(result, key, limit, derive_fields):
+    """The original one-dump-per-drop loop, kept as the behavioural oracle."""
+    rows = result.get(key)
+    if not isinstance(rows, list) or not rows:
+        return result
+    kept = list(rows)
+    while True:
+        candidate = {**result, key: kept, **derive_fields(len(kept))}
+        if size_of(candidate) <= limit or len(kept) <= 1:
+            return candidate
+        kept.pop()
+
+
+@pytest.mark.parametrize("limit", [200, 1_000, 5_000, 50_000])
+def test_trim_matches_the_linear_reference(limit):
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * (i % 37)} for i in range(120)]
+    result = {"entities": rows, "total_matches": 500, "offset": 40}
+
+    def derive(kept_len):
+        next_cursor = 40 + kept_len
+        more = next_cursor < 500
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    assert _trim_list_to_fit(result, "entities", limit, derive) == _linear_trim_reference(
+        result, "entities", limit, derive
+    )
+
+
+def test_trim_returns_a_result_that_fits_or_a_single_row():
+    rows = [{"entity_id": f"light.l{i}", "blob": "y" * 400} for i in range(80)]
+    result = {"entities": rows, "total_matches": 80, "offset": 0}
+    fitted = _trim_list_to_fit(result, "entities", 3_000, lambda n: {"returned": n})
+    assert len(fitted["entities"]) >= 1
+    assert size_of(fitted) <= 3_000 or len(fitted["entities"]) == 1

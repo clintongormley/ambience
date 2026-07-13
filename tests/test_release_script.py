@@ -371,10 +371,22 @@ def test_rejects_when_mcp_protocol_ahead_of_published(tmp_path: Path):
 
 def test_allows_when_published_protocol_meets_or_exceeds(tmp_path: Path):
     """A published MCP that already speaks the backend's protocol (or newer) must
-    not block the release."""
+    not block the release. A real newer package ships every adapter it supports
+    (per protocols/__init__.py's design), so the fake lists both {1,2}, not just {2}
+    — a bare "2" would be the dropped-adapter case, not this one."""
     _init_repo(tmp_path)
-    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '2 0.2.0'"})
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '1,2 0.2.0'"})
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_gate2_refuses_a_published_mcp_that_dropped_the_backends_protocol(tmp_path):
+    """Membership, not ceiling: a published ambience-mcp speaking {2,3} does NOT
+    satisfy a backend declaring protocol 1 — every user would loop on
+    'update Ambience' with no update that helps."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": "echo '2,3 0.2.0'"})
+    assert result.returncode != 0
+    assert "speaks MCP protocol" in result.stderr
 
 
 # --- Gate 2b: MIN_MCP_VERSION must name a PUBLISHED ambience-mcp ---
@@ -578,10 +590,12 @@ def test_a_final_release_probes_the_final_channel(tmp_path: Path):
 
 # A channel-aware fake PyPI, and the exact state a maintainer is in mid-rc: the FINAL
 # channel's newest ambience-mcp (1.0.0) speaks protocol 1; the PRE-RELEASE channel also
-# has the freshly tagged 1.1.0rc1, which speaks protocol 2.
+# has the freshly tagged 1.1.0rc1, which speaks protocols {1,2} (a real newer package
+# ships every adapter it supports, per protocols/__init__.py's design — it has not
+# dropped 1, it has ADDED 2).
 _CHANNEL_AWARE_PYPI = """
 case "$*" in
-  *--prerelease=allow*) echo "2 1.1.0rc1" ;;
+  *--prerelease=allow*) echo "1,2 1.1.0rc1" ;;
   *) echo "1 1.0.0" ;;
 esac
 """

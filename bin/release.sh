@@ -80,6 +80,21 @@ _is_uint() {
   esac
 }
 
+# True (0) when $1 is a comma-joined list of bare non-negative integers ("1" or
+# "1,2,3"). The published-protocols probe answers with the FULL list — the gate
+# checks membership, not the ceiling: a published package that dropped an old
+# adapter must not satisfy a backend still declaring that protocol.
+_is_uint_list() {
+  case "$1" in
+    ''|,*|*,|*,,*) return 1 ;;
+  esac
+  local part
+  local IFS=','
+  for part in $1; do
+    _is_uint "$part" || return 1
+  done
+}
+
 if remote_ref_exists "refs/tags/$TAG"; then
   echo "error: tag $TAG already exists on origin" >&2
   exit 1
@@ -197,7 +212,7 @@ if [ -n "$MCP_PYPI_CHECK_CMD" ]; then
 else
   # Assembled from single-quoted halves so the inner `\"` escapes (which the eval'd
   # `python -c "…"` needs) survive verbatim while $MCP_CHANNEL_FLAG still expands.
-  MCP_PYPI_CHECK_CMD='uvx --no-cache '"${MCP_CHANNEL_FLAG:+$MCP_CHANNEL_FLAG }"'--from ambience-mcp python -c "import importlib.metadata as md; from ambience_mcp.protocols import PROTOCOLS; print(max(PROTOCOLS), md.version(\"ambience-mcp\"))"'
+  MCP_PYPI_CHECK_CMD='uvx --no-cache '"${MCP_CHANNEL_FLAG:+$MCP_CHANNEL_FLAG }"'--from ambience-mcp python -c "import importlib.metadata as md; from ambience_mcp.protocols import PROTOCOLS; print(\",\".join(str(p) for p in sorted(PROTOCOLS)), md.version(\"ambience-mcp\"))"'
 fi
 PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
 
@@ -205,50 +220,55 @@ PUBLISHED=$(eval "$MCP_PYPI_CHECK_CMD" 2>/dev/null) || PUBLISHED=""
 # two fields — empty, a multi-line answer (e.g. "0\nnote: deprecated" from a noisy `uv`
 # warning), a stray third field — is blanked here, so the fail-closed checks below
 # refuse it rather than silently reading a truncated or garbled value.
-PUBLISHED_PROTOCOL=""
+PUBLISHED_PROTOCOLS=""
 PUBLISHED_VERSION=""
 PUBLISHED_EXTRA=""
 case "$PUBLISHED" in
   *$'\n'*) PUBLISHED="" ;;
 esac
-read -r PUBLISHED_PROTOCOL PUBLISHED_VERSION PUBLISHED_EXTRA <<<"$PUBLISHED" || true
+read -r PUBLISHED_PROTOCOLS PUBLISHED_VERSION PUBLISHED_EXTRA <<<"$PUBLISHED" || true
 if [ -n "$PUBLISHED_EXTRA" ]; then
-  PUBLISHED_PROTOCOL=""
+  PUBLISHED_PROTOCOLS=""
   PUBLISHED_VERSION=""
 fi
 
-# Reject a protocol that isn't a bare non-negative integer BEFORE the `-gt` comparison
-# below. `[ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOL" ]` returns exit status 2 ("integer
-# expression expected") on a non-numeric value; inside an `if` condition, `set -e` does
-# not fire and bash reads status 2 as false, so the refusal branch would be silently
-# skipped and the release would proceed. This subsumes the plain-emptiness check: an
-# empty string, whitespace, HTML, or a multi-line value are all rejected here, before
-# they ever reach the comparison.
-if ! _is_uint "$PUBLISHED_PROTOCOL"; then
-  echo "error: could not determine which MCP protocol the published ambience-mcp speaks." >&2
+# Reject a protocol list that isn't a comma-joined list of bare non-negative integers
+# BEFORE the membership check below. `[ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOLS" ]`
+# would return exit status 2 ("integer expression expected") on a non-numeric value;
+# inside an `if` condition, `set -e` does not fire and bash reads status 2 as false, so
+# the refusal branch would be silently skipped and the release would proceed. This
+# subsumes the plain-emptiness check: an empty string, whitespace, HTML, or a
+# multi-line value are all rejected here, before they ever reach the comparison.
+if ! _is_uint_list "$PUBLISHED_PROTOCOLS"; then
+  echo "error: could not determine which MCP protocol(s) the published ambience-mcp speaks." >&2
   echo "  (Asked the ${MCP_CHANNEL_LABEL}, because ${VERSION} ships into it.)" >&2
   echo "  The gate fails CLOSED: an unreachable PyPI must not be read as 'compatible'." >&2
-  echo "  (Expected one line, '<protocol> <version>'; got: '${PUBLISHED}')" >&2
+  echo "  (Expected one line, '<protocols> <version>' (e.g. \"1\" or \"1,2\"); got: '${PUBLISHED}')" >&2
   echo "  (A published ambience-mcp older than the protocols/ package predates this check;" >&2
   echo "   publish an mcp-v* tag first, then retry.)" >&2
   exit 1
 fi
 
-if [ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOL" ]; then
-  echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2
-  echo "  ambience-mcp in the ${MCP_CHANNEL_LABEL} (${PUBLISHED_VERSION}) only speaks" >&2
-  echo "  ${PUBLISHED_PROTOCOL}." >&2
-  echo "" >&2
-  echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
-  echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
-  echo "" >&2
-  echo "  The CHANNEL is part of the rule: ${VERSION} is a ${MCP_CHANNEL_LABEL} release, so" >&2
-  echo "  it is measured against the ambience-mcp its users will actually resolve. A FINAL" >&2
-  echo "  Ambience needs a FINAL ambience-mcp — an rc does not count, because a plain" >&2
-  echo "  \`uvx\` never installs one. See CONTRIBUTING.md." >&2
-  exit 1
-fi
-echo "  published ambience-mcp ${PUBLISHED_VERSION} (${MCP_CHANNEL_LABEL}) speaks protocol ${PUBLISHED_PROTOCOL} ✓"
+case ",$PUBLISHED_PROTOCOLS," in
+  *",$MCP_PROTOCOL,"*)
+    : # the published package speaks this release's protocol
+    ;;
+  *)
+    echo "error: this release speaks MCP protocol ${MCP_PROTOCOL}, but the published" >&2
+    echo "  ambience-mcp in the ${MCP_CHANNEL_LABEL} (${PUBLISHED_VERSION}) only speaks" >&2
+    echo "  {${PUBLISHED_PROTOCOLS}}." >&2
+    echo "" >&2
+    echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
+    echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
+    echo "" >&2
+    echo "  The CHANNEL is part of the rule: ${VERSION} is a ${MCP_CHANNEL_LABEL} release, so" >&2
+    echo "  it is measured against the ambience-mcp its users will actually resolve. A FINAL" >&2
+    echo "  Ambience needs a FINAL ambience-mcp — an rc does not count, because a plain" >&2
+    echo "  \`uvx\` never installs one. See CONTRIBUTING.md." >&2
+    exit 1
+    ;;
+esac
+echo "  published ambience-mcp ${PUBLISHED_VERSION} (${MCP_CHANNEL_LABEL}) speaks protocol(s) {${PUBLISHED_PROTOCOLS}} ✓"
 
 # The refusal floor must name a PUBLISHED ambience-mcp — see the header above. The
 # PEP 440 comparison is delegated to Gate 1's script (`--check-floor-against`), not

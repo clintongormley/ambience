@@ -43,8 +43,14 @@ which runs only when the client sends `ambience/mcp/hello` — so it binds FUTUR
 clients (every one of which handshakes), and cannot touch a PRE-handshake client. An
 ambience-mcp older than the first handshake-capable release never asks: it connects,
 authenticates, and calls `ambience/ai_bundle` / `ambience/ai_context` directly, and
-this backend serves it exactly as before. (Those clients are refused a different way,
-by the client itself: `unknown_command` on the hello.)
+this backend still answers those calls — though not byte-for-byte as before: the
+payloads no longer carry the pre-handshake format stamps (`ambience_ai_context`,
+`ambience_ai_bundle`) such a build read to warn about a too-new backend, so that
+frozen client population is served UNCHECKED, and a future incompatible ai_context
+reshape would be misread silently. That is the accepted cost of retiring the
+per-payload tripwires in favour of the handshake. (The inverse pairing does refuse
+itself: a handshake-capable client whose hello gets `unknown_command` concludes
+"update Ambience" without this backend's help.)
 
 So this value is deliberately inert today. It does NOT name the first
 handshake-capable release — `mcp-v0.2.0-rc.3` is already tagged and published, and is

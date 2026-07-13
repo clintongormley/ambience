@@ -50,3 +50,13 @@ def test_ledger_is_bounded_and_evicts_oldest():
     assert ledger.consume(oldest) is False
     # a recently recorded token is still there
     assert ledger.consume(f"tok-{PreviewLedger._MAX - 1:05d}") is True
+
+
+def test_holds_peeks_without_consuming():
+    ledger = PreviewLedger()
+    ledger.record("abc")
+    assert ledger.holds("abc")
+    assert ledger.holds("abc")  # still there — holds never consumes
+    assert not ledger.holds("zzz")
+    assert ledger.consume("abc")
+    assert not ledger.holds("abc")

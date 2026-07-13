@@ -12,7 +12,7 @@ import pytest
 from conftest import FakeClient
 
 from ambience_mcp import budget, tools
-from ambience_mcp.ha_client import HACommandError
+from ambience_mcp.ha_client import HACommandError, IncompatibleError
 from ambience_mcp.ledger import PreviewLedger, fingerprint
 from ambience_mcp.protocols.v1 import ProtocolV1
 
@@ -947,3 +947,30 @@ async def test_get_guide_propagates_other_command_errors():
     client = FakeClient({"ambience/ai_guide": HACommandError("internal_error", "boom")})
     with pytest.raises(HACommandError):
         await _v1(client).get_guide()
+
+
+async def test_a_failed_apply_keeps_the_token_so_try_again_is_true_advice():
+    """The save is a wholesale replace (idempotent), so a token consumed only
+    on SUCCESS lets the user retry a failed apply — instead of burning the
+    token on a transient and answering the retry with 'bad confirm_token'."""
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+            "ambience/area/save": IncompatibleError("startup window refusal"),
+        }
+    )
+    adapter = _v1(client)
+    scenes = [{"name": "A", "category": "mood", "actions": []}]
+    preview = await adapter.preview_write({"kind": "area", "id": "kitchen"}, scenes)
+    token = preview["confirm_token"]
+    with pytest.raises(IncompatibleError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
+    # the transient passed: the SAME token must still work
+    client.results["ambience/area/save"] = {"ok": True}
+    result = await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
+    assert result == {"ok": True}
+    # and now it is spent
+    with pytest.raises(tools.ToolError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)

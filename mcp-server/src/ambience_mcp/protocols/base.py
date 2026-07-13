@@ -255,7 +255,7 @@ class BaseProtocol:
         new_categories = new_categories or []
         scenes = _strip_ranks(scenes)  # `rank` is a read-only annotation, never stored
         token = fingerprint(_scope_key(kind, sid), scenes, new_categories)
-        if confirm_token != token or not self.ledger.consume(token):
+        if confirm_token != token or not self.ledger.holds(token):
             raise ToolError(
                 "apply_write needs the confirm_token from a preview_write of this exact "
                 "payload; run preview_write first (and again if you changed the scenes)"
@@ -268,13 +268,20 @@ class BaseProtocol:
             await self.command(
                 "ambience/categories/save", categories=_merge_categories(existing, new_categories)
             )
-        return await self.command(
+        result = await self.command(
             f"ambience/{kind}/save",
             config={"scenes": scenes},
             change={"action": "import", "scene_name": None},
             minimise_pins=True,
             **_id_payload(kind, sid),
         )
+        # Spend the token only now: a failed apply (dropped socket, a
+        # startup-window refusal between the category save and this one) keeps
+        # it valid, so "try again" is true advice and a retry can complete the
+        # half-applied write. The save is a wholesale replace, so retrying the
+        # same approved payload is idempotent.
+        self.ledger.consume(token)
+        return result
 
     async def list_categories(self) -> dict[str, Any]:
         return await self.command("ambience/categories/list")

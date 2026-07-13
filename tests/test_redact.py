@@ -14,6 +14,7 @@ from homeassistant.components.diagnostics import REDACTED
 from custom_components.ambience.redact import (
     redact_action,
     redact_exposed_action,
+    redact_plan,
     redact_predicate,
     redact_store,
     redact_trace,
@@ -385,3 +386,44 @@ def test_redact_store_leaves_malformed_actions_unchanged() -> None:
 def test_redact_trace_leaves_malformed_actions_unchanged() -> None:
     trace = {"cause": {"kind": "manual"}, "actions": {"weird": 1}}
     assert redact_trace(trace)["actions"] == {"weird": 1}
+
+
+# --- redact_plan: one resolve/dry-run plan -----------------------------------
+
+
+def test_redact_plan_blanks_security_params_and_presence_describes():
+    plan = {
+        "matched_scene_index": 0,
+        "scene_name": "Night",
+        "actions": [
+            {"service": "lock.lock", "entity_ids": ["lock.front"], "params": {"code": "1234"}},
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.hall"],
+                "params": {"brightness": 10},
+            },
+        ],
+        "snapshots_described": {
+            "people": "1 of 2 home (Alice)",
+            "template": "rendered location detail",
+            "sun": "below horizon",
+        },
+        "switch_state": "on",
+    }
+    out = redact_plan(plan)
+    assert out["actions"][0]["params"] == {"code": REDACTED}
+    assert out["actions"][1]["params"] == {"brightness": 10}
+    assert out["snapshots_described"]["people"] == REDACTED
+    assert out["snapshots_described"]["template"] == REDACTED
+    assert out["snapshots_described"]["sun"] == "below horizon"
+    # never mutates the input
+    assert plan["actions"][0]["params"]["code"] == "1234"
+    assert plan["snapshots_described"]["people"] == "1 of 2 home (Alice)"
+
+
+def test_redact_plan_passes_unexpected_shapes_through():
+    assert redact_plan(None) is None
+    assert redact_plan({"actions": "not-a-list", "snapshots_described": 3}) == {
+        "actions": "not-a-list",
+        "snapshots_described": 3,
+    }

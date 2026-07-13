@@ -123,7 +123,25 @@ class BaseProtocol:
         kind, sid = _parse_scope(scope)
         # dry_run uses HA's shared scope selector, which marks house with `house: True`
         # rather than an id key; area/floor reuse the same id selector as get/save.
-        return await self.command("ambience/dry_run", **(_id_payload(kind, sid) or {"house": True}))
+        selector = _id_payload(kind, sid) or {"house": True}
+        # Always redacted: the plan carries who-is-home detail (people describe)
+        # and the winning scene's raw action params (lock/alarm codes) — the
+        # same PII classes list_traces already redacts on this session. An
+        # older backend rejects the extra key at the schema layer
+        # (invalid_format); retry without it and SAY so, rather than failing a
+        # working tool or leaking silently.
+        try:
+            return await self.command("ambience/dry_run", redact=True, **selector)
+        except HACommandError as exc:
+            if exc.code != "invalid_format":
+                raise
+            result = await self.command("ambience/dry_run", **selector)
+            result["notice"] = (
+                "This Ambience does not support redacting dry_run results; presence "
+                "detail and security action params may appear unredacted. Update "
+                "Ambience (HACS) and restart Home Assistant to enable redaction."
+            )
+            return result
 
     async def validate(self, scenes: list[dict[str, Any]]) -> dict[str, Any]:
         # Strip the read-only `rank` annotation, like the write paths, so a caller that

@@ -201,6 +201,28 @@ def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def redact_plan(plan: Any) -> Any:
+    """Scrub one resolve/dry-run plan (the `async_resolve_only` shape): the
+    winning scene's security action params (alarm codes, lock PINs — the same
+    value scrub as `redact_action`) and the presence/location-revealing
+    condition describes (the `people` describe renders who is home by NAME;
+    `template` renders arbitrary state). Other describes (sun, lux, period…)
+    carry no PII and are kept, matching `_DETAIL_REDACTED_CONDITIONS`. Never
+    mutates the input; unexpected shapes pass through unchanged."""
+    if not isinstance(plan, dict):
+        return plan
+    out = dict(plan)
+    if isinstance(out.get("actions"), list):
+        out["actions"] = [redact_action(a) for a in out["actions"]]
+    described = out.get("snapshots_described")
+    if isinstance(described, dict):
+        out["snapshots_described"] = {
+            name: (REDACTED if name in _DETAIL_REDACTED_CONDITIONS and desc is not None else desc)
+            for name, desc in described.items()
+        }
+    return out
+
+
 def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
     """Scrub presence PII and secrets from one serialised trace record: presence
     causes (old/new zone names), the multi-entity `for:` gate label, security

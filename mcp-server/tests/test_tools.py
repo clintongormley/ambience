@@ -53,7 +53,35 @@ async def test_get_scope_rejects_bad_kind():
 async def test_dry_run_uses_scope_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
     await _v1(client).dry_run({"kind": "floor", "id": "ground"})
-    assert client.calls == [{"type": "ambience/dry_run", "floor_id": "ground"}]
+    assert client.calls == [{"type": "ambience/dry_run", "floor_id": "ground", "redact": True}]
+
+
+async def test_dry_run_always_asks_for_redaction():
+    """dry_run results carry who-is-home detail and raw action params (lock
+    codes) — the same PII classes list_traces already redacts. The adapter
+    must ask for redaction on every call."""
+    client = FakeClient({"ambience/dry_run": {"matched_scene_index": None}})
+    await _v1(client).dry_run({"kind": "house"})
+    assert client.calls[-1] == {"type": "ambience/dry_run", "house": True, "redact": True}
+
+
+async def test_dry_run_falls_back_with_a_notice_when_the_backend_cannot_redact():
+    """A pre-redaction backend rejects the extra key with invalid_format: the
+    adapter retries without it and says so, instead of failing the tool or
+    leaking silently."""
+
+    class _RejectsRedact(FakeClient):
+        async def command(self, type, **payload):
+            if type == "ambience/dry_run" and payload.get("redact"):
+                self.calls.append({"type": type, **payload})
+                raise HACommandError("invalid_format", "extra keys not allowed")
+            return await super().command(type, **payload)
+
+    client = _RejectsRedact({"ambience/dry_run": {"matched_scene_index": None}})
+    result = await _v1(client).dry_run({"kind": "house"})
+    assert result["matched_scene_index"] is None
+    assert result["notice"].startswith("This Ambience does not support redacting")
+    assert client.calls[-1] == {"type": "ambience/dry_run", "house": True}
 
 
 async def test_validate_wraps_scenes_in_config():
@@ -371,7 +399,7 @@ async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(mo
 async def test_dry_run_house_uses_house_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
     await _v1(client).dry_run({"kind": "house"})
-    assert client.calls == [{"type": "ambience/dry_run", "house": True}]
+    assert client.calls == [{"type": "ambience/dry_run", "house": True, "redact": True}]
 
 
 async def test_get_scope_ranks_scenes_per_category_in_order():

@@ -41,7 +41,7 @@ from .const import (
 from .diagnostics import scope_diagnostics
 from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
-from .redact import redacted_traces
+from .redact import redact_plan, redacted_traces
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     all_live_states,
@@ -598,6 +598,11 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     {
         vol.Required("type"): "ambience/dry_run",
         **_SCOPE_SELECTOR_SCHEMA,
+        # The MCP server always asks for redaction: the plan carries who-is-home
+        # detail (people describe) and raw action params (lock/alarm codes) that
+        # must not leave the home to an external AI. The panel omits it and gets
+        # the real detail.
+        vol.Optional("redact"): bool,
     }
 )
 @websocket_api.async_response
@@ -616,6 +621,13 @@ async def _ws_dry_run(
         result["categories"] = await async_resolve_categories_only(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
+        if msg.get("redact"):
+            result = {
+                **redact_plan(result),
+                "categories": {
+                    cid: redact_plan(plan) for cid, plan in result["categories"].items()
+                },
+            }
     except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return

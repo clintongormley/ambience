@@ -775,6 +775,80 @@ async def test_dry_run_returns_matched_scene(
     assert resp["result"]["actions"][0]["service"] == "light.turn_on"
 
 
+async def test_dry_run_does_not_redact_secrets_by_default(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "conditions": [],
+            "scenes": [
+                {
+                    "name": "night lockup",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "lock.lock",
+                            "entity_ids": ["lock.front_door"],
+                            "params": {"code": "1234"},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save["success"] is True
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id=area_id,
+    )
+    assert resp["success"] is True
+    assert resp["result"]["actions"][0]["params"] == {"code": "1234"}
+
+
+async def test_dry_run_redacts_secrets_when_asked(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "conditions": [],
+            "scenes": [
+                {
+                    "name": "night lockup",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "lock.lock",
+                            "entity_ids": ["lock.front_door"],
+                            "params": {"code": "1234"},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save["success"] is True
+    client = await hass_ws_client(hass)
+    await client.send_json(
+        {"id": 11, "type": "ambience/dry_run", "area_id": area_id, "redact": True}
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    from homeassistant.components.diagnostics import REDACTED
+
+    assert msg["result"]["actions"][0]["params"] == {"code": REDACTED}
+    for plan in msg["result"]["categories"].values():
+        for action in plan["actions"]:
+            assert action.get("params", {}).get("code") in (None, REDACTED)
+
+
 async def test_dry_run_returns_per_category_results(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:

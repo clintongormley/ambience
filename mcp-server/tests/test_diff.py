@@ -110,12 +110,15 @@ def test_summarise_diff_updated_reports_changed_fields():
     ]
 
 
-def test_summarise_diff_never_reports_priority_or_pinned_as_changed():
+def test_summarise_diff_reports_priority_and_pinned_when_explicitly_authored():
+    # Inverted: priority/pinned are evaluation-order fields the backend HONOURS
+    # on import, so when the AFTER scene states them explicitly a change here
+    # must be visible, not swallowed — see test_a_priority_swap_is_a_visible_update.
     before = {"name": "Evening", "category": "lighting", "priority": 5, "pinned": True}
     after = {"name": "Evening", "category": "lighting", "priority": 99, "pinned": False}
     changes = {"added": [], "removed": [], "updated": [{"before": before, "after": after}]}
 
-    assert summarise_diff(changes)["updated"][0]["changed_fields"] == []
+    assert summarise_diff(changes)["updated"][0]["changed_fields"] == ["pinned", "priority"]
 
 
 def test_summarise_diff_handles_an_unnamed_scene_without_crashing():
@@ -143,3 +146,94 @@ def test_summarise_diff_gives_unnamed_added_removed_entries_a_positional_index()
         {"name": None, "category": "c", "index": 0},
         {"name": None, "category": "c", "index": 1},
     ]
+
+
+def test_a_priority_swap_is_a_visible_update():
+    """The backend pins any scene carrying an int priority AT that priority
+    (authorable on import) — swapping two priorities changes which scene wins,
+    so it must never preview as an empty diff."""
+    current = [
+        {"name": "A", "category": "mood", "priority": 2048, "actions": []},
+        {"name": "B", "category": "mood", "priority": 1024, "actions": []},
+    ]
+    proposed = [
+        {"name": "A", "category": "mood", "priority": 1024, "actions": []},
+        {"name": "B", "category": "mood", "priority": 2048, "actions": []},
+    ]
+    changes = diff_scopes(current, proposed)
+    assert changes["added"] == [] and changes["removed"] == []
+    assert len(changes["updated"]) == 2
+    summary = summarise_diff(changes)
+    assert all(u["changed_fields"] == ["priority"] for u in summary["updated"])
+
+
+def test_a_pinned_flip_is_a_visible_update():
+    current = [{"name": "A", "category": "mood", "priority": 10, "actions": []}]
+    proposed = [{"name": "A", "category": "mood", "priority": 10, "pinned": True, "actions": []}]
+    assert len(diff_scopes(current, proposed)["updated"]) == 1
+
+
+def test_a_faithful_carry_forward_is_still_an_empty_diff():
+    scene = {"name": "A", "category": "mood", "priority": 10, "pinned": False, "actions": []}
+    changes = diff_scopes([scene], [dict(scene)])
+    assert changes["updated"] == [] and "order_note" not in changes
+
+
+def test_authoring_without_order_fields_gets_one_note_not_per_scene_noise():
+    """A model that authors by list order (no priority/pinned) must not drown
+    the diff in phantom 'updated' entries — but the backend WILL re-derive
+    order, so the diff says so once, at scope level."""
+    current = [
+        {"name": "A", "category": "mood", "priority": 2048, "actions": []},
+        {"name": "B", "category": "mood", "priority": 1024, "actions": []},
+    ]
+    proposed = [
+        {"name": "A", "category": "mood", "actions": []},
+        {"name": "B", "category": "mood", "actions": []},
+    ]
+    changes = diff_scopes(current, proposed)
+    assert changes["updated"] == []
+    assert "re-derive" in changes["order_note"]
+
+
+def test_restating_priority_while_dropping_pinned_still_gets_a_signal():
+    """Partial omission: the proposal restates `priority` unchanged but silently
+    drops the stored `pinned`. Per-field comparison strips `pinned` from both
+    sides (since it's not authored), so the scenes compare equal and produce no
+    `updated` entry — but the backend WILL re-derive `pinned` on apply
+    (minimise_pins), so this must not be a silent, empty diff."""
+    current = [{"name": "A", "category": "mood", "priority": 100, "pinned": True, "actions": []}]
+    proposed = [{"name": "A", "category": "mood", "priority": 100, "actions": []}]
+    changes = diff_scopes(current, proposed)
+    assert changes["updated"] == []
+    assert "order_note" in changes
+
+
+def test_restating_pinned_while_dropping_priority_still_gets_a_signal():
+    """The mirror image: `pinned` is restated unchanged, `priority` is silently
+    dropped. Same reasoning as the priority-restated case above, other field."""
+    current = [{"name": "A", "category": "mood", "priority": 100, "pinned": True, "actions": []}]
+    proposed = [{"name": "A", "category": "mood", "pinned": True, "actions": []}]
+    changes = diff_scopes(current, proposed)
+    assert changes["updated"] == []
+    assert "order_note" in changes
+
+
+def test_summarise_diff_keeps_the_order_note():
+    changes = {"added": [], "removed": [], "updated": [], "order_note": "note text"}
+    assert summarise_diff(changes)["order_note"] == "note text"
+
+
+def test_a_non_string_category_never_crashes_the_diff():
+    """validate() reports a non-string category as a clean error, but the diff
+    still runs on the invalid payload (preview_write returns it alongside the
+    error) — an unhashable category (a dict or list, e.g. the category OBJECT
+    where its string id belongs) must not replace that clean error with a raw
+    TypeError from _key's dict-key tuple."""
+    proposed = [
+        {"name": "A", "category": {"id": "mood"}, "actions": []},  # named key path
+        {"category": ["mood"], "actions": []},  # unnamed key path (positional)
+    ]
+    changes = diff_scopes([], proposed)
+    assert len(changes["added"]) == 2
+    summarise_diff(changes)  # the elided-summary path must survive it too

@@ -78,6 +78,117 @@ Releases follow a **cut → soak → flip** flow:
 A manual `workflow_dispatch` on the **docs** workflow can redeploy the docs for
 a chosen tag (or the current latest) if you ever need to reseed the site.
 
+### Releasing a protocol bump
+
+`MCP_PROTOCOL` (in `custom_components/ambience/const.py`) is the backend↔MCP
+contract. It is **not** either semver, and it bumps only when the contract
+changes shape.
+
+**When it bumps, publish the MCP server first.** The coupling is
+one-directional:
+
+- A **new MCP** against an **old backend** is fine — it ships a frozen adapter
+    for every protocol it supports and loads the one the backend asks for.
+- A **new backend** against an **old MCP** is a deadlock: users are told
+    "upgrade ambience-mcp", and `uvx` installs latest — which does not speak the
+    new protocol yet.
+
+So: tag `mcp-v<version>` and let it publish, **then** run `bin/release.sh`. The
+release script enforces this (it asks PyPI what the published MCP speaks and
+refuses to go first), and fails closed if PyPI cannot be reached.
+
+Ambience releases that do **not** bump `MCP_PROTOCOL` need no MCP release at all
+— **unless they raise `MIN_MCP_VERSION`**, which is coupled to an MCP release in
+exactly the same way (see below).
+
+### The release channel: cut the pair in the same one
+
+**An Ambience release is checked against the `ambience-mcp` its own users will
+resolve** — and which one that is depends on the channel:
+
+- a **final** Ambience → the newest **final** `ambience-mcp` (plain `uvx`, which
+    is what a stable user runs)
+- a **pre-release** Ambience → the newest **pre-release-or-final**
+    `ambience-mcp` (`uvx --prerelease=allow`, which is what a beta tester runs —
+    see the MCP server's README)
+
+This is not a preference: `uvx --from ambience-mcp` uses uv's default prerelease
+strategy, which **excludes pre-releases whenever a final release exists**. So an
+rc `ambience-mcp` is simply not installable without the flag, and measuring a
+release against an `ambience-mcp` from the wrong channel means measuring it
+against a package its users cannot get. Gate 2 asks PyPI in the channel matching
+the version being cut, and says in the release log which one it asked.
+
+**Cutting an rc pair** (say Ambience `1.6.0-rc.1` with a protocol bump):
+
+1. Bump `MCP_PROTOCOL` in `custom_components/ambience/const.py`.
+1. Write the new frozen adapter, `mcp-server/src/ambience_mcp/protocols/vN.py`,
+    and register it in `PROTOCOLS`.
+1. Re-record the shape golden (`mcp-server/tests/`), so the new adapter's wire
+    shape is pinned.
+1. Bump `mcp-server/pyproject.toml` to the matching MCP rc (e.g. `1.1.0rc1`).
+1. Tag `mcp-v1.1.0-rc.1` and let the workflow publish it to PyPI.
+1. Run `bin/release.sh 1.6.0-rc.1`. Gate 2 probes the **pre-release** channel,
+    sees the rc that speaks the new protocol, and lets the release through.
+
+Then, when the beta soaks clean and you want to go final: publish a **final**
+`ambience-mcp` (tag `mcp-v1.1.0`) **before** `bin/release.sh 1.6.0`. Gate 2 now
+probes the **final** channel, where the rc does not count — and that is correct,
+not an obstacle to route around: a stable user's plain `uvx` cannot install an
+rc either, so shipping the final backend first would tell every one of them to
+upgrade to something they cannot get.
+
+### `MIN_MCP_VERSION` — the refusal floor
+
+`MIN_MCP_VERSION` (also in `const.py`) is the **oldest `ambience-mcp` this
+backend will serve**. It is the one thing `MCP_PROTOCOL` cannot express: *"that
+build handshakes fine, but it is known-broken — refuse it"*. A protocol number
+can only say the contract changed shape; this singles out a bad release of an
+unchanged one.
+
+It can only refuse a client that **asks**. The floor is read during the
+`ambience/mcp/hello` handshake, so it binds every **future** `ambience-mcp`
+(they all handshake) and cannot touch a **pre-handshake** one — an old client
+never sends the hello, it just calls `ambience/ai_context` directly. That is why
+the current value is inert: `mcp-v0.2.0-rc.3` is already published, and is the
+**last pre-handshake** release (no `protocols/` package, never sends the hello)
+— not the first one that speaks it. The floor names a version **below** the
+first handshake-capable release (whatever version this backend's own release
+actually publishes), which is the lowest value that refuses nobody: any client
+able to read the floor already handshook successfully, so it is, by
+construction, running something newer than this. A floor is a refusal, and there
+is nothing to refuse yet.
+
+It is also the **strongest** refusal the backend can issue — the MCP checks it
+first, ahead of the protocol question — so it carries the strongest rule:
+
+> **It may never name an `ambience-mcp` that is not published yet.**
+
+`uvx` installs *latest*. A floor above the newest **published** `ambience-mcp`
+tells **every** user, on **every** tool call, to upgrade to a version that does
+not exist. It is a one-line edit with no adapter to write and no shape to
+re-record, which makes it the easiest of all these levers to pull by mistake —
+so two gates hold it:
+
+- `bin/check_mcp_protocol.py` (Gate 1, `make mcp-gate`, runs on every push)
+    refuses a floor newer than the `ambience-mcp` **in this repo**. That makes
+    the floor *shippable* — but the repo version routinely runs ahead of PyPI
+    (the post-release bump), so it does not yet make it *installable*.
+- `bin/release.sh` (Gate 2) asks PyPI for the **published** `ambience-mcp` — its
+    protocol(s) *and* its version — and refuses the release unless the published
+    package's protocol list **includes** the backend's protocol (membership, not
+    a ceiling: a published package that dropped an old adapter is refused too),
+    **or** if `MIN_MCP_VERSION` names something newer than it. It asks in the
+    channel the release ships into (see above), so the floor is held to the
+    `ambience-mcp` this release's users can actually install. It fails closed if
+    PyPI cannot be reached or its answer cannot be read.
+
+To raise it: bump `mcp-server/pyproject.toml`, tag `mcp-v<version>`, **let it
+publish** — then raise `MIN_MCP_VERSION` to it and release Ambience. Same order
+as a protocol bump, for the same reason. And the same channel rule: a floor
+naming an rc `ambience-mcp` is releasable in an Ambience rc, but not in a final
+release — a stable user's `uvx` would never install its way above it.
+
 ## Make targets
 
 Every gate is a `make` target so humans, the hook, and CI all run the exact same
@@ -90,6 +201,7 @@ command (see `Makefile`). Useful ones:
 | `make coverage-py` / `make coverage-js` | Tests with coverage gates                                                |
 | `make i18n`                             | All i18n gates (parity, shipped-locale completeness, no-hardcoded lints) |
 | `make translations`                     | Translation key-parity check                                             |
+| `make mcp-gate`                         | Gate 1: `MCP_PROTOCOL` has an adapter, `MIN_MCP_VERSION` is installable  |
 | `make build-check`                      | Rebuild bundle, fail on drift                                            |
 
 ## Markdown formatting

@@ -328,6 +328,18 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         assert exc.value.translation_key == "scene_category_not_string"
 
+    def test_category_type_is_checked_for_unnamed_scenes_too(self) -> None:
+        """The category is a hash key downstream (sorting's per-category buckets,
+        the MCP diff): an unhashable value must be a clean validation error for
+        EVERY scene, not a TypeError that escapes the save path as unknown_error."""
+        hass = _make_hass()
+        with pytest.raises(AmbienceError) as err:
+            validate_scope_config(
+                hass,
+                {"scenes": [{"category": {"x": 1}, "when": {}, "actions": []}]},  # no name
+            )
+        assert err.value.translation_key == "scene_category_not_string"
+
     def test_accepts_scene_apply_once(self) -> None:
         hass = _make_hass()
         validate_scope_config(hass, {"scenes": [{"when": {}, "actions": [], "apply": "once"}]})

@@ -41,7 +41,7 @@ from .const import (
 from .diagnostics import scope_diagnostics
 from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
-from .redact import redacted_traces
+from .redact import redact_plan, redacted_traces
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     all_live_states,
@@ -598,6 +598,18 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     {
         vol.Required("type"): "ambience/dry_run",
         **_SCOPE_SELECTOR_SCHEMA,
+        # Default to redacted: there is no panel caller of this command (it does
+        # not appear anywhere in frontend/src or the built bundle) — the only
+        # live consumer is the MCP server, handing this plan to an external AI.
+        # The plan carries presence/location-revealing describes (people,
+        # template, unavailable, occupancy) and raw action params (lock/alarm
+        # codes), so a caller that omits the flag must get the SAFE result. That
+        # matters concretely: an `ambience-mcp` published before this backend
+        # gained redaction never sends `redact` at all, and must not be handed
+        # secrets just because it doesn't know to ask for safety. A future panel
+        # that wants the real detail ships alongside this backend and can opt in
+        # explicitly with `redact: false`.
+        vol.Optional("redact", default=True): bool,
     }
 )
 @websocket_api.async_response
@@ -616,6 +628,17 @@ async def _ws_dry_run(
         result["categories"] = await async_resolve_categories_only(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
+        if msg["redact"]:
+            # redact_plan() shallow-copies its input, including a `categories`
+            # sub-dict if the plan carries one — that copy is unredacted. Compute
+            # the per-category redaction into a local FIRST and assign it
+            # explicitly after, so the result doesn't depend on which of two
+            # keys in a dict literal happens to come last.
+            redacted_categories = {
+                cid: redact_plan(plan) for cid, plan in result["categories"].items()
+            }
+            result = redact_plan(result)
+            result["categories"] = redacted_categories
     except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
@@ -1454,6 +1477,33 @@ async def _ws_ai_context(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/mcp/hello"})
+@websocket_api.async_response
+async def _ws_mcp_hello(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The MCP compatibility handshake — deliberately tiny.
+
+    Every earlier version check rode inside `ai_bundle`/`ai_context`, so on a house
+    big enough to overflow the AI client's token cap the diagnostic was rejected
+    along with the payload it was warning about. This is a handful of bytes: it
+    always arrives."""
+    from .ai_common import ambience_version
+    from .const import MCP_PROTOCOL, MIN_MCP_VERSION
+
+    connection.send_result(
+        msg["id"],
+        {
+            "protocol": MCP_PROTOCOL,
+            "ambience_version": await ambience_version(hass),
+            "min_mcp_version": MIN_MCP_VERSION,
+        },
+    )
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/entities/find",
@@ -1537,6 +1587,16 @@ async def _ws_simulate_inputs(
     connection.send_result(msg["id"], result)
 
 
+def _strict_int(value: Any) -> int:
+    """An int that is not a bool. `vol.Any(int, …)` admits booleans (bool
+    subclasses int), and prev_applied is compared against a scene index with
+    `==`, where True == 1 would silently mis-report a step as DEBOUNCED."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        # i18n: voluptuous schema validator — English-only (framework layer)
+        raise vol.Invalid("expected an integer")
+    return value
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -1565,7 +1625,7 @@ async def _ws_simulate_inputs(
         ),
         # The winning scene index the previous simulate step acted on, carried
         # forward so a re-won scene debounces (None to start a fresh sequence).
-        vol.Optional("prev_applied"): vol.Any(int, None),
+        vol.Optional("prev_applied"): vol.Any(_strict_int, None),
     }
 )
 @websocket_api.async_response
@@ -1701,6 +1761,7 @@ _WS_HANDLERS = (
     _ws_scope_diagnostics,
     _ws_ai_bundle,
     _ws_ai_context,
+    _ws_mcp_hello,
     _ws_entities_find,
     _ws_ai_guide,
     _ws_simulate_inputs,

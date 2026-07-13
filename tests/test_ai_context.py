@@ -56,7 +56,10 @@ async def test_context_carries_an_entity_summary_not_entity_rows(
 
     context = await build_ai_context(hass)
 
-    assert context["ambience_ai_context"] == 1
+    # Compatibility is the handshake's job now (ambience/mcp/hello). A version field
+    # inside a payload that can be too large to deliver is the exact pattern this
+    # change removes.
+    assert "ambience_ai_context" not in context
     assert "entities" not in context["catalog"]  # the 240k of rows is the whole problem
     summary = context["catalog"]["entity_summary"]
     assert summary["total"] >= 1

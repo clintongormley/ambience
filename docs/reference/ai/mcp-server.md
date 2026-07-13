@@ -104,10 +104,33 @@ To connect to several Home Assistant installs, or to install a specific version,
 see the
 [mcp-server README](https://github.com/clintongormley/ambience/blob/stable/mcp-server/README.md).
 
+You almost certainly do not want a pinned version: one build works with every
+Ambience. And if Ambience ever asks you to upgrade `ambience-mcp`, a pin will
+keep reinstalling the old build, so the upgrade can never happen — remove the
+pin first.
+
+## Running an Ambience pre-release
+
+If you test Ambience betas, your `ambience-mcp` has to come from the same
+channel — `uvx` installs pre-releases only when you ask it to, so by default it
+would keep giving you the last stable `ambience-mcp`, which may be too old for
+the beta. Use these `args` instead:
+
+```json
+["--prerelease=allow", "ambience-mcp"]
+```
+
+This is not a pin — you still get the newest build, and upgrades still work.
+Drop the flag when you go back to a final Ambience release. See
+[Testing an Ambience pre-release](https://github.com/clintongormley/ambience/blob/stable/mcp-server/README.md#testing-an-ambience-pre-release).
+
 ## Your privacy
 
 Ambience removes your private data before it reaches the AI. See
-[Privacy](../ai-assisted-scenes.md#privacy) for what is hidden.
+[Privacy](../ai-assisted-scenes.md#privacy) for what is hidden. The "what would
+happen right now" preview (`ambience_dry_run`) is hidden the same way. If your
+Ambience is too old to redact it, the preview carries a visible notice instead
+of quietly showing the unhidden result — update Ambience to fix that.
 
 ______________________________________________________________________
 

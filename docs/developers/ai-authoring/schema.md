@@ -133,7 +133,7 @@ envelope's `mode` controls how the listed scenes fold into the existing config.
 |---|---|---|---|
 | `name` | string | yes (in practice) | Unique, case-insensitively and trimmed, within its `(category, scope)`. Always name scenes. |
 | `description` | string | no | Display-only; never affects matching, order, or actions. |
-| `category` | string | yes | A category id. An unknown/missing one is silently reassigned to `general` at save — always reference a real category (or define it in the envelope). |
+| `category` | string | yes | A category id. On the **paste/import** path, an unknown/missing one is silently reassigned to `general` at save. Over **MCP**, `ambience_preview_write` blocks it instead (no confirm token) — see the [coercion caveat](#category-coercion-caveat). Always reference a real category (or declare it in the envelope / `new_categories`). |
 | `when` | object | yes | `{ "<condition>": <predicate> }`. See section 4. Empty `{}` matches unconditionally. |
 | `actions` | array | yes | List of [ActionSpec](#5-actionspec). May be empty (a pure "blocker" scene that matches but does nothing). |
 | `apply` | string | no | `"once"` (default): apply when first winner, then debounce identical re-fires. `"always"`: re-apply on every re-evaluation while it stays the winner. |

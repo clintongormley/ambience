@@ -3,6 +3,7 @@ import json
 import pytest
 
 from ambience_mcp import budget
+from ambience_mcp.budget import _trim_list_to_fit, size_of
 
 
 def test_max_result_chars_defaults():
@@ -36,7 +37,6 @@ def test_size_of_models_the_wire_payload_not_compact_json():
 
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
-        "ambience_ai_context": 1,
         "catalog": {"entity_summary": {"total": 3}},
         "actions": {
             "exposed": [{"id": f"light.a{i}"} for i in range(schema_count)],
@@ -92,6 +92,162 @@ def test_fit_context_with_no_schemas_to_shed_returns_what_it_has():
     fitted = budget.fit_context(context, budget=100)
 
     assert fitted == context
+
+
+def _linear_context_reference(context: dict, limit: int) -> dict:
+    """The original one-schema-at-a-time shed loop `fit_context` replaced with a
+    bisection, kept as the behavioural oracle — mirrors `_linear_trim_reference`
+    below for `_trim_list_to_fit`. Same shedding order (biggest schema first,
+    fewest schemas dropped for the bytes reclaimed), just walked linearly instead
+    of bisected."""
+    if size_of(context) <= limit:
+        return context
+    actions = context.get("actions")
+    schemas = actions.get("schemas") if isinstance(actions, dict) else None
+    if not isinstance(schemas, dict) or not schemas:
+        return context
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+
+    def candidate(shed: int) -> dict:
+        dropped = set(ordered[:shed])
+        return {
+            **context,
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
+        }
+
+    shed = 1
+    while True:
+        result = candidate(shed)
+        if size_of(result) <= limit or shed >= len(ordered):
+            return result
+        shed += 1
+
+
+@pytest.mark.parametrize("limit", [100, 200, 1_000, 2_000, 5_000, 50_000])
+def test_fit_context_matches_the_linear_reference(limit):
+    context = _context(30, 200)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
+@pytest.mark.parametrize("limit", [0, 1, 10, 50, 100])
+def test_fit_context_matches_the_linear_reference_at_extreme_limits(limit):
+    # Limits small enough that nothing (or almost nothing) fits — the
+    # boundary where the bisection's `hi` bound (shedding EVERY schema) is
+    # never verified to fit, so the "honest oversized result" path is what
+    # gets exercised here rather than a found fitting shed count.
+    context = _context(12, 300)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
+def _uneven_context(sizes: list[int | None], keys: list[str] | None = None) -> dict:
+    """Like `_context`, but each schema's size (and optionally key) is given
+    explicitly, so tests can build wildly uneven shapes — a huge schema next
+    to tiny or empty ones, long key names on tiny values, etc. `None` means an
+    empty-dict value."""
+    schemas = {}
+    for i, size in enumerate(sizes):
+        key = keys[i] if keys else f"light.a{i}"
+        schemas[key] = {} if size is None else {"fields": {"f": "x" * size}}
+    return {
+        "catalog": {"entity_summary": {"total": len(sizes)}},
+        "actions": {"exposed": [{"id": k} for k in schemas], "schemas": schemas},
+    }
+
+
+@pytest.mark.parametrize(
+    "sizes",
+    [
+        [5000, 0, 0, 0],
+        [5000, 1, 1, 1, 1],
+        [0, 0, 0, 5000],
+        [200, 100, 50, 25, 12, 6, 3, 1, 0],
+        [None, None, None, 3000],
+        [3000, None, None],
+    ],
+)
+@pytest.mark.parametrize("limit", [10, 100, 500, 1_000, 5_000, 50_000])
+def test_fit_context_matches_the_linear_reference_with_wildly_uneven_schema_sizes(sizes, limit):
+    # `ordered` sorts biggest-first, so a real payload can shed one huge
+    # schema and be left with several tiny (or empty-dict) ones — the shape
+    # most likely to stress the monotonicity the bisection relies on.
+    context = _uneven_context(sizes)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
+def test_fit_context_matches_the_linear_reference_with_tiny_values_and_long_keys():
+    # A long key name on a tiny (or empty) value is the adversarial case for
+    # the CONTRACT `fit_context` relies on: shedding that entry frees almost
+    # no bytes from `schemas`, while its long name still costs bytes in
+    # `schemas_omitted`. The key's own bytes appear (and cancel) in both
+    # places regardless of length, so this must still match the oracle.
+    context = _uneven_context([0, 0, 0, 5000], keys=["z" * 200, "z" * 150, "z" * 100, "a"])
+
+    for limit in (10, 100, 500, 1_000, 5_000, 50_000):
+        assert budget.fit_context(context, budget=limit) == _linear_context_reference(
+            context, limit
+        )
+
+
+def _context_candidate_sizes(context: dict) -> list[int]:
+    """size_of(candidate(shed)) for every shed from 1 to len(ordered), using
+    the exact same construction fit_context itself uses internally."""
+    actions = context["actions"]
+    schemas = actions["schemas"]
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+    sizes = []
+    for shed in range(1, len(ordered) + 1):
+        dropped = set(ordered[:shed])
+        candidate = {
+            **context,
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
+        }
+        sizes.append(size_of(candidate))
+    return sizes
+
+
+# The guard beyond the docs: pin the actual invariant fit_context's bisection
+# depends on (see its inline "CONTRACT this relies on" comment in budget.py)
+# — size_of(candidate(shed)) strictly decreases as shed increases, with no
+# exceptions anywhere in range. If a future edit changes what `candidate`
+# carries (e.g. a per-schema summary alongside the omitted name) in a way
+# that stops dominating the shed entry's own bytes, this should fail here,
+# loudly and by name, instead of the bisection silently diverging from the
+# linear oracle.
+@pytest.mark.parametrize("schema_size", [0, 1, 5, 50, 500, 5_000])
+@pytest.mark.parametrize("schema_count", [2, 3, 5, 10, 30, 60])
+def test_context_candidate_size_is_strictly_monotonic_as_shed_increases(schema_count, schema_size):
+    context = _context(schema_count, schema_size)
+
+    sizes = _context_candidate_sizes(context)
+
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
+
+
+def test_context_candidate_size_is_strictly_monotonic_with_uneven_sizes_and_long_keys():
+    # Same property, but for the adversarial uneven-sizes/long-keys shapes
+    # above, where the "removed value's bytes dominate the added key's
+    # bytes" argument is closest to the margin.
+    context = _uneven_context([5000, 1, 1, 1, 1])
+    sizes = _context_candidate_sizes(context)
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
+
+    context = _uneven_context([0, 0, 0, 5000], keys=["z" * 200, "z" * 150, "z" * 100, "a"])
+    sizes = _context_candidate_sizes(context)
+    for smaller_shed_size, larger_shed_size in zip(sizes, sizes[1:], strict=False):
+        assert larger_shed_size < smaller_shed_size
 
 
 def _entities(count: int, size: int) -> dict:
@@ -346,8 +502,8 @@ def test_fit_result_returns_non_dict_results_unchanged():
 
 def test_fit_result_is_a_no_op_for_results_already_fitted_upstream():
     # fit_context/fit_entities/fit_traces already brought these shapes within
-    # budget in tools.py before fit_result ever sees them — the boundary must
-    # be a genuine no-op for them, not a second pass.
+    # budget in the protocol adapter (protocols/v1.py) before fit_result ever
+    # sees them — the boundary must be a genuine no-op for them, not a second pass.
     context = _context(2, 10)
     entities = _entities(3, 10)
     traces = _traces(3, 10)
@@ -429,6 +585,13 @@ def test_fit_preview_summarises_when_over_budget_without_dropping_any_entry():
 
 def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
     result = _preview(20, 20, 5, 300)
+    # The two newest fields on the human's approval surface: an existing category
+    # being overwritten (updating_categories, top-level like its unknown/creating
+    # siblings), and evaluation order being re-derived (order_note, INSIDE diff —
+    # see diff.py's diff_scopes/summarise_diff). Neither has a guard elsewhere
+    # against being dropped when fit_preview trims the payload.
+    result["updating_categories"] = [{"before": {"id": "c"}, "after": {"id": "c", "name": "C2"}}]
+    result["diff"]["order_note"] = "some scenes were resubmitted without their order fields"
 
     fitted = budget.fit_preview(result, budget=3_000)
 
@@ -437,9 +600,15 @@ def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
     assert fitted["errors"] == result["errors"]
     assert fitted["unknown_categories"] == result["unknown_categories"]
     assert fitted["creating_categories"] == result["creating_categories"]
+    assert fitted["updating_categories"] == result["updating_categories"]
+    assert fitted["diff"]["order_note"] == result["diff"]["order_note"]
 
 
-def test_fit_preview_updated_entries_carry_changed_fields_not_priority_or_pinned():
+def test_fit_preview_updated_entries_carry_explicitly_authored_priority_and_pinned():
+    # Inverted: priority/pinned are evaluation-order fields the backend HONOURS
+    # on import, so when the AFTER scene states them explicitly a change here
+    # must survive summarisation, not be swallowed — see diff.py's _ORDER_FIELDS
+    # and tests/test_diff.py::test_a_priority_swap_is_a_visible_update.
     before = {
         "name": "Evening",
         "category": "c",
@@ -466,7 +635,7 @@ def test_fit_preview_updated_entries_carry_changed_fields_not_priority_or_pinned
     fitted = budget.fit_preview(result, budget=50)
 
     entry = fitted["diff"]["updated"][0]
-    assert entry["changed_fields"] == ["actions"]
+    assert entry["changed_fields"] == ["actions", "pinned", "priority"]
 
 
 def test_fit_preview_handles_an_unnamed_scene_without_crashing():
@@ -513,3 +682,174 @@ def test_fit_preview_does_not_mutate_the_input():
     budget.fit_preview(result, budget=3_000)
 
     assert json.dumps(result) == before
+
+
+def _linear_trim_reference(result, key, limit, derive_fields):
+    """The original one-dump-per-drop loop, kept as the behavioural oracle."""
+    rows = result.get(key)
+    if not isinstance(rows, list) or not rows:
+        return result
+    kept = list(rows)
+    while True:
+        candidate = {**result, key: kept, **derive_fields(len(kept))}
+        if size_of(candidate) <= limit or len(kept) <= 1:
+            return candidate
+        kept.pop()
+
+
+@pytest.mark.parametrize("limit", [200, 1_000, 5_000, 50_000])
+def test_trim_matches_the_linear_reference(limit):
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * (i % 37)} for i in range(120)]
+    result = {"entities": rows, "total_matches": 500, "offset": 40}
+
+    def derive(kept_len):
+        next_cursor = 40 + kept_len
+        more = next_cursor < 500
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    assert _trim_list_to_fit(result, "entities", limit, derive) == _linear_trim_reference(
+        result, "entities", limit, derive
+    )
+
+
+@pytest.mark.parametrize("limit", [200, 1_000, 5_000, 50_000])
+def test_trim_matches_the_linear_reference_at_the_entities_cursor_flip_boundary(limit):
+    # The test above (total_matches=500, offset=40, n=120) never actually
+    # reaches total_matches, so `more` is True at every kept_len including the
+    # top — the cursor-flips-to-null / truncated-flips-to-False discontinuity
+    # (kept_len == len(rows), the same kind of on/off flip fit_traces's
+    # notice hits) is never exercised for entities. Setting
+    # total_matches == offset + n makes it flip exactly at the top.
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * (i % 37)} for i in range(120)]
+    result = {"entities": rows, "total_matches": 160, "offset": 40}  # 160 == 40 + 120
+
+    def derive(kept_len):
+        next_cursor = 40 + kept_len
+        more = next_cursor < 160
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    assert _trim_list_to_fit(result, "entities", limit, derive) == _linear_trim_reference(
+        result, "entities", limit, derive
+    )
+
+
+def test_trim_returns_a_result_that_fits_or_a_single_row():
+    rows = [{"entity_id": f"light.l{i}", "blob": "y" * 400} for i in range(80)]
+    result = {"entities": rows, "total_matches": 80, "offset": 0}
+    fitted = _trim_list_to_fit(result, "entities", 3_000, lambda n: {"returned": n})
+    assert len(fitted["entities"]) >= 1
+    assert size_of(fitted) <= 3_000 or len(fitted["entities"]) == 1
+
+
+def _traces_derive_fields(total):
+    """A faithful reproduction of `fit_traces`'s own `derive_fields`: the
+    ~150-char `notice` is present for every `kept_len < total` and ABSENT at
+    `kept_len == total` — the on/off field the bisection must not be fooled
+    by. `total` is `len(rows)` here, exactly as it is inside `fit_traces`
+    (there is no separate "total_matches" for traces, unlike entities)."""
+
+    def derive(kept_len):
+        omitted = total - kept_len
+        if not omitted:
+            return {"returned": kept_len}
+        notice = (
+            f"Showing {kept_len} of {total} traces; the oldest {omitted} were "
+            "omitted to fit the result budget. Call again with a smaller limit to see "
+            "a different slice."
+        )
+        return {"returned": kept_len, "omitted": omitted, "notice": notice}
+
+    return derive
+
+
+@pytest.mark.parametrize("limit", [50, 200, 236, 300, 400, 455, 500, 510, 600, 5_000, 50_000])
+@pytest.mark.parametrize("n_rows", [1, 2, 3, 4, 5, 8, 15, 30])
+def test_trim_matches_the_linear_reference_for_the_traces_shaped_on_off_notice(n_rows, limit):
+    # Unlike the entities-shaped derive above (only cursor DIGITS change size),
+    # this derive_fields flips a ~150-char field on/off exactly at the top
+    # boundary (kept_len == len(rows)) — the discontinuity the bisection must
+    # not miss. Sweeping both n_rows and limit across the boundary covers the
+    # discontinuity itself, not just one lucky value.
+    rows = [{"t": ""} for _ in range(n_rows)]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(n_rows)
+
+    assert _trim_list_to_fit(result, "traces", limit, derive) == _linear_trim_reference(
+        result, "traces", limit, derive
+    )
+
+
+def test_trim_matches_the_linear_reference_at_the_reviewers_counterexample():
+    # Pinned regression for the CRITICAL finding on task 13: bisection assumed
+    # payload size grows monotonically with kept rows, but fit_traces's
+    # derive_fields is an ON/OFF field (the notice) that is ABSENT at
+    # kept_len == total and PRESENT for every kept_len < total — a
+    # discontinuity at the top boundary, not the "few chars" nudge the old
+    # comment described. Dropping from 3 rows (no notice) to 2 rows (notice
+    # appears) INCREASES the total size, so a bisection that only ever
+    # corrects downward can land on 1 row and never look back at 3, which
+    # fits all along.
+    rows = [{"t": ""}, {"t": ""}, {"t": ""}]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(3)
+
+    fast = _trim_list_to_fit(result, "traces", 455, derive)
+    slow = _linear_trim_reference(result, "traces", 455, derive)
+
+    assert fast == slow
+    assert len(fast["traces"]) == 3  # the linear oracle keeps every row here
+
+
+# The guard beyond the docs: pin the actual invariant the bisection in
+# _trim_list_to_fit depends on (see its inline "CONTRACT this relies on"
+# comment in budget.py) — below the top boundary, size strictly decreases as
+# kept_len shrinks by one — for BOTH real derive_fields shapes. If a future
+# edit adds a fatter conditional field to either one, this should fail here,
+# loudly and by name, instead of the trim silently diverging from the linear
+# oracle the way the reviewer's counterexample above did.
+
+
+def _below_top_sizes(result, key, derive_fields, n_rows):
+    """size_of(candidate(k)) for k = 1..n_rows, replicating exactly the
+    candidate `_trim_list_to_fit` itself measures — not a stand-in shape."""
+    rows = result[key]
+    return [size_of({**result, key: rows[:k], **derive_fields(k)}) for k in range(1, n_rows + 1)]
+
+
+@pytest.mark.parametrize("row_size", [0, 1, 5, 40, 200])
+@pytest.mark.parametrize("n_rows", [2, 3, 5, 10, 30, 60, 100])
+def test_traces_derive_fields_size_is_strictly_monotonic_below_the_top(n_rows, row_size):
+    rows = [{"unit": f"u{i}", "reason": "x" * row_size} for i in range(n_rows)]
+    result = {"traces": rows}
+    derive = _traces_derive_fields(n_rows)
+
+    sizes = _below_top_sizes(result, "traces", derive, n_rows)
+    # Drop the top (kept_len == n_rows) — its on/off `notice` discontinuity
+    # is sanctioned and separately covered by the reviewer's-counterexample
+    # and traces-shaped-on-off-notice tests above; this test is only about
+    # the range where no such discontinuity is allowed.
+    below_top = sizes[:-1]
+    for smaller_kept_size, larger_kept_size in zip(below_top, below_top[1:], strict=False):
+        assert smaller_kept_size < larger_kept_size
+
+
+@pytest.mark.parametrize("row_size", [0, 1, 5, 40, 200])
+@pytest.mark.parametrize("n_rows", [2, 3, 5, 10, 30, 60, 100])
+def test_entities_derive_fields_size_is_strictly_monotonic_below_the_top(n_rows, row_size):
+    offset = 40
+    # total_matches kept comfortably above offset + n_rows so the top-of-range
+    # cursor-flip discontinuity (covered separately by the entities-cursor-
+    # flip-boundary test above) never lands inside the range checked here.
+    total = offset + n_rows + 1_000
+    rows = [{"entity_id": f"light.l{i}", "name": "x" * row_size} for i in range(n_rows)]
+    result = {"entities": rows, "total_matches": total, "offset": offset}
+
+    def derive(kept_len):
+        next_cursor = offset + kept_len
+        more = next_cursor < total
+        return {"returned": kept_len, "cursor": next_cursor if more else None, "truncated": more}
+
+    sizes = _below_top_sizes(result, "entities", derive, n_rows)
+    below_top = sizes[:-1]
+    for smaller_kept_size, larger_kept_size in zip(below_top, below_top[1:], strict=False):
+        assert smaller_kept_size < larger_kept_size

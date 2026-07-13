@@ -31,11 +31,16 @@ TO_REDACT = {
 }
 
 # Presence PII also rides in trace free text outside the structured keys above:
-# a person/device_tracker cause carries zone names in old/new, and the people/
-# template predicate `detail` strings render each person's location / the
-# rendered template. Scrubbed by redact_trace below.
+# a person/device_tracker cause carries zone names in old/new, and these four
+# condition describes render presence/location by name or implication: `people`
+# (who is home, by NAME) and `template` (arbitrary rendered state) render a
+# person's location; `unavailable` renders the friendly names of currently-down
+# entities, which can include a device_tracker (e.g. "Alice's Phone"); `occupancy`
+# renders which rooms are occupied right now. Scrubbed below by redact_trace (via
+# redact_predicate) and by redact_plan, which checks this set directly for
+# snapshots_described and reuses redact_predicate only for its optional explanation.
 PRESENCE_PREFIXES = ("person.", "device_tracker.")
-_DETAIL_REDACTED_CONDITIONS = {"people", "template"}
+_DETAIL_REDACTED_CONDITIONS = {"people", "template", "unavailable", "occupancy"}
 
 # Action params for these service domains can carry secrets — alarm codes, lock
 # PINs — that must not ride into an export. Redacted by VALUE wherever an action
@@ -181,10 +186,11 @@ def redact_store(dump: Any) -> Any:
 
 def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
     """Blank a predicate's free-text detail and scrub presence-revealing
-    entity_ids (person./device_tracker.). Detail is blanked for people/template
-    predicates (they render a person's location / the rendered template) AND for
-    any predicate that references a presence entity directly — e.g. a `state`
-    rule on a person renders the live location in its detail."""
+    entity_ids (person./device_tracker.). Detail is blanked for conditions in
+    `_DETAIL_REDACTED_CONDITIONS` (people/template/unavailable/occupancy — each
+    renders presence or location by name or implication) AND for any predicate
+    that references a presence entity directly — e.g. a `state` rule on a
+    person renders the live location in its detail."""
     out = predicate
     eids = out.get("entity_ids")
     presence = _has_presence(eids)
@@ -198,6 +204,56 @@ def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
                 for e in eids
             ],
         }
+    return out
+
+
+def _redact_actions(actions: list[Any]) -> list[Any]:
+    """Every action in `actions` run through `redact_action`. Shared by
+    `redact_trace` and `redact_plan` so the same action-list scrub isn't
+    duplicated between them."""
+    return [redact_action(a) for a in actions]
+
+
+def _redact_explanation(explanation: dict[str, Any]) -> dict[str, Any]:
+    """A copy of an `Explanation` dict with every scene's predicates run through
+    `redact_predicate`. Shared by `redact_trace` and `redact_plan` so the same
+    `explanation` shape — reachable via a serialised trace OR a dry-run plan
+    with `explain=True` — is scrubbed identically on both doors rather than
+    risking drift between two copies of the same walk."""
+    scenes = []
+    for scene in explanation.get("scenes", []):
+        predicates = [redact_predicate(p) for p in scene.get("predicates", [])]
+        scenes.append({**scene, "predicates": predicates})
+    return {**explanation, "scenes": scenes}
+
+
+def redact_plan(plan: Any) -> Any:
+    """Scrub one resolve/dry-run plan (the `async_resolve_only` shape): the
+    winning scene's security action params (alarm codes, lock PINs — the same
+    value scrub as `redact_action`), the presence/location-revealing condition
+    describes in `snapshots_described` (`people` renders who is home by NAME;
+    `template` renders arbitrary rendered state; `unavailable` renders the
+    friendly names of currently-down entities, which can include a
+    device_tracker; `occupancy` renders which rooms are occupied right now —
+    see `_DETAIL_REDACTED_CONDITIONS`), and — should this path ever be called
+    with `explain=True` — the same per-predicate detail/entity_ids scrub
+    `redact_trace` applies to a serialised trace's `explanation`, via
+    `redact_predicate`. Other describes (sun, lux, period…) carry no PII and
+    are kept. Never mutates the input; unexpected shapes pass through
+    unchanged."""
+    if not isinstance(plan, dict):
+        return plan
+    out = dict(plan)
+    if isinstance(out.get("actions"), list):
+        out["actions"] = _redact_actions(out["actions"])
+    described = out.get("snapshots_described")
+    if isinstance(described, dict):
+        out["snapshots_described"] = {
+            name: (REDACTED if name in _DETAIL_REDACTED_CONDITIONS and desc is not None else desc)
+            for name, desc in described.items()
+        }
+    if isinstance(out.get("explanation"), dict):
+        out["explanation"] = _redact_explanation(out["explanation"])
     return out
 
 
@@ -225,14 +281,9 @@ def redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
         cause["new"] = REDACTED
     out["cause"] = cause
     if isinstance(out.get("actions"), list):
-        out["actions"] = [redact_action(a) for a in out["actions"]]
-    explanation = trace.get("explanation")
-    if isinstance(explanation, dict):
-        scenes = []
-        for scene in explanation.get("scenes", []):
-            predicates = [redact_predicate(p) for p in scene.get("predicates", [])]
-            scenes.append({**scene, "predicates": predicates})
-        out["explanation"] = {**explanation, "scenes": scenes}
+        out["actions"] = _redact_actions(out["actions"])
+    if isinstance(out.get("explanation"), dict):
+        out["explanation"] = _redact_explanation(out["explanation"])
     return out
 
 

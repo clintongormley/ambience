@@ -278,6 +278,25 @@ async def test_simulate_rejects_non_string_override_state(
     assert resp["error"]["code"] == "invalid_format"
 
 
+async def test_prev_applied_rejects_booleans(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """bool subclasses int, and prev_applied is compared to a scene index with
+    == — True would silently debounce index 1. The same range rejects bools
+    for scene priority; the schema must match."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        prev_applied=True,
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "invalid_format"
+
+
 async def test_simulate_rejects_naive_now(hass: HomeAssistant, hass_ws_client, seeded_area) -> None:
     """A timezone-naive `now` produces naive-vs-aware TypeErrors inside
     condition snapshots, silently distorting results — reject it up front."""

@@ -103,10 +103,111 @@ version's authoring guide automatically.
 }
 ```
 
-## Compatibility
+## Version compatibility
 
-If your Ambience is **older** than the server supports, it will refuse to write
-changes and will tell you how to update to the correct version.
+There are three version numbers, and only one of them is about compatibility:
+
+| Number                        | Example      | Changes when                                         |
+| ----------------------------- | ------------ | ---------------------------------------------------- |
+| Ambience (the integration)    | `1.1.0-rc.3` | every Ambience release                               |
+| `ambience-mcp` (this package) | `0.2.0rc3`   | every MCP release                                    |
+| **MCP protocol**              | **`1`**      | **only when the backend↔MCP contract changes shape** |
+
+On connect, this server asks Ambience which protocol it speaks and loads the
+matching adapter. **It ships an adapter for every protocol it supports**, so the
+latest `ambience-mcp` still talks to older Ambience installs — which is what
+makes the multi-instance setup above work when your two installs are on
+different versions.
+
+If the two cannot work together, **every** tool call fails with a message naming
+which side to upgrade. It will never tell you to install an *older*
+`ambience-mcp`: `uvx` installs the latest, so that would be advice you could not
+follow.
+
+- *"Update Ambience"* — your Ambience is older than this server supports. Update
+    it in HACS and restart Home Assistant. That is all: the restart drops the
+    websocket, the handshake re-runs on the next tool call, and the server heals
+    itself — **you do not need to restart the MCP server**.
+
+    You may also see this message for a few seconds *while* Home Assistant is
+    starting: Ambience answers the handshake only once it has finished setting
+    up, and until then it looks the same as an Ambience that is too old. Ask
+    again in a moment — the server re-checks on every call while in this state,
+    so it clears itself as soon as Ambience is up.
+
+- *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
+    refusing this build. **This one does need a restart of the MCP server**, and
+    reconnecting alone will not do: the running process *is* the old version, so
+    it would only re-handshake its way to the same verdict. Quit your MCP
+    client, run `uv cache clean ambience-mcp`, then restart it. The cache clean
+    matters too: `uvx` caches the old version, and the running server holds the
+    cache lock, so restarting alone will not pick up the new one. And if your
+    config [pins a version](#pinning-a-version), remove the pin — a pinned
+    version never upgrades, so the cache clean would just reinstall the same
+    build.
+
+    If your Ambience is a **pre-release**, that message will also tell you to
+    allow pre-releases — see below. It is not optional: without it, `uvx`
+    reinstalls the same build every time and the upgrade never happens.
+
+## Testing an Ambience pre-release
+
+**Your `ambience-mcp` channel must match your Ambience channel.**
+
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it        |
+| -------------------------------- | ----------------------------------- | --------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | plain `uvx` (default) |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow`  |
+
+A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
+not install one by default**: it skips pre-releases whenever a final release
+exists, so it would keep handing you the last stable `ambience-mcp` — which may
+be too old for the beta you are testing. You would be told to upgrade, clean the
+cache, restart, and land on the same build again.
+
+So if you run an Ambience beta, opt the MCP server into the same channel:
+
+```json
+{
+  "mcpServers": {
+    "ambience": {
+      "command": "uvx",
+      "args": ["--prerelease=allow", "ambience-mcp"],
+      "env": {
+        "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
+        "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** (terminal, and the VS Code extension) — the same command you
+used above, with `--prerelease=allow` added.
+
+Mac and Linux:
+
+```sh
+claude mcp add ambience --scope user \
+  --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
+  --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
+  -- uvx --prerelease=allow ambience-mcp
+```
+
+Windows:
+
+```text
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx --prerelease=allow ambience-mcp
+```
+
+If you already added `ambience`, remove it first
+(`claude mcp remove ambience --scope user`) — re-adding with the same name does
+not overwrite the old entry's args.
+
+This is **not** a [pin](#pinning-a-version) — it widens what `uvx` may install
+rather than fixing it, so you keep getting the newest build and the upgrade path
+still works. When you go back to a final Ambience, drop the flag: leaving it on
+would keep you on `ambience-mcp` release candidates you did not ask for.
 
 ## Turning it off
 
@@ -134,12 +235,27 @@ paged.
 from your install, so it always matches your Ambience version — no separately
 installed guide to keep in sync.
 
+`ambience_dry_run` is always redacted, the same way a trace already is:
+presence/location detail and security-action params (lock PINs, alarm codes)
+never come back in the result. Against an Ambience too old to redact, the result
+carries a visible `notice` instead of the raw values — update Ambience (HACS)
+and restart Home Assistant to get redaction there too.
+
 ## The write gate
 
 `ambience_apply_write` refuses to commit unless you first call
 `ambience_preview_write` for the **exact** scope+scenes and pass back its
 `confirm_token`. Every write is a normal scope save — reversible via Ambience
 undo/redo.
+
+`ambience_preview_write`'s diff also reports `updating_categories` (an existing
+category `new_categories` would overwrite, with before/after) and, when you
+resubmit stored scenes without their `priority`/`pinned` fields, an `order_note`
+saying evaluation order will be re-derived.
+
+A failed `ambience_apply_write` keeps its `confirm_token` — it is only spent on
+a write that actually commits, so once whatever caused the failure is fixed you
+retry the same call rather than previewing all over again.
 
 ## The result budget
 
@@ -252,7 +368,14 @@ disable it without removing the file, add
 
 ### Pinning a version
 
-You normally never need this — one build spans Ambience versions. When you do:
+You normally never need this — one build spans Ambience versions.
+
+**A pin opts you out of the upgrade path.** If Ambience ever asks you to
+[upgrade `ambience-mcp`](#version-compatibility), a pinned config will keep
+reinstalling the pinned build no matter how often you clean the cache or
+restart, and every tool call will keep failing. Remove the pin to get out.
+
+When you do want one:
 
 - **A specific released version:** `uvx ambience-mcp@0.2.0` (args:
     `["ambience-mcp@0.2.0"]`).

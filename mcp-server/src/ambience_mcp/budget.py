@@ -97,20 +97,63 @@ def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str,
     if not isinstance(schemas, dict) or not schemas:
         return context  # nothing left to shed — an honest oversized result beats a crash
 
-    kept = dict(schemas)
-    omitted: list[str] = []
-    fitted = context
-    for name in sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True):
-        del kept[name]
-        omitted.append(name)
-        fitted = {
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+
+    def candidate(shed: int) -> dict[str, Any]:
+        dropped = set(ordered[:shed])
+        return {
             **context,
-            "actions": {**actions, "schemas": kept},
-            "schemas_omitted": sorted(omitted),
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
         }
-        if size_of(fitted) <= limit:
-            break
-    return fitted
+
+    # Shedding order is fixed (biggest first), so find the SMALLEST shed count
+    # that fits by bisection — identical result to the old one-dump-per-shed
+    # loop, in O(log n) measurements. If even shedding everything does not fit,
+    # return that honest oversized result (fit_result is the backstop).
+    #
+    # CONTRACT this relies on: size_of(candidate(shed)) is STRICTLY DECREASING
+    # as shed increases. Each extra shed both removes one schema entry (its
+    # key AND its value) from `schemas` and adds that SAME key (bare, no
+    # value) to `schemas_omitted`. The key's own bytes appear in both places
+    # and cancel; what's left is the removed entry's `": " + value` bytes
+    # (the dict-only separator plus the value's own JSON) against nothing —
+    # strictly negative for any JSON-encodable value, since even the
+    # cheapest one (a single digit) is 1 char, plus the 2-char `": "`. So a
+    # shed count that fits keeps fitting for every larger shed count too.
+    #
+    # That monotonicity is what lets the loop below skip re-measuring `hi`
+    # once bisection narrows onto it: every `hi = mid` assignment fires only
+    # after `mid` was just measured and confirmed to fit, so the cached
+    # candidate is trusted instead of rebuilt-and-remeasured afterward
+    # (there used to be a trailing walk-forward loop here that repeated that
+    # measurement "just in case" the bisection under-shot; it fired 0 times
+    # across 140,000+ fuzzed and boundary-exhaustive trials, because strict
+    # monotonicity makes its premise — that a converged `hi` could still be
+    # unfitting — structurally false; see git history for the deleted loop,
+    # and don't re-add it as a defensive measure without re-deriving why it
+    # would ever fire). The one shed count never verified this way is
+    # `len(ordered)` itself (shedding EVERY schema) when no smaller shed ever
+    # fit — but that is exactly the "still doesn't fit" case the docstring
+    # above already documents returning honestly, not a case a trailing walk
+    # could have rescued anyway: `lo` only reaches `len(ordered)` unverified
+    # by climbing there via failing mids, and the old loop's own
+    # `lo < len(ordered)` guard would have refused to run at that point
+    # regardless of whether it truly fit.
+    lo, hi = 1, len(ordered)
+    fitted: dict[str, Any] | None = None
+    while lo < hi:
+        mid = (lo + hi) // 2
+        mid_candidate = candidate(mid)
+        if size_of(mid_candidate) <= limit:
+            hi = mid
+            fitted = mid_candidate
+        else:
+            lo = mid + 1
+    return fitted if fitted is not None else candidate(lo)
 
 
 def _trim_list_to_fit(
@@ -140,17 +183,88 @@ def _trim_list_to_fit(
 
     Bails out unchanged if `result[key]` is missing, not a list, or empty —
     there is nothing to trim.
+
+    Bisects instead of dropping one row per full re-measure — see the inline
+    comment below for the shape this relies on and why the top boundary is
+    handled separately from the rest.
+
+    Precondition on `derive_fields`: below the top (`kept_len < len(rows)`),
+    `size_of(candidate(kept_len))` must be STRICTLY DECREASING as `kept_len`
+    decreases — no ties, no growth, anywhere in that range. See the inline
+    comment below for why that holds for both current callers, and
+    `test_budget.py`'s `..._size_is_strictly_monotonic_below_the_top` tests,
+    which pin it.
     """
     rows = result.get(key)
     if not isinstance(rows, list) or not rows:
         return result
 
-    kept = list(rows)
-    while True:
-        candidate = {**result, key: kept, **derive_fields(len(kept))}
-        if size_of(candidate) <= limit or len(kept) <= 1:
-            return candidate
-        kept.pop()
+    def candidate(kept_len: int) -> dict[str, Any]:
+        return {**result, key: rows[:kept_len], **derive_fields(kept_len)}
+
+    # CONTRACT this relies on: below the top boundary (kept_len < len(rows)),
+    # size_of(candidate(kept_len)) must be STRICTLY DECREASING as kept_len
+    # decreases. Not "near-monotonic", not "tolerant of a small nudge either
+    # way" — there is no slack anywhere in that range, and nothing below
+    # corrects for it if the contract is violated (there used to be a
+    # trailing walk-down loop here that looked like such a correction; it
+    # fired 0 times in 167,931+ boundary-exhaustive trials against both real
+    # shapes below, because strict monotonicity makes it structurally
+    # unreachable — see git history for the deleted loop, and don't re-add it
+    # as a defensive measure without re-deriving why it would ever fire).
+    #
+    # That strict decrease holds for both current shapes because a dropped
+    # row's own bytes dominate any growth the recomputed fields can add back:
+    # the cheapest possible JSON list element under `indent=2` — an empty
+    # object `{}` — costs >= 12 wire chars once size_of's x2 duplication is
+    # applied (6 raw chars: newline + 2-space indent + `{},`), while the
+    # worst-case per-step growth in the recomputed fields (a
+    # total-minus-kept_len counter like fit_traces's `omitted` gaining one
+    # digit as kept_len shrinks by one, counted once in its own field and
+    # once more where fit_traces's `notice` string echoes the same number)
+    # costs <= 4 wire chars. 12 > 4 with room to spare. Pinned by
+    # test_budget.py's test_traces_derive_fields_size_is_strictly_monotonic_below_the_top
+    # and test_entities_derive_fields_size_is_strictly_monotonic_below_the_top.
+    #
+    # The one place this module SANCTIONS a discontinuity is the top itself
+    # (kept_len == len(rows)): both current callers gate an on/off field
+    # there (fit_traces's ~150-char `notice`, present for every kept_len <
+    # len(rows) and ABSENT only at kept_len == len(rows); fit_entities's
+    # `cursor`/`truncated` flip the same way when `next_cursor` crosses
+    # `total`). For entities that crossing lands at the top only because the
+    # backend always sends `total_matches` in practice — NOT because
+    # `next_cursor` is structurally incapable of crossing `total` sooner: a
+    # result carrying `offset > 0` with no `total_matches` falls back to
+    # `total = len(rows)` (see fit_entities below), which puts the crossing
+    # at the INTERIOR kept_len = len(rows) - offset instead. That interior
+    # case is harmless in practice (fuzzed with zero divergences from the
+    # oracle — the flip there is size-neutral-or-shrinking, not growing), but
+    # it is this function trusting the backend's contract, not deriving a
+    # guarantee from `offset`/`len(rows)` alone.
+    #
+    # A large on/off jump is not a nudge, so it cannot be bisected across
+    # safely — see the reviewer finding pinned by
+    # test_trim_matches_the_linear_reference_at_the_reviewers_counterexample.
+    # So the top candidate is measured directly first — same as the linear
+    # oracle in test_budget.py, which always tests the untrimmed list before
+    # popping anything — and only the strictly-smaller candidates, which all
+    # share the SAME on/off state (never being the top), are bisected. Within
+    # that range strict monotonicity (above) makes bisection exact on its
+    # own: there is no discontinuity left to miss and nothing left to correct
+    # for afterward.
+    n = len(rows)
+    full = candidate(n)
+    if n == 1 or size_of(full) <= limit:
+        return full
+
+    lo, hi = 1, n - 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if size_of(candidate(mid)) <= limit:
+            lo = mid
+        else:
+            hi = mid - 1
+    return candidate(lo)
 
 
 def fit_entities(result: dict[str, Any], budget: int | None = None) -> dict[str, Any]:

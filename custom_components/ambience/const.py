@@ -19,10 +19,56 @@ STORAGE_VERSION = 1
 # version (which tracks features, not bundle shape).
 AI_BUNDLE_VERSION = 1
 
-AI_CONTEXT_VERSION = 1
-"""Structure version of the BOUNDED MCP export (`ambience/ai_context`). Versioned
-independently of AI_BUNDLE_VERSION: the fat download-and-paste bundle and the slim
-MCP context are different shapes for different consumers and evolve separately."""
+MCP_PROTOCOL = 1
+"""The backend↔MCP contract this install speaks.
+
+NOT a semver, and not either of the two real ones (the integration's, or
+ambience-mcp's). A single integer that bumps ONLY when the contract changes shape,
+so Ambience can ship 1.2.0 -> 2.0.0 without touching the MCP server at all.
+
+The `ambience-mcp` package ships one frozen adapter per protocol it supports and
+loads the one named here. `bin/check_mcp_protocol.py` asserts an adapter for this
+value exists in the repo; the release gate asserts one is published to PyPI.
+"""
+
+MIN_MCP_VERSION = "0.2.0-rc.3"
+"""The oldest `ambience-mcp` this backend will serve.
+
+The one thing MCP_PROTOCOL cannot express: "that build handshakes fine, but it is
+known-broken — refuse it". A protocol number can only say the contract changed
+shape; this can single out a bad release of an unchanged contract.
+
+It can only refuse a client that ASKS. The floor is read in the MCP's `_negotiate`,
+which runs only when the client sends `ambience/mcp/hello` — so it binds FUTURE
+clients (every one of which handshakes), and cannot touch a PRE-handshake client. An
+ambience-mcp older than the first handshake-capable release never asks: it connects,
+authenticates, and calls `ambience/ai_bundle` / `ambience/ai_context` directly, and
+this backend still answers those calls — though not byte-for-byte as before: the
+payloads no longer carry the pre-handshake format stamps (`ambience_ai_context`,
+`ambience_ai_bundle`) such a build read to warn about a too-new backend, so that
+frozen client population is served UNCHECKED, and a future incompatible ai_context
+reshape would be misread silently. That is the accepted cost of retiring the
+per-payload tripwires in favour of the handshake. (The inverse pairing does refuse
+itself: a handshake-capable client whose hello gets `unknown_command` concludes
+"update Ambience" without this backend's help.)
+
+So this value is deliberately inert today. It does NOT name the first
+handshake-capable release — `mcp-v0.2.0-rc.3` is already tagged and published, and is
+the last PRE-handshake build (no `protocols/` package, never sends
+`ambience/mcp/hello`). The first release that actually speaks the handshake is
+whatever this backend's own release publishes to `ambience-mcp`, and it will need a
+newer version string than this one (0.2.0-rc.3 is taken). So this value names a
+version BELOW the first handshake-capable release, which is what makes it refuse
+nothing: any client able to read the floor already handshook successfully, so it is,
+by construction, running something newer than this. That is the correct resting
+state: a floor is a REFUSAL, and there is nothing to refuse yet.
+
+Raising it is exactly as coupled to an MCP release as bumping MCP_PROTOCOL is: `uvx`
+installs LATEST, so a floor above the newest PUBLISHED ambience-mcp refuses every user
+and points them at a package that does not exist. Publish the ambience-mcp first, then
+raise this to it (`bin/check_mcp_protocol.py` and `bin/release.sh` both enforce that;
+see CONTRIBUTING.md).
+"""
 
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"

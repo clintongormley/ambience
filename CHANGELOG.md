@@ -8,6 +8,108 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- The MCP server and Ambience now agree on a **protocol** at connect time, so an
+    incompatible pair says so instead of half-working. Every tool call fails
+    with a message naming which side to upgrade — and never asks you to install
+    an older `ambience-mcp`, which `uvx` could not do anyway. The check rides on
+    a tiny handshake rather than inside the authoring context, so it arrives
+    even on a house whose context is too large to return: the failure that
+    prompted this could not report itself, because its own warning was inside
+    the payload being rejected.
+- The MCP server ships an adapter for every protocol it supports, so the latest
+    release still talks to older Ambience installs — which is what makes
+    pointing one MCP server at two installs on different Ambience versions work.
+
+### Fixed
+
+- Asking the AI something while Home Assistant is still starting up no longer
+    latches a permanent, wrong *"Update Ambience"* on a perfectly current
+    Ambience. Ambience registers its websocket commands when it finishes setting
+    up, which is well after Home Assistant starts accepting connections — so for
+    a few seconds after every restart the handshake gets "no such command",
+    which is indistinguishable from a genuinely old Ambience. That verdict is no
+    longer cached: the next tool call re-asks on the same connection, so the
+    moment Ambience is up the server heals itself, with no reconnect and no
+    MCP-server restart. (A genuinely old Ambience still gets the "update
+    Ambience" message on every call, which is still the fix.)
+- A save you ask the AI to apply no longer needlessly burns its confirmation
+    when the MCP server has to reconnect to Home Assistant first. If the
+    connection had to be re-established — Home Assistant restarted, or was still
+    coming up — the save was refused as *"it may already have been applied"*,
+    even though nothing had been sent to Home Assistant at all: the connection
+    itself had not finished opening. The confirmation is single-use, so you then
+    had to preview the change and confirm it all over again. Such a save is now
+    simply retried on the fresh connection. (A save that really did reach Home
+    Assistant and only lost its reply is still never re-sent — it could be
+    applied twice.)
+- The "upgrade `ambience-mcp`" message now also tells you to remove any version
+    **pin** from your MCP config. Without that, the rest of the advice (clean
+    the cache, restart) is a no-op for anyone who pinned a version — the pin
+    reinstalls the same old build, and every tool call keeps failing.
+- Testing an Ambience **pre-release** now works with the MCP server. `uvx`
+    installs pre-releases only when asked, so once a final `ambience-mcp` is
+    published it would keep reinstalling that one for a beta tester — who would
+    be told to upgrade, do exactly as asked, and get the same build back, for
+    ever. When your Ambience is a pre-release, the "upgrade `ambience-mcp`"
+    message now says so and gives you the config that can actually reach it
+    (`uvx --prerelease=allow ambience-mcp`); a final Ambience is never told to
+    allow pre-releases. The release gate matches: it checks a pre-release
+    Ambience against the pre-release `ambience-mcp` channel, and a final one
+    against the final channel.
+- The AI's dry-run preview is now redacted like traces already were: who is home
+    (by name) and security action params (lock PINs, alarm codes) no longer
+    leave the home in `ambience_dry_run` results. Redaction is now the backend's
+    DEFAULT — `ambience/dry_run` redacts unless a caller explicitly passes
+    `redact: false` — so even a cached, pre-upgrade `ambience-mcp` (which never
+    sends the flag at all) gets a redacted result with no action needed. A build
+    too old to understand the `redact` key at all still gets a visible notice
+    instead of a silent leak.
+- `list_traces` and the diagnostics download now redact two more kinds of
+    predicate detail, the same widened set `ambience_dry_run` above respects:
+    `unavailable` (the friendly names of currently-down entities, which can
+    include a `device_tracker`) and `occupancy` (which rooms are occupied right
+    now). Previously only `people` and `template` details were blanked.
+- A write that only changes scene evaluation order (`priority`/`pinned`) no
+    longer previews as "no changes" — the diff shows it, and resubmitting scenes
+    without their stored order fields adds a note saying order will be
+    re-derived.
+- A scene with no category is now blocked at preview (the backend used to
+    silently move it to "General" after the diff was approved), and re-declaring
+    an existing category in `new_categories` now shows the overwrite in the
+    preview.
+- A non-string `category` on an unnamed scene is now a clean validation error
+    instead of an opaque save failure. It was already checked for named scenes;
+    an unnamed one skipped the check and could reach the store with a category
+    value that isn't hashable. `ambience_preview_write` no longer swallows that
+    clean error either: its diff used the category as a lookup key, so an
+    unhashable value crashed the preview with a raw `TypeError` before the error
+    could be reported.
+- A failed `ambience_apply_write` no longer burns its confirm token: "try again"
+    now works instead of answering "bad confirm_token".
+- Cancelling (or erroring) a tool call during Home Assistant's startup window
+    can no longer permanently wedge the MCP server; an incompatibility verdict
+    also re-checks itself, so following "Update Ambience and restart Home
+    Assistant" actually clears it.
+- An HA endpoint that accepts the websocket connection but never sends a frame
+    (a half-configured reverse proxy) no longer hangs every MCP tool call
+    forever: the auth handshake now times out and reconnects, the same way an
+    unresponsive command already did.
+- Reloading or disabling the Ambience integration mid-session now gets an
+    actionable "Ambience is reloading" message instead of a raw
+    `unknown_command`.
+- The release gate now checks the published `ambience-mcp` actually speaks the
+    backend's protocol (membership, not just "not newer").
+
+### Changed
+
+- The AI guide response no longer carries `ambience_ai_bundle`, and the MCP
+    context no longer carries `ambience_ai_context`. Compatibility is the
+    handshake's job now. The **downloadable AI bundle still carries
+    `ambience_ai_bundle`** — the paste-flow skill gates on it, and there is no
+    handshake with a human.
+
 ## [1.1.0-rc.3] - 2026-07-12
 
 ### Added

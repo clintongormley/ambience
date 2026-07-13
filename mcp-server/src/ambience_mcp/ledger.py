@@ -46,3 +46,8 @@ class PreviewLedger:
             del self._seen[fp]
             return True
         return False
+
+    def holds(self, fp: str) -> bool:
+        """Membership peek — never consumes. apply_write checks upfront but
+        spends the token only after the save SUCCEEDS."""
+        return fp in self._seen

@@ -2,7 +2,7 @@
 # hook (.githooks/pre-push), and CI. Coverage thresholds live in their configs
 # (pyproject.toml fail_under for Python, vitest.config.ts for the frontend) so
 # raising them propagates here automatically.
-.PHONY: lint-py lint-js lint-md format-md translations ui-strings i18n coverage-py coverage-js mcp-tests build-check ai-docs ai-docs-check install-hooks
+.PHONY: lint-py lint-js lint-md format-md translations ui-strings i18n mcp-gate coverage-py coverage-js mcp-tests build-check ai-docs ai-docs-check install-hooks
 
 # Markdown formatter, pinned for reproducible output (matches the editor venv).
 # Run via uvx so no local install/PATH setup is needed — only `uv`. The
@@ -39,6 +39,9 @@ i18n:           ## all i18n gates: key parity + shipped-locale completeness + no
 	python -m bin.check_exceptions_keys
 	python -m bin.check_no_hardcoded_py
 	python -m bin.check_no_hardcoded_ts
+
+mcp-gate:       ## the MCP_PROTOCOL <-> PROTOCOLS adapter gate (cross-package)
+	python -m bin.check_mcp_protocol
 
 coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
 	python -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing

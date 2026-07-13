@@ -5,6 +5,7 @@ description = "Local MCP server for authoring Home Assistant Ambience scenes"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2",
+    "packaging>=23",
     "websockets>=12",
 ]
 

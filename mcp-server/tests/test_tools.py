@@ -1,3 +1,10 @@
+"""The tool surface, exercised through the protocol adapter that now owns it.
+
+The eleven tools moved out of `tools.py` into `protocols/` (eight version-invariant
+ones on `BaseProtocol`, three on `ProtocolV1`), so these drive `ProtocolV1` against a
+FakeClient. `tools.py` keeps only the shared helpers they are built from, which are
+still tested directly here."""
+
 import pathlib
 import re
 
@@ -5,42 +12,108 @@ import pytest
 from conftest import FakeClient
 
 from ambience_mcp import budget, tools
-from ambience_mcp.ha_client import HACommandError
+from ambience_mcp.ha_client import HACommandError, IncompatibleError
 from ambience_mcp.ledger import PreviewLedger, fingerprint
+from ambience_mcp.protocols.v1 import ProtocolV1
+
+
+def _v1(
+    client: FakeClient,
+    ledger: PreviewLedger | None = None,
+    cache: tools.GuideCache | None = None,
+) -> ProtocolV1:
+    """The adapter under test. The ledger and guide cache are server-held state, so
+    a test that spans preview→apply (or two guide fetches) must pass the same one."""
+    return ProtocolV1(client, ledger or PreviewLedger(), cache or tools.GuideCache(), protocol=1)
 
 
 async def test_get_scope_area_uses_area_get():
     client = FakeClient({"ambience/area/get": {"scenes": [{"name": "X"}]}})
-    result = await tools.get_scope(client, {"kind": "area", "id": "living_room"})
+    result = await _v1(client).get_scope({"kind": "area", "id": "living_room"})
     assert result == {"scenes": [{"name": "X", "rank": 1}]}
     assert client.calls == [{"type": "ambience/area/get", "area_id": "living_room"}]
 
 
 async def test_get_scope_house_uses_house_get_without_id():
     client = FakeClient({"ambience/house/get": {"scenes": []}})
-    await tools.get_scope(client, {"kind": "house"})
+    await _v1(client).get_scope({"kind": "house"})
     assert client.calls == [{"type": "ambience/house/get"}]
 
 
 async def test_get_scope_rejects_area_without_id():
     with pytest.raises(tools.ToolError, match="id"):
-        await tools.get_scope(FakeClient(), {"kind": "area"})
+        await _v1(FakeClient()).get_scope({"kind": "area"})
 
 
 async def test_get_scope_rejects_bad_kind():
     with pytest.raises(tools.ToolError, match="kind"):
-        await tools.get_scope(FakeClient(), {"kind": "planet", "id": "mars"})
+        await _v1(FakeClient()).get_scope({"kind": "planet", "id": "mars"})
 
 
 async def test_dry_run_uses_scope_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
-    await tools.dry_run(client, {"kind": "floor", "id": "ground"})
-    assert client.calls == [{"type": "ambience/dry_run", "floor_id": "ground"}]
+    await _v1(client).dry_run({"kind": "floor", "id": "ground"})
+    assert client.calls == [{"type": "ambience/dry_run", "floor_id": "ground", "redact": True}]
+
+
+async def test_dry_run_always_asks_for_redaction():
+    """dry_run results carry who-is-home detail and raw action params (lock
+    codes) — the same PII classes list_traces already redacts. The adapter
+    must ask for redaction on every call."""
+    client = FakeClient({"ambience/dry_run": {"matched_scene_index": None}})
+    await _v1(client).dry_run({"kind": "house"})
+    assert client.calls[-1] == {"type": "ambience/dry_run", "house": True, "redact": True}
+
+
+async def test_dry_run_falls_back_with_a_notice_when_the_backend_cannot_redact():
+    """A pre-redaction backend rejects the extra key with invalid_format: the
+    adapter retries without it and says so, instead of failing the tool or
+    leaking silently."""
+
+    class _RejectsRedact(FakeClient):
+        async def command(self, type, **payload):
+            if type == "ambience/dry_run" and payload.get("redact"):
+                self.calls.append({"type": type, **payload})
+                raise HACommandError("invalid_format", "extra keys not allowed")
+            return await super().command(type, **payload)
+
+    client = _RejectsRedact({"ambience/dry_run": {"matched_scene_index": None}})
+    result = await _v1(client).dry_run({"kind": "house"})
+    assert result["matched_scene_index"] is None
+    assert result["notice"].startswith("This Ambience does not support redacting")
+    assert client.calls[-1] == {"type": "ambience/dry_run", "house": True}
+
+
+async def test_dry_run_propagates_errors_other_than_invalid_format():
+    """The `except HACommandError` in `dry_run` exists ONLY to work around a
+    pre-redaction backend rejecting the extra `redact` key (invalid_format).
+    Any other backend error (e.g. validation_error) must propagate untouched —
+    a future refactor that widens the except into a catch-all would silently
+    turn every dry_run failure into an unredacted retry, with nothing here to
+    catch it."""
+    client = FakeClient({"ambience/dry_run": HACommandError("validation_error", "bad scope")})
+    with pytest.raises(HACommandError, match="bad scope"):
+        await _v1(client).dry_run({"kind": "house"})
+
+
+async def test_dry_run_escalates_a_mid_reload_unknown_command_instead_of_retrying_unredacted():
+    """The `except HACommandError` in `dry_run` exists ONLY to retry without
+    `redact` for a pre-redaction backend (invalid_format). `command()` rewrites
+    an `unknown_command` (a config-entry reload, or the integration disabled)
+    into `CommandUnavailable`, which is a ToolError, NOT an HACommandError — it
+    must escape this except clause untouched, and specifically must NOT be
+    mistaken for the redaction-fallback trigger: the adapter must not retry the
+    command without redact=True."""
+    client = FakeClient({"ambience/dry_run": HACommandError("unknown_command", "Unknown command.")})
+    with pytest.raises(tools.CommandUnavailable, match="reload"):
+        await _v1(client).dry_run({"kind": "house"})
+    # exactly the one (redacted) attempt was made — no unredacted retry
+    assert client.calls == [{"type": "ambience/dry_run", "house": True, "redact": True}]
 
 
 async def test_validate_wraps_scenes_in_config():
     client = FakeClient({"ambience/validate": {"ok": True}})
-    await tools.validate(client, [{"name": "X", "category": "c"}])
+    await _v1(client).validate([{"name": "X", "category": "c"}])
     assert client.calls == [
         {"type": "ambience/validate", "config": {"scenes": [{"name": "X", "category": "c"}]}}
     ]
@@ -49,7 +122,7 @@ async def test_validate_wraps_scenes_in_config():
 async def test_validate_strips_rank():
     # `rank` is a read-only annotation; validating read-back scenes must not leak it.
     client = FakeClient({"ambience/validate": {"ok": True}})
-    await tools.validate(client, [{"name": "X", "category": "c", "rank": 1}])
+    await _v1(client).validate([{"name": "X", "category": "c", "rank": 1}])
     call = next(c for c in client.calls if c["type"] == "ambience/validate")
     assert call["config"] == {"scenes": [{"name": "X", "category": "c"}]}
 
@@ -63,8 +136,7 @@ async def test_preview_write_returns_diff_valid_and_token():
             "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
-    ledger = PreviewLedger()
-    result = await tools.preview_write(client, {"kind": "area", "id": "lr"}, scenes, ledger)
+    result = await _v1(client).preview_write({"kind": "area", "id": "lr"}, scenes)
     assert result["valid"] is True
     assert result["errors"] is None
     assert result["unknown_categories"] == []
@@ -86,7 +158,7 @@ async def test_preview_write_survives_unreadable_current_scenes():
             "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
-    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    result = await _v1(client).preview_write(scope, scenes)
     assert result["valid"] is True
     assert result["diff"]["added"] == scenes
     assert result["diff"]["removed"] == []
@@ -106,7 +178,7 @@ async def test_preview_write_survives_non_list_current_scenes():
             "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
-    result = await tools.preview_write(client, scope, scenes, PreviewLedger())
+    result = await _v1(client).preview_write(scope, scenes)
     assert result["valid"] is True
     assert result["diff"]["added"] == scenes
 
@@ -123,13 +195,114 @@ async def test_preview_write_blocks_a_scene_with_an_unknown_category():
             "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
-    ledger = PreviewLedger()
-    result = await tools.preview_write(client, scope, scenes, ledger)
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
     assert result["unknown_categories"] == ["typo_lighting"]
     assert result["valid"] is False
     # No usable token was recorded → apply is gated out.
     with pytest.raises(tools.ToolError, match="preview_write"):
-        await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
+
+
+async def test_preview_write_blocks_a_scene_with_no_category():
+    """The backend silently reassigns an uncategorised scene to 'General' on
+    save (reassign_orphan_scenes) — the stored scope would differ from the
+    approved preview. Block it like an unknown category: no usable token."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [
+        {"name": "A", "category": "mood", "actions": []},
+        {"name": "B", "actions": []},  # no category
+        {"name": "C", "category": None, "actions": []},  # null category
+    ]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+    # and the token is unusable: apply must refuse it (ledger never recorded it)
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
+
+
+async def test_preview_write_reports_a_non_string_category_cleanly():
+    """A category OBJECT where its string id belongs is exactly the shape the
+    backend's validate rejects cleanly (scene_category_not_string) — but the
+    diff runs on the invalid payload too, and an unhashable category used to
+    escape diff_scopes' key tuple as `TypeError: unhashable type`, eating the
+    clean error the preview had already captured."""
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": HACommandError(
+                "invalid_format", "scene 0: 'category' must be a string id"
+            ),
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": {"id": "mood"}, "actions": []}],
+    )
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+
+
+async def test_preview_write_blocks_a_scene_with_an_empty_category():
+    """`""` passes `isinstance(..., str)`, so before the fix it was swept into
+    the unknown-categories set (an empty string is never a registered category
+    id), tripping THAT gate first with a dangling "unknown categories ...: "
+    message and never reaching the actionable uncategorised one. An empty
+    category must route to the uncategorised gate, same as missing/None."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [{"name": "A", "category": "", "actions": []}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+    assert "unknown categories" not in result["errors"]
+    assert result["unknown_categories"] == []
+    # and the token is unusable: apply must refuse it (ledger never recorded it)
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
+
+
+async def test_preview_write_with_unknown_and_empty_category_reports_unknown_first():
+    """A payload naming both a genuinely-unknown category AND an uncategorised
+    scene trips the unknown-categories gate first — it runs first in
+    `preview_write` and the uncategorised gate is guarded by `and valid`, so
+    only one problem is reported per round. The AI fixes the named id, and the
+    uncategorised scene surfaces on the next preview_write once that clears."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [
+        {"name": "A", "category": "nonesuch", "actions": []},
+        {"name": "B", "category": "", "actions": []},
+    ]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert result["unknown_categories"] == ["nonesuch"]
+    assert "unknown categories" in result["errors"]
+    assert "nonesuch" in result["errors"]
 
 
 async def test_preview_write_accepts_declared_new_categories():
@@ -144,12 +317,52 @@ async def test_preview_write_accepts_declared_new_categories():
         }
     )
     ledger = PreviewLedger()
-    result = await tools.preview_write(client, scope, scenes, ledger, new_cats)
+    result = await _v1(client, ledger).preview_write(scope, scenes, new_cats)
     assert result["valid"] is True
     assert result["unknown_categories"] == []
     assert result["creating_categories"] == new_cats
     assert result["confirm_token"] == fingerprint(scope, scenes, new_cats)
     assert ledger.consume(result["confirm_token"]) is True  # a usable, applyable token
+
+
+async def test_preview_write_surfaces_category_mutations():
+    """apply's _merge_categories REPLACES a re-declared existing category
+    wholesale (rename, icon/color drop). The preview must show that mutation —
+    creating_categories only covers genuinely-new ids."""
+    stored = {"id": "comfort", "name": "Comfort", "icon": "mdi:sofa"}
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [stored]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": "comfort", "actions": []}],
+        new_categories=[{"id": "comfort", "name": "Comfort v2"}],
+    )
+    assert result["creating_categories"] == []
+    assert result["updating_categories"] == [
+        {"before": stored, "after": {"id": "comfort", "name": "Comfort v2"}}
+    ]
+
+
+async def test_preview_write_does_not_flag_a_noop_redeclare():
+    stored = {"id": "comfort", "name": "Comfort"}
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [stored]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": "comfort", "actions": []}],
+        new_categories=[dict(stored)],
+    )
+    assert result["updating_categories"] == []
 
 
 async def test_apply_write_creates_declared_categories_before_saving():
@@ -161,13 +374,12 @@ async def test_apply_write_creates_declared_categories_before_saving():
     ledger.record(token)
     client = FakeClient(
         {
-            "ambience/frontend_version": {"version": "1.1.0"},
             "ambience/categories/list": {"categories": [{"id": "lighting", "name": "Lighting"}]},
             "ambience/categories/save": {"ok": True},
             "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
         }
     )
-    await tools.apply_write(client, scope, scenes, token, ledger, new_cats)
+    await _v1(client, ledger).apply_write(scope, scenes, token, new_cats)
     types = [c["type"] for c in client.calls]
     # categories are created (existing preserved + new appended) before the scope save
     assert types.index("ambience/categories/save") < types.index("ambience/area/save")
@@ -182,26 +394,39 @@ async def test_preview_write_reports_validation_error():
             "ambience/validate": HACommandError("validation_error", "bad predicate"),
         }
     )
-    result = await tools.preview_write(
-        client, {"kind": "area", "id": "lr"}, [{"category": "c"}], PreviewLedger()
-    )
+    result = await _v1(client).preview_write({"kind": "area", "id": "lr"}, [{"category": "c"}])
     assert result["valid"] is False
     assert result["errors"] == "bad predicate"
+
+
+async def test_preview_write_escalates_a_mid_reload_unknown_command_instead_of_valid_false():
+    """`ambience/validate` answering `unknown_command` mid-reload (a config-entry
+    reload after an options save, or the integration disabled) must NOT be folded
+    into `valid=False` — that reported a transient reload window to the AI as
+    'your scenes are invalid', driving it to rewrite perfectly good scenes.
+    `command()` rewrites it into `CommandUnavailable`, a ToolError (not an
+    HACommandError), so the `except HACommandError` here must not catch it —
+    it escapes preview_write as an actionable, reload-specific error instead."""
+    scope = {"kind": "area", "id": "lr"}
+    scenes = [{"name": "Movie", "category": "lighting"}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": HACommandError("unknown_command", "Unknown command."),
+        }
+    )
+    with pytest.raises(tools.CommandUnavailable, match="reload"):
+        await _v1(client).preview_write(scope, scenes)
 
 
 async def test_apply_write_requires_matching_token_from_preview():
     scenes = [{"name": "Movie", "category": "lighting"}]
     scope = {"kind": "area", "id": "lr"}
     ledger = PreviewLedger()
-    client = FakeClient(
-        {
-            "ambience/frontend_version": {"version": "1.1.0"},
-            "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
-        }
-    )
+    client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": scenes}}})
     ledger.record(fingerprint(scope, scenes))
     token = fingerprint(scope, scenes)
-    result = await tools.apply_write(client, scope, scenes, token, ledger)
+    result = await _v1(client, ledger).apply_write(scope, scenes, token)
     assert result == {"ok": True, "config": {"scenes": scenes}}
     save_call = next(c for c in client.calls if c["type"] == "ambience/area/save")
     assert save_call == {
@@ -217,12 +442,10 @@ async def test_apply_write_rejects_without_preview():
     scenes = [{"name": "Movie", "category": "lighting"}]
     scope = {"kind": "area", "id": "lr"}
     with pytest.raises(tools.ToolError, match="preview_write"):
-        await tools.apply_write(
-            client=FakeClient(),
+        await _v1(FakeClient()).apply_write(
             scope=scope,
             scenes=scenes,
             confirm_token=fingerprint(scope, scenes),
-            ledger=PreviewLedger(),
         )
 
 
@@ -231,8 +454,8 @@ async def test_apply_write_rejects_token_for_different_payload():
     ledger = PreviewLedger()
     ledger.record(fingerprint(scope, [{"name": "Old"}]))
     with pytest.raises(tools.ToolError, match="preview_write"):
-        await tools.apply_write(
-            FakeClient(), scope, [{"name": "New"}], fingerprint(scope, [{"name": "Old"}]), ledger
+        await _v1(FakeClient(), ledger).apply_write(
+            scope, [{"name": "New"}], fingerprint(scope, [{"name": "Old"}])
         )
 
 
@@ -245,12 +468,12 @@ async def test_invalid_preview_does_not_record_a_usable_token():
             "ambience/validate": HACommandError("validation_error", "bad predicate"),
         }
     )
-    ledger = PreviewLedger()
-    result = await tools.preview_write(client, scope, scenes, ledger)
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
     assert result["valid"] is False
     # Token was returned for reference but never recorded, so apply is gated out.
     with pytest.raises(tools.ToolError, match="preview_write"):
-        await tools.apply_write(client, scope, scenes, result["confirm_token"], ledger)
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
 
 
 def _realistic_scene(prefix: str, i: int) -> dict:
@@ -305,9 +528,8 @@ async def test_preview_write_summarises_a_wholesale_21_scene_scope_replace():
             "ambience/categories/list": {"categories": [{"id": "lighting"}]},
         }
     )
-    ledger = PreviewLedger()
 
-    result = await tools.preview_write(client, scope, proposed, ledger)
+    result = await _v1(client).preview_write(scope, proposed)
 
     assert result["valid"] is True
     assert result["diff_summarised"] is True
@@ -323,15 +545,13 @@ async def test_preview_write_summarises_a_wholesale_21_scene_scope_replace():
     ledger2 = PreviewLedger()
     ledger2.record(result["confirm_token"])
     apply_client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": proposed}}})
-    applied = await tools.apply_write(
-        apply_client, scope, proposed, result["confirm_token"], ledger2
-    )
+    applied = await _v1(apply_client, ledger2).apply_write(scope, proposed, result["confirm_token"])
     assert applied["ok"] is True
 
 
 async def test_list_traces_passes_limit():
     client = FakeClient({"ambience/traces/list": {"traces": []}})
-    await tools.list_traces(client, limit=5)
+    await _v1(client).list_traces(limit=5)
     assert client.calls == [{"type": "ambience/traces/list", "redact": True, "limit": 5}]
 
 
@@ -340,7 +560,7 @@ async def test_list_traces_always_asks_for_redaction():
     # feed) — this tool leaves the house for an external AI, so it must always
     # request the redacted view, with or without an explicit limit.
     client = FakeClient({"ambience/traces/list": {"traces": []}})
-    await tools.list_traces(client)
+    await _v1(client).list_traces()
     assert client.calls == [{"type": "ambience/traces/list", "redact": True}]
 
 
@@ -357,9 +577,7 @@ async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(mo
         }
     )
 
-    result = await tools.list_traces(client)
-
-    from ambience_mcp import budget
+    result = await _v1(client).list_traces()
 
     assert budget.size_of(result) <= 2000
     assert result["omitted"] > 0
@@ -368,8 +586,8 @@ async def test_list_traces_trims_an_oversized_list_and_announces_the_omission(mo
 
 async def test_dry_run_house_uses_house_selector():
     client = FakeClient({"ambience/dry_run": {"winner": None}})
-    await tools.dry_run(client, {"kind": "house"})
-    assert client.calls == [{"type": "ambience/dry_run", "house": True}]
+    await _v1(client).dry_run({"kind": "house"})
+    assert client.calls == [{"type": "ambience/dry_run", "house": True, "redact": True}]
 
 
 async def test_get_scope_ranks_scenes_per_category_in_order():
@@ -385,7 +603,7 @@ async def test_get_scope_ranks_scenes_per_category_in_order():
             }
         }
     )
-    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    result = await _v1(client).get_scope({"kind": "area", "id": "lr"})
     # rank counts within each category, in list (evaluation) order
     assert [(s["name"], s["rank"]) for s in result["scenes"]] == [
         ("A", 1),
@@ -403,7 +621,7 @@ async def test_get_scope_keeps_priority_and_pinned_alongside_rank():
             }
         }
     )
-    scene = (await tools.get_scope(client, {"kind": "house"}))["scenes"][0]
+    scene = (await _v1(client).get_scope({"kind": "house"}))["scenes"][0]
     assert scene["rank"] == 1
     assert scene["priority"] == 7168
     assert scene["pinned"] is True
@@ -414,7 +632,7 @@ async def test_get_scope_leaves_non_dict_scenes_untouched():
     # scenes element's shape, ranking must skip and return the list untouched
     # rather than raise — the server's only structural read of the bundle.
     client = FakeClient({"ambience/area/get": {"scenes": ["sceneref-1", "sceneref-2"]}})
-    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    result = await _v1(client).get_scope({"kind": "area", "id": "lr"})
     assert result["scenes"] == ["sceneref-1", "sceneref-2"]
 
 
@@ -424,61 +642,27 @@ async def test_get_scope_skips_ranking_for_whole_list_when_any_scene_non_dict():
     # untouched — no partial annotation.
     scenes = [{"name": "A", "category": "c"}, "sceneref"]
     client = FakeClient({"ambience/area/get": {"scenes": scenes}})
-    result = await tools.get_scope(client, {"kind": "area", "id": "lr"})
+    result = await _v1(client).get_scope({"kind": "area", "id": "lr"})
     assert result["scenes"] == scenes
     assert "rank" not in result["scenes"][0]
 
 
 async def test_get_context_reads_ai_context_not_the_fat_bundle():
-    client = FakeClient(
-        {"ambience/ai_context": {"ambience_ai_context": 1, "catalog": {"entity_summary": {}}}}
-    )
+    client = FakeClient({"ambience/ai_context": {"catalog": {"entity_summary": {}}}})
 
-    result = await tools.get_context(client)
+    result = await _v1(client).get_context()
 
     assert client.calls == [{"type": "ambience/ai_context"}]
-    assert result["ambience_ai_context"] == 1
+    assert result["catalog"] == {"entity_summary": {}}
 
 
-async def test_get_context_on_an_old_backend_says_to_upgrade():
-    client = FakeClient({"ambience/ai_context": HACommandError("unknown_command", "nope")})
-
-    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
-        await tools.get_context(client)
-
-
-async def test_get_context_warns_when_the_backend_is_newer_than_us():
-    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 99}})
-
-    result = await tools.get_context(client)
-
-    assert "warning" in result
-    assert "ambience-mcp" in result["warning"]
-
-
-async def test_get_context_does_not_warn_when_the_backend_format_matches():
-    client = FakeClient({"ambience/ai_context": {"ambience_ai_context": 1}})
-
-    result = await tools.get_context(client)
-
-    assert "warning" not in result
-
-
-async def test_get_context_does_not_warn_when_the_format_field_is_absent():
-    client = FakeClient({"ambience/ai_context": {}})
-
-    result = await tools.get_context(client)
-
-    assert "warning" not in result
-
-
-async def test_get_context_propagates_other_command_errors():
-    # Mirrors test_get_guide_propagates_other_command_errors: only unknown_command
-    # is converted to a ToolError; every other HACommandError must pass through
-    # untouched rather than be swallowed or misreported.
+async def test_get_context_propagates_command_errors():
+    # The adapter adds no error handling of its own: a backend error reaches the
+    # caller as-is. ("Your Ambience is too old" is no longer a per-command guess —
+    # the handshake settles it once, before any tool runs.)
     client = FakeClient({"ambience/ai_context": HACommandError("validation_error", "boom")})
     with pytest.raises(HACommandError):
-        await tools.get_context(client)
+        await _v1(client).get_context()
 
 
 async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
@@ -486,7 +670,6 @@ async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
     client = FakeClient(
         {
             "ambience/ai_context": {
-                "ambience_ai_context": 1,
                 "actions": {
                     "exposed": [{"id": f"light.a{i}"} for i in range(10)],
                     "schemas": {f"light.a{i}": {"f": "x" * 500} for i in range(10)},
@@ -495,9 +678,7 @@ async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
         }
     )
 
-    result = await tools.get_context(client)
-
-    from ambience_mcp import budget
+    result = await _v1(client).get_context()
 
     assert budget.size_of(result) <= 2000
     assert result["schemas_omitted"]
@@ -506,7 +687,7 @@ async def test_get_context_sheds_schemas_that_bust_the_budget(monkeypatch):
 async def test_find_entities_forwards_only_the_given_filters():
     client = FakeClient({"ambience/entities/find": {"entities": [], "total_matches": 0}})
 
-    await tools.find_entities(client, domain="light", area_id="kitchen")
+    await _v1(client).find_entities(domain="light", area_id="kitchen")
 
     assert client.calls == [
         {"type": "ambience/entities/find", "domain": "light", "area_id": "kitchen"}
@@ -517,7 +698,7 @@ async def test_find_entities_omits_unset_filters_entirely():
     # Sending explicit nulls would make the backend's vol.Optional pointless.
     client = FakeClient({"ambience/entities/find": {"entities": []}})
 
-    await tools.find_entities(client)
+    await _v1(client).find_entities()
 
     assert client.calls == [{"type": "ambience/entities/find"}]
 
@@ -525,7 +706,7 @@ async def test_find_entities_omits_unset_filters_entirely():
 async def test_find_entities_forwards_paging():
     client = FakeClient({"ambience/entities/find": {"entities": []}})
 
-    await tools.find_entities(client, query="lux", limit=10, cursor=20)
+    await _v1(client).find_entities(query="lux", limit=10, cursor=20)
 
     assert client.calls == [
         {"type": "ambience/entities/find", "query": "lux", "limit": 10, "cursor": 20}
@@ -538,7 +719,7 @@ async def test_find_entities_forwards_a_zero_cursor():
     # `if value`, cursor=0 would be silently dropped, breaking pagination.
     client = FakeClient({"ambience/entities/find": {"entities": []}})
 
-    await tools.find_entities(client, cursor=0)
+    await _v1(client).find_entities(cursor=0)
 
     assert client.calls == [{"type": "ambience/entities/find", "cursor": 0}]
 
@@ -560,36 +741,24 @@ async def test_find_entities_trims_an_oversized_page_and_repoints_the_cursor(mon
         }
     )
 
-    result = await tools.find_entities(client)
-
-    from ambience_mcp import budget
+    result = await _v1(client).find_entities()
 
     assert budget.size_of(result) <= 2000
     assert result["cursor"] == result["returned"]  # offset 0 + kept
     assert result["truncated"] is True
 
 
-async def test_find_entities_on_an_old_backend_says_to_upgrade():
-    # Mirrors test_get_context_on_an_old_backend_says_to_upgrade: find_entities is
-    # just as load-bearing as get_context and must fail the same actionable way
-    # against a pre-ai_context backend, not surface a raw unknown_command.
-    client = FakeClient({"ambience/entities/find": HACommandError("unknown_command", "nope")})
-
-    with pytest.raises(tools.ToolError, match="Upgrade Ambience"):
-        await tools.find_entities(client)
-
-
-async def test_find_entities_propagates_other_command_errors():
+async def test_find_entities_propagates_command_errors():
     client = FakeClient({"ambience/entities/find": HACommandError("validation_error", "boom")})
 
     with pytest.raises(HACommandError):
-        await tools.find_entities(client)
+        await _v1(client).find_entities()
 
 
 async def test_preview_write_strips_rank_before_backend():
     scenes = [{"name": "A", "category": "c", "rank": 1}]
     client = FakeClient({"ambience/area/get": {"scenes": []}, "ambience/validate": {"ok": True}})
-    await tools.preview_write(client, {"kind": "area", "id": "lr"}, scenes, PreviewLedger())
+    await _v1(client).preview_write({"kind": "area", "id": "lr"}, scenes)
     validate_call = next(c for c in client.calls if c["type"] == "ambience/validate")
     assert validate_call["config"] == {"scenes": [{"name": "A", "category": "c"}]}
 
@@ -602,7 +771,7 @@ async def test_apply_write_strips_rank_before_save():
     token = fingerprint(scope, stripped)  # the gate fingerprints the rank-free payload
     ledger.record(token)
     client = FakeClient({"ambience/area/save": {"ok": True, "config": {"scenes": stripped}}})
-    await tools.apply_write(client, scope, scenes, token, ledger)
+    await _v1(client, ledger).apply_write(scope, scenes, token)
     save_call = next(c for c in client.calls if c["type"] == "ambience/area/save")
     assert save_call["config"] == {"scenes": stripped}
 
@@ -639,7 +808,6 @@ Actions body.
 GUIDE_PAYLOAD = {
     "guide": GUIDE_TEXT,
     "ambience_version": "1.1.0",
-    "ambience_ai_bundle": 1,
 }
 
 
@@ -665,10 +833,11 @@ Cookbook body.
 
 def test_split_guide_sections_reads_the_older_double_heading_format():
     """The MCP server ships separately from the integration, so a NEW server WILL
-    meet an OLD Ambience (MIN_AMBIENCE_VERSION is 1.1.0, which assembles the guide
-    with two H1s per part). Splitting that naively yields an empty body for every
-    section an AI is told to read — it would fetch the guide, get "", and author
-    blind, which is the exact failure this whole feature exists to prevent.
+    meet an OLD Ambience (1.1.0 is the oldest that speaks protocol 1, and it
+    assembles the guide with two H1s per part). Splitting that naively yields an
+    empty body for every section an AI is told to read — it would fetch the guide,
+    get "", and author blind, which is the exact failure this whole feature exists
+    to prevent.
 
     The wrapper's title is the canonical section name in BOTH formats, so an empty
     section absorbs the body that follows it.
@@ -697,16 +866,16 @@ async def test_get_guide_fetches_the_whole_guide_once_then_reuses_it():
     the internet, not just a LAN). The version is held by the SERVER, not passed in
     as a tool argument — a model could claim to hold a guide it had never fetched
     and be told {unchanged: true} with no text, which is the trap this replaces."""
-    cache = tools.GuideCache()
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
+    protocol = _v1(client)
 
-    first = await tools.get_guide(client, cache, section="Config schema")
+    first = await protocol.get_guide(section="Config schema")
     assert "Schema body." in first["guide"]
     assert client.calls == [{"type": "ambience/ai_guide"}]  # nothing held yet
 
     # The install says "same version" and sends no text; the split is reused.
     client.results["ambience/ai_guide"] = {"unchanged": True, "ambience_version": "1.1.0"}
-    second = await tools.get_guide(client, cache, section="Actions")
+    second = await protocol.get_guide(section="Actions")
     assert "Actions body." in second["guide"]
     assert client.calls[-1] == {"type": "ambience/ai_guide", "have_version": "1.1.0"}
 
@@ -714,7 +883,8 @@ async def test_get_guide_fetches_the_whole_guide_once_then_reuses_it():
 async def test_get_guide_refetches_when_the_install_was_upgraded():
     cache = tools.GuideCache()
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    await tools.get_guide(client, cache)
+    protocol = _v1(client, cache=cache)
+    await protocol.get_guide()
 
     upgraded = {
         **GUIDE_PAYLOAD,
@@ -722,7 +892,7 @@ async def test_get_guide_refetches_when_the_install_was_upgraded():
         "guide": "# Title\n\nintro\n\n# Brand new\n\nfresh body",
     }
     client.results["ambience/ai_guide"] = upgraded
-    result = await tools.get_guide(client, cache)
+    result = await protocol.get_guide()
 
     assert result["ambience_version"] == "1.2.0"
     assert result["sections"] == ["Brand new"]
@@ -736,14 +906,15 @@ async def test_an_unsplittable_guide_is_never_cached():
     Keep asking the install instead, so it can recover."""
     cache = tools.GuideCache()
     client = FakeClient({"ambience/ai_guide": {**GUIDE_PAYLOAD, "guide": ""}})
+    protocol = _v1(client, cache=cache)
 
-    first = await tools.get_guide(client, cache)
+    first = await protocol.get_guide()
     assert first["sections"] == []
     assert cache.version is None  # nothing worth remembering
 
     # It must ask for the text again — not claim to hold a guide it never got.
     client.results["ambience/ai_guide"] = GUIDE_PAYLOAD
-    second = await tools.get_guide(client, cache)
+    second = await protocol.get_guide()
     assert second["sections"] == ["Config schema", "Import format", "Actions"]
     assert client.calls[-1] == {"type": "ambience/ai_guide"}
 
@@ -754,7 +925,7 @@ async def test_get_guide_without_section_returns_contents_not_the_full_text():
     advice over MCP — there is nothing to paste. Offering it would waste a TOC
     entry on a section no MCP reader should open."""
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, tools.GuideCache())
+    result = await _v1(client).get_guide()
     assert result["sections"] == ["Config schema", "Import format", "Actions"]
     assert "guide" not in result
     assert result["ambience_version"] == "1.1.0"
@@ -762,16 +933,14 @@ async def test_get_guide_without_section_returns_contents_not_the_full_text():
 
 async def test_get_guide_will_not_serve_the_document_title_as_a_section():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(
-        client, tools.GuideCache(), section="Ambience — AI authoring & diagnosis guide"
-    )
+    result = await _v1(client).get_guide(section="Ambience — AI authoring & diagnosis guide")
     assert "error" in result
     assert "guide" not in result
 
 
 async def test_get_guide_returns_only_the_requested_section():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, tools.GuideCache(), section="Config schema")
+    result = await _v1(client).get_guide(section="Config schema")
     assert result["section"] == "Config schema"
     assert "Schema body." in result["guide"]
     assert "Actions body." not in result["guide"]
@@ -809,109 +978,95 @@ async def test_get_guide_asks_for_the_text_whenever_it_holds_none():
     a model passed a version read from the bundle and got {unchanged: true} with no
     guide at all."""
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, tools.GuideCache(), section="Actions")
+    result = await _v1(client).get_guide(section="Actions")
     assert client.calls == [{"type": "ambience/ai_guide"}]
     assert "Actions body." in result["guide"]
 
 
 async def test_get_guide_rejects_an_unknown_section_and_lists_the_real_ones():
     client = FakeClient({"ambience/ai_guide": GUIDE_PAYLOAD})
-    result = await tools.get_guide(client, tools.GuideCache(), section="Nonsense")
+    result = await _v1(client).get_guide(section="Nonsense")
     assert "error" in result
     assert result["sections"] == ["Config schema", "Import format", "Actions"]
     assert result["usage"]  # a wrong guess still gets told how to call it properly
     assert "guide" not in result
 
 
-async def test_get_guide_reports_unavailable_on_old_backend():
+async def test_get_guide_reports_unavailable_during_a_reload_not_an_old_backend():
+    """An adapter only exists after this connection's handshake succeeded, so
+    `unknown_command` here can never mean an old Ambience — the 'old backend'
+    framing this test used to assert is obsolete: a pre-handshake backend never
+    reaches get_guide, the verdict blocks it first. It means a config-entry
+    reload (an options save) or the integration being disabled."""
     client = FakeClient(
         {"ambience/ai_guide": HACommandError("unknown_command", "Unknown command.")}
     )
-    result = await tools.get_guide(client, tools.GuideCache())
+    result = await _v1(client).get_guide()
     assert result["unavailable"] is True
+    assert "reload" in result["message"]
     assert "guide" not in result
 
 
 async def test_get_guide_propagates_other_command_errors():
     client = FakeClient({"ambience/ai_guide": HACommandError("internal_error", "boom")})
     with pytest.raises(HACommandError):
-        await tools.get_guide(client, tools.GuideCache())
+        await _v1(client).get_guide()
 
 
-def test_parse_version_reads_major_minor_patch():
-    assert tools._parse_version("1.1.0") == (1, 1, 0)
-
-
-def test_parse_version_tolerates_prerelease_and_build_suffix():
-    assert tools._parse_version("1.2.0-rc.1") == (1, 2, 0)
-    assert tools._parse_version("2.0.0+build5") == (2, 0, 0)
-
-
-def test_parse_version_returns_none_for_unrecognisable():
-    assert tools._parse_version(None) is None
-    assert tools._parse_version("") is None
-    assert tools._parse_version("garbage") is None
-
-
-def test_parse_version_pads_short_versions_so_they_dont_sort_low():
-    # Bare tuple compare would make (1, 1) < (1, 1, 0); padding keeps 1.1 == 1.1.0.
-    assert tools._parse_version("1.1") == (1, 1, 0)
-    assert tools._parse_version("2") == (2, 0, 0)
-    assert tools._parse_version("1.1") >= tools.MIN_AMBIENCE_VERSION
-
-
-def test_parse_version_rejects_unicode_digits():
-    # "²".isdigit() is True but int("²") raises; isdecimal() must reject it → None.
-    assert tools._parse_version("1.².0") is None
-
-
-def test_min_ambience_version_is_the_release_with_minimise_pins():
-    # The floor below which apply_write is refused; comparable as a tuple.
-    assert tools.MIN_AMBIENCE_VERSION == (1, 1, 0)
-    assert tools._parse_version("1.0.0") < tools.MIN_AMBIENCE_VERSION
-    assert tools._parse_version("1.1.0") >= tools.MIN_AMBIENCE_VERSION
-
-
-def _apply_ready(version_result):
-    """A FakeClient primed to apply, with a scripted frontend_version probe."""
-    scenes = [{"name": "Movie", "category": "lighting"}]
-    scope = {"kind": "area", "id": "lr"}
-    ledger = PreviewLedger()
-    token = fingerprint(scope, scenes)
-    ledger.record(token)
+async def test_a_failed_apply_keeps_the_token_so_try_again_is_true_advice():
+    """The save is a wholesale replace (idempotent), so a token consumed only
+    on SUCCESS lets the user retry a failed apply — instead of burning the
+    token on a transient and answering the retry with 'bad confirm_token'."""
     client = FakeClient(
         {
-            "ambience/frontend_version": version_result,
-            "ambience/area/save": {"ok": True, "config": {"scenes": scenes}},
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+            "ambience/area/save": IncompatibleError("startup window refusal"),
         }
     )
-    return client, scope, scenes, token, ledger
+    adapter = _v1(client)
+    scenes = [{"name": "A", "category": "mood", "actions": []}]
+    preview = await adapter.preview_write({"kind": "area", "id": "kitchen"}, scenes)
+    token = preview["confirm_token"]
+    with pytest.raises(IncompatibleError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
+    # the transient passed: the SAME token must still work
+    client.results["ambience/area/save"] = {"ok": True}
+    result = await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
+    assert result == {"ok": True}
+    # and now it is spent
+    with pytest.raises(tools.ToolError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
 
 
-async def test_apply_write_refused_against_old_backend():
-    client, scope, scenes, token, ledger = _apply_ready({"version": "1.0.0"})
-    with pytest.raises(tools.ToolError, match="1.1.0"):
-        await tools.apply_write(client, scope, scenes, token, ledger)
-    # Refused before ever saving.
-    assert not any(c["type"] == "ambience/area/save" for c in client.calls)
-
-
-async def test_apply_write_proceeds_against_current_backend():
-    client, scope, scenes, token, ledger = _apply_ready({"version": "1.1.0"})
-    result = await tools.apply_write(client, scope, scenes, token, ledger)
-    assert result == {"ok": True, "config": {"scenes": scenes}}
-
-
-async def test_apply_write_fails_open_when_version_blank():
-    # Indeterminate version (teardown race) -> proceed, don't block on a hiccup.
-    client, scope, scenes, token, ledger = _apply_ready({"version": ""})
-    result = await tools.apply_write(client, scope, scenes, token, ledger)
-    assert result["ok"] is True
-
-
-async def test_apply_write_fails_open_when_probe_unsupported():
-    client, scope, scenes, token, ledger = _apply_ready(
-        HACommandError("unknown_command", "Unknown command.")
+async def test_a_failed_category_save_also_keeps_the_token_so_try_again_is_true_advice():
+    """apply_write saves categories BEFORE the scene config, so the
+    consume-only-on-SUCCESS guarantee covered above for the scene save must
+    hold at this earlier save point too — a transient here must not burn the
+    token any more than one at the later save does."""
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": []},
+            "ambience/categories/save": IncompatibleError("startup window refusal"),
+            "ambience/area/save": {"ok": True},
+        }
     )
-    result = await tools.apply_write(client, scope, scenes, token, ledger)
-    assert result["ok"] is True
+    adapter = _v1(client)
+    scenes = [{"name": "A", "category": "ambient", "actions": []}]
+    new_categories = [{"id": "ambient", "name": "Ambient"}]
+    preview = await adapter.preview_write({"kind": "area", "id": "kitchen"}, scenes, new_categories)
+    token = preview["confirm_token"]
+    with pytest.raises(IncompatibleError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token, new_categories)
+    # the transient passed: the SAME token must still work
+    client.results["ambience/categories/save"] = {"ok": True}
+    result = await adapter.apply_write(
+        {"kind": "area", "id": "kitchen"}, scenes, token, new_categories
+    )
+    assert result == {"ok": True}
+    # and now it is spent
+    with pytest.raises(tools.ToolError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token, new_categories)

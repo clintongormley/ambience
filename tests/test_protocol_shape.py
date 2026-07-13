@@ -535,17 +535,15 @@ async def test_categories_list_shape_is_pinned(
     assert resp["result"]["categories"], "an empty category list would pin nothing"
 
 
-def test_mcp_diff_transient_fields_match_the_backends():
-    """diff.py must ignore exactly the per-scene hints the backend injects
-    (websocket_helpers._TRANSIENT_SCENE_FIELDS) — a new backend annotation
-    that diff.py doesn't know makes every re-submitted-unchanged scene show
-    as 'updated', turning the human approval surface into noise. The packages
-    cannot import each other (separate venvs), so the MCP literal is read
-    with ast, like bin/check_mcp_protocol.py reads MCP_PROTOCOL."""
+def _read_mcp_diff_set_literal(name: str) -> set[Any]:
+    """The value of one module-level set-literal assignment in mcp-server's
+    diff.py, read with `ast` rather than imported — the two packages cannot
+    import each other (separate venvs), so this is how a backend test reads an
+    MCP literal (same technique bin/check_mcp_protocol.py uses for
+    MCP_PROTOCOL). Shared by the `_TRANSIENT_FIELDS` and `_ORDER_FIELDS` gates
+    below so the ast-walking isn't duplicated between them."""
     import ast
     from pathlib import Path
-
-    from custom_components.ambience.websocket_helpers import _TRANSIENT_SCENE_FIELDS
 
     diff_py = Path(__file__).parents[1] / "mcp-server" / "src" / "ambience_mcp" / "diff.py"
     module = ast.parse(diff_py.read_text())
@@ -553,10 +551,41 @@ def test_mcp_diff_transient_fields_match_the_backends():
         if (
             isinstance(node, ast.Assign)
             and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "_TRANSIENT_FIELDS"
+            and node.targets[0].id == name
         ):
-            mcp_fields = ast.literal_eval(node.value)
-            break
-    else:
-        pytest.fail("no module-level _TRANSIENT_FIELDS assignment in mcp-server diff.py")
-    assert mcp_fields == set(_TRANSIENT_SCENE_FIELDS)
+            return ast.literal_eval(node.value)
+    pytest.fail(f"no module-level {name} assignment in mcp-server diff.py")
+
+
+def test_mcp_diff_transient_fields_match_the_backends():
+    """diff.py must ignore exactly the per-scene hints the backend injects
+    (websocket_helpers._TRANSIENT_SCENE_FIELDS) — a new backend annotation
+    that diff.py doesn't know makes every re-submitted-unchanged scene show
+    as 'updated', turning the human approval surface into noise."""
+    from custom_components.ambience.websocket_helpers import _TRANSIENT_SCENE_FIELDS
+
+    assert _read_mcp_diff_set_literal("_TRANSIENT_FIELDS") == set(_TRANSIENT_SCENE_FIELDS)
+
+
+def test_mcp_diff_order_fields_match_the_backend():
+    """diff.py's `_ORDER_FIELDS` names the scene fields the backend honours on
+    import to set evaluation order — validated in
+    `websocket_helpers.validate_scope_config` (the `scene_priority_invalid` /
+    `scene_pinned_invalid` checks) and consumed by `sorting.resolve_order` /
+    `sorting.minimise_pins`. This is the same class of bug
+    `test_mcp_diff_transient_fields_match_the_backends` guards against: if the
+    backend ever honoured a THIRD order field, an order-only change stated only
+    in that field would preview as "no changes" — the exact bug commit
+    a8ed6aaf fixed when it was `_TRANSIENT_FIELDS`.
+
+    Unlike `_TRANSIENT_SCENE_FIELDS`, the backend has no single named constant
+    for "priority"/"pinned" — they're two literal strings used inline at the
+    two call sites above, not gathered into one importable/ast-parseable
+    place. So this pins the MCP's set against that known-correct literal
+    directly, rather than against a backend symbol. It is a weaker gate than
+    the transient-fields one: it catches an accidental edit to diff.py's own
+    `_ORDER_FIELDS`, but NOT a backend change that adds a new order field,
+    since there is nothing on the backend side to read. If a maintainer adds
+    one, this test's hardcoded set must be updated by hand.
+    """
+    assert _read_mcp_diff_set_literal("_ORDER_FIELDS") == {"priority", "pinned"}

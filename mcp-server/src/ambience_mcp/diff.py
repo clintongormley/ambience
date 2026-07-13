@@ -20,6 +20,17 @@ _TRANSIENT_FIELDS = {"shadowed_by", "missing_entities", "overlap_entities", "con
 # order (auto-sort + minimise_pins): that is the normal author-by-list-order
 # workflow, so omission is not flagged per scene — diff_scopes emits one
 # scope-level `order_note` instead.
+#
+# Unlike _TRANSIENT_FIELDS above, the backend has no single named constant for
+# this set — "priority"/"pinned" are two literal strings validated inline in
+# websocket_helpers.validate_scope_config (scene_priority_invalid /
+# scene_pinned_invalid) and honoured by sorting.resolve_order / minimise_pins.
+# tests/test_protocol_shape.py::test_mcp_diff_order_fields_match_the_backend
+# pins this against that known-correct literal set directly (there is nothing
+# importable to ast-parse on the backend side) — if a THIRD order field is ever
+# added there, that test's hardcoded set must be updated by hand, or an
+# order-only change in the new field will silently preview as "no changes"
+# (the same bug commit a8ed6aaf fixed for _TRANSIENT_FIELDS).
 _ORDER_FIELDS = {"priority", "pinned"}
 
 

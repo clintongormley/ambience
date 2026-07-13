@@ -58,6 +58,34 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     allow pre-releases. The release gate matches: it checks a pre-release
     Ambience against the pre-release `ambience-mcp` channel, and a final one
     against the final channel.
+- The AI's dry-run preview is now redacted like traces already were: who is home
+    (by name) and security action params (lock PINs, alarm codes) no longer
+    leave the home in `ambience_dry_run` results. Older backends that cannot
+    redact get a visible notice instead of a silent leak.
+- `list_traces` and the diagnostics download now redact two more kinds of
+    predicate detail, the same widened set `ambience_dry_run` above respects:
+    `unavailable` (the friendly names of currently-down entities, which can
+    include a `device_tracker`) and `occupancy` (which rooms are occupied right
+    now). Previously only `people` and `template` details were blanked.
+- A write that only changes scene evaluation order (`priority`/`pinned`) no
+    longer previews as "no changes" — the diff shows it, and resubmitting scenes
+    without their stored order fields adds a note saying order will be
+    re-derived.
+- A scene with no category is now blocked at preview (the backend used to
+    silently move it to "General" after the diff was approved), and re-declaring
+    an existing category in `new_categories` now shows the overwrite in the
+    preview.
+- A failed `ambience_apply_write` no longer burns its confirm token: "try again"
+    now works instead of answering "bad confirm_token".
+- Cancelling (or erroring) a tool call during Home Assistant's startup window
+    can no longer permanently wedge the MCP server; an incompatibility verdict
+    also re-checks itself, so following "Update Ambience and restart Home
+    Assistant" actually clears it.
+- Reloading or disabling the Ambience integration mid-session now gets an
+    actionable "Ambience is reloading" message instead of a raw
+    `unknown_command`.
+- The release gate now checks the published `ambience-mcp` actually speaks the
+    backend's protocol (membership, not just "not newer").
 
 ### Changed
 

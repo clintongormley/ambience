@@ -170,12 +170,13 @@ so two gates hold it:
     the floor *shippable* — but the repo version routinely runs ahead of PyPI
     (the post-release bump), so it does not yet make it *installable*.
 - `bin/release.sh` (Gate 2) asks PyPI for the **published** `ambience-mcp` — its
-    protocol *and* its version — and refuses the release if the backend's
-    protocol is ahead of it, **or** if `MIN_MCP_VERSION` names something newer
-    than it. It asks in the channel the release ships into (see above), so the
-    floor is held to the `ambience-mcp` this release's users can actually
-    install. It fails closed if PyPI cannot be reached or its answer cannot be
-    read.
+    protocol(s) *and* its version — and refuses the release unless the published
+    package's protocol list **includes** the backend's protocol (membership, not
+    a ceiling: a published package that dropped an old adapter is refused too),
+    **or** if `MIN_MCP_VERSION` names something newer than it. It asks in the
+    channel the release ships into (see above), so the floor is held to the
+    `ambience-mcp` this release's users can actually install. It fails closed if
+    PyPI cannot be reached or its answer cannot be read.
 
 To raise it: bump `mcp-server/pyproject.toml`, tag `mcp-v<version>`, **let it
 publish** — then raise `MIN_MCP_VERSION` to it and release Ambience. Same order

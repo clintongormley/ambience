@@ -385,7 +385,10 @@ async def test_diagnostics_traces_redact_presence_pii(
     # the same identifiers the cause scrub removes — they ride in the new
     # per-predicate entity_ids list.
     assert preds["people"]["entity_ids"] == [REDACTED]
-    # Non-presence details and entity_ids stay useful for debugging.
+    # `occupancy`'s detail is redacted too (it renders which rooms are occupied
+    # right now — see _DETAIL_REDACTED_CONDITIONS), but its non-presence entity_ids
+    # stay useful for debugging, as does an unrelated condition like time_of_day.
+    assert preds["occupancy"]["detail"] == REDACTED
     assert preds["time_of_day"]["detail"] == "evening"
     assert preds["occupancy"]["entity_ids"] == ["binary_sensor.hall"]
     assert "person.alice" not in str(result)

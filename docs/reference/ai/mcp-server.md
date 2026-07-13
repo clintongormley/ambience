@@ -127,7 +127,10 @@ Drop the flag when you go back to a final Ambience release. See
 ## Your privacy
 
 Ambience removes your private data before it reaches the AI. See
-[Privacy](../ai-assisted-scenes.md#privacy) for what is hidden.
+[Privacy](../ai-assisted-scenes.md#privacy) for what is hidden. The "what would
+happen right now" preview (`ambience_dry_run`) is hidden the same way. If your
+Ambience is too old to redact it, the preview carries a visible notice instead
+of quietly showing the unhidden result — update Ambience to fix that.
 
 ______________________________________________________________________
 

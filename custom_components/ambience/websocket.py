@@ -1581,6 +1581,7 @@ def _strict_int(value: Any) -> int:
     subclasses int), and prev_applied is compared against a scene index with
     `==`, where True == 1 would silently mis-report a step as DEBOUNCED."""
     if isinstance(value, bool) or not isinstance(value, int):
+        # i18n: voluptuous schema validator — English-only (framework layer)
         raise vol.Invalid("expected an integer")
     return value
 

@@ -235,12 +235,27 @@ paged.
 from your install, so it always matches your Ambience version — no separately
 installed guide to keep in sync.
 
+`ambience_dry_run` is always redacted, the same way a trace already is:
+presence/location detail and security-action params (lock PINs, alarm codes)
+never come back in the result. Against an Ambience too old to redact, the result
+carries a visible `notice` instead of the raw values — update Ambience (HACS)
+and restart Home Assistant to get redaction there too.
+
 ## The write gate
 
 `ambience_apply_write` refuses to commit unless you first call
 `ambience_preview_write` for the **exact** scope+scenes and pass back its
 `confirm_token`. Every write is a normal scope save — reversible via Ambience
 undo/redo.
+
+`ambience_preview_write`'s diff also reports `updating_categories` (an existing
+category `new_categories` would overwrite, with before/after) and, when you
+resubmit stored scenes without their `priority`/`pinned` fields, an `order_note`
+saying evaluation order will be re-derived.
+
+A failed `ambience_apply_write` keeps its `confirm_token` — it is only spent on
+a write that actually commits, so once whatever caused the failure is fixed you
+retry the same call rather than previewing all over again.
 
 ## The result budget
 

@@ -45,7 +45,8 @@ private data first. Before anything leaves Home Assistant, it removes:
 - where people and their devices are,
 - the zones shown in your traces,
 - your weather and workday entities,
-- the results of your `people` and `template` conditions,
+- the results of your `people`, `template`, `unavailable`, and `occupancy`
+    conditions,
 - secrets in your actions, such as alarm and lock codes and the contents of
     notifications.
 

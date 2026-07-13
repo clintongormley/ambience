@@ -196,8 +196,9 @@ echo "→ Gate 2: this release speaks MCP protocol ${MCP_PROTOCOL}; checking PyP
 # Overridable (mirrors BUILD_CMD / AI_DOCS_CMD below) so tests can fake the PyPI
 # lookup instead of hitting the real network on every pre-flight-check test.
 #
-# ONE lookup answers both questions — the protocol the published ambience-mcp speaks
-# AND its version — on a single line: "<protocol> <version>" (e.g. "1 0.2.0rc3"). One
+# ONE lookup answers both questions — the protocol(s) the published ambience-mcp
+# speaks AND its version — on a single line: "<protocols> <version>", where
+# <protocols> is a comma-joined list (e.g. "1,2 0.2.0rc3"). One
 # `uvx --no-cache` resolution, so the two answers cannot disagree about which release
 # they describe, and the cache is still bypassed (a stale `uv` cache is what caused the
 # original incident: the gate must ask PyPI, never a cache). The channel flag rides on

@@ -43,10 +43,12 @@ def _clean_env(extra: dict | None = None) -> dict:
     freshness guards pass without a real toolchain; individual tests override them.
 
     MCP_PYPI_CHECK_CMD stands in for the real PyPI lookup, which answers on one line
-    with BOTH fields Gate 2 needs: "<protocol> <version>". The default satisfies the
-    fixture repo (see _init_repo's const.py: MCP_PROTOCOL=1, MIN_MCP_VERSION=0.1.0) so
-    Gate 2 passes without hitting the real network/PyPI; tests exercising Gate 2 itself
-    override it to simulate other published protocols and versions.
+    with BOTH fields Gate 2 needs: "<protocols> <version>", where <protocols> is a
+    comma-joined list (e.g. "1,2 0.2.0" — the published package ships an adapter per
+    protocol it supports). The default satisfies the fixture repo (see _init_repo's
+    const.py: MCP_PROTOCOL=1, MIN_MCP_VERSION=0.1.0) so Gate 2 passes without hitting
+    the real network/PyPI; tests exercising Gate 2 itself override it to simulate
+    other published protocols and versions.
     """
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
@@ -348,9 +350,10 @@ def test_rejects_main_behind_origin(tmp_path: Path):
 # The fixture's const.py fixes MCP_PROTOCOL=1 and MIN_MCP_VERSION="0.1.0" (see
 # _init_repo); MCP_PYPI_CHECK_CMD stands in for the real `uvx --no-cache --from
 # ambience-mcp ...` PyPI lookup so these stay fast and network-free. The real lookup
-# answers on one line with BOTH fields: "<protocol> <version>". The default is
-# "echo '1 0.2.0'", used by every other test in this file to make Gate 2 a no-op while
-# exercising unrelated behaviour.
+# answers on one line with BOTH fields: "<protocols> <version>", where <protocols> is
+# a comma-joined list (e.g. "1,2 0.2.0"). The default is "echo '1 0.2.0'", used by
+# every other test in this file to make Gate 2 a no-op while exercising unrelated
+# behaviour.
 
 
 def test_rejects_when_mcp_protocol_ahead_of_published(tmp_path: Path):
@@ -492,18 +495,21 @@ def test_rejects_an_unreadable_published_version(tmp_path: Path, check_cmd: str)
     ],
 )
 def test_rejects_an_unparseable_published_protocol(tmp_path: Path, check_cmd: str):
-    """A published PROTOCOL that isn't a bare non-negative integer must be rejected
-    before the `-gt` comparison, not silently pass. `[ "$MCP_PROTOCOL" -gt
-    "$PUBLISHED_PROTOCOL" ]` exits 2 ("integer expression expected") on non-numeric
-    input; inside an `if` condition that status reads as false under `set -e`, which
-    would let a garbled PyPI response fail OPEN instead of closed. This subsumes
-    the plain-emptiness check: an empty string, whitespace, HTML, or a multi-line
-    value (e.g. "0 0.2.0\\nnote: deprecated" from a noisy `uv` warning) are all rejected
-    here, before they ever reach the comparison — even when (the "multiline" case)
-    the first line is itself a well-formed, and here dangerously LOWER, reply: the true
-    published protocol (0) would be behind the fixture's backend protocol (1),
-    exactly the deadlock Gate 2 exists to prevent, so this must block rather than
-    silently compare against a truncated/garbled reading."""
+    """A published PROTOCOL LIST that isn't a comma-joined list of bare non-negative
+    integers must be rejected by `_is_uint_list` before the membership check, not
+    silently pass. A raw `[ "$MCP_PROTOCOL" -gt "$PUBLISHED_PROTOCOLS" ]` would exit 2
+    ("integer expression expected") on non-numeric input, and inside an `if` condition
+    that status reads as false under `set -e` — which would let a garbled PyPI response
+    fail OPEN instead of closed, exactly the trap `_is_uint_list` closes before the
+    `case ",$PUBLISHED_PROTOCOLS," in *",$MCP_PROTOCOL,"*)` membership test ever runs.
+    This subsumes the plain-emptiness check: an empty string, whitespace, HTML, or a
+    multi-line value (e.g. "0 0.2.0\\nnote: deprecated" from a noisy `uv` warning) are
+    all rejected here, before they ever reach the comparison — even when (the
+    "multiline" case) the first line is itself a well-formed, and here dangerously
+    LOWER, reply: the true published protocol list ("0") would not include the
+    fixture's backend protocol (1), exactly the deadlock Gate 2 exists to prevent,
+    so this must block rather than silently compare against a truncated/garbled
+    reading."""
     _init_repo(tmp_path)
     result = _run(tmp_path, "0.2.0", "--no-push", env={"MCP_PYPI_CHECK_CMD": check_cmd})
     assert result.returncode != 0

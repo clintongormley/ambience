@@ -36,8 +36,9 @@ TO_REDACT = {
 # (who is home, by NAME) and `template` (arbitrary rendered state) render a
 # person's location; `unavailable` renders the friendly names of currently-down
 # entities, which can include a device_tracker (e.g. "Alice's Phone"); `occupancy`
-# renders which rooms are occupied right now. Scrubbed by redact_trace/redact_plan
-# below via redact_predicate.
+# renders which rooms are occupied right now. Scrubbed below by redact_trace (via
+# redact_predicate) and by redact_plan, which checks this set directly for
+# snapshots_described and reuses redact_predicate only for its optional explanation.
 PRESENCE_PREFIXES = ("person.", "device_tracker.")
 _DETAIL_REDACTED_CONDITIONS = {"people", "template", "unavailable", "occupancy"}
 

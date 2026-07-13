@@ -215,6 +215,35 @@
       "traces[].switch_state",
       "traces[].timestamp",
       "traces[].winner_name"
+    ],
+    "scope_get": [
+      "scenes",
+      "scenes[].actions",
+      "scenes[].actions[].entity_ids",
+      "scenes[].actions[].params",
+      "scenes[].actions[].params.*",
+      "scenes[].actions[].service",
+      "scenes[].category",
+      "scenes[].config_issues",
+      "scenes[].config_issues[].kind",
+      "scenes[].config_issues[].ref",
+      "scenes[].description",
+      "scenes[].missing_entities",
+      "scenes[].name",
+      "scenes[].overlap_entities",
+      "scenes[].pinned",
+      "scenes[].priority",
+      "scenes[].shadowed_by",
+      "scenes[].when",
+      "scenes[].when.time_of_day",
+      "scenes[].when.time_of_day.period"
+    ],
+    "categories_list": [
+      "categories",
+      "categories[].color",
+      "categories[].icon",
+      "categories[].id",
+      "categories[].name"
     ]
   }
 }

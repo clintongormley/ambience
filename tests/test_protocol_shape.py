@@ -7,6 +7,20 @@ a payload's SHAPE changes — otherwise the v1 adapter silently receives a v2 pa
 So the shape is pinned. Change a key and this test fails, telling you to bump the
 protocol and add an adapter, or revert. Values are NOT pinned (they vary per house);
 only the structure is.
+
+Pinned payloads: `ai_context`, `entities_find`, `traces_list` (read per-protocol by
+ProtocolV1) and `scope_get`, `categories_list` (read by every protocol via
+BaseProtocol.get_scope/list_categories, and again inline inside preview_write — the
+diff's baseline and its known-category gate). A rename in either of those last two
+would make preview_write's diff show every scene as freshly `added`
+(`current = []`, the defensive fallback for a shape it can't read) while apply_write
+still replaces the whole scope — a human approving a change they cannot see, which
+is exactly the failure this gate exists to prevent.
+
+Deliberately NOT pinned: `ambience/ai_guide`. `BaseProtocol.get_guide` reads it too,
+but its payload is versioned prose (schema/cookbook text for the model to read), not
+structured data the diff/consent surface depends on — a wording change there is not
+the kind of silent-misread risk this gate is for.
 """
 
 from __future__ import annotations
@@ -87,6 +101,8 @@ _VALUE_KEYED = frozenset(
         "actions.schemas.*.fields",
         # keyed by the dispatched action's own service field names
         "traces[].actions[].params",
+        # keyed by the stored scene action's own service field names
+        "scenes[].actions[].params",
     }
 )
 
@@ -428,6 +444,95 @@ async def test_traces_list_shape_is_pinned(
     # A golden recorded from an empty list would pin only `traces` and nothing inside
     # a record — so guard the fixture, not just the payload.
     assert resp["result"]["traces"], "an empty trace list would pin nothing"
+
+
+async def test_scope_get_shape_is_pinned(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, hass_ws_client: Any
+) -> None:
+    """`ambience/{kind}/get` is read by every protocol version, not a per-protocol
+    adapter: `BaseProtocol.get_scope` (base.py) returns it straight to the model, AND
+    `BaseProtocol.preview_write` reads it again as the diff's `current` baseline. If
+    `scenes` were ever renamed, `preview_write`'s defensive fallback (`current = []`)
+    would kick in silently — every scene would then diff as freshly `added` while
+    `apply_write` still replaces the whole scope wholesale. That is a human approving
+    a change they cannot see, the exact failure the diff exists to prevent — so this
+    is pinned here even though no per-protocol adapter names it.
+
+    Pinned through the real websocket handlers (save then get), with a genuinely
+    populated scene — name, category, description, a non-empty `when`, an action with
+    entity_ids/params, and explicit `priority`/`pinned` — so a rename of any field
+    `diff.py`'s `_key`/`_comparable` or the MCP's `_with_ranks` reads is caught, not
+    just the container keys.
+    """
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    area = ar.async_get(hass).async_create("Kitchen")
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/area/save",
+            "area_id": area.id,
+            "config": {
+                "scenes": [
+                    {
+                        "name": "movie",
+                        "category": "general",
+                        "description": "evening watch",
+                        "when": {"time_of_day": {"period": "evening"}},
+                        "actions": [
+                            {
+                                "service": "light.turn_on",
+                                "entity_ids": ["light.lamp"],
+                                "params": {"brightness_pct": 30},
+                            }
+                        ],
+                        "priority": 10,
+                        "pinned": True,
+                    }
+                ]
+            },
+        }
+    )
+    save = await client.receive_json()
+    assert save["success"] is True, save
+
+    await client.send_json({"id": 2, "type": "ambience/area/get", "area_id": area.id})
+    resp = await client.receive_json()
+
+    assert resp["success"] is True
+    assert_shape("scope_get", resp["result"])
+    # A golden recorded from an empty scene list would pin nothing inside a scene.
+    assert resp["result"]["scenes"], "an empty scene list would pin nothing"
+
+
+async def test_categories_list_shape_is_pinned(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, hass_ws_client: Any
+) -> None:
+    """`ambience/categories/list` is read by every protocol version via
+    `BaseProtocol.list_categories`, AND again inline inside `preview_write`'s
+    known-category gate (`existing_by_id`). A silent rename of `id` there would make
+    every already-declared category look unknown to `preview_write`, blocking every
+    write behind a spurious 'unknown categories' error — the opposite failure mode
+    from `scope_get`'s (a false block instead of a silent over-approval), but still
+    not caught by any per-protocol adapter golden.
+
+    A fresh install always seeds one real category (`GENERAL_CATEGORY`), so this
+    needs no extra setup to be non-empty.
+    """
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/categories/list"})
+    resp = await client.receive_json()
+
+    assert resp["success"] is True
+    assert_shape("categories_list", resp["result"])
+    assert resp["result"]["categories"], "an empty category list would pin nothing"
 
 
 def test_mcp_diff_transient_fields_match_the_backends():

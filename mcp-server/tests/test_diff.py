@@ -222,3 +222,18 @@ def test_restating_pinned_while_dropping_priority_still_gets_a_signal():
 def test_summarise_diff_keeps_the_order_note():
     changes = {"added": [], "removed": [], "updated": [], "order_note": "note text"}
     assert summarise_diff(changes)["order_note"] == "note text"
+
+
+def test_a_non_string_category_never_crashes_the_diff():
+    """validate() reports a non-string category as a clean error, but the diff
+    still runs on the invalid payload (preview_write returns it alongside the
+    error) — an unhashable category (a dict or list, e.g. the category OBJECT
+    where its string id belongs) must not replace that clean error with a raw
+    TypeError from _key's dict-key tuple."""
+    proposed = [
+        {"name": "A", "category": {"id": "mood"}, "actions": []},  # named key path
+        {"category": ["mood"], "actions": []},  # unnamed key path (positional)
+    ]
+    changes = diff_scopes([], proposed)
+    assert len(changes["added"]) == 2
+    summarise_diff(changes)  # the elided-summary path must survive it too

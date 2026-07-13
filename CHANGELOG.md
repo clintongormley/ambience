@@ -82,7 +82,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - A non-string `category` on an unnamed scene is now a clean validation error
     instead of an opaque save failure. It was already checked for named scenes;
     an unnamed one skipped the check and could reach the store with a category
-    value that isn't hashable.
+    value that isn't hashable. `ambience_preview_write` no longer swallows that
+    clean error either: its diff used the category as a lookup key, so an
+    unhashable value crashed the preview with a raw `TypeError` before the error
+    could be reported.
 - A failed `ambience_apply_write` no longer burns its confirm token: "try again"
     now works instead of answering "bad confirm_token".
 - Cancelling (or erroring) a tool call during Home Assistant's startup window

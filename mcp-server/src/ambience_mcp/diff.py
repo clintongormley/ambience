@@ -37,6 +37,14 @@ _ORDER_FIELDS = {"priority", "pinned"}
 def _key(scene: dict[str, Any], index: int) -> tuple[Any, ...]:
     name = scene.get("name")
     category = scene.get("category")
+    if not (isinstance(category, str) or category is None):
+        # A non-string category (say, the category OBJECT where its string id
+        # belongs) is invalid — validate() reports it cleanly — but the diff
+        # still runs on the invalid payload, and this key is a dict key, so an
+        # unhashable value here would eat that clean error with a raw
+        # TypeError. repr keeps distinct wrong values distinct; the prefix
+        # keeps them from ever colliding with a real string id.
+        category = f"!non-string:{category!r}"
     if isinstance(name, str) and name.strip():
         return ("named", category, name.strip().lower())
     return ("idx", category, index)

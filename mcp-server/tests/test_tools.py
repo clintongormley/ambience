@@ -230,6 +230,29 @@ async def test_preview_write_blocks_a_scene_with_no_category():
         await protocol.apply_write(scope, scenes, result["confirm_token"])
 
 
+async def test_preview_write_reports_a_non_string_category_cleanly():
+    """A category OBJECT where its string id belongs is exactly the shape the
+    backend's validate rejects cleanly (scene_category_not_string) — but the
+    diff runs on the invalid payload too, and an unhashable category used to
+    escape diff_scopes' key tuple as `TypeError: unhashable type`, eating the
+    clean error the preview had already captured."""
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": HACommandError(
+                "invalid_format", "scene 0: 'category' must be a string id"
+            ),
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    result = await _v1(client).preview_write(
+        {"kind": "area", "id": "kitchen"},
+        [{"name": "A", "category": {"id": "mood"}, "actions": []}],
+    )
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+
+
 async def test_preview_write_blocks_a_scene_with_an_empty_category():
     """`""` passes `isinstance(..., str)`, so before the fix it was swept into
     the unknown-categories set (an empty string is never a registered category

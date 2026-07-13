@@ -1576,6 +1576,15 @@ async def _ws_simulate_inputs(
     connection.send_result(msg["id"], result)
 
 
+def _strict_int(value: Any) -> int:
+    """An int that is not a bool. `vol.Any(int, …)` admits booleans (bool
+    subclasses int), and prev_applied is compared against a scene index with
+    `==`, where True == 1 would silently mis-report a step as DEBOUNCED."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise vol.Invalid("expected an integer")
+    return value
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -1604,7 +1613,7 @@ async def _ws_simulate_inputs(
         ),
         # The winning scene index the previous simulate step acted on, carried
         # forward so a re-won scene debounces (None to start a fresh sequence).
-        vol.Optional("prev_applied"): vol.Any(int, None),
+        vol.Optional("prev_applied"): vol.Any(_strict_int, None),
     }
 )
 @websocket_api.async_response

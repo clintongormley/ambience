@@ -614,6 +614,42 @@ async def test_a_reconnect_to_the_same_protocol_still_retries():
     assert fresh.calls == ["ambience/mcp/hello", "ambience/ping"]
 
 
+async def test_a_hello_that_times_out_does_not_condemn_the_callers_write():
+    """The subtlest of the three establishment failures: the hello inside `_negotiate`
+    can itself raise `HAConnectionError(sent=True)` from its OWN recv path (a
+    `_COMMAND_TIMEOUT` — a live-but-stalled HA). That flag is the truth about the HELLO.
+
+    It then propagates `_negotiate` → `_live()` → `_checked_live()` → `_live_for()` →
+    straight into `command_for`'s `except HAConnectionError`, which reads `exc.sent`
+    against the CALLER's command type. One command's flag answering for another: the
+    caller's `/save` is refused as "may already have been applied" when the connection
+    it would have travelled on never even finished handshaking. Worse, `apply_write`
+    has already spent its single-use confirm token, so the user must re-run
+    `preview_write` for a write that never left the process.
+
+    `_live()` re-raises establishment failures as `sent=False`, so the write is retried
+    on a fresh connection — and, because only the one frame is re-sent, it reaches the
+    backend exactly once."""
+    stalled = _HandshakeThenScriptedClient(HAConnectionError("hello timed out", sent=True))
+    fresh = _HandshakeThenScriptedClient({"protocol": 1}, {"ok": True})
+    connections = [stalled, fresh]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    assert await client.command_for(1, "ambience/area/save", scope={}) == {"ok": True}
+
+    # The stalled connection saw only its own hello, and was closed rather than leaked.
+    assert stalled.calls == ["ambience/mcp/hello"]
+    assert stalled.closed is True
+    # The write reached the backend EXACTLY ONCE, on the connection that handshook.
+    assert fresh.calls == ["ambience/mcp/hello", "ambience/area/save"]
+
+
 async def test_a_failed_handshake_closes_the_client_instead_of_leaking_it():
     """Important 2: a hello that itself raises (e.g. `unauthorized` for a
     non-admin token) must not abandon the freshly-connected client. It was never

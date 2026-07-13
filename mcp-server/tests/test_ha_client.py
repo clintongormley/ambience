@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from conftest import FakeTransport
 
@@ -275,6 +277,144 @@ async def test_a_failed_connect_is_retried_for_a_non_mutating_command():
 
     assert await client.command("ambience/house/get") == {"scenes": []}
     assert fake.sent == ["ambience/house/get"]
+
+
+async def test_a_failed_connect_is_retried_for_a_WRITE_too():
+    """A failure while the connection is still being ESTABLISHED cannot have sent the
+    caller's command — it is still sitting in `command_for`'s locals, unwritten. But
+    `connect()` raises HAConnectionError with the default `sent=True`, so `command_for`
+    read one command's flag as if it described another and refused the write.
+
+    The cost is not just a lost retry: `apply_write` spends its single-use confirm token
+    BEFORE it writes, so the user is told "this may have been applied" and has to run
+    `preview_write` again — for a write that never left the process. `_live()` now
+    re-raises any establishment failure as `sent=False`, and the write is re-sent."""
+    fake = _ScriptedClient({"ok": True})
+    attempts = [HAConnectionError("unreachable", sent=True), None]
+
+    async def _connect(ws_url: str, token: str):
+        outcome = attempts.pop(0)
+        if outcome is not None:
+            raise outcome
+        return fake
+
+    client = ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
+
+    assert await client.command("ambience/area/save", config={}) == {"ok": True}
+    assert fake.sent == ["ambience/area/save"]  # re-sent exactly once, on the good socket
+
+
+async def test_a_failed_authenticate_is_retried_for_a_WRITE_too():
+    """The same establishment invariant, through the REAL `HAClient.authenticate()` —
+    which raises HAConnectionError with the default `sent=True` even though the caller's
+    command has not been written to any socket (the auth round trip has not even
+    finished, so there is no session to have sent it on)."""
+
+    class _DeadDuringAuth:
+        async def send(self, data: str) -> None: ...
+
+        async def recv(self) -> str:
+            raise ConnectionResetError("socket dropped mid-auth")
+
+        async def close(self) -> None: ...
+
+    fresh = _ScriptedClient({"ok": True})
+    attempts = [0]
+
+    async def _connect(ws_url: str, token: str):
+        attempts[0] += 1
+        if attempts[0] == 1:
+            await HAClient(_DeadDuringAuth()).authenticate(token)  # raises, sent=True
+        return fresh
+
+    client = ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
+
+    assert await client.command("ambience/area/save", config={}) == {"ok": True}
+    assert fresh.sent == ["ambience/area/save"]
+
+
+async def test_a_write_sent_on_a_socket_that_lost_the_reply_is_still_never_re_sent():
+    """THE invariant the establishment fix must not weaken, driven through a real
+    `HAClient` and a real transport: the handshake completes, then the save's frame IS
+    written and the socket dies before the reply. HA may have applied it, so re-sending
+    could apply it twice.
+
+    That failure comes from `HAClient.command`'s RECV path — not from `_live()` — so it
+    keeps its `sent=True` and must never be laundered into a retry by the establishment
+    fix, which only ever reclassifies failures raised while the connection is still
+    being built."""
+
+    class _AnswersTheHelloThenDies:
+        """Replies to the hello; the next frame it is sent goes out and is never
+        answered — the socket drops with the save already on the wire."""
+
+        def __init__(self) -> None:
+            self.sent: list[dict] = []
+
+        async def send(self, data: str) -> None:
+            self.sent.append(json.loads(data))
+
+        async def recv(self) -> str:
+            if len(self.sent) == 1:  # the hello
+                return json.dumps(
+                    {"id": 1, "type": "result", "success": True, "result": {"protocol": 1}}
+                )
+            raise ConnectionResetError("socket dropped after the send")
+
+        async def close(self) -> None: ...
+
+    doomed = _AnswersTheHelloThenDies()
+    fresh = _ScriptedClient({"ok": True})
+    made = iter([HAClient(doomed), fresh])
+
+    async def _connect(ws_url: str, token: str):
+        return next(made)
+
+    client = ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
+
+    with pytest.raises(HAConnectionError) as exc:
+        await client.command("ambience/area/save", config={})
+    assert exc.value.sent is True
+    assert doomed.sent[1]["type"] == "ambience/area/save"  # it really did go out...
+    assert fresh.sent == []  # ...and the fresh client saw NOTHING — never re-applied
+
+
+async def test_a_second_consecutive_establishment_failure_propagates():
+    """Establishment failures are `sent=False`, so `command_for` now retries them — for
+    writes as well as reads. That is one extra connect attempt, not a loop: the retry's
+    own failure propagates."""
+    attempts = 0
+
+    async def _connect(ws_url: str, token: str):
+        nonlocal attempts
+        attempts += 1
+        raise HAConnectionError("unreachable", sent=True)
+
+    client = ReconnectingClient(
+        _connect,
+        lambda: type("C", (), {"ws_url": "ws://x", "token": "t"})(),
+        supported_protocols=frozenset({1}),
+        mcp_version="0.2.0rc3",
+    )
+
+    with pytest.raises(HAConnectionError, match="unreachable"):
+        await client.command("ambience/area/save", config={})
+    assert attempts == 2  # the original + exactly one retry
 
 
 async def test_a_resend_that_fails_again_propagates():

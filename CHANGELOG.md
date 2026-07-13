@@ -34,6 +34,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     moment Ambience is up the server heals itself, with no reconnect and no
     MCP-server restart. (A genuinely old Ambience still gets the "update
     Ambience" message on every call, which is still the fix.)
+- A save you ask the AI to apply no longer needlessly burns its confirmation
+    when the MCP server has to reconnect to Home Assistant first. If the
+    connection had to be re-established — Home Assistant restarted, or was still
+    coming up — the save was refused as *"it may already have been applied"*,
+    even though nothing had been sent to Home Assistant at all: the connection
+    itself had not finished opening. The confirmation is single-use, so you then
+    had to preview the change and confirm it all over again. Such a save is now
+    simply retried on the fresh connection. (A save that really did reach Home
+    Assistant and only lost its reply is still never re-sent — it could be
+    applied twice.)
 - The "upgrade `ambience-mcp`" message now also tells you to remove any version
     **pin** from your MCP config. Without that, the rest of the advice (clean
     the cache, restart) is a no-op for anyone who pinned a version — the pin

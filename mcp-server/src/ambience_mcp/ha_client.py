@@ -29,9 +29,12 @@ class HAConnectionError(HAError):
     """The websocket failed to open, dropped mid-session, or sent a bad frame.
 
     `sent` says whether the command reached Home Assistant before the failure.
-    False (the socket was already dead when we tried to write) means HA never saw
-    it, so even a write is safe to retry. True means it may have been applied and
-    only the reply was lost — re-sending a write could apply it twice.
+    False means HA never saw it — the socket was already dead when we tried to
+    write, or the failure happened while the connection was still being
+    ESTABLISHED, so the caller's command had not been written to any socket (see
+    `ReconnectingClient._live`) — so even a write is safe to retry. True means it
+    may have been applied and only the reply was lost — re-sending a write could
+    apply it twice.
     """
 
     def __init__(self, message: str, *, sent: bool = True) -> None:
@@ -448,22 +451,47 @@ class ReconnectingClient:
                         with contextlib.suppress(Exception):
                             await self._client.close()
                     cfg = self._config()
-                    client = await self._connect(cfg.ws_url, cfg.token)
-                    # Handshake ONCE per connection, before publishing the client —
-                    # so it costs one round trip, and re-runs on every reconnect.
-                    # Changing the backend's protocol means restarting HA, which
-                    # drops the socket, so a stale verdict cannot survive the very
-                    # upgrade that would change it. That makes this self-healing.
+                    # ESTABLISHMENT — connect, authenticate, handshake. The caller's
+                    # command is still sitting in `command_for`'s locals throughout: not
+                    # one byte of it has been written to any socket. So an
+                    # HAConnectionError from in here says NOTHING about that command
+                    # having reached HA, and the `sent` flags these three sources carry
+                    # cannot be believed as if it did:
+                    #   - `connect()` (the socket never opened) and `HAClient.
+                    #     authenticate()` both raise with the default `sent=True`;
+                    #   - the hello inside `_negotiate` can raise `sent=True` from its OWN
+                    #     recv path (a `_COMMAND_TIMEOUT`) — true of the HELLO, but read by
+                    #     `command_for` as if it described the CALLER's command. One
+                    #     command's flag must never answer for another's.
+                    # Left as-is, a write that hits a reconnect is refused as "may already
+                    # have been applied" when nothing was sent at all — and `apply_write`
+                    # spends its single-use confirm token BEFORE it writes, so the user
+                    # has to run `preview_write` again for a write that never left this
+                    # process. Re-raise as sent=False instead: nothing the caller asked
+                    # for has been written, so even a write is safe to re-send.
                     try:
-                        await self._handshake(client)
-                    except BaseException:
-                        # The handshake itself failed (bad auth, dropped socket
-                        # mid-hello, ...). The client was never published to
-                        # self._client, so nothing else will ever close it —
-                        # release it now or every subsequent call leaks a socket.
-                        with contextlib.suppress(Exception):
-                            await client.close()
-                        raise
+                        client = await self._connect(cfg.ws_url, cfg.token)
+                        # Handshake ONCE per connection, before publishing the client —
+                        # so it costs one round trip, and re-runs on every reconnect.
+                        # Changing the backend's protocol means restarting HA, which
+                        # drops the socket, so a stale verdict cannot survive the very
+                        # upgrade that would change it. That makes this self-healing.
+                        try:
+                            await self._handshake(client)
+                        except BaseException:
+                            # The handshake itself failed (bad auth, dropped socket
+                            # mid-hello, a cancelled tool call, ...). The client was never
+                            # published to self._client, so nothing else will ever close
+                            # it — release it now or every subsequent call leaks a socket.
+                            with contextlib.suppress(Exception):
+                                await client.close()
+                            raise
+                    except HAConnectionError as exc:
+                        # ONLY a connection failure is reclassified. Everything else means
+                        # what it says and must reach the caller untouched: HAAuthError (a
+                        # rejected token), HACommandError (a hello that answered with a
+                        # real error code), a CancelledError.
+                        raise HAConnectionError(str(exc), sent=False) from exc
                     self._client = client
                     return client
         # The connection is HEALTHY, so the branch above will never run again on it —

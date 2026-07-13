@@ -742,3 +742,72 @@ async def test_bool_protocol_is_not_treated_as_valid():
 
     with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
         await client.ready()
+
+
+class _StartupWindowClient:
+    """An HAClient stand-in whose hello answers from a QUEUE, so one connection can
+    reply `unknown_command` first and then stall — the real shape of an HA that is
+    still starting up. An HAConnectionError from the hello marks the client closed,
+    exactly as the real `HAClient.command`'s recv-failure path does."""
+
+    def __init__(self, hellos: list[Any], *outcomes: Any) -> None:
+        self._hellos = list(hellos)
+        self._outcomes = list(outcomes)
+        self.closed = False
+        self.calls: list[str] = []
+
+    async def command(self, type: str, **payload: Any) -> Any:
+        self.calls.append(type)
+        outcome = self._hellos.pop(0) if type == "ambience/mcp/hello" else self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            if isinstance(outcome, HAConnectionError):
+                self.closed = True
+            raise outcome
+        return outcome
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+async def test_a_stalled_re_derive_hello_does_not_condemn_the_callers_write():
+    """The last place a hello's `sent` flag can answer for the caller's command.
+
+    The `unknown_command` verdict is deliberately NOT cached, so while HA is starting
+    each tool call re-sends the hello on the existing healthy socket. If THAT hello dies
+    on its own recv path it raises `sent=True` — true of the hello, and meaningless about
+    the caller's write, which is still sitting in `command_for`'s locals.
+
+    This branch runs ONLY in the startup window, i.e. precisely when a not-yet-ready HA
+    is likeliest to leave a hello unanswered — so it is the likeliest place of all to
+    refuse a `/save` as "may already have been applied" when nothing was sent, burning
+    the confirm token `apply_write` has already spent."""
+    # One connection: Ambience is not up yet (unknown_command), and by the next tool
+    # call HA is stalled hard enough that the re-derived hello times out.
+    starting = _StartupWindowClient(
+        [
+            HACommandError("unknown_command", "nope"),
+            HAConnectionError("hello timed out", sent=True),
+        ]
+    )
+    ready = _StartupWindowClient([{"protocol": 1}], {"ok": True})  # Ambience finished setup
+    connections = [starting, ready]
+
+    async def connect(ws_url: str, token: str) -> Any:
+        return connections.pop(0)
+
+    client = ReconnectingClient(
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
+    )
+
+    # Ambience is still setting up: the right, actionable answer — and not cached.
+    with pytest.raises(IncompatibleError):
+        await client.command_for(1, "ambience/area/save", scope={})
+
+    # The re-derived hello stalls. The write never left, so it must be RETRIED on a
+    # fresh connection — not condemned as "may already have been applied".
+    assert await client.command_for(1, "ambience/area/save", scope={}) == {"ok": True}
+
+    # The stalled connection saw only its two hellos — the write never went out on it.
+    assert starting.calls == ["ambience/mcp/hello", "ambience/mcp/hello"]
+    # And it reached the backend exactly once, on the connection that handshook.
+    assert ready.calls == ["ambience/mcp/hello", "ambience/area/save"]

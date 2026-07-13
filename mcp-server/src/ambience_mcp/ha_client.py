@@ -505,7 +505,18 @@ class ReconnectingClient:
             async with self._lock:
                 client = self._client
                 if client is not None and not client.closed and not self._verdict_sticky:
-                    await self._handshake(client)
+                    # Same reclassification as ESTABLISHMENT above, and for the same
+                    # reason: this hello goes out on the socket, but the CALLER's command
+                    # is still in `command_for`'s locals. A hello that dies on its own
+                    # recv path raises sent=True — true of the hello, and meaningless
+                    # about the caller's write. This branch runs only in the startup
+                    # window, i.e. exactly when a not-yet-ready HA is most likely to
+                    # leave a hello unanswered, so it is the likeliest place of all to
+                    # condemn a write that was never sent.
+                    try:
+                        await self._handshake(client)
+                    except HAConnectionError as exc:
+                        raise HAConnectionError(str(exc), sent=False) from exc
         return self._client
 
     async def _checked_live(self) -> HAClient:

@@ -598,11 +598,11 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     {
         vol.Required("type"): "ambience/dry_run",
         **_SCOPE_SELECTOR_SCHEMA,
-        # The MCP server always asks for redaction: the plan carries who-is-home
-        # detail (people describe) and raw action params (lock/alarm codes) that
-        # must not leave the home to an external AI. The panel omits it and gets
-        # the real detail.
-        vol.Optional("redact"): bool,
+        # The MCP server always asks for redaction: the plan carries presence/
+        # location-revealing describes (people, template, unavailable, occupancy)
+        # and raw action params (lock/alarm codes) that must not leave the home
+        # to an external AI. The panel omits it and gets the real detail.
+        vol.Optional("redact", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -621,7 +621,7 @@ async def _ws_dry_run(
         result["categories"] = await async_resolve_categories_only(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
-        if msg.get("redact"):
+        if msg["redact"]:
             result = {
                 **redact_plan(result),
                 "categories": {

@@ -84,6 +84,18 @@ async def test_dry_run_falls_back_with_a_notice_when_the_backend_cannot_redact()
     assert client.calls[-1] == {"type": "ambience/dry_run", "house": True}
 
 
+async def test_dry_run_propagates_errors_other_than_invalid_format():
+    """The `except HACommandError` in `dry_run` exists ONLY to work around a
+    pre-redaction backend rejecting the extra `redact` key (invalid_format).
+    Any other backend error (e.g. validation_error) must propagate untouched —
+    a future refactor that widens the except into a catch-all would silently
+    turn every dry_run failure into an unredacted retry, with nothing here to
+    catch it."""
+    client = FakeClient({"ambience/dry_run": HACommandError("validation_error", "bad scope")})
+    with pytest.raises(HACommandError, match="bad scope"):
+        await _v1(client).dry_run({"kind": "house"})
+
+
 async def test_validate_wraps_scenes_in_config():
     client = FakeClient({"ambience/validate": {"ok": True}})
     await _v1(client).validate([{"name": "X", "category": "c"}])

@@ -59,6 +59,22 @@ def test_redact_predicate_still_blanks_people_detail() -> None:
     assert out["entity_ids"] == [REDACTED]
 
 
+def test_redact_predicate_blanks_detail_for_unavailable_snapshot_summary() -> None:
+    # unavailable's whole-snapshot describe (predicate=None) renders the
+    # friendly names of every currently-down entity — which can include a
+    # device_tracker (e.g. "Alice's Phone") — even though THIS predicate
+    # carries no entity_ids of its own to prefix-match on.
+    pred = {"condition_key": "unavailable", "detail": "1 of 3 unavailable (Alice's Phone)"}
+    assert redact_predicate(pred)["detail"] == REDACTED
+
+
+def test_redact_predicate_blanks_detail_for_occupancy_snapshot_summary() -> None:
+    # occupancy's whole-snapshot describe (predicate=None) renders which rooms
+    # are occupied right now, by sensor friendly name.
+    pred = {"condition_key": "occupancy", "detail": "2 of 3 active (Kitchen, Hall)"}
+    assert redact_predicate(pred)["detail"] == REDACTED
+
+
 # --- R2: multi-entity DURATION cause label -----------------------------------
 
 
@@ -406,6 +422,8 @@ def test_redact_plan_blanks_security_params_and_presence_describes():
         "snapshots_described": {
             "people": "1 of 2 home (Alice)",
             "template": "rendered location detail",
+            "unavailable": "1 of 3 unavailable (Alice's Phone)",
+            "occupancy": "2 of 3 active (Kitchen, Hall)",
             "sun": "below horizon",
         },
         "switch_state": "on",
@@ -415,10 +433,49 @@ def test_redact_plan_blanks_security_params_and_presence_describes():
     assert out["actions"][1]["params"] == {"brightness": 10}
     assert out["snapshots_described"]["people"] == REDACTED
     assert out["snapshots_described"]["template"] == REDACTED
+    assert out["snapshots_described"]["unavailable"] == REDACTED
+    assert out["snapshots_described"]["occupancy"] == REDACTED
     assert out["snapshots_described"]["sun"] == "below horizon"
     # never mutates the input
     assert plan["actions"][0]["params"]["code"] == "1234"
     assert plan["snapshots_described"]["people"] == "1 of 2 home (Alice)"
+
+
+def test_redact_plan_blanks_explanation_predicate_detail_when_present():
+    # `explanation` is always None on the dry-run path today
+    # (`async_resolve_only` passes `explain=False`), but `redact_plan`'s
+    # docstring documents the full `async_resolve_only` shape, which DOES
+    # carry an `explanation` when a caller passes `explain=True`. Closing this
+    # permanently — rather than relying on `explain` never flipping — means a
+    # future caller can't leak presence-bearing predicate detail with no test
+    # catching it. Reuses `redact_predicate` the same way `redact_trace` does
+    # (via the shared `_redact_explanation` helper).
+    plan = {
+        "matched_scene_index": 0,
+        "explanation": {
+            "winner_index": 0,
+            "scenes": [
+                {
+                    "index": 0,
+                    "predicates": [
+                        {
+                            "condition_key": "people",
+                            "detail": "Alice at zone.work",
+                            "entity_ids": ["person.alice"],
+                        },
+                        {"condition_key": "time_of_day", "detail": "evening"},
+                    ],
+                }
+            ],
+        },
+    }
+    out = redact_plan(plan)
+    preds = out["explanation"]["scenes"][0]["predicates"]
+    assert preds[0]["detail"] == REDACTED
+    assert preds[0]["entity_ids"] == [REDACTED]
+    assert preds[1]["detail"] == "evening"
+    # never mutates the input
+    assert plan["explanation"]["scenes"][0]["predicates"][0]["detail"] == "Alice at zone.work"
 
 
 def test_redact_plan_passes_unexpected_shapes_through():

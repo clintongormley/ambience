@@ -124,12 +124,15 @@ class BaseProtocol:
         # dry_run uses HA's shared scope selector, which marks house with `house: True`
         # rather than an id key; area/floor reuse the same id selector as get/save.
         selector = _id_payload(kind, sid) or {"house": True}
-        # Always redacted: the plan carries who-is-home detail (people describe)
-        # and the winning scene's raw action params (lock/alarm codes) — the
-        # same PII classes list_traces already redacts on this session. An
-        # older backend rejects the extra key at the schema layer
-        # (invalid_format); retry without it and SAY so, rather than failing a
-        # working tool or leaking silently.
+        # Always redacted: the plan carries presence/location-revealing describes
+        # (people, template, unavailable, occupancy) and the winning scene's raw
+        # action params (lock/alarm codes) — the same PII classes list_traces
+        # already redacts on this session. An older backend rejects the extra key
+        # at the schema layer (invalid_format); retry without it and SAY so,
+        # rather than failing a working tool or leaking silently. Any OTHER
+        # HACommandError (e.g. validation_error) must propagate — this is not a
+        # generic "retry on any error" branch, it exists solely to work around a
+        # backend that doesn't understand the `redact` key yet.
         try:
             return await self.command("ambience/dry_run", redact=True, **selector)
         except HACommandError as exc:

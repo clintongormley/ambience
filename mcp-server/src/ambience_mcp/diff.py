@@ -54,17 +54,14 @@ def diff_scopes(current: list[dict[str, Any]], proposed: list[dict[str, Any]]) -
         if _comparable(cur[k], order_keys) != _comparable(pro[k], order_keys):
             updated.append({"before": cur[k], "after": pro[k]})
     changes: dict[str, Any] = {"added": added, "removed": removed, "updated": updated}
-    dropped_order = [
-        k
-        for k in pro
-        if k in cur and not (_ORDER_FIELDS & pro[k].keys()) and (_ORDER_FIELDS & cur[k].keys())
-    ]
+    dropped_order = [k for k in pro if k in cur and (_ORDER_FIELDS & cur[k].keys()) - pro[k].keys()]
     if dropped_order:
         changes["order_note"] = (
-            f"{len(dropped_order)} existing scene(s) were resubmitted without their "
-            "stored priority/pinned fields; the backend will re-derive their "
-            "evaluation order from list order and specificity on apply. Carry those "
-            "fields forward from ambience_get_scope to keep the stored order."
+            f"{len(dropped_order)} existing scene(s) were resubmitted without one or "
+            "more of their stored priority/pinned fields; the backend will re-derive "
+            "evaluation order (for the dropped field(s)) from list order and "
+            "specificity on apply. Carry those fields forward from ambience_get_scope "
+            "to keep the stored order."
         )
     return changes
 

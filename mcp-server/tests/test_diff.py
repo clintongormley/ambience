@@ -196,6 +196,29 @@ def test_authoring_without_order_fields_gets_one_note_not_per_scene_noise():
     assert "re-derive" in changes["order_note"]
 
 
+def test_restating_priority_while_dropping_pinned_still_gets_a_signal():
+    """Partial omission: the proposal restates `priority` unchanged but silently
+    drops the stored `pinned`. Per-field comparison strips `pinned` from both
+    sides (since it's not authored), so the scenes compare equal and produce no
+    `updated` entry — but the backend WILL re-derive `pinned` on apply
+    (minimise_pins), so this must not be a silent, empty diff."""
+    current = [{"name": "A", "category": "mood", "priority": 100, "pinned": True, "actions": []}]
+    proposed = [{"name": "A", "category": "mood", "priority": 100, "actions": []}]
+    changes = diff_scopes(current, proposed)
+    assert changes["updated"] == []
+    assert "order_note" in changes
+
+
+def test_restating_pinned_while_dropping_priority_still_gets_a_signal():
+    """The mirror image: `pinned` is restated unchanged, `priority` is silently
+    dropped. Same reasoning as the priority-restated case above, other field."""
+    current = [{"name": "A", "category": "mood", "priority": 100, "pinned": True, "actions": []}]
+    proposed = [{"name": "A", "category": "mood", "pinned": True, "actions": []}]
+    changes = diff_scopes(current, proposed)
+    assert changes["updated"] == []
+    assert "order_note" in changes
+
+
 def test_summarise_diff_keeps_the_order_note():
     changes = {"added": [], "removed": [], "updated": [], "order_note": "note text"}
     assert summarise_diff(changes)["order_note"] == "note text"

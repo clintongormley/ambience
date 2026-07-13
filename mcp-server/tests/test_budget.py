@@ -438,7 +438,11 @@ def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
     assert fitted["creating_categories"] == result["creating_categories"]
 
 
-def test_fit_preview_updated_entries_carry_changed_fields_not_priority_or_pinned():
+def test_fit_preview_updated_entries_carry_explicitly_authored_priority_and_pinned():
+    # Inverted: priority/pinned are evaluation-order fields the backend HONOURS
+    # on import, so when the AFTER scene states them explicitly a change here
+    # must survive summarisation, not be swallowed — see diff.py's _ORDER_FIELDS
+    # and tests/test_diff.py::test_a_priority_swap_is_a_visible_update.
     before = {
         "name": "Evening",
         "category": "c",
@@ -465,7 +469,7 @@ def test_fit_preview_updated_entries_carry_changed_fields_not_priority_or_pinned
     fitted = budget.fit_preview(result, budget=50)
 
     entry = fitted["diff"]["updated"][0]
-    assert entry["changed_fields"] == ["actions"]
+    assert entry["changed_fields"] == ["actions", "pinned", "priority"]
 
 
 def test_fit_preview_handles_an_unnamed_scene_without_crashing():

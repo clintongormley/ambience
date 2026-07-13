@@ -217,7 +217,9 @@ async def ambience_preview_write(
     they are created on apply. If unknown_categories is non-empty the write is
     blocked (no usable token) — declare them here or create them with
     ambience_save_categories. Show the diff to the user; pass the token to
-    ambience_apply_write to commit."""
+    ambience_apply_write to commit. Explicit priority/pinned changes appear in
+    the diff; if you resubmit stored scenes without those fields, the diff
+    carries an order_note saying evaluation order will be re-derived."""
     return await (await _protocol_()).preview_write(scope, scenes, new_categories)
 
 

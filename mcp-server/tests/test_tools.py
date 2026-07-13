@@ -974,3 +974,35 @@ async def test_a_failed_apply_keeps_the_token_so_try_again_is_true_advice():
     # and now it is spent
     with pytest.raises(tools.ToolError):
         await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token)
+
+
+async def test_a_failed_category_save_also_keeps_the_token_so_try_again_is_true_advice():
+    """apply_write saves categories BEFORE the scene config, so the
+    consume-only-on-SUCCESS guarantee covered above for the scene save must
+    hold at this earlier save point too — a transient here must not burn the
+    token any more than one at the later save does."""
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": []},
+            "ambience/categories/save": IncompatibleError("startup window refusal"),
+            "ambience/area/save": {"ok": True},
+        }
+    )
+    adapter = _v1(client)
+    scenes = [{"name": "A", "category": "ambient", "actions": []}]
+    new_categories = [{"id": "ambient", "name": "Ambient"}]
+    preview = await adapter.preview_write({"kind": "area", "id": "kitchen"}, scenes, new_categories)
+    token = preview["confirm_token"]
+    with pytest.raises(IncompatibleError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token, new_categories)
+    # the transient passed: the SAME token must still work
+    client.results["ambience/categories/save"] = {"ok": True}
+    result = await adapter.apply_write(
+        {"kind": "area", "id": "kitchen"}, scenes, token, new_categories
+    )
+    assert result == {"ok": True}
+    # and now it is spent
+    with pytest.raises(tools.ToolError):
+        await adapter.apply_write({"kind": "area", "id": "kitchen"}, scenes, token, new_categories)

@@ -296,9 +296,10 @@ class ReconnectingClient:
     a command that failed on `send` never reached HA, so re-sending that one frame
     on a fresh socket is safe for reads and writes alike, and needs no per-tool
     "is this idempotent?" annotation. Retrying a whole tool would be neither — it
-    would re-run the tool's local side effects, and `apply_write` consumes its
-    single-use confirm token *before* it writes, so a re-entry would report a bogus
-    "bad confirm_token" for what was only a dropped socket.
+    would re-run the tool's local side effects, and `apply_write` only spends its
+    single-use confirm token once a save has actually succeeded, so a whole-tool
+    re-entry after that point would report a bogus "bad confirm_token" for a write
+    that in fact already landed, instead of telling the caller it's done.
 
     A command that HA *did* receive (`sent=True`) is never re-sent: it may have been
     applied with only the reply lost.
@@ -468,12 +469,13 @@ class ReconnectingClient:
                     #     recv path (a `_COMMAND_TIMEOUT`) — true of the HELLO, but read by
                     #     `command_for` as if it described the CALLER's command. One
                     #     command's flag must never answer for another's.
-                    # Left as-is, a write that hits a reconnect is refused as "may already
-                    # have been applied" when nothing was sent at all — and `apply_write`
-                    # spends its single-use confirm token BEFORE it writes, so the user
-                    # has to run `preview_write` again for a write that never left this
-                    # process. Re-raise as sent=False instead: nothing the caller asked
-                    # for has been written, so even a write is safe to re-send.
+                    # Left as-is, a write that hits a reconnect here defaults to sent=True
+                    # (see above) and so is never auto-resent — surfaced to the caller as
+                    # "may already have been applied" when nothing was sent at all: not one
+                    # byte of this connection attempt ever reached HA. A write that never
+                    # left this process must not be reported to the AI as "may have landed".
+                    # Re-raise as sent=False instead: nothing the caller asked for has been
+                    # written, so even a write is safe to re-send.
                     try:
                         client = await self._connect(cfg.ws_url, cfg.token)
                         # Handshake ONCE per connection, before publishing the client —

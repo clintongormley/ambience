@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import pytest
@@ -10,6 +11,7 @@ from ambience_mcp.ha_client import (
     IncompatibleError,
     ProtocolChangedError,
     ReconnectingClient,
+    _Negotiated,
 )
 from ambience_mcp.protocols.v1 import ProtocolV1
 
@@ -547,7 +549,8 @@ async def test_a_second_adapter_in_flight_is_never_sent_to_the_new_protocol(monk
     # A reconnects into the protocol-2 backend and is dropped...
     with pytest.raises(ProtocolChangedError, match="protocol 2"):
         await call_a.get_context()
-    assert client._protocol == 2  # ...and the shared state has moved under B's feet.
+    # ...and the shared state has moved under B's feet.
+    assert client._negotiated.protocol == 2
 
     # B's V1 adapter must NOT send to that backend.
     with pytest.raises(ProtocolChangedError, match="protocol 2"):
@@ -686,7 +689,7 @@ async def test_ready_raises_instead_of_asserting_when_protocol_is_unset():
     prove the guard is a real `raise`, not an assertion."""
     client, _ = _reconnecting({"protocol": 1})
     await client.ready()
-    client._protocol = None  # the "should never happen" state the guard covers
+    client._negotiated = _Negotiated(None, None)  # the "should never happen" state
 
     with pytest.raises(RuntimeError, match="_negotiate"):
         await client.ready()
@@ -811,3 +814,126 @@ async def test_a_stalled_re_derive_hello_does_not_condemn_the_callers_write():
     assert starting.calls == ["ambience/mcp/hello", "ambience/mcp/hello"]
     # And it reached the backend exactly once, on the connection that handshook.
     assert ready.calls == ["ambience/mcp/hello", "ambience/area/save"]
+
+
+class _ScriptedHello:
+    """An HAClient stand-in whose command() pops the next scripted outcome for
+    ambience/mcp/hello and answers every other command with {}.
+
+    Outcomes: a dict is returned; an HAConnectionError is raised AND marks the
+    client closed (mirroring HAClient.command's recv path); any other
+    BaseException (HACommandError, CancelledError) is raised WITHOUT closing —
+    a cancelled wait_for / an error reply leaves the socket healthy; a
+    ("wait", event, dict) tuple blocks on the event then returns the dict."""
+
+    def __init__(self, hellos):
+        self.hellos = list(hellos)
+        self.closed = False
+        self.hello_count = 0
+
+    async def command(self, type, **payload):
+        if type == "ambience/mcp/hello":
+            self.hello_count += 1
+            outcome = self.hellos.pop(0) if self.hellos else {"protocol": 1}
+            if isinstance(outcome, tuple) and outcome[0] == "wait":
+                await outcome[1].wait()
+                return outcome[2]
+            if isinstance(outcome, HAConnectionError):
+                self.closed = True
+                raise outcome
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+        return {}
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _scripted_reconnecting(clients):
+    """A ReconnectingClient whose connect_fn pops the next scripted client."""
+    queue = list(clients)
+
+    async def connect(ws_url, token):
+        return queue.pop(0)
+
+    cfg = type("Cfg", (), {"ws_url": "ws://x", "token": "t"})()
+    return ReconnectingClient(
+        connect, lambda: cfg, supported_protocols=frozenset({1}), mcp_version="1.0.0"
+    )
+
+
+async def test_a_cancelled_re_derive_does_not_wedge_the_connection():
+    """A tool call cancelled mid re-derived hello must leave the previous
+    verdict standing — not a half-cleared state that turns every later call
+    into RuntimeError('…this is a bug in _negotiate()')."""
+    client = _ScriptedHello(
+        [
+            HACommandError("unknown_command", "startup window"),
+            asyncio.CancelledError(),
+            {"protocol": 1},
+        ]
+    )
+    rc = _scripted_reconnecting([client])
+    with pytest.raises(IncompatibleError):
+        await rc.ready()  # startup-window verdict, re-derived per call
+    with pytest.raises(asyncio.CancelledError):
+        await rc.ready()  # user aborts mid-hello — must not corrupt state
+    assert await rc.ready() == 1  # backend now answers: the connection heals
+
+
+async def test_an_erroring_re_derive_does_not_wedge_the_connection():
+    """Same latch via HACommandError (e.g. 'unauthorized' once the admin-gated
+    hello registers): the error surfaces once, the old verdict stands, and the
+    connection heals when the hello answers."""
+    client = _ScriptedHello(
+        [
+            HACommandError("unknown_command", "startup window"),
+            HACommandError("unauthorized", "admin required"),
+            {"protocol": 1},
+        ]
+    )
+    rc = _scripted_reconnecting([client])
+    with pytest.raises(IncompatibleError):
+        await rc.ready()
+    with pytest.raises(HACommandError):
+        await rc.ready()
+    assert await rc.ready() == 1
+
+
+async def test_a_concurrent_call_during_a_re_derive_never_sees_a_half_set_state():
+    """While one call's re-derived hello is in flight, a parallel call must
+    resolve to a complete state (old verdict or new protocol) — never
+    RuntimeError('bug in _negotiate') or a ProtocolChangedError naming
+    protocol None."""
+    release = asyncio.Event()
+    client = _ScriptedHello(
+        [
+            HACommandError("unknown_command", "startup window"),
+            ("wait", release, {"protocol": 1}),
+        ]
+    )
+    rc = _scripted_reconnecting([client])
+    with pytest.raises(IncompatibleError):
+        await rc.ready()
+    task1 = asyncio.create_task(rc.ready())
+    await asyncio.sleep(0)  # task1 enters the re-derive and blocks on the hello
+    task2 = asyncio.create_task(rc.ready())
+    await asyncio.sleep(0)
+    release.set()
+    assert await task1 == 1
+    assert await task2 == 1
+
+
+async def test_an_incompatible_verdict_heals_after_the_prescribed_upgrade():
+    """'Update Ambience (HACS) and restart Home Assistant' must actually work:
+    after the restart kills the socket, the next calls reconnect and
+    re-handshake instead of serving the stale verdict forever."""
+    old = _ScriptedHello([{"protocol": 99}, HAConnectionError("socket died")])
+    new = _ScriptedHello([{"protocol": 1}])
+    rc = _scripted_reconnecting([old, new])
+    with pytest.raises(IncompatibleError):
+        await rc.ready()  # protocol 99: incompatible
+    with pytest.raises(HAConnectionError):
+        await rc.ready()  # re-derive discovers the dead socket (HA restarted)
+    assert await rc.ready() == 1  # reconnects to the upgraded backend

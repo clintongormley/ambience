@@ -860,9 +860,8 @@ def _scripted_reconnecting(clients):
     async def connect(ws_url, token):
         return queue.pop(0)
 
-    cfg = type("Cfg", (), {"ws_url": "ws://x", "token": "t"})()
     return ReconnectingClient(
-        connect, lambda: cfg, supported_protocols=frozenset({1}), mcp_version="1.0.0"
+        connect, _cfg, supported_protocols=frozenset({1}), mcp_version="1.0.0"
     )
 
 

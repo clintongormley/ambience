@@ -30,6 +30,16 @@ from ..tools import (
 )
 
 
+def _has_category(scene: dict[str, Any]) -> bool:
+    """A scene "has a category" only for a genuinely-named, non-empty id — a
+    falsy value (`""`) passes `isinstance(..., str)` but is never a registered
+    category, so it must NOT count as having one. Shared by `preview_write`'s
+    unknown-categories and uncategorised-scenes gates, which need this same
+    predicate stated once each, positively and negated."""
+    category = scene.get("category")
+    return isinstance(category, str) and bool(category)
+
+
 class BaseProtocol:
     """Talks to one Ambience over an HAClient. Subclassed per protocol version."""
 
@@ -198,37 +208,49 @@ class BaseProtocol:
         cat_list = await self.command("ambience/categories/list")
         existing_by_id = {c.get("id"): c for c in cat_list.get("categories", [])}
         known = set(existing_by_id) | {c.get("id") for c in new_categories}
-        # A falsy category (`""`) is excluded here, not just an absent/None one: it
-        # passes `isinstance(..., str)` but is never a registered id, so without this
-        # exclusion it would land in `unknown` and trip THIS gate first with a
-        # dangling "unknown categories ...: " message — masking the uncategorised
-        # gate below (guarded by `and valid`) and its actionable message. Empty
-        # categories belong to the uncategorised gate; this gate is only for a
+        # A falsy category (`""`) does not count as "having" one: it passes
+        # `isinstance(..., str)` but is never a registered id, so treating it as
+        # "has a category" here would land it in `unknown` and trip that gate first
+        # with a dangling "unknown categories ...: " message — masking the
+        # uncategorised gate below and its actionable message. Empty categories
+        # belong to the uncategorised gate; the unknown gate is only for a
         # genuinely-unknown, non-empty id (e.g. a typo).
-        unknown = sorted(
-            {s["category"] for s in scenes if isinstance(s.get("category"), str) and s["category"]}
-            - known
-        )
-        if unknown and valid:
-            valid = False
-            joined = ", ".join(unknown)
-            errors = f"unknown categories (create them or declare in new_categories): {joined}"
+        unknown = sorted({s["category"] for s in scenes if _has_category(s)} - known)
         # A scene with no category at all is silently moved to "General" by the
         # backend on save (reassign_orphan_scenes) — the stored scope would
         # differ from the approved preview. Same treatment as an unknown
         # category: block the write until every scene names one.
-        uncategorised = [
-            i
-            for i, s in enumerate(scenes)
-            if not (isinstance(s.get("category"), str) and s["category"])
-        ]
-        if uncategorised and valid:
-            valid = False
+        uncategorised = [i for i, s in enumerate(scenes) if not _has_category(s)]
+
+        def _unknown_categories_error() -> str | None:
+            if not unknown:
+                return None
+            joined = ", ".join(unknown)
+            return f"unknown categories (create them or declare in new_categories): {joined}"
+
+        def _uncategorised_scenes_error() -> str | None:
+            if not uncategorised:
+                return None
             joined = ", ".join(str(i) for i in uncategorised)
-            errors = (
+            return (
                 "every scene must name a category (the backend silently moves "
                 f"uncategorised scenes to General): scene index(es) {joined} have none"
             )
+
+        # Ordered, first-match-wins: each check is independent and stateless (no
+        # shared "have we already failed" flag to remember), so precedence is
+        # explicit in the list order rather than resting on every new gate
+        # remembering to guard itself. Unknown before uncategorised is pinned by
+        # test_preview_write_with_unknown_and_empty_category_reports_unknown_first.
+        # The schema-validate() gate above stays separate: it catches an
+        # exception rather than computing a value, a different enough shape that
+        # folding it into this list would obscure more than it would unify.
+        if valid:
+            for category_gate in (_unknown_categories_error, _uncategorised_scenes_error):
+                message = category_gate()
+                if message is not None:
+                    valid, errors = False, message
+                    break
         creating = [c for c in new_categories if c.get("id") not in existing_by_id]
         # apply's _merge_categories REPLACES a re-declared existing category
         # wholesale — a rename or a dropped icon is a real mutation the human

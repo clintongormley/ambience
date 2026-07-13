@@ -259,8 +259,16 @@ case ",$PUBLISHED_PROTOCOLS," in
     echo "  ambience-mcp in the ${MCP_CHANNEL_LABEL} (${PUBLISHED_VERSION}) only speaks" >&2
     echo "  {${PUBLISHED_PROTOCOLS}}." >&2
     echo "" >&2
-    echo "  Publish the MCP server FIRST (tag mcp-v<version>), or every user on this" >&2
-    echo "  release will be told to upgrade ambience-mcp to a version that does not exist." >&2
+    echo "  Two different causes look identical here:" >&2
+    echo "  - The published ambience-mcp is BEHIND this release (its protocols are all" >&2
+    echo "    below ${MCP_PROTOCOL}): publish the MCP server FIRST (tag mcp-v<version>), or" >&2
+    echo "    every user on this release will be told to upgrade ambience-mcp to a" >&2
+    echo "    version that does not exist." >&2
+    echo "  - The published ambience-mcp is AHEAD and already DROPPED the adapter for" >&2
+    echo "    protocol ${MCP_PROTOCOL} (its protocols are all above it): publishing again" >&2
+    echo "    will not help — restore the protocol ${MCP_PROTOCOL} adapter in" >&2
+    echo "    mcp-server/src/ambience_mcp/protocols/ (see protocols/__init__.py) and" >&2
+    echo "    publish that." >&2
     echo "" >&2
     echo "  The CHANNEL is part of the rule: ${VERSION} is a ${MCP_CHANNEL_LABEL} release, so" >&2
     echo "  it is measured against the ambience-mcp its users will actually resolve. A FINAL" >&2

@@ -287,10 +287,15 @@ async def test_a_failed_connect_is_retried_for_a_WRITE_too():
     `connect()` raises HAConnectionError with the default `sent=True`, so `command_for`
     read one command's flag as if it described another and refused the write.
 
-    The cost is not just a lost retry: `apply_write` spends its single-use confirm token
-    BEFORE it writes, so the user is told "this may have been applied" and has to run
-    `preview_write` again — for a write that never left the process. `_live()` now
-    re-raises any establishment failure as `sent=False`, and the write is re-sent."""
+    The cost is not just a lost retry: refused this way, a write that never left the
+    process would be reported to the AI as though it "may have landed" — the same
+    ambiguous verdict a write HA genuinely received but lost the reply to deserves,
+    and this one does not. `apply_write` only spends its single-use confirm token
+    AFTER its save succeeds (never before), so this failure alone would not have
+    burned it — but the user would still be wrongly told to treat an unsent write
+    with the same caution as one that might have landed. `_live()` now re-raises any
+    establishment failure as `sent=False`, so `command_for` retries it transparently
+    instead of surfacing that false verdict."""
     fake = _ScriptedClient({"ok": True})
     attempts = [HAConnectionError("unreachable", sent=True), None]
 

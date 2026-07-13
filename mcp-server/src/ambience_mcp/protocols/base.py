@@ -293,6 +293,15 @@ class BaseProtocol:
         # it valid, so "try again" is true advice and a retry can complete the
         # half-applied write. The save is a wholesale replace, so retrying the
         # same approved payload is idempotent.
+        #
+        # This does loosen the gate: `holds()` above only PEEKS (it does not
+        # consume), so two concurrent apply_write calls carrying the same token
+        # can both pass the check above, both `await` the save, and both reach
+        # this consume() (the second is then a harmless no-op — the token is
+        # already gone). That is not a consent hole: both calls carry the exact
+        # payload the human approved, the save is a wholesale replace, so the
+        # end state is identical either way — the only externally visible cost
+        # is one extra entry in the undo history.
         self.ledger.consume(token)
         return result
 

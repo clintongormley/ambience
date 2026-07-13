@@ -60,8 +60,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     against the final channel.
 - The AI's dry-run preview is now redacted like traces already were: who is home
     (by name) and security action params (lock PINs, alarm codes) no longer
-    leave the home in `ambience_dry_run` results. Older backends that cannot
-    redact get a visible notice instead of a silent leak.
+    leave the home in `ambience_dry_run` results — once your `ambience-mcp` is a
+    build that actually asks for it. Redaction is requested by the MCP client,
+    not enforced by the backend, so a cached pre-upgrade `ambience-mcp` still
+    gets an unredacted result, with no warning; if `ambience_dry_run` results
+    look unredacted, quit your MCP client, run `uv cache clean ambience-mcp`,
+    remove any version pin, and restart it. Older backends that cannot redact at
+    all still get a visible notice instead of a silent leak.
 - `list_traces` and the diagnostics download now redact two more kinds of
     predicate detail, the same widened set `ambience_dry_run` above respects:
     `unavailable` (the friendly names of currently-down entities, which can
@@ -75,12 +80,20 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     silently move it to "General" after the diff was approved), and re-declaring
     an existing category in `new_categories` now shows the overwrite in the
     preview.
+- A non-string `category` on an unnamed scene is now a clean validation error
+    instead of an opaque save failure. It was already checked for named scenes;
+    an unnamed one skipped the check and could reach the store with a category
+    value that isn't hashable.
 - A failed `ambience_apply_write` no longer burns its confirm token: "try again"
     now works instead of answering "bad confirm_token".
 - Cancelling (or erroring) a tool call during Home Assistant's startup window
     can no longer permanently wedge the MCP server; an incompatibility verdict
     also re-checks itself, so following "Update Ambience and restart Home
     Assistant" actually clears it.
+- An HA endpoint that accepts the websocket connection but never sends a frame
+    (a half-configured reverse proxy) no longer hangs every MCP tool call
+    forever: the auth handshake now times out and reconnects, the same way an
+    unresponsive command already did.
 - Reloading or disabling the Ambience integration mid-session now gets an
     actionable "Ambience is reloading" message instead of a raw
     `unknown_command`.

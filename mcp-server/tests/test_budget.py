@@ -94,6 +94,46 @@ def test_fit_context_with_no_schemas_to_shed_returns_what_it_has():
     assert fitted == context
 
 
+def _linear_context_reference(context: dict, limit: int) -> dict:
+    """The original one-schema-at-a-time shed loop `fit_context` replaced with a
+    bisection, kept as the behavioural oracle — mirrors `_linear_trim_reference`
+    below for `_trim_list_to_fit`. Same shedding order (biggest schema first,
+    fewest schemas dropped for the bytes reclaimed), just walked linearly instead
+    of bisected."""
+    if size_of(context) <= limit:
+        return context
+    actions = context.get("actions")
+    schemas = actions.get("schemas") if isinstance(actions, dict) else None
+    if not isinstance(schemas, dict) or not schemas:
+        return context
+    ordered = sorted(schemas, key=lambda k: size_of(schemas[k]), reverse=True)
+
+    def candidate(shed: int) -> dict:
+        dropped = set(ordered[:shed])
+        return {
+            **context,
+            "actions": {
+                **actions,
+                "schemas": {k: v for k, v in schemas.items() if k not in dropped},
+            },
+            "schemas_omitted": sorted(ordered[:shed]),
+        }
+
+    shed = 1
+    while True:
+        result = candidate(shed)
+        if size_of(result) <= limit or shed >= len(ordered):
+            return result
+        shed += 1
+
+
+@pytest.mark.parametrize("limit", [100, 200, 1_000, 2_000, 5_000, 50_000])
+def test_fit_context_matches_the_linear_reference(limit):
+    context = _context(30, 200)
+
+    assert budget.fit_context(context, budget=limit) == _linear_context_reference(context, limit)
+
+
 def _entities(count: int, size: int) -> dict:
     return {
         "entities": [{"entity_id": f"light.l{i:04d}", "name": "n" * size} for i in range(count)],
@@ -429,6 +469,13 @@ def test_fit_preview_summarises_when_over_budget_without_dropping_any_entry():
 
 def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
     result = _preview(20, 20, 5, 300)
+    # The two newest fields on the human's approval surface: an existing category
+    # being overwritten (updating_categories, top-level like its unknown/creating
+    # siblings), and evaluation order being re-derived (order_note, INSIDE diff —
+    # see diff.py's diff_scopes/summarise_diff). Neither has a guard elsewhere
+    # against being dropped when fit_preview trims the payload.
+    result["updating_categories"] = [{"before": {"id": "c"}, "after": {"id": "c", "name": "C2"}}]
+    result["diff"]["order_note"] = "some scenes were resubmitted without their order fields"
 
     fitted = budget.fit_preview(result, budget=3_000)
 
@@ -437,6 +484,8 @@ def test_fit_preview_preserves_the_confirm_token_and_gate_fields_untouched():
     assert fitted["errors"] == result["errors"]
     assert fitted["unknown_categories"] == result["unknown_categories"]
     assert fitted["creating_categories"] == result["creating_categories"]
+    assert fitted["updating_categories"] == result["updating_categories"]
+    assert fitted["diff"]["order_note"] == result["diff"]["order_note"]
 
 
 def test_fit_preview_updated_entries_carry_explicitly_authored_priority_and_pinned():

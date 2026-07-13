@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-_TRANSIENT_FIELDS = {"shadowed_by", "missing_entities", "overlap_entities", "config_issues"}
 # Backend-injected per-scene hints, never authored — always ignored. Pinned to
 # the backend's _TRANSIENT_SCENE_FIELDS by tests/test_protocol_shape.py.
+_TRANSIENT_FIELDS = {"shadowed_by", "missing_entities", "overlap_entities", "config_issues"}
 
 # Evaluation-order fields. The backend HONOURS these on import
 # (websocket_helpers.validate_scope_config: "'priority'/'pinned' are authorable

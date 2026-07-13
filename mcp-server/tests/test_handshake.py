@@ -626,10 +626,12 @@ async def test_a_hello_that_times_out_does_not_condemn_the_callers_write():
     It then propagates `_negotiate` → `_handshake` → `_live()` → `_live_for()` →
     straight into `command_for`'s `except HAConnectionError`, which reads `exc.sent`
     against the CALLER's command type. One command's flag answering for another: the
-    caller's `/save` is refused as "may already have been applied" when the connection
-    it would have travelled on never even finished handshaking. Worse, `apply_write`
-    has already spent its single-use confirm token, so the user must re-run
-    `preview_write` for a write that never left the process.
+    caller's `/save` would be refused as "may already have been applied" when the
+    connection it would have travelled on never even finished handshaking — a write
+    that never left the process, reported to the AI as though it may have landed.
+    `apply_write` only spends its single-use confirm token AFTER its save succeeds, so
+    this refusal would not burn it — but the user would still be wrongly told to treat
+    an unsent write with the same caution as one HA might actually have received.
 
     `_live()` re-raises establishment failures as `sent=False`, so the write is retried
     on a fresh connection — and, because only the one frame is re-sent, it reaches the

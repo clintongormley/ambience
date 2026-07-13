@@ -195,10 +195,12 @@ async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
 async def ambience_dry_run(scope: dict[str, Any]) -> dict[str, Any]:
     """Preview which scene currently wins for a scope, without executing its
     actions — no evaluation trace, just the winning scene. Read-only. scope
-    shape as in ambience_get_scope. The result is redacted like list_traces:
-    who is home (by name) and security action params (lock PINs, alarm codes)
-    never appear. An older Ambience that cannot redact returns the result
-    unredacted, with a `notice` saying so."""
+    shape as in ambience_get_scope. Presence detail (who is home, occupancy,
+    down-device names) and this result's own action params (lock PINs, alarm
+    codes) are redacted before reaching you — but you can still read stored
+    action params via ambience_get_scope, which you need in order to preserve
+    them on a wholesale save. An older Ambience that cannot redact returns this
+    result unredacted, with a `notice` saying so."""
     return await (await _protocol_()).dry_run(scope)
 
 

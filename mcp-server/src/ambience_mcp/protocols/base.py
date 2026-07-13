@@ -192,6 +192,22 @@ class BaseProtocol:
             valid = False
             joined = ", ".join(unknown)
             errors = f"unknown categories (create them or declare in new_categories): {joined}"
+        # A scene with no category at all is silently moved to "General" by the
+        # backend on save (reassign_orphan_scenes) — the stored scope would
+        # differ from the approved preview. Same treatment as an unknown
+        # category: block the write until every scene names one.
+        uncategorised = [
+            i
+            for i, s in enumerate(scenes)
+            if not (isinstance(s.get("category"), str) and s["category"])
+        ]
+        if uncategorised and valid:
+            valid = False
+            joined = ", ".join(str(i) for i in uncategorised)
+            errors = (
+                "every scene must name a category (the backend silently moves "
+                f"uncategorised scenes to General): scene index(es) {joined} have none"
+            )
         creating = [c for c in new_categories if c.get("id") not in existing_ids]
         changes = diff_scopes(current, scenes)
         token = fingerprint(_scope_key(kind, sid), scenes, new_categories)

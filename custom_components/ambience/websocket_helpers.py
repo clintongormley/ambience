@@ -48,15 +48,15 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     for scene_idx, scene in enumerate(scenes):
         if not isinstance(scene, dict):
             raise AmbienceError("scene_not_object", scene_idx=scene_idx)
+        category = scene.get("category")
+        # `category` is a string id (or absent). Checked for EVERY scene — named
+        # or not — because the category is a hash key downstream (sorting's
+        # per-category buckets), where a non-hashable value would escape the
+        # websocket validation path as an opaque TypeError.
+        if category is not None and not isinstance(category, str):
+            raise AmbienceError("scene_category_not_string", scene_idx=scene_idx)
         name = scene.get("name")
         if isinstance(name, str) and name.strip():
-            category = scene.get("category")
-            # `category` is a string id (or absent). Guard against corrupted /
-            # hand-edited storage so a non-hashable value raises a clean
-            # ValueError here instead of an unhashable-key TypeError that would
-            # escape the websocket validation path.
-            if category is not None and not isinstance(category, str):
-                raise AmbienceError("scene_category_not_string", scene_idx=scene_idx)
             name_key = (category, name.strip().lower())
             if name_key in seen_names:
                 raise AmbienceError("scene_dup_name", scene_idx=scene_idx, name=name.strip())

@@ -189,6 +189,32 @@ async def test_preview_write_blocks_a_scene_with_an_unknown_category():
         await protocol.apply_write(scope, scenes, result["confirm_token"])
 
 
+async def test_preview_write_blocks_a_scene_with_no_category():
+    """The backend silently reassigns an uncategorised scene to 'General' on
+    save (reassign_orphan_scenes) — the stored scope would differ from the
+    approved preview. Block it like an unknown category: no usable token."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [
+        {"name": "A", "category": "mood", "actions": []},
+        {"name": "B", "actions": []},  # no category
+        {"name": "C", "category": None, "actions": []},  # null category
+    ]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+    # and the token is unusable: apply must refuse it (ledger never recorded it)
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
+
+
 async def test_preview_write_accepts_declared_new_categories():
     scope = {"kind": "area", "id": "lr"}
     scenes = [{"name": "Film", "category": "movie_night"}]

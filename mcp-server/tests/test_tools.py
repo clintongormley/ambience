@@ -215,6 +215,58 @@ async def test_preview_write_blocks_a_scene_with_no_category():
         await protocol.apply_write(scope, scenes, result["confirm_token"])
 
 
+async def test_preview_write_blocks_a_scene_with_an_empty_category():
+    """`""` passes `isinstance(..., str)`, so before the fix it was swept into
+    the unknown-categories set (an empty string is never a registered category
+    id), tripping THAT gate first with a dangling "unknown categories ...: "
+    message and never reaching the actionable uncategorised one. An empty
+    category must route to the uncategorised gate, same as missing/None."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [{"name": "A", "category": "", "actions": []}]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert "category" in result["errors"]
+    assert "unknown categories" not in result["errors"]
+    assert result["unknown_categories"] == []
+    # and the token is unusable: apply must refuse it (ledger never recorded it)
+    with pytest.raises(tools.ToolError, match="preview_write"):
+        await protocol.apply_write(scope, scenes, result["confirm_token"])
+
+
+async def test_preview_write_with_unknown_and_empty_category_reports_unknown_first():
+    """A payload naming both a genuinely-unknown category AND an uncategorised
+    scene trips the unknown-categories gate first — it runs first in
+    `preview_write` and the uncategorised gate is guarded by `and valid`, so
+    only one problem is reported per round. The AI fixes the named id, and the
+    uncategorised scene surfaces on the next preview_write once that clears."""
+    scope = {"kind": "area", "id": "kitchen"}
+    scenes = [
+        {"name": "A", "category": "nonesuch", "actions": []},
+        {"name": "B", "category": "", "actions": []},
+    ]
+    client = FakeClient(
+        {
+            "ambience/area/get": {"scenes": []},
+            "ambience/validate": {"ok": True},
+            "ambience/categories/list": {"categories": [{"id": "mood", "name": "Mood"}]},
+        }
+    )
+    protocol = _v1(client)
+    result = await protocol.preview_write(scope, scenes)
+    assert result["valid"] is False
+    assert result["unknown_categories"] == ["nonesuch"]
+    assert "unknown categories" in result["errors"]
+    assert "nonesuch" in result["errors"]
+
+
 async def test_preview_write_accepts_declared_new_categories():
     scope = {"kind": "area", "id": "lr"}
     scenes = [{"name": "Film", "category": "movie_night"}]

@@ -185,8 +185,16 @@ class BaseProtocol:
         cat_list = await self.command("ambience/categories/list")
         existing_ids = {c.get("id") for c in cat_list.get("categories", [])}
         known = existing_ids | {c.get("id") for c in new_categories}
+        # A falsy category (`""`) is excluded here, not just an absent/None one: it
+        # passes `isinstance(..., str)` but is never a registered id, so without this
+        # exclusion it would land in `unknown` and trip THIS gate first with a
+        # dangling "unknown categories ...: " message — masking the uncategorised
+        # gate below (guarded by `and valid`) and its actionable message. Empty
+        # categories belong to the uncategorised gate; this gate is only for a
+        # genuinely-unknown, non-empty id (e.g. a typo).
         unknown = sorted(
-            {s["category"] for s in scenes if isinstance(s.get("category"), str)} - known
+            {s["category"] for s in scenes if isinstance(s.get("category"), str) and s["category"]}
+            - known
         )
         if unknown and valid:
             valid = False

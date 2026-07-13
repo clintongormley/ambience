@@ -629,12 +629,16 @@ async def _ws_dry_run(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
         if msg["redact"]:
-            result = {
-                **redact_plan(result),
-                "categories": {
-                    cid: redact_plan(plan) for cid, plan in result["categories"].items()
-                },
+            # redact_plan() shallow-copies its input, including a `categories`
+            # sub-dict if the plan carries one — that copy is unredacted. Compute
+            # the per-category redaction into a local FIRST and assign it
+            # explicitly after, so the result doesn't depend on which of two
+            # keys in a dict literal happens to come last.
+            redacted_categories = {
+                cid: redact_plan(plan) for cid, plan in result["categories"].items()
             }
+            result = redact_plan(result)
+            result["categories"] = redacted_categories
     except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return

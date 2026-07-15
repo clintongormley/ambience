@@ -192,7 +192,7 @@ async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
+async def ambience_get_guide(section: str | None = None, part: int | None = None) -> dict[str, Any]:
     """Fetch the Ambience scene-authoring guide (schema + cookbook) live from the
     running install. Read it before authoring.
 
@@ -200,8 +200,9 @@ async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
     Call with no argument to get the list of section names, then call again with
     section=<name> to read one. Start with "Config schema" and "Condition
     cookbook"; read "Reading a diagnostic bundle" when diagnosing why a scene
-    did not fire."""
-    return await (await _protocol_()).get_guide(section)
+    did not fire. A large section is returned in parts: pass part=<n> and follow
+    the response `notice` to fetch the rest."""
+    return await (await _protocol_()).get_guide(section, part)
 
 
 @mcp.tool()

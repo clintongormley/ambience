@@ -94,6 +94,14 @@ def test_all_tool_wrappers_exist():
         assert hasattr(server, name), f"missing tool wrapper {name}"
 
 
+def test_tool_get_guide_accepts_part():
+    # The pagination arg has to reach the tool schema, not just the handler, or a
+    # model can never ask for part 2 of an over-budget section.
+    import inspect
+
+    assert "part" in inspect.signature(server.ambience_get_guide).parameters
+
+
 # The result-budget boundary: budget.fit_result must run on EVERY tool's return
 # value, not just the 3 (get_context/find_entities/list_traces) that carry a
 # shape-aware fit_* strategy of their own in the protocol adapter

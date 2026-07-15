@@ -62,21 +62,118 @@ def max_result_chars() -> int:
 def size_of(payload: Any) -> int:
     """The payload's size as the client will actually receive it on the wire.
 
-    FastMCP does not send compact JSON. Every tool here is annotated
-    `-> dict[str, Any]`, which FastMCP turns into an output schema, so a result
-    is serialized TWICE: once pretty-printed (`indent=2`) as the text content
-    block, and again, byte-for-byte the same, as `structuredContent`. Nested
-    action schemas — exactly what `fit_context` exists to shed — inflate ~97%
-    under `indent=2` alone, before the duplication.
+    FastMCP does not send compact JSON. Tools disable FastMCP structured output
+    (`_BoundedFastMCP.add_tool` passes `structured_output=False`), so a result is
+    serialized ONCE — the pretty-printed (`indent=2`) text content block — not
+    twice. (With structured output enabled FastMCP emits the payload a second
+    time, byte-for-byte, as `structuredContent`; this server owns its client and
+    does not need that backward-compat channel, so it is turned off — halving the
+    wire size this function measures.) Nested action schemas — exactly what
+    `fit_context` exists to shed — still inflate ~97% under `indent=2`.
 
-    Measuring compact `json.dumps` therefore under-counts the real wire size by
-    roughly 1.6-2.6x, worst where it matters most, and would let an "it fits"
-    result sail through that the client actually rejects. `json.dumps(indent=2)`
-    is not byte-identical to FastMCP's `pydantic_core.to_json(indent=2)`, but it
-    is a faithful stand-in, and keeps this module free of a FastMCP/pydantic-core
-    dependency.
+    Measuring compact `json.dumps` therefore under-counts the real wire size,
+    worst where it matters most, and would let an "it fits" result sail through
+    that the client actually rejects. `json.dumps(indent=2)` is not byte-identical
+    to FastMCP's `pydantic_core.to_json(indent=2)`, but it is a faithful stand-in,
+    and keeps this module free of a FastMCP/pydantic-core dependency.
     """
-    return 2 * len(json.dumps(payload, indent=2, default=str))
+    return len(json.dumps(payload, indent=2, default=str))
+
+
+def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
+    """Split a guide section into the fewest consecutive chunks each satisfying
+    `fits`. Split points are markdown headings (`## ` then `### `), never inside a
+    ``` fence — so YAML `#` comments in examples are safe. A single heading-block
+    that still fails `fits` alone is hard-split into fence-aware atoms (a whole
+    ``` fence is one atom, never broken). Always returns at least one chunk; each
+    chunk fits UNLESS a single atom — one line, or one whole fence — is itself
+    larger than the budget (which the shipped guide does not contain)."""
+
+    def blocks(lines: list[str], markers: tuple[str, ...]) -> list[str]:
+        out: list[str] = []
+        cur: list[str] = []
+        in_fence = False
+        for line in lines:
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+            elif not in_fence and line.startswith(markers) and cur:
+                out.append("\n".join(cur))
+                cur = []
+            cur.append(line)
+        if cur:
+            out.append("\n".join(cur))
+        return out
+
+    def pack(chunks: list[str]) -> list[str] | None:
+        """Greedily join consecutive chunks while `fits`. Returns None if any single
+        chunk fails `fits` on its own (caller must split that chunk further)."""
+        parts: list[str] = []
+        cur = ""
+        for ch in chunks:
+            if not fits(ch):
+                return None
+            candidate = f"{cur}\n{ch}" if cur else ch
+            # Greedy flush-or-extend: start a new part only when appending this
+            # chunk would bust `fits`; otherwise extend (when `cur` is empty
+            # candidate == ch, so this also starts the first part).
+            if cur and not fits(candidate):
+                parts.append(cur)
+                cur = ch
+            else:
+                cur = candidate
+        if cur:
+            parts.append(cur)
+        return parts
+
+    if fits(text):
+        return [text]
+
+    # Try ## boundaries, then finer ### boundaries, then a fence-aware hard split.
+    # `if packed` (not `is not None`): pack returns [] only for empty input, which
+    # should fall through to the guaranteed-non-empty fallback below.
+    for markers in (("## ",), ("## ", "### ")):
+        packed = pack(blocks(text.splitlines(), markers))
+        if packed:
+            return packed
+
+    # Hard fallback: greedily pack fence-aware ATOMS. A whole ``` fence is one
+    # atom (never split — a `#` inside it stays put); every other line is its own
+    # atom. Packing atoms, rather than raw lines with an in-fence flag, is what
+    # makes each chunk fit: a fence that STRADDLES the budget boundary can't be
+    # broken, so a line-level splitter would overrun while inside it (it only ever
+    # flushes before a plain line). Guarantees each chunk fits unless a single
+    # atom is itself over budget.
+    def atoms(lines: list[str]) -> list[str]:
+        out: list[str] = []
+        fence: list[str] = []
+        in_fence = False
+        for line in lines:
+            marker = line.lstrip().startswith("```")
+            if in_fence:
+                fence.append(line)
+                if marker:  # closing marker — emit the whole fence as one atom
+                    out.append("\n".join(fence))
+                    fence, in_fence = [], False
+            elif marker:  # opening marker — begin a fence atom
+                fence, in_fence = [line], True
+            else:
+                out.append(line)
+        if fence:  # unterminated fence — keep it whole rather than lose it
+            out.append("\n".join(fence))
+        return out
+
+    parts: list[str] = []
+    cur = ""
+    for atom in atoms(text.splitlines()):
+        candidate = f"{cur}\n{atom}" if cur else atom
+        if cur and not fits(candidate):
+            parts.append(cur)
+            cur = atom
+        else:
+            cur = candidate
+    if cur:
+        parts.append(cur)
+    return parts or [text]
 
 
 def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str, Any]:

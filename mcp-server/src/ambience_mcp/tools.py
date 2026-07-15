@@ -80,7 +80,8 @@ _GUIDE_USAGE = (
     "Call ambience_get_guide again with section=<one of sections> to read that "
     "part. The whole guide is far too large to return at once — read the "
     "sections you need. 'Config schema' and 'Condition cookbook' cover most "
-    "authoring; 'Reading a diagnostic bundle' covers diagnosis."
+    "authoring; 'Reading a diagnostic bundle' covers diagnosis. A large section is "
+    "returned in parts — pass part=<n> and follow the `notice` to fetch the rest."
 )
 
 

@@ -210,3 +210,96 @@ async def test_get_guide_still_degrades_gracefully_when_unavailable():
     result = await protocol.get_guide()
     assert result["unavailable"] is True
     assert "reload" in result["message"]
+
+
+# Pagination: a section too large for the result budget is served in
+# heading-aligned parts (see budget._guide_section_parts). The env-var budget
+# override (max_result_chars reads it at call time) is how the rest of the suite
+# shrinks the budget too — see test_server.py — so it works regardless of how
+# the handler imports max_result_chars.
+
+
+async def test_get_guide_paginates_an_oversized_section(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "400")
+    big = "## X\n\n" + "\n".join(f"line {i}" for i in range(300))
+    protocol = _v1(
+        {
+            "ambience/ai_guide": {
+                # Title needs a non-empty body: _split_guide_sections treats a
+                # first H1 with an EMPTY body as a wrapper and merges the next H1
+                # into it (Ambience <= 1.1.0's double-H1 assembly), which would
+                # swallow "Only" and leave no readable section to page.
+                "guide": f"# Title\n\npreamble\n\n# Only\n\n{big}",
+                "ambience_version": "1",
+            }
+        }
+    )
+
+    p1 = await protocol.get_guide(section="Only", part=1)
+    assert p1["part"] == 1 and p1["total_parts"] > 1
+    assert "part=2" in p1["notice"]
+
+    p_last = await protocol.get_guide(section="Only", part=p1["total_parts"])
+    assert "part=" not in p_last["notice"]  # last part invites no "next"
+
+
+async def test_get_guide_rejects_an_out_of_range_part(monkeypatch):
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "400")
+    big = "## X\n\n" + "\n".join(f"line {i}" for i in range(300))
+    protocol = _v1(
+        {
+            "ambience/ai_guide": {
+                # Title needs a non-empty body: _split_guide_sections treats a
+                # first H1 with an EMPTY body as a wrapper and merges the next H1
+                # into it (Ambience <= 1.1.0's double-H1 assembly), which would
+                # swallow "Only" and leave no readable section to page.
+                "guide": f"# Title\n\npreamble\n\n# Only\n\n{big}",
+                "ambience_version": "1",
+            }
+        }
+    )
+    out = await protocol.get_guide(section="Only", part=999)
+    assert "error" in out and "part" in out["error"].lower()
+
+
+async def test_get_guide_every_part_of_the_real_cookbook_fits_the_budget(monkeypatch):
+    # The end-to-end guarantee: every paginated part must fit the budget so none
+    # is nuked by fit_result's result_too_large at the server boundary. Uses the
+    # REAL shipped cookbook at a small budget, which exercises the fence-aware
+    # hard fallback (regression: a fence straddling the budget boundary produced
+    # over-budget parts) AND the real notice/part-count fields (regression: the
+    # fits placeholder must upper-bound the real payload).
+    monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "5000")
+    from pathlib import Path
+
+    import ambience_mcp.budget as budget
+    from ambience_mcp.tools import _split_guide_sections
+
+    guide_path = (
+        Path(__file__).parents[2] / "custom_components/ambience/ai_guide/ambience-ai-guide.md"
+    )
+    full = guide_path.read_text(encoding="utf-8")
+    # Sanity: the section really does need the hard fallback at this budget.
+    assert "Condition cookbook" in _split_guide_sections(full)
+
+    protocol = _v1({"ambience/ai_guide": {"guide": full, "ambience_version": "1.1.0-rc.4"}})
+    first = await protocol.get_guide(section="Condition cookbook", part=1)
+    n = first["total_parts"]
+    assert n > 1
+    for p in range(1, n + 1):
+        out = await protocol.get_guide(section="Condition cookbook", part=p)
+        assert budget.size_of(out) <= budget.max_result_chars(), f"part {p} of {n} over budget"
+
+
+async def test_get_guide_small_section_shape_is_unchanged():
+    protocol = _v1(
+        {
+            "ambience/ai_guide": {
+                "guide": "# Title\n\npreamble\n\n# A\n\nbody",
+                "ambience_version": "1",
+            }
+        }
+    )
+    out = await protocol.get_guide(section="A")
+    assert out["section"] == "A" and out["guide"] == "body"
+    assert "part" not in out and "total_parts" not in out

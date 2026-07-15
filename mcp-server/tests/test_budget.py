@@ -22,17 +22,97 @@ def test_max_result_chars_ignores_a_nonsense_override(monkeypatch, bad):
 
 
 def test_size_of_models_the_wire_payload_not_compact_json():
-    # FastMCP sends a result pretty-printed (indent=2) AND a second time as
-    # structuredContent — size_of must model both, not the compact json.dumps a
+    # FastMCP serializes a result ONCE, pretty-printed (indent=2), as the text
+    # content block — structured output is disabled, so there is no second
+    # byte-identical structuredContent copy (see _BoundedFastMCP.add_tool).
+    # size_of must model that indent=2 wire form, not the compact json.dumps a
     # naive implementation would reach for.
     schemas = {f"a{i}": {"fields": {"f": "x" * 50}} for i in range(20)}
     payload = {"actions": {"schemas": schemas}}
     compact = len(json.dumps(payload))
 
-    assert budget.size_of(payload) == 2 * len(json.dumps(payload, indent=2))
-    # The whole point of the fix: compact JSON meaningfully under-counts nested
-    # schemas, exactly the term fit_context sheds.
+    assert budget.size_of(payload) == len(json.dumps(payload, indent=2))
+    # indent=2 still meaningfully exceeds compact for nested schemas, exactly the
+    # term fit_context sheds.
     assert budget.size_of(payload) > compact * 1.5
+
+
+def test_size_of_counts_a_single_emission():
+    # Tools disable FastMCP structured output (see _BoundedFastMCP.add_tool), so a
+    # result is serialized ONCE — the indent=2 text content block — not twice.
+    payload = {"guide": "x" * 5000}
+    assert size_of(payload) == len(json.dumps(payload, indent=2, default=str))
+
+
+def test_cookbook_sized_guide_section_fits_after_single_emission():
+    # The reported bug, pinned against the REAL shipped guide:
+    # ambience_get_guide(section="Condition cookbook") returned result_too_large
+    # only because size_of double-counted the (now disabled) structuredContent
+    # copy. With a single emission the real cookbook section fits the budget with
+    # headroom. If this FAILS, the shipped guide grew past the single-emission
+    # budget — land the pagination change before relying on it.
+    from pathlib import Path
+
+    from ambience_mcp.tools import _split_guide_sections
+
+    guide = Path(__file__).parents[2] / "custom_components/ambience/ai_guide/ambience-ai-guide.md"
+    sections = _split_guide_sections(guide.read_text(encoding="utf-8"))
+    payload = {
+        "ambience_version": "1.1.0-rc.4",
+        "sections": list(sections),
+        "section": "Condition cookbook",
+        "guide": sections["Condition cookbook"],
+    }
+    assert size_of(payload) <= budget.max_result_chars()
+
+
+def test_guide_section_parts_single_chunk_when_it_fits():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\nalpha\n\n## B\n\nbeta"
+    assert _guide_section_parts(text, fits=lambda c: True) == [text]
+
+
+def test_guide_section_parts_splits_on_headings_to_fit():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n" + "a" * 100 + "\n\n## B\n\n" + "b" * 100
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 130)
+    assert len(parts) == 2
+    assert parts[0].startswith("## A") and parts[1].startswith("## B")
+    assert all(len(p) <= 130 for p in parts)
+
+
+def test_guide_section_parts_never_splits_inside_a_fence():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n```yaml\n# not a heading\nx: 1\n```\n\n## B\n\nb"
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 60)
+    assert all(p.count("```") % 2 == 0 for p in parts)  # no fence split across parts
+
+
+def test_guide_section_parts_hard_splits_an_oversized_block():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n" + "\n".join(f"line{i}" for i in range(50))
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 40)
+    assert len(parts) > 1
+    assert all(len(p) <= 40 for p in parts)
+
+
+def test_guide_section_parts_keeps_every_chunk_within_budget_across_a_fence():
+    from ambience_mcp.budget import _guide_section_parts
+
+    # One ## block bigger than budget forces the line-level hard fallback. A long
+    # prose line leaves `cur` just under budget; the fence-open line still fits,
+    # but the fence BODY pushes the chunk over — and a fence must never be broken.
+    # Regression: the hard fallback flushed only BEFORE a plain line, never before
+    # a fence it had already entered, so it emitted an over-budget chunk even
+    # though every line and the whole fence each fit on their own.
+    fence = "```\n" + "\n".join("cccc" for _ in range(3)) + "\n```"
+    text = "## A\n" + "p" * 50 + "\n" + fence + "\ntail"
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 60)
+    assert all(len(p) <= 60 for p in parts), [len(p) for p in parts]
 
 
 def _context(schema_count: int, schema_size: int) -> dict:

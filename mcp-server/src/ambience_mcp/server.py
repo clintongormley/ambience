@@ -73,6 +73,21 @@ class _BoundedFastMCP(FastMCP):
     """
 
     def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        # This server owns its client, so it does not need FastMCP's dual
+        # content + structuredContent emission (backward compat for clients that
+        # can't read structuredContent). Emitting once halves the wire payload —
+        # see budget.size_of.
+        #
+        # Force it OFF unless a caller set it explicitly. The @tool() decorator
+        # (the path every tool here takes) ALWAYS forwards structured_output — as
+        # None, meaning "auto-detect from the return annotation", which for our
+        # `-> dict[str, Any]` tools turns the second copy ON. `get(...) is None`
+        # overrides both that explicit None AND an omitted key (a bare add_tool)
+        # to False, while leaving an explicit True/False untouched. A plain
+        # `setdefault` fills only a missing key — never the explicit None @tool()
+        # passes — so it would never fire on the path that matters.
+        if kwargs.get("structured_output") is None:
+            kwargs["structured_output"] = False
         super().add_tool(_bounded(fn), *args, **kwargs)
 
 
@@ -179,7 +194,7 @@ async def ambience_get_scope(scope: dict[str, Any]) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
+async def ambience_get_guide(section: str | None = None, part: int | None = None) -> dict[str, Any]:
     """Fetch the Ambience scene-authoring guide (schema + cookbook) live from the
     running install. Read it before authoring.
 
@@ -187,8 +202,9 @@ async def ambience_get_guide(section: str | None = None) -> dict[str, Any]:
     Call with no argument to get the list of section names, then call again with
     section=<name> to read one. Start with "Config schema" and "Condition
     cookbook"; read "Reading a diagnostic bundle" when diagnosing why a scene
-    did not fire."""
-    return await (await _protocol_()).get_guide(section)
+    did not fire. A large section is returned in parts: pass part=<n> and follow
+    the response `notice` to fetch the rest."""
+    return await (await _protocol_()).get_guide(section, part)
 
 
 @mcp.tool()

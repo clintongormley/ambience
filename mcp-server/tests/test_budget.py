@@ -44,6 +44,28 @@ def test_size_of_counts_a_single_emission():
     assert size_of(payload) == len(json.dumps(payload, indent=2, default=str))
 
 
+def test_cookbook_sized_guide_section_fits_after_single_emission():
+    # The reported bug, pinned against the REAL shipped guide:
+    # ambience_get_guide(section="Condition cookbook") returned result_too_large
+    # only because size_of double-counted the (now disabled) structuredContent
+    # copy. With a single emission the real cookbook section fits the budget with
+    # headroom. If this FAILS, the shipped guide grew past the single-emission
+    # budget — land the pagination change before relying on it.
+    from pathlib import Path
+
+    from ambience_mcp.tools import _split_guide_sections
+
+    guide = Path(__file__).parents[2] / "custom_components/ambience/ai_guide/ambience-ai-guide.md"
+    sections = _split_guide_sections(guide.read_text(encoding="utf-8"))
+    payload = {
+        "ambience_version": "1.1.0-rc.4",
+        "sections": list(sections),
+        "section": "Condition cookbook",
+        "guide": sections["Condition cookbook"],
+    }
+    assert size_of(payload) <= budget.max_result_chars()
+
+
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
         "catalog": {"entity_summary": {"total": 3}},

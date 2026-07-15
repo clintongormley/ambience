@@ -66,6 +66,40 @@ def test_cookbook_sized_guide_section_fits_after_single_emission():
     assert size_of(payload) <= budget.max_result_chars()
 
 
+def test_guide_section_parts_single_chunk_when_it_fits():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\nalpha\n\n## B\n\nbeta"
+    assert _guide_section_parts(text, fits=lambda c: True) == [text]
+
+
+def test_guide_section_parts_splits_on_headings_to_fit():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n" + "a" * 100 + "\n\n## B\n\n" + "b" * 100
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 130)
+    assert len(parts) == 2
+    assert parts[0].startswith("## A") and parts[1].startswith("## B")
+    assert all(len(p) <= 130 for p in parts)
+
+
+def test_guide_section_parts_never_splits_inside_a_fence():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n```yaml\n# not a heading\nx: 1\n```\n\n## B\n\nb"
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 60)
+    assert all(p.count("```") % 2 == 0 for p in parts)  # no fence split across parts
+
+
+def test_guide_section_parts_hard_splits_an_oversized_block():
+    from ambience_mcp.budget import _guide_section_parts
+
+    text = "## A\n\n" + "\n".join(f"line{i}" for i in range(50))
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 40)
+    assert len(parts) > 1
+    assert all(len(p) <= 40 for p in parts)
+
+
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
         "catalog": {"entity_summary": {"total": 3}},

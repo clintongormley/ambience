@@ -80,6 +80,77 @@ def size_of(payload: Any) -> int:
     return len(json.dumps(payload, indent=2, default=str))
 
 
+def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
+    """Split a guide section into the fewest consecutive chunks each satisfying
+    `fits`. Split points are markdown headings (`## ` then `### `), never inside a
+    ``` fence — so YAML `#` comments in examples are safe. A single heading-block
+    that still fails `fits` alone is hard-split by lines (fence-aware). Always
+    returns at least one chunk."""
+
+    def blocks(lines: list[str], markers: tuple[str, ...]) -> list[str]:
+        out: list[str] = []
+        cur: list[str] = []
+        in_fence = False
+        for line in lines:
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+            elif not in_fence and line.startswith(markers) and cur:
+                out.append("\n".join(cur))
+                cur = []
+            cur.append(line)
+        if cur:
+            out.append("\n".join(cur))
+        return out
+
+    def pack(chunks: list[str]) -> list[str] | None:
+        """Greedily join consecutive chunks while `fits`. Returns None if any single
+        chunk fails `fits` on its own (caller must split that chunk further)."""
+        parts: list[str] = []
+        cur = ""
+        for ch in chunks:
+            if not fits(ch):
+                return None
+            candidate = f"{cur}\n{ch}" if cur else ch
+            if cur and fits(candidate):
+                cur = candidate
+            elif cur:
+                parts.append(cur)
+                cur = ch
+            else:
+                cur = ch
+        if cur:
+            parts.append(cur)
+        return parts
+
+    if fits(text):
+        return [text]
+
+    # Try ## boundaries, then finer ### boundaries, then a line-level hard split.
+    for markers in (("## ",), ("## ", "### ")):
+        packed = pack(blocks(text.splitlines(), markers))
+        if packed is not None:
+            return packed
+    # Hard fallback: line-level, fence-aware, guarantees each chunk fits (barring a
+    # single line longer than the budget, which the guide never contains).
+    parts: list[str] = []
+    cur = ""
+    in_fence = False
+    for line in text.splitlines():
+        candidate = f"{cur}\n{line}" if cur else line
+        if cur and not in_fence and fits(candidate):
+            cur = candidate
+        elif cur and not in_fence:
+            parts.append(cur)
+            cur = line
+        else:  # inside a fence, never break — keep the fence intact
+            cur = candidate
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+    if cur:
+        parts.append(cur)
+    return parts or [text]
+
+
 def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str, Any]:
     """Shed action schemas, biggest first, until the context fits.
 

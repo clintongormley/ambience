@@ -8,6 +8,26 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- Large sections of the AI scene-authoring guide are now served in parts over
+    MCP. A section that would exceed the result budget is split at its headings
+    (never inside a code example) and returned page by page, so no part of the
+    guide can ever be too big for the AI to read — it just follows the notice
+    and fetches the next part.
+- Two new scene-authoring cookbook recipes: *Re-arm a self-clearing helper*
+    (keep a helper set while its conditions still hold, by subscribing a scene
+    to its own target) and *Fail-safe off* (turn an appliance off on its own
+    run-time, so a dead presence sensor can't leave it running).
+
+### Fixed
+
+- Asking the AI for the large "Condition cookbook" section of the authoring
+    guide over MCP no longer fails with *"result too large"*. Tool results were
+    being serialised twice on the wire, which doubled their measured size and
+    pushed the biggest guide section over the budget; results are now sent once,
+    halving the payload so the section fits.
+
 ## [1.1.0-rc.4] - 2026-07-13
 
 ### Added

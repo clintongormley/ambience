@@ -78,12 +78,14 @@ class _BoundedFastMCP(FastMCP):
         # can't read structuredContent). Emitting once halves the wire payload —
         # see budget.size_of.
         #
-        # Override None specifically, NOT a missing key: the @tool() decorator
-        # (the path every tool here takes) ALWAYS forwards structured_output
-        # explicitly, defaulting to None ("auto-detect from the return
-        # annotation" — which, for our `-> dict[str, Any]` tools, turns the
-        # second copy ON). A bare `setdefault` would never fire against that
-        # explicit None. An explicit True/False from a caller is still honoured.
+        # Force it OFF unless a caller set it explicitly. The @tool() decorator
+        # (the path every tool here takes) ALWAYS forwards structured_output — as
+        # None, meaning "auto-detect from the return annotation", which for our
+        # `-> dict[str, Any]` tools turns the second copy ON. `get(...) is None`
+        # overrides both that explicit None AND an omitted key (a bare add_tool)
+        # to False, while leaving an explicit True/False untouched. A plain
+        # `setdefault` fills only a missing key — never the explicit None @tool()
+        # passes — so it would never fire on the path that matters.
         if kwargs.get("structured_output") is None:
             kwargs["structured_output"] = False
         super().add_tool(_bounded(fn), *args, **kwargs)

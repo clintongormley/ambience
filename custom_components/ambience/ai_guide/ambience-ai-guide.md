@@ -1408,6 +1408,57 @@ spike can't flip a scene:
   float it up on its own — **pin it to the top** (see [schema.md](schema.md) → *How
   scenes are chosen*).
 
+### Fail-safe off: cap on the device's own run-time
+
+An appliance switched **on** by presence and **off** by "sensor vacant for N"
+(a bathroom fan, an extractor, a towel radiator) is only as reliable as that
+sensor. If the sensor goes **unavailable** — reboot, Wi-Fi drop, firmware crash
+— the "vacant" test can never pass (`unavailable` is neither occupied nor
+vacant), so nothing turns the appliance off and it runs until the sensor
+returns. Make the **off** independent of the sensor: a blocker holds the run-on
+window, and a cap keyed on the **appliance's own state** does the turn-off.
+
+```yaml
+# 1 — presence turns it on
+- name: Person in shower or toilet
+  category: fans
+  when:
+    state:
+      kind: or
+      items:
+        - { kind: is, entity_id: binary_sensor.bath_zone_shower, states: ["on"], for: { s: 15 } }
+        - { kind: is, entity_id: binary_sensor.bath_zone_toilet, states: ["on"], for: { m: 1 } }
+  actions:
+    - { service: ambience.turn_on, entity_ids: [fan.bath], params: {} }
+# 2 — no-op blocker: hold until BOTH zones have been clear a while
+- name: Block until shower and toilet clear for 15 minutes
+  category: fans
+  when:
+    occupancy: { sensors: [binary_sensor.bath_zone_shower, binary_sensor.bath_zone_toilet], occupied: false, quant: all, for: { m: 15 }, negate: true }
+  actions: []
+# 3 — cap on the FAN's own run-time; reads the device, not the sensor
+- name: Fan off after 15 minutes
+  category: fans
+  when:
+    state: { kind: is, entity_id: fan.bath, states: ["on"], for: { m: 15 } }
+  actions:
+    - { service: ambience.turn_off, entity_ids: [fan.bath], params: {} }
+```
+
+- **Why a dead sensor can't strand it on.** Scene 2 is a `negate` blocker, and an
+  unavailable sensor is a **miss even under negate** (see the *occupancy* note on
+  unobservable sensors) — so when the sensor dies the blocker *releases* instead
+  of holding, and the cascade falls through to scene 3, which reads `fan.bath`
+  (still observable) and turns it off ~N after it came on, whatever the sensor is
+  doing.
+- **Order 1 → 2 → 3.** Scene 1's match (a zone occupied) is a subset of scene 2's
+  ("not both clear"), so containment sorts it first; pin the `state` cap last so
+  it can't float above the `occupancy` blocker.
+- This is the **dual** of *Re-arm a self-clearing helper*: that keeps a helper
+  **on** against a self-clearing timer; this turns a device **off** against a
+  dead sensor. The built-in radiator idiom (`Radiator off after 2 hours`) is the
+  same shape.
+
 ### Survive a Home Assistant restart (a `for:` gate is briefly immature)
 
 > **Precondition — you only need this if you hoisted the occupancy test.** The

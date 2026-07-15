@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..budget import fit_preview
+from ..budget import _guide_section_parts, fit_preview, max_result_chars, size_of
 from ..diff import diff_scopes
 from ..ha_client import HACommandError
 from ..ledger import PreviewLedger, fingerprint
@@ -107,7 +107,9 @@ class BaseProtocol:
             result["scenes"] = _with_ranks(result["scenes"])
         return result
 
-    async def get_guide(self, section: str | None = None) -> dict[str, Any]:
+    async def get_guide(
+        self, section: str | None = None, part: int | None = None
+    ) -> dict[str, Any]:
         """Fetch the authoring guide (schema + cookbook) from the running install, one
         section at a time.
 
@@ -116,6 +118,11 @@ class BaseProtocol:
         tokens and does not fit in a single tool result, which is why there is no
         "give me all of it" mode. A backend caught mid config-entry-reload (or
         disabled) returns {unavailable: true} instead of raising — see `command`.
+
+        A single section that would itself bust the result budget is served in
+        heading-aligned parts: pass `part` (1-based) and follow the returned
+        `notice` to fetch the rest. A section that fits is returned whole, with no
+        `part`/`total_parts` fields — the shape is unchanged for the common case.
         """
         held = {"have_version": self.guide_cache.version} if self.guide_cache.version else {}
         try:
@@ -140,7 +147,52 @@ class BaseProtocol:
             return {**meta, "usage": _GUIDE_USAGE}
         if section not in sections:
             return {**meta, "error": f"Unknown guide section {section!r}.", "usage": _GUIDE_USAGE}
-        return {**meta, "section": section, "guide": sections[section]}
+
+        text = sections[section]
+
+        def fits(chunk: str) -> bool:
+            # Budget the WHOLE result, with generous placeholder pagination fields
+            # (a 2-digit total_parts, a 160-char notice) so the real payload —
+            # smaller numbers, a shorter notice — never exceeds what was tested
+            # here. A section that fits whole is returned without these fields, so
+            # this over-budgets that case slightly; harmless, and it keeps the
+            # split conservative.
+            trial = {
+                **meta,
+                "section": section,
+                "part": 1,
+                "total_parts": 99,
+                "guide": chunk,
+                "notice": "x" * 160,
+            }
+            return size_of(trial) <= max_result_chars()
+
+        if fits(text):
+            return {**meta, "section": section, "guide": text}
+
+        parts = _guide_section_parts(text, fits)
+        n = len(parts)
+        p = 1 if part is None else part
+        if not 1 <= p <= n:
+            return {
+                **meta,
+                "section": section,
+                "error": f"Section {section!r} spans {n} parts; ask for part 1..{n}.",
+                "usage": _GUIDE_USAGE,
+            }
+        notice = f"Section {section!r} is large: part {p} of {n}."
+        if p < n:
+            notice += (
+                f" Call ambience_get_guide(section={section!r}, part={p + 1}) for the next part."
+            )
+        return {
+            **meta,
+            "section": section,
+            "part": p,
+            "total_parts": n,
+            "guide": parts[p - 1],
+            "notice": notice,
+        }
 
     async def dry_run(self, scope: dict[str, Any]) -> dict[str, Any]:
         kind, sid = _parse_scope(scope)

@@ -792,6 +792,39 @@ winning scene's actions run, so every scene must stand alone; idempotent
   re-evaluates whenever `current_activity` changes (it's a `state` atom, so the
   unit is subscribed to it — see the *`state`* section above).
 
+### Re-arm a self-clearing helper (subscribe to your own target)
+
+Some helpers clear themselves — an `input_boolean` an external hardware timer
+flips back `off`, a mode that lapses. When a scene should **keep** such a
+helper set while its real conditions still hold, list the helper **in the
+scene's own `when`** as an always-true `state` atom over **all** its states,
+and set `apply: always`:
+
+```yaml
+- name: Hold the power-shower latch while someone showers
+  category: <power shower category>          # priority above the "clear" scene; apply: always
+  apply: always
+  when:
+    occupancy: { sensors: [binary_sensor.shower_zone], for: { s: 3 } }
+    state:
+      kind: and
+      items:
+        - { kind: ">", entity_id: sensor.water_flow, states: ["5"] }
+        - { kind: is, entity_id: input_boolean.power_shower, states: ["off", "on"] }  # re-arm + hold
+  actions:
+    - { service: ambience.turn_on, entity_ids: [input_boolean.power_shower], params: {} }
+```
+
+- The `is [off, on]` atom is **not** redundant. It does two jobs (see the
+  *subscription note* in the *`state`* section above): it **subscribes** the
+  unit to the helper, so the instant the timer flips it `off` the unit
+  re-evaluates and `apply: always` turns it back on; and matching **both**
+  states means the atom never drops the scene, so evaluation does not **fall
+  through to the next scene** during the flip.
+- Pair it with `apply: always` (the re-fire) — see *Re-assert a scene held
+  between wins* above. When **reviewing**, treat a tautological `is [<all
+  states>]` on a scene's own target as load-bearing, never as dead code.
+
 ### Simplify a finished group: hoist a repeated condition into a gate
 
 Once a group works, do a quick **ordering-and-simplification pass**. The tell-tale

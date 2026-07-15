@@ -151,19 +151,27 @@ class BaseProtocol:
         text = sections[section]
 
         def fits(chunk: str) -> bool:
-            # Budget the WHOLE result, with generous placeholder pagination fields
-            # (a 2-digit total_parts, a 160-char notice) so the real payload —
-            # smaller numbers, a shorter notice — never exceeds what was tested
-            # here. A section that fits whole is returned without these fields, so
-            # this over-budgets that case slightly; harmless, and it keeps the
+            # Budget the WHOLE result. The pagination fields are placeholders sized
+            # to UPPER-BOUND the real payload rather than guessed: `part`/
+            # `total_parts` at 3 digits, and `notice` built from THIS section's
+            # real name in its longest ("next part") form. So a real returned part
+            # — real name, real numbers of ≤3 digits (a section never splits into
+            # ≥1000 parts at any sane budget) — can never be larger than what was
+            # budgeted here, and thus never trips fit_result at the server
+            # boundary. A section that fits whole is returned WITHOUT these fields,
+            # so this over-budgets that case slightly; harmless, and it keeps the
             # split conservative.
+            worst_notice = (
+                f"Section {section!r} is large: part 999 of 999."
+                f" Call ambience_get_guide(section={section!r}, part=999) for the next part."
+            )
             trial = {
                 **meta,
                 "section": section,
-                "part": 1,
-                "total_parts": 99,
+                "part": 999,
+                "total_parts": 999,
                 "guide": chunk,
-                "notice": "x" * 160,
+                "notice": worst_notice,
             }
             return size_of(trial) <= max_result_chars()
 

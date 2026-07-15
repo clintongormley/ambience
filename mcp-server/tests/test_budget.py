@@ -100,6 +100,21 @@ def test_guide_section_parts_hard_splits_an_oversized_block():
     assert all(len(p) <= 40 for p in parts)
 
 
+def test_guide_section_parts_keeps_every_chunk_within_budget_across_a_fence():
+    from ambience_mcp.budget import _guide_section_parts
+
+    # One ## block bigger than budget forces the line-level hard fallback. A long
+    # prose line leaves `cur` just under budget; the fence-open line still fits,
+    # but the fence BODY pushes the chunk over — and a fence must never be broken.
+    # Regression: the hard fallback flushed only BEFORE a plain line, never before
+    # a fence it had already entered, so it emitted an over-budget chunk even
+    # though every line and the whole fence each fit on their own.
+    fence = "```\n" + "\n".join("cccc" for _ in range(3)) + "\n```"
+    text = "## A\n" + "p" * 50 + "\n" + fence + "\ntail"
+    parts = _guide_section_parts(text, fits=lambda c: len(c) <= 60)
+    assert all(len(p) <= 60 for p in parts), [len(p) for p in parts]
+
+
 def _context(schema_count: int, schema_size: int) -> dict:
     return {
         "catalog": {"entity_summary": {"total": 3}},

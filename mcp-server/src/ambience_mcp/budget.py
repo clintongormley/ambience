@@ -84,8 +84,10 @@ def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
     """Split a guide section into the fewest consecutive chunks each satisfying
     `fits`. Split points are markdown headings (`## ` then `### `), never inside a
     ``` fence — so YAML `#` comments in examples are safe. A single heading-block
-    that still fails `fits` alone is hard-split by lines (fence-aware). Always
-    returns at least one chunk."""
+    that still fails `fits` alone is hard-split into fence-aware atoms (a whole
+    ``` fence is one atom, never broken). Always returns at least one chunk; each
+    chunk fits UNLESS a single atom — one line, or one whole fence — is itself
+    larger than the budget (which the shipped guide does not contain)."""
 
     def blocks(lines: list[str], markers: tuple[str, ...]) -> list[str]:
         out: list[str] = []
@@ -126,28 +128,49 @@ def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
     if fits(text):
         return [text]
 
-    # Try ## boundaries, then finer ### boundaries, then a line-level hard split.
+    # Try ## boundaries, then finer ### boundaries, then a fence-aware hard split.
+    # `if packed` (not `is not None`): pack returns [] only for empty input, which
+    # should fall through to the guaranteed-non-empty fallback below.
     for markers in (("## ",), ("## ", "### ")):
         packed = pack(blocks(text.splitlines(), markers))
-        if packed is not None:
+        if packed:
             return packed
-    # Hard fallback: line-level, fence-aware, guarantees each chunk fits (barring a
-    # single line longer than the budget, which the guide never contains).
+
+    # Hard fallback: greedily pack fence-aware ATOMS. A whole ``` fence is one
+    # atom (never split — a `#` inside it stays put); every other line is its own
+    # atom. Packing atoms, rather than raw lines with an in-fence flag, is what
+    # makes each chunk fit: a fence that STRADDLES the budget boundary can't be
+    # broken, so a line-level splitter would overrun while inside it (it only ever
+    # flushes before a plain line). Guarantees each chunk fits unless a single
+    # atom is itself over budget.
+    def atoms(lines: list[str]) -> list[str]:
+        out: list[str] = []
+        fence: list[str] = []
+        in_fence = False
+        for line in lines:
+            marker = line.lstrip().startswith("```")
+            if in_fence:
+                fence.append(line)
+                if marker:  # closing marker — emit the whole fence as one atom
+                    out.append("\n".join(fence))
+                    fence, in_fence = [], False
+            elif marker:  # opening marker — begin a fence atom
+                fence, in_fence = [line], True
+            else:
+                out.append(line)
+        if fence:  # unterminated fence — keep it whole rather than lose it
+            out.append("\n".join(fence))
+        return out
+
     parts: list[str] = []
     cur = ""
-    in_fence = False
-    for line in text.splitlines():
-        candidate = f"{cur}\n{line}" if cur else line
-        # Flush only when a break is allowed here (not mid-fence) AND this line
-        # would bust `fits`; otherwise extend — which also keeps a fence intact
-        # (never break while in_fence) and starts the first part.
-        if cur and not in_fence and not fits(candidate):
+    for atom in atoms(text.splitlines()):
+        candidate = f"{cur}\n{atom}" if cur else atom
+        if cur and not fits(candidate):
             parts.append(cur)
-            cur = line
+            cur = atom
         else:
             cur = candidate
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
     if cur:
         parts.append(cur)
     return parts or [text]

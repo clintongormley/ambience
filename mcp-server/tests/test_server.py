@@ -1,7 +1,20 @@
+import json
+
 import ambience_mcp.server as server
 from ambience_mcp import budget
 from ambience_mcp.ha_client import ReconnectingClient
 from ambience_mcp.protocols import PROTOCOLS
+
+
+def _wire(result):
+    """The dict a bounded tool actually puts on the wire. Structured output is
+    disabled (see _BoundedFastMCP.add_tool), so FastMCP returns a plain content
+    sequence — one text block whose text is the indent=2 JSON of the tool's dict
+    result — not a (content, structuredContent) tuple. Parse it back so a test can
+    assert on the fields the client receives."""
+    assert isinstance(result, list), f"expected a content sequence, got {type(result)}"
+    assert len(result) == 1 and result[0].type == "text"
+    return json.loads(result[0].text)
 
 
 def _serving(**tools):
@@ -88,6 +101,31 @@ def test_all_tool_wrappers_exist():
 # _BoundedFastMCP.add_tool), not per-tool.
 
 
+async def test_bounded_add_tool_disables_structured_output():
+    """Every tool is registered with structured output OFF, so FastMCP emits a
+    result once (the indent=2 text content block) instead of twice (a second,
+    byte-identical structuredContent copy). That halves the wire size size_of
+    measures — see _BoundedFastMCP.add_tool and budget.size_of.
+
+    Registered via @tool() (the real path a production tool takes), NOT
+    add_tool() directly: @tool() ALWAYS forwards structured_output explicitly as
+    None ("auto-detect from the return annotation"), so the guard has to override
+    that None — a bare `setdefault` on a missing key would leave the second copy
+    on. FastMCP returns a plain content sequence when structured output is off and
+    a (content, structuredContent) tuple when it is on, so the tuple's absence is
+    the proof the second copy is gone."""
+    probe = server._BoundedFastMCP("probe")
+
+    @probe.tool()
+    async def demo() -> dict[str, object]:
+        return {"a": 1, "b": "x" * 20}
+
+    result = await probe.call_tool("demo", {})
+
+    assert not isinstance(result, tuple)  # no structuredContent second channel
+    assert isinstance(result, list) and len(result) == 1 and result[0].type == "text"
+
+
 async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(monkeypatch):
     """A brand-new tool that never calls any fit_* helper — exactly the shape of
     the 8 tools that had no guard before this fix — still cannot ship an
@@ -105,7 +143,7 @@ async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(mo
     async def oversized_tool() -> dict[str, object]:
         return {"items": [{"x": "y" * 100} for _ in range(50)]}
 
-    _, structured = await probe.call_tool("oversized_tool", {})
+    structured = _wire(await probe.call_tool("oversized_tool", {}))
 
     assert budget.size_of(structured) <= 1000
     assert structured["error"] == "result_too_large"
@@ -123,7 +161,7 @@ async def test_list_categories_is_bounded_despite_having_no_fit_strategy(monkeyp
 
     monkeypatch.setattr(server, "_protocol_", _serving(list_categories=oversized_categories))
 
-    _, structured = await server.mcp.call_tool("ambience_list_categories", {})
+    structured = _wire(await server.mcp.call_tool("ambience_list_categories", {}))
 
     assert budget.size_of(structured) <= 1500
     assert structured["error"] == "result_too_large"
@@ -141,7 +179,7 @@ async def test_a_sync_tool_is_bounded_too(monkeypatch):
     def oversized_sync_tool() -> dict[str, object]:
         return {"items": [{"x": "y" * 100} for _ in range(50)]}
 
-    _, structured = await probe.call_tool("oversized_sync_tool", {})
+    structured = _wire(await probe.call_tool("oversized_sync_tool", {}))
 
     assert budget.size_of(structured) <= 1000
     assert structured["error"] == "result_too_large"
@@ -157,7 +195,7 @@ async def test_an_already_bounded_tool_result_passes_through_unchanged(monkeypat
 
     monkeypatch.setattr(server, "_protocol_", _serving(list_categories=small_categories))
 
-    _, structured = await server.mcp.call_tool("ambience_list_categories", {})
+    structured = _wire(await server.mcp.call_tool("ambience_list_categories", {}))
 
     assert structured == {"categories": [{"id": "lighting"}]}
     assert "omitted" not in structured

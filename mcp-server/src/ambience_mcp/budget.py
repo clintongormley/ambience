@@ -62,21 +62,22 @@ def max_result_chars() -> int:
 def size_of(payload: Any) -> int:
     """The payload's size as the client will actually receive it on the wire.
 
-    FastMCP does not send compact JSON. Every tool here is annotated
-    `-> dict[str, Any]`, which FastMCP turns into an output schema, so a result
-    is serialized TWICE: once pretty-printed (`indent=2`) as the text content
-    block, and again, byte-for-byte the same, as `structuredContent`. Nested
-    action schemas — exactly what `fit_context` exists to shed — inflate ~97%
-    under `indent=2` alone, before the duplication.
+    FastMCP does not send compact JSON. Tools disable FastMCP structured output
+    (`_BoundedFastMCP.add_tool` passes `structured_output=False`), so a result is
+    serialized ONCE — the pretty-printed (`indent=2`) text content block — not
+    twice. (With structured output enabled FastMCP emits the payload a second
+    time, byte-for-byte, as `structuredContent`; this server owns its client and
+    does not need that backward-compat channel, so it is turned off — halving the
+    wire size this function measures.) Nested action schemas — exactly what
+    `fit_context` exists to shed — still inflate ~97% under `indent=2`.
 
-    Measuring compact `json.dumps` therefore under-counts the real wire size by
-    roughly 1.6-2.6x, worst where it matters most, and would let an "it fits"
-    result sail through that the client actually rejects. `json.dumps(indent=2)`
-    is not byte-identical to FastMCP's `pydantic_core.to_json(indent=2)`, but it
-    is a faithful stand-in, and keeps this module free of a FastMCP/pydantic-core
-    dependency.
+    Measuring compact `json.dumps` therefore under-counts the real wire size,
+    worst where it matters most, and would let an "it fits" result sail through
+    that the client actually rejects. `json.dumps(indent=2)` is not byte-identical
+    to FastMCP's `pydantic_core.to_json(indent=2)`, but it is a faithful stand-in,
+    and keeps this module free of a FastMCP/pydantic-core dependency.
     """
-    return 2 * len(json.dumps(payload, indent=2, default=str))
+    return len(json.dumps(payload, indent=2, default=str))
 
 
 def fit_context(context: dict[str, Any], budget: int | None = None) -> dict[str, Any]:

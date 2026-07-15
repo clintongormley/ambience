@@ -73,6 +73,19 @@ class _BoundedFastMCP(FastMCP):
     """
 
     def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        # This server owns its client, so it does not need FastMCP's dual
+        # content + structuredContent emission (backward compat for clients that
+        # can't read structuredContent). Emitting once halves the wire payload —
+        # see budget.size_of.
+        #
+        # Override None specifically, NOT a missing key: the @tool() decorator
+        # (the path every tool here takes) ALWAYS forwards structured_output
+        # explicitly, defaulting to None ("auto-detect from the return
+        # annotation" — which, for our `-> dict[str, Any]` tools, turns the
+        # second copy ON). A bare `setdefault` would never fire against that
+        # explicit None. An explicit True/False from a caller is still honoured.
+        if kwargs.get("structured_output") is None:
+            kwargs["structured_output"] = False
         super().add_tool(_bounded(fn), *args, **kwargs)
 
 

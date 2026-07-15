@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.5] - 2026-07-15
+
 ### Added
 
 - Large sections of the AI scene-authoring guide are now served in parts over

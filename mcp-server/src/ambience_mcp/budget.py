@@ -111,13 +111,14 @@ def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
             if not fits(ch):
                 return None
             candidate = f"{cur}\n{ch}" if cur else ch
-            if cur and fits(candidate):
-                cur = candidate
-            elif cur:
+            # Greedy flush-or-extend: start a new part only when appending this
+            # chunk would bust `fits`; otherwise extend (when `cur` is empty
+            # candidate == ch, so this also starts the first part).
+            if cur and not fits(candidate):
                 parts.append(cur)
                 cur = ch
             else:
-                cur = ch
+                cur = candidate
         if cur:
             parts.append(cur)
         return parts
@@ -137,12 +138,13 @@ def _guide_section_parts(text: str, fits: Callable[[str], bool]) -> list[str]:
     in_fence = False
     for line in text.splitlines():
         candidate = f"{cur}\n{line}" if cur else line
-        if cur and not in_fence and fits(candidate):
-            cur = candidate
-        elif cur and not in_fence:
+        # Flush only when a break is allowed here (not mid-fence) AND this line
+        # would bust `fits`; otherwise extend — which also keeps a fence intact
+        # (never break while in_fence) and starts the first part.
+        if cur and not in_fence and not fits(candidate):
             parts.append(cur)
             cur = line
-        else:  # inside a fence, never break — keep the fence intact
+        else:
             cur = candidate
         if line.lstrip().startswith("```"):
             in_fence = not in_fence

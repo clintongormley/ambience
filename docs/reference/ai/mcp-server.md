@@ -116,9 +116,10 @@ pin first.
 ## Running an Ambience pre-release
 
 If you test Ambience betas, your `ambience-mcp` has to come from the same
-channel — `uvx` installs pre-releases only when you ask it to, so by default it
-would keep giving you the last stable `ambience-mcp`, which may be too old for
-the beta. Use these `args` instead:
+channel — `uvx` installs pre-releases only when you ask it to (`@latest` does
+not change that: it means the newest **final** release), so by default it would
+keep giving you the last stable `ambience-mcp`, which may be too old for the
+beta. Use these `args` instead:
 
 ```json
 ["--prerelease=allow", "ambience-mcp@latest"]

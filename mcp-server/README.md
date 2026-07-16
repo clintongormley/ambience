@@ -167,7 +167,9 @@ A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
 not install one by default**: it skips pre-releases whenever a final release
 exists, so it would keep handing you the last stable `ambience-mcp` — which may
 be too old for the beta you are testing. You would be told to upgrade, restart,
-and land on the same stable build again.
+and land on the same stable build again. `@latest` does not change this: it
+re-resolves on every start, but within the same channel — "latest" means the
+newest **final** release until you pass the flag.
 
 So if you run an Ambience beta, opt the MCP server into the same channel:
 

@@ -55,9 +55,9 @@ class IncompatibleError(HAError):
     """This ambience-mcp and this Ambience cannot work together.
 
     Raised from every tool call, not just the one that noticed, and carrying a
-    message that names WHICH side to upgrade. Never advises a downgrade: `uvx
-    ambience-mcp` installs LATEST, so "install an older one" is advice the user
-    cannot follow.
+    message that names WHICH side to upgrade. Never advises a downgrade:
+    `uvx ambience-mcp@latest` installs LATEST, so "install an older one" is
+    advice the user cannot follow.
     """
 
 
@@ -89,14 +89,14 @@ def _prerelease_clause(ambience_version: object) -> str:
     pre-release — and nothing at all when it is not.
 
     A pre-release Ambience is paired with a pre-release `ambience-mcp`, and a plain
-    `uvx --from ambience-mcp` cannot see one: uv's default prerelease strategy skips
-    pre-releases whenever a final release exists. So the moment any final ambience-mcp
-    is published, a beta tester on the documented (unpinned, plain-`uvx`) config who is
-    told to "upgrade ambience-mcp" would clean the cache, restart, resolve that same
-    final build again, and loop forever — the exact unfollowable advice this handshake
-    exists to make unreachable. `--prerelease=allow` is the only way out, and it points
-    FORWARD: it WIDENS what uv may resolve, never asking for a pinned or an earlier
-    build (which `uvx` could not install anyway).
+    `uvx ambience-mcp@latest` cannot see one: uv's default prerelease strategy skips
+    pre-releases whenever a final release exists (`@latest` changes FRESHNESS, not the
+    channel). So the moment any final ambience-mcp is published, a beta tester on the
+    documented (`@latest`) config who is told to "upgrade ambience-mcp" would restart,
+    resolve that same final build again, and loop forever — the exact unfollowable
+    advice this handshake exists to make unreachable. `--prerelease=allow` is the only
+    way out, and it points FORWARD: it WIDENS what uv may resolve, never asking for a
+    pinned or an earlier build (which `uvx` could not install anyway).
 
     Conservative, and deliberately one-directional:
     - absent / null / not a string / unparseable `ambience_version` → no clause. The
@@ -115,20 +115,20 @@ def _prerelease_clause(ambience_version: object) -> str:
     return (
         f" This Ambience ({ambience_version}) is a PRE-RELEASE, so your MCP client must "
         "allow pre-releases too, or `uvx` will keep reinstalling the newest FINAL "
-        'ambience-mcp: use args `["--prerelease=allow", "ambience-mcp"]` '
-        "(`uvx --prerelease=allow ambience-mcp`)."
+        'ambience-mcp: use args `["--prerelease=allow", "ambience-mcp@latest"]` '
+        "(`uvx --prerelease=allow ambience-mcp@latest`)."
     )
 
 
 def _upgrade_mcp(reason: str, *, ambience_version: object = None) -> str:
     """The one remedy that gets a user from a too-old ambience-mcp to a working one.
 
-    Every clause is load-bearing, and the third exists because the remedy is otherwise
+    Every clause is load-bearing, and the second exists because the remedy is otherwise
     a NO-OP for anyone who followed the README's "Pinning a version" advice: a pinned
-    `ambience-mcp@0.2.0` reinstalls the same pinned build after any cache clean or
-    restart, so they would loop on this message forever. Naming the pin is the only
-    way out — and it points FORWARD (remove the pin => get latest), never at an older
-    or a specific version, which `uvx` could not install anyway.
+    `ambience-mcp@0.2.0` reinstalls the same pinned build after every restart, so they
+    would loop on this message forever. Naming the pin is the only way out — and it
+    points FORWARD (remove the pin => get latest), never at an older or a specific
+    version, which `uvx` could not install anyway.
 
     `ambience_version` is the backend's own version, straight off the hello. It adds the
     pre-release channel clause (see `_prerelease_clause`) when — and only when — the
@@ -136,10 +136,9 @@ def _upgrade_mcp(reason: str, *, ambience_version: object = None) -> str:
     rest of the remedy is a no-op for the one user it is aimed at.
     """
     return (
-        f"{reason} Upgrade ambience-mcp: quit your MCP client, run "
-        "`uv cache clean ambience-mcp`, then restart it. (`uvx` caches the old "
-        "version and the running server holds the cache lock, so the restart alone "
-        "is not enough.) If your MCP config pins a version (e.g. args "
+        f"{reason} Upgrade ambience-mcp: restart your MCP client — the documented "
+        "config runs `ambience-mcp@latest`, which installs the newest release every "
+        "time the server starts. If your MCP config pins a version (e.g. args "
         '`["ambience-mcp@0.2.0"]`), remove the pin — a pinned version never upgrades.'
         f"{_prerelease_clause(ambience_version)}"
     )
@@ -369,10 +368,11 @@ class ReconnectingClient:
         # The backend's OWN version — not a compatibility input (the protocol and the
         # floor decide that), but it decides which ambience-mcp CHANNEL the "upgrade
         # ambience-mcp" remedy has to name: a pre-release Ambience is paired with a
-        # pre-release ambience-mcp, which a plain `uvx` will never resolve. It only ever
-        # changes the message's WORDING — see `_prerelease_clause` — so an absent,
-        # null, or unparseable value simply omits a clause and every verdict below
-        # stands exactly as it would have.
+        # pre-release ambience-mcp, which `uvx ambience-mcp@latest` will never
+        # resolve while a final release exists. It only ever changes the message's
+        # WORDING — see `_prerelease_clause` — so an absent, null, or unparseable
+        # value simply omits a clause and every verdict below stands exactly as it
+        # would have.
         ambience_version = hello.get("ambience_version")
 
         # The backend refusing THIS client outranks any protocol question: it is the

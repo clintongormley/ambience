@@ -43,8 +43,11 @@ async def test_backend_ahead_says_upgrade_the_mcp_server():
 
     with pytest.raises(IncompatibleError) as exc:
         await client.ready()
-    assert "ambience-mcp" in str(exc.value)
-    assert "uv cache clean" in str(exc.value)
+    assert "ambience-mcp@latest" in str(exc.value)
+    # A client restart IS the upgrade — `@latest` re-resolves on every start.
+    assert "restart your MCP client" in str(exc.value)
+    assert "remove the pin" in str(exc.value)  # the pin clause is load-bearing too
+    assert "uv cache clean" not in str(exc.value)
 
 
 async def test_backend_behind_says_upgrade_ambience():
@@ -181,8 +184,8 @@ async def test_a_client_below_the_backend_floor_is_refused():
 
     with pytest.raises(IncompatibleError) as exc:
         await client.ready()
-    assert "ambience-mcp" in str(exc.value)
-    assert "uv cache clean" in str(exc.value)
+    assert "ambience-mcp@latest" in str(exc.value)
+    assert "restart your MCP client" in str(exc.value)
 
 
 async def test_pep440_ordering_not_string_ordering():
@@ -232,8 +235,8 @@ async def test_every_command_raises_while_incompatible():
 
 
 async def test_no_message_ever_asks_for_a_downgrade():
-    # The invariant: `uvx ambience-mcp` installs LATEST, so a user cannot follow
-    # advice to install an older one. Every remedy must point forward.
+    # The invariant: `uvx ambience-mcp@latest` installs LATEST, so a user cannot
+    # follow advice to install an older one. Every remedy must point forward.
     #
     # ALL SIX incompatibility messages, not four. The "backend behind" one
     # (supported={2,3}, backend says 1) is the only message not built by a shared
@@ -275,13 +278,13 @@ async def test_no_message_ever_asks_for_a_downgrade():
 
 
 # --- the release CHANNEL: a pre-release backend needs a pre-release ambience-mcp ------
-# `uvx --from ambience-mcp` uses uv's default prerelease strategy, which SKIPS
+# `uvx ambience-mcp@latest` uses uv's default prerelease strategy, which SKIPS
 # pre-releases whenever a final release exists. So the moment any final ambience-mcp is
-# published, a beta tester running a pre-release Ambience on the documented (unpinned,
-# plain-`uvx`) config who is told to "upgrade ambience-mcp" cleans the cache, restarts,
-# resolves that same final build again — and loops forever. The remedy must name
-# `--prerelease=allow`, or it is advice they cannot follow, which is the one thing this
-# whole handshake exists to make unreachable.
+# published, a beta tester running a pre-release Ambience on the documented (`@latest`)
+# config who is told to "upgrade ambience-mcp" restarts, resolves that same final build
+# again — and loops forever. The remedy must name `--prerelease=allow`, or it is advice
+# they cannot follow, which is the one thing this whole handshake exists to make
+# unreachable.
 
 
 @pytest.mark.parametrize(
@@ -305,7 +308,7 @@ async def test_a_prerelease_backend_tells_the_user_to_allow_prereleases(hello):
     message = str(exc.value)
     assert "--prerelease=allow" in message
     assert "1.6.0-rc.1" in message  # names the pre-release it is talking about
-    assert "uv cache clean" in message  # ...and keeps the rest of the remedy
+    assert "restart your MCP client" in message  # ...and keeps the rest of the remedy
 
 
 async def test_a_final_backend_is_never_told_to_allow_prereleases():
@@ -320,7 +323,7 @@ async def test_a_final_backend_is_never_told_to_allow_prereleases():
         await client.ready()
 
     assert "--prerelease" not in str(exc.value)
-    assert "uv cache clean" in str(exc.value)  # the ordinary remedy is untouched
+    assert "ambience-mcp@latest" in str(exc.value)  # the ordinary remedy is untouched
 
 
 @pytest.mark.parametrize(
@@ -346,7 +349,7 @@ async def test_an_unreadable_ambience_version_omits_the_clause_and_changes_no_ve
 
     message = str(exc.value)
     assert "--prerelease" not in message
-    assert "uv cache clean" in message  # the verdict, and the rest of the remedy, stand
+    assert "ambience-mcp@latest" in message  # the verdict, and the rest of the remedy, stand
 
 
 async def test_a_prerelease_backend_we_can_work_with_is_not_nagged_about_channels():
@@ -709,7 +712,7 @@ async def test_an_mcp_with_no_adapters_says_so_instead_of_dying_in_max():
     with pytest.raises(IncompatibleError) as exc:
         await client.ready()
     assert "no MCP protocol adapters" in str(exc.value)
-    assert "uv cache clean" in str(exc.value)  # still the actionable upgrade remedy
+    assert "ambience-mcp@latest" in str(exc.value)  # still the actionable upgrade remedy
 
 
 async def test_an_unparseable_version_of_OURSELVES_fails_loudly_not_silently():

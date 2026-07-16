@@ -22,7 +22,7 @@ preview and your confirmation.
   "mcpServers": {
     "ambience": {
       "command": "uvx",
-      "args": ["ambience-mcp"],
+      "args": ["ambience-mcp@latest"],
       "env": {
         "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
         "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
@@ -31,6 +31,11 @@ preview and your confirmation.
   }
 }
 ```
+
+The `@latest` matters: it makes `uvx` re-check PyPI for the newest release on
+every server start (a sub-second check), so updates arrive on their own whenever
+your MCP client restarts. Without it, `uvx` reuses its cached environment
+indefinitely — the first version you install is the version you keep.
 
 **Claude Code** (terminal, and the VS Code extension) — one command, with your
 own address and token.
@@ -41,13 +46,13 @@ Mac and Linux:
 claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
   --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
-  -- uvx ambience-mcp
+  -- uvx ambience-mcp@latest
 ```
 
 Windows:
 
 ```text
-claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp@latest
 ```
 
 It confirms where it saved the server, with a line like this.
@@ -91,12 +96,12 @@ version's authoring guide automatically.
   "mcpServers": {
     "ambience-home": {
       "command": "uvx",
-      "args": ["ambience-mcp"],
+      "args": ["ambience-mcp@latest"],
       "env": { "AMBIENCE_HA_URL": "http://home.local:8123", "AMBIENCE_HA_TOKEN": "<token A>" }
     },
     "ambience-test": {
       "command": "uvx",
-      "args": ["ambience-mcp"],
+      "args": ["ambience-mcp@latest"],
       "env": { "AMBIENCE_HA_URL": "http://test.local:8123", "AMBIENCE_HA_TOKEN": "<token B>" }
     }
   }
@@ -138,13 +143,11 @@ follow.
 - *"Upgrade ambience-mcp"* — your Ambience is newer than this server, or is
     refusing this build. **This one does need a restart of the MCP server**, and
     reconnecting alone will not do: the running process *is* the old version, so
-    it would only re-handshake its way to the same verdict. Quit your MCP
-    client, run `uv cache clean ambience-mcp`, then restart it. The cache clean
-    matters too: `uvx` caches the old version, and the running server holds the
-    cache lock, so restarting alone will not pick up the new one. And if your
-    config [pins a version](#pinning-a-version), remove the pin — a pinned
-    version never upgrades, so the cache clean would just reinstall the same
-    build.
+    it would only re-handshake its way to the same verdict. Restart your MCP
+    client — your config launches `ambience-mcp@latest`, which installs the
+    newest release on start. And if your config
+    [pins a version](#pinning-a-version) instead, remove the pin — a pinned
+    version never upgrades, no matter how often you restart.
 
     If your Ambience is a **pre-release**, that message will also tell you to
     allow pre-releases — see below. It is not optional: without it, `uvx`
@@ -154,16 +157,17 @@ follow.
 
 **Your `ambience-mcp` channel must match your Ambience channel.**
 
-| Your Ambience                    | The `ambience-mcp` you want         | How you get it        |
-| -------------------------------- | ----------------------------------- | --------------------- |
-| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | plain `uvx` (default) |
-| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow`  |
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it                               |
+| -------------------------------- | ----------------------------------- | -------------------------------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `uvx ambience-mcp@latest` (the default)      |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `uvx --prerelease=allow ambience-mcp@latest` |
 
 A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
 not install one by default**: it skips pre-releases whenever a final release
 exists, so it would keep handing you the last stable `ambience-mcp` — which may
-be too old for the beta you are testing. You would be told to upgrade, clean the
-cache, restart, and land on the same build again.
+be too old for the beta you are testing. You would be told to upgrade, restart,
+and land on the same stable build again. `@latest` does not change this:
+"latest" means the newest **final** release until you pass the flag.
 
 So if you run an Ambience beta, opt the MCP server into the same channel:
 
@@ -172,7 +176,7 @@ So if you run an Ambience beta, opt the MCP server into the same channel:
   "mcpServers": {
     "ambience": {
       "command": "uvx",
-      "args": ["--prerelease=allow", "ambience-mcp"],
+      "args": ["--prerelease=allow", "ambience-mcp@latest"],
       "env": {
         "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
         "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
@@ -191,13 +195,13 @@ Mac and Linux:
 claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
   --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
-  -- uvx --prerelease=allow ambience-mcp
+  -- uvx --prerelease=allow ambience-mcp@latest
 ```
 
 Windows:
 
 ```text
-claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx --prerelease=allow ambience-mcp
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx --prerelease=allow ambience-mcp@latest
 ```
 
 If you already added `ambience`, remove it first
@@ -372,8 +376,8 @@ You normally never need this — one build spans Ambience versions.
 
 **A pin opts you out of the upgrade path.** If Ambience ever asks you to
 [upgrade `ambience-mcp`](#version-compatibility), a pinned config will keep
-reinstalling the pinned build no matter how often you clean the cache or
-restart, and every tool call will keep failing. Remove the pin to get out.
+reinstalling the pinned build no matter how often you restart, and every tool
+call will keep failing. Remove the pin to get out.
 
 When you do want one:
 

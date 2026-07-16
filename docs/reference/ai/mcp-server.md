@@ -28,7 +28,7 @@ restart Claude Desktop:
   "mcpServers": {
     "ambience": {
       "command": "uvx",
-      "args": ["ambience-mcp"],
+      "args": ["ambience-mcp@latest"],
       "env": {
         "AMBIENCE_HA_URL": "http://homeassistant.local:8123",
         "AMBIENCE_HA_TOKEN": "<your admin long-lived token>"
@@ -40,6 +40,10 @@ restart Claude Desktop:
 
 Replace the address and token with your own.
 
+The `@latest` matters: it makes `uvx` check for the newest release every time
+the server starts, so updates arrive on their own whenever you restart your AI
+assistant. Without it, the first version you install is the version you keep.
+
 ## Set it up in Claude Code (and VS Code)
 
 Run the command below, with your own address and token.
@@ -50,13 +54,13 @@ On Mac and Linux:
 claude mcp add ambience --scope user \
   --env AMBIENCE_HA_URL=http://homeassistant.local:8123 \
   --env AMBIENCE_HA_TOKEN=YOUR_TOKEN \
-  -- uvx ambience-mcp
+  -- uvx ambience-mcp@latest
 ```
 
 On Windows:
 
 ```text
-claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp
+claude mcp add ambience --scope user --env AMBIENCE_HA_URL=http://homeassistant.local:8123 --env AMBIENCE_HA_TOKEN=YOUR_TOKEN -- uvx ambience-mcp@latest
 ```
 
 It confirms where it saved the server, with a line like this.
@@ -112,12 +116,13 @@ pin first.
 ## Running an Ambience pre-release
 
 If you test Ambience betas, your `ambience-mcp` has to come from the same
-channel — `uvx` installs pre-releases only when you ask it to, so by default it
-would keep giving you the last stable `ambience-mcp`, which may be too old for
-the beta. Use these `args` instead:
+channel — `uvx` installs pre-releases only when you ask it to (`@latest` does
+not change that: it means the newest **final** release), so by default it would
+keep giving you the last stable `ambience-mcp`, which may be too old for the
+beta. Use these `args` instead:
 
 ```json
-["--prerelease=allow", "ambience-mcp"]
+["--prerelease=allow", "ambience-mcp@latest"]
 ```
 
 This is not a pin — you still get the newest build, and upgrades still work.

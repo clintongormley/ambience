@@ -33,10 +33,9 @@ preview and your confirmation.
 ```
 
 The `@latest` matters: it makes `uvx` re-check PyPI for the newest release on
-every server start (a sub-second check), so updates arrive on their own
-whenever your MCP client restarts. Without it, `uvx` reuses its cached
-environment indefinitely — the first version you install is the version you
-keep.
+every server start (a sub-second check), so updates arrive on their own whenever
+your MCP client restarts. Without it, `uvx` reuses its cached environment
+indefinitely — the first version you install is the version you keep.
 
 **Claude Code** (terminal, and the VS Code extension) — one command, with your
 own address and token.
@@ -158,10 +157,10 @@ follow.
 
 **Your `ambience-mcp` channel must match your Ambience channel.**
 
-| Your Ambience                    | The `ambience-mcp` you want         | How you get it                        |
-| -------------------------------- | ----------------------------------- | ------------------------------------- |
-| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `ambience-mcp@latest` (the default)   |
-| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow` added to it      |
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it                      |
+| -------------------------------- | ----------------------------------- | ----------------------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `ambience-mcp@latest` (the default) |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow` added to it    |
 
 A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
 not install one by default**: it skips pre-releases whenever a final release

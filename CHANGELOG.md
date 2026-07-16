@@ -8,6 +8,16 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- The MCP server setup instructions now use `ambience-mcp@latest`, which checks
+    for the newest release every time the server starts (a sub-second check) —
+    so updates now arrive on their own whenever your AI assistant restarts.
+    Without `@latest`, `uvx` reuses its cached install indefinitely, so the
+    first version you installed was the version you kept. The *"upgrade
+    ambience-mcp"* message now simply says to restart your MCP client, instead
+    of walking you through cleaning the `uv` cache.
+
 ## [1.1.0-rc.5] - 2026-07-15
 
 ### Added

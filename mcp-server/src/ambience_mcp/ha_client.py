@@ -55,9 +55,9 @@ class IncompatibleError(HAError):
     """This ambience-mcp and this Ambience cannot work together.
 
     Raised from every tool call, not just the one that noticed, and carrying a
-    message that names WHICH side to upgrade. Never advises a downgrade: `uvx
-    ambience-mcp@latest` installs LATEST, so "install an older one" is advice the
-    user cannot follow.
+    message that names WHICH side to upgrade. Never advises a downgrade:
+    `uvx ambience-mcp@latest` installs LATEST, so "install an older one" is
+    advice the user cannot follow.
     """
 
 

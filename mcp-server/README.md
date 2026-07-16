@@ -157,10 +157,10 @@ follow.
 
 **Your `ambience-mcp` channel must match your Ambience channel.**
 
-| Your Ambience                    | The `ambience-mcp` you want         | How you get it                      |
-| -------------------------------- | ----------------------------------- | ----------------------------------- |
-| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `ambience-mcp@latest` (the default) |
-| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow` added to it    |
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it                               |
+| -------------------------------- | ----------------------------------- | -------------------------------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `uvx ambience-mcp@latest` (the default)      |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `uvx --prerelease=allow ambience-mcp@latest` |
 
 A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
 not install one by default**: it skips pre-releases whenever a final release

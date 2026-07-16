@@ -46,6 +46,7 @@ async def test_backend_ahead_says_upgrade_the_mcp_server():
     assert "ambience-mcp@latest" in str(exc.value)
     # A client restart IS the upgrade — `@latest` re-resolves on every start.
     assert "restart your MCP client" in str(exc.value)
+    assert "remove the pin" in str(exc.value)  # the pin clause is load-bearing too
     assert "uv cache clean" not in str(exc.value)
 
 

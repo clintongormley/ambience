@@ -368,11 +368,11 @@ class ReconnectingClient:
         # The backend's OWN version — not a compatibility input (the protocol and the
         # floor decide that), but it decides which ambience-mcp CHANNEL the "upgrade
         # ambience-mcp" remedy has to name: a pre-release Ambience is paired with a
-        # pre-release ambience-mcp, which `uvx ambience-mcp@latest` will never resolve
-        # while a final release exists. It only ever
-        # changes the message's WORDING — see `_prerelease_clause` — so an absent,
-        # null, or unparseable value simply omits a clause and every verdict below
-        # stands exactly as it would have.
+        # pre-release ambience-mcp, which `uvx ambience-mcp@latest` will never
+        # resolve while a final release exists. It only ever changes the message's
+        # WORDING — see `_prerelease_clause` — so an absent, null, or unparseable
+        # value simply omits a clause and every verdict below stands exactly as it
+        # would have.
         ambience_version = hello.get("ambience_version")
 
         # The backend refusing THIS client outranks any protocol question: it is the

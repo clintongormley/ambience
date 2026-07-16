@@ -40,8 +40,8 @@ restart Claude Desktop:
 
 Replace the address and token with your own.
 
-The `@latest` matters: it makes the server check for the newest release every
-time it starts, so updates arrive on their own whenever you restart your AI
+The `@latest` matters: it makes `uvx` check for the newest release every time
+the server starts, so updates arrive on their own whenever you restart your AI
 assistant. Without it, the first version you install is the version you keep.
 
 ## Set it up in Claude Code (and VS Code)

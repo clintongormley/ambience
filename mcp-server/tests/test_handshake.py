@@ -44,8 +44,7 @@ async def test_backend_ahead_says_upgrade_the_mcp_server():
     with pytest.raises(IncompatibleError) as exc:
         await client.ready()
     assert "ambience-mcp@latest" in str(exc.value)
-    # The documented config runs `ambience-mcp@latest`, which re-resolves on every
-    # start — a client restart IS the upgrade, no cache surgery to walk through.
+    # A client restart IS the upgrade — `@latest` re-resolves on every start.
     assert "restart your MCP client" in str(exc.value)
     assert "uv cache clean" not in str(exc.value)
 
@@ -235,8 +234,8 @@ async def test_every_command_raises_while_incompatible():
 
 
 async def test_no_message_ever_asks_for_a_downgrade():
-    # The invariant: `uvx ambience-mcp` installs LATEST, so a user cannot follow
-    # advice to install an older one. Every remedy must point forward.
+    # The invariant: `uvx ambience-mcp@latest` installs LATEST, so a user cannot
+    # follow advice to install an older one. Every remedy must point forward.
     #
     # ALL SIX incompatibility messages, not four. The "backend behind" one
     # (supported={2,3}, backend says 1) is the only message not built by a shared

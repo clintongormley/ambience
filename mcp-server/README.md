@@ -158,18 +158,17 @@ follow.
 
 **Your `ambience-mcp` channel must match your Ambience channel.**
 
-| Your Ambience                    | The `ambience-mcp` you want         | How you get it        |
-| -------------------------------- | ----------------------------------- | --------------------- |
-| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | plain `uvx` (default) |
-| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow`  |
+| Your Ambience                    | The `ambience-mcp` you want         | How you get it                        |
+| -------------------------------- | ----------------------------------- | ------------------------------------- |
+| a **final** release (`1.6.0`)    | the newest **final** `ambience-mcp` | `ambience-mcp@latest` (the default)   |
+| a **pre-release** (`1.6.0-rc.1`) | the newest **pre-release** or final | `--prerelease=allow` added to it      |
 
 A pre-release Ambience ships with a pre-release `ambience-mcp`, and **`uvx` will
 not install one by default**: it skips pre-releases whenever a final release
 exists, so it would keep handing you the last stable `ambience-mcp` — which may
 be too old for the beta you are testing. You would be told to upgrade, restart,
-and land on the same stable build again. `@latest` does not change this: it
-re-resolves on every start, but within the same channel — "latest" means the
-newest **final** release until you pass the flag.
+and land on the same stable build again. `@latest` does not change this:
+"latest" means the newest **final** release until you pass the flag.
 
 So if you run an Ambience beta, opt the MCP server into the same channel:
 

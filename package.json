@@ -19,7 +19,7 @@
     "ci": "biome ci frontend/src test"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.16",
+    "@biomejs/biome": "2.5.4",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^28.0.3",
     "@vitest/coverage-v8": "^2.1.9",

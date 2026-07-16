@@ -341,12 +341,15 @@ describe("trace-detail", () => {
     ["skipped_switch_off", null, "switch is off"],
     ["skipped_scope_disabled", null, "scope is disabled"],
     ["skipped_unavailable", null, "went unavailable"],
-  ] as const)("%s (no actions) shows the explanation where the action summary would go", (outcome, winner_name, phrase) => {
-    const host = renderToHost({ outcome, winner_name, actions: [] }, false);
-    const slot = host.querySelector(".action-summary");
-    expect(slot).toBeTruthy();
-    expect(slot?.textContent).toContain(phrase);
-  });
+  ] as const)(
+    "%s (no actions) shows the explanation where the action summary would go",
+    (outcome, winner_name, phrase) => {
+      const host = renderToHost({ outcome, winner_name, actions: [] }, false);
+      const slot = host.querySelector(".action-summary");
+      expect(slot).toBeTruthy();
+      expect(slot?.textContent).toContain(phrase);
+    },
+  );
 
   test("an outcome with actions lists the actions, not the explanation", () => {
     const host = renderToHost({ outcome: "acted" }, false);

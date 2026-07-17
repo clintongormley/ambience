@@ -114,8 +114,8 @@ There are three version numbers, and only one of them is about compatibility:
 
 | Number                        | Example      | Changes when                                         |
 | ----------------------------- | ------------ | ---------------------------------------------------- |
-| Ambience (the integration)    | `1.1.0-rc.5` | every Ambience release                               |
-| `ambience-mcp` (this package) | `0.2.0rc5`   | every MCP release                                    |
+| Ambience (the integration)    | `1.1.0-rc.6` | every Ambience release                               |
+| `ambience-mcp` (this package) | `0.2.0rc6`   | every MCP release                                    |
 | **MCP protocol**              | **`1`**      | **only when the backend↔MCP contract changes shape** |
 
 On connect, this server asks Ambience which protocol it speaks and loads the

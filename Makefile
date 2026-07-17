@@ -13,6 +13,14 @@ MDFORMAT := uvx --from mdformat==1.0.0 \
 	--with mdformat-frontmatter==2.1.2 \
 	mdformat
 
+# Interpreter for the backend gates below (they all `python -m bin.*`). Resolved
+# via bin/py-with-deps.sh rather than a bare `python`, so an activated
+# mcp-server/.venv can't shadow the integration's deps and break the gates
+# locally while they pass in CI. Override with `make PYTHON=/path/to/python <t>`
+# (a command-line assignment beats this one; an exported PYTHON is honoured by
+# the resolver). See bin/py-with-deps.sh.
+PYTHON := $(shell bin/py-with-deps.sh)
+
 lint-py:        ## Fast: ruff lint + format check
 	ruff check . && ruff format --check .
 
@@ -26,25 +34,25 @@ format-md:      ## Apply markdown formatting (AI/generated docs excluded via .md
 	git ls-files -z '*.md' '*.markdown' | xargs -0 $(MDFORMAT)
 
 translations:   ## strings.json <-> translations key parity
-	python -m bin.check_translations
+	$(PYTHON) -m bin.check_translations
 
 ui-strings:     ## frontend ui.* localize keys <-> i18n-data.ts bundle parity
-	python -m bin.check_ui_strings
+	$(PYTHON) -m bin.check_ui_strings
 
 i18n:           ## all i18n gates: key parity + shipped-locale completeness + no-hardcoded lints
-	python -m bin.check_translations
-	python -m bin.check_ui_strings
-	python -m bin.check_i18n_placeholders
-	python -m bin.check_i18n_fallbacks
-	python -m bin.check_exceptions_keys
-	python -m bin.check_no_hardcoded_py
-	python -m bin.check_no_hardcoded_ts
+	$(PYTHON) -m bin.check_translations
+	$(PYTHON) -m bin.check_ui_strings
+	$(PYTHON) -m bin.check_i18n_placeholders
+	$(PYTHON) -m bin.check_i18n_fallbacks
+	$(PYTHON) -m bin.check_exceptions_keys
+	$(PYTHON) -m bin.check_no_hardcoded_py
+	$(PYTHON) -m bin.check_no_hardcoded_ts
 
 mcp-gate:       ## the MCP_PROTOCOL <-> PROTOCOLS adapter gate (cross-package)
-	python -m bin.check_mcp_protocol
+	$(PYTHON) -m bin.check_mcp_protocol
 
 coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
-	python -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing
+	$(PYTHON) -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing
 
 coverage-js:    ## frontend tests + coverage gate (thresholds in vitest.config.ts)
 	npm run coverage
@@ -56,10 +64,10 @@ build-check:    ## rebuild bundle and fail if the committed output differs
 	npm run build && git diff --exit-code custom_components/ambience/frontend/
 
 ai-docs:        ## regenerate the code-derived AI knowledge-pack sections
-	python -m bin.gen_ai_docs
+	$(PYTHON) -m bin.gen_ai_docs
 
 ai-docs-check:  ## regenerate AI docs and fail if the committed output is stale
-	python -m bin.gen_ai_docs && git diff --exit-code docs/developers/ai-authoring/ ai/skill/ custom_components/ambience/ai_guide/
+	$(PYTHON) -m bin.gen_ai_docs && git diff --exit-code docs/developers/ai-authoring/ ai/skill/ custom_components/ambience/ai_guide/
 
 install-hooks:  ## point git at the committed hooks
 	sh bin/install-hooks.sh

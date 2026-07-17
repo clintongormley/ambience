@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.6] - 2026-07-17
+
 ### Changed
 
 - The MCP server setup instructions now use `ambience-mcp@latest`, which checks

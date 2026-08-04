@@ -1,4 +1,4 @@
-"""FastMCP glue: one connection, one preview ledger, eleven thin tool wrappers.
+"""MCPServer glue: one connection, one preview ledger, eleven thin tool wrappers.
 
 Each wrapper delegates to the protocol adapter the backend asked for (see
 `protocols/`); the docstring + type hints become the tool's MCP schema. Keep
@@ -13,7 +13,7 @@ from collections.abc import Callable
 from importlib.metadata import version
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from .budget import fit_result
 from .config import load_config
@@ -27,15 +27,15 @@ from .tools import GuideCache
 def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap a tool callable so its return value always passes through
     `budget.fit_result` before it reaches the client. Not something a tool
-    author calls themselves — `_BoundedFastMCP.add_tool` below applies it to
+    author calls themselves — `_BoundedMCPServer.add_tool` below applies it to
     every registered tool automatically.
 
-    FastMCP supports both sync and async tool functions, so this picks the
+    MCPServer supports both sync and async tool functions, so this picks the
     matching wrapper shape via `inspect.iscoroutinefunction` — awaiting a sync
     function's return value directly (rather than the function itself) would
     raise at call time. Every tool registered on this server today is async,
     so a sync tool has never actually hit this, but the whole point of
-    `_BoundedFastMCP` is that the guard applies no matter how a tool is
+    `_BoundedMCPServer` is that the guard applies no matter how a tool is
     registered, so it must handle both."""
 
     if inspect.iscoroutinefunction(fn):
@@ -53,8 +53,8 @@ def _bounded(fn: Callable[..., Any]) -> Callable[..., Any]:
     return sync_wrapper
 
 
-class _BoundedFastMCP(FastMCP):
-    """A FastMCP that makes the result budget STRUCTURAL rather than something
+class _BoundedMCPServer(MCPServer):
+    """An MCPServer that makes the result budget STRUCTURAL rather than something
     each tool has to remember.
 
     `budget.py`'s shape-aware strategies (`fit_context`/`fit_entities`/
@@ -73,7 +73,7 @@ class _BoundedFastMCP(FastMCP):
     """
 
     def add_tool(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        # This server owns its client, so it does not need FastMCP's dual
+        # This server owns its client, so it does not need MCPServer's dual
         # content + structuredContent emission (backward compat for clients that
         # can't read structuredContent). Emitting once halves the wire payload —
         # see budget.size_of.
@@ -91,7 +91,7 @@ class _BoundedFastMCP(FastMCP):
         super().add_tool(_bounded(fn), *args, **kwargs)
 
 
-mcp = _BoundedFastMCP("ambience")
+mcp = _BoundedMCPServer("ambience")
 _ledger = PreviewLedger()
 _guide_cache = GuideCache()
 _client: ReconnectingClient | None = None

@@ -8,6 +8,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- The `ambience-mcp` MCP server now runs on **mcp 2.0**. mcp 2.0 removed the
+    bundled FastMCP the server was built on, so a fresh `uvx ambience-mcp`
+    (which always resolves the newest `mcp`) failed to start with *"No module
+    named 'mcp.server.fastmcp'"*. The server now targets mcp 2.0's `MCPServer`,
+    and pins `mcp<3` so a future major release cannot break installs the same
+    way.
+
 ## [1.1.0-rc.6] - 2026-07-17
 
 ### Changed

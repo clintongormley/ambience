@@ -268,8 +268,8 @@ bounded — at any house size. The budget is **60,000 characters of the wire
 payload** (roughly 15k tokens), overridable with
 `AMBIENCE_MCP_MAX_RESULT_CHARS`.
 
-"Wire payload" is deliberate: FastMCP pretty-prints a result *and* repeats it as
-`structuredContent`, so what the client receives is ~2-3x the compact JSON.
+"Wire payload" is deliberate: MCPServer pretty-prints a result *and* repeats it
+as `structuredContent`, so what the client receives is ~2-3x the compact JSON.
 Measuring the compact form would under-count by up to 3x and let an "it fits"
 result sail through that the client then rejects.
 

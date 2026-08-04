@@ -84,6 +84,39 @@ jobs:
       - name: Build bundle
         run: npm run build
 
+  # mcp-server unit tests against the LATEST mcp SDK, deliberately IGNORING the
+  # `mcp>=2,<3` cap in mcp-server/pyproject.toml. mcp 2.0 removed the bundled
+  # FastMCP (mcp.server.fastmcp) with no notice and broke the then-uncapped
+  # package until it was migrated to MCPServer; running the newest mcp here
+  # surfaces the next such major (3.0) as an early warning instead of on an
+  # unrelated PR. Like the jobs above, a failure here never blocks a PR.
+  mcp-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # If a future mcp major ever requires a newer Python than this, `--upgrade
+      # mcp` below would silently hold at an older compatible mcp (a false-negative
+      # early warning) — bump this pin when that happens.
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install mcp-server against the latest mcp (unpinned)
+        run: |
+          cd mcp-server
+          python -m pip install --upgrade pip
+          # Runtime + test deps installed directly and UNPINNED, so the project's
+          # `mcp<3` cap can't hold the SDK back — a new mcp major then lands here.
+          python -m pip install --upgrade mcp packaging websockets pytest pytest-asyncio
+          # Our package WITHOUT deps, so the unpinned mcp above isn't re-resolved
+          # back down to the cap.
+          python -m pip install --no-deps -e .
+
+      - name: Run tests
+        run: cd mcp-server && python -m pytest -q
+
   # Lightweight HA-tooling validation. hassfest and the HACS action always pull
   # the latest HA tooling, so they catch HA-side drift even where unit tests are
   # thin. Mirrors hassfest.yml and validate.yml.

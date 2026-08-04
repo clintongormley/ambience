@@ -14,9 +14,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 
 from .const import (
-    CONF_ENABLE_AI_TAB,
     CONF_SHOW_SIDEBAR_PANEL,
-    DEFAULT_ENABLE_AI_TAB,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
 )
@@ -52,18 +50,15 @@ class AmbienceOptionsFlow(OptionsFlow):
                 title="",
                 data={
                     CONF_SHOW_SIDEBAR_PANEL: user_input[CONF_SHOW_SIDEBAR_PANEL],
-                    CONF_ENABLE_AI_TAB: user_input[CONF_ENABLE_AI_TAB],
                 },
             )
 
         current = self.config_entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL)
-        current_ai = self.config_entry.options.get(CONF_ENABLE_AI_TAB, DEFAULT_ENABLE_AI_TAB)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool,
-                    vol.Required(CONF_ENABLE_AI_TAB, default=current_ai): bool,
                 }
             ),
         )

@@ -15,12 +15,10 @@
       "init": {
         "title": "Opções do Ambience",
         "data": {
-          "show_sidebar_panel": "Mostrar o Ambience na barra lateral",
-          "enable_ai_tab": "Ativar o separador de criação com IA (beta)"
+          "show_sidebar_panel": "Mostrar o Ambience na barra lateral"
         },
         "data_description": {
-          "show_sidebar_panel": "Quando desativado, o Ambience é removido da barra lateral. Pode continuar a adicionar o cartão do Ambience a qualquer painel.",
-          "enable_ai_tab": "Adiciona um separador de IA ao painel do Ambience para criar e corrigir cenas com um assistente de IA. Desativado por predefinição enquanto está em beta."
+          "show_sidebar_panel": "Quando desativado, o Ambience é removido da barra lateral. Pode continuar a adicionar o cartão do Ambience a qualquer painel."
         }
       }
     }

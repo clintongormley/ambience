@@ -15,12 +15,10 @@
       "init": {
         "title": "Opciones de Ambience",
         "data": {
-          "show_sidebar_panel": "Mostrar Ambience en la barra lateral",
-          "enable_ai_tab": "Activar la pestaña de autoría con IA (beta)"
+          "show_sidebar_panel": "Mostrar Ambience en la barra lateral"
         },
         "data_description": {
-          "show_sidebar_panel": "Cuando está desactivado, Ambience se elimina de la barra lateral. Aún puedes añadir la tarjeta de Ambience a cualquier panel.",
-          "enable_ai_tab": "Añade una pestaña de IA al panel de Ambience para crear y corregir escenas con un asistente de IA. Desactivada por defecto mientras está en beta."
+          "show_sidebar_panel": "Cuando está desactivado, Ambience se elimina de la barra lateral. Aún puedes añadir la tarjeta de Ambience a cualquier panel."
         }
       }
     }

@@ -5,11 +5,7 @@
     This feature is new and still changing. You review and confirm everything an AI
     suggests, so nothing is saved on its own, and every change can be undone.
 
-    The AI tab is hidden until you turn it on:
-
-    1. Go to **Settings → Devices & services → Ambience → Configure**.
-    1. Enable **the AI authoring tab (beta)**.
-    1. Open the Ambience panel. The **AI** tab appears under **Settings**.
+    Open the Ambience panel — the **AI** tab is under **Settings**.
 
 Ask an AI to build your scenes for you. Describe what you want in plain English,
 such as "in the evening, when the living room is dark and someone is home, dim

@@ -1,6 +1,6 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { getOptions, type HassConnection } from "../api.js";
+import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import "./ambience-settings.js";
 import "./categories-settings.js";
@@ -69,29 +69,12 @@ export class AmbienceSettingsView extends LitElement {
    *  Absent → defaults to "categories". */
   @property({ attribute: false }) initialTab?: Tab;
   @state() private _tab: Tab = "categories";
-  /** Whether to show the AI authoring tab (beta). Off until the user opts in via
-   *  the integration's options; read once when `hass` first arrives. */
-  @state() private _aiEnabled = false;
-  private _optionsLoaded = false;
 
   protected override willUpdate(changed: Map<string, unknown>) {
     // Seed the active tab from `initialTab` when supplied. The modal recreates
     // this view on each open, so this runs fresh per open; manual tab clicks
     // afterward aren't clobbered (initialTab doesn't change between renders).
     if (changed.has("initialTab") && this.initialTab) this._tab = this.initialTab;
-    // Read the AI-tab opt-in once, the first render `hass` is available for.
-    if (this.hass && !this._optionsLoaded) {
-      this._optionsLoaded = true;
-      void this._loadOptions();
-    }
-  }
-
-  private async _loadOptions() {
-    try {
-      this._aiEnabled = (await getOptions(this.hass)).enable_ai_tab;
-    } catch {
-      this._aiEnabled = false;
-    }
   }
 
   override render() {
@@ -112,15 +95,11 @@ export class AmbienceSettingsView extends LitElement {
         }}>
           <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
         </button>
-        ${
-          this._aiEnabled
-            ? html`<button class=${this._tab === "import" ? "active" : ""} @click=${() => {
-                this._tab = "import";
-              }}>
-              <ha-icon icon="mdi:creation"></ha-icon>${localize(this.hass, "ui.settings_tab_import", "AI")}
-            </button>`
-            : nothing
-        }
+        <button class=${this._tab === "import" ? "active" : ""} @click=${() => {
+          this._tab = "import";
+        }}>
+          <ha-icon icon="mdi:creation"></ha-icon>${localize(this.hass, "ui.settings_tab_import", "AI")}
+        </button>
         <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => {
           this._tab = "ambience";
         }}>
@@ -135,7 +114,7 @@ export class AmbienceSettingsView extends LitElement {
               ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
               : this._tab === "actions"
                 ? html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
-                : this._tab === "import" && this._aiEnabled
+                : this._tab === "import"
                   ? html`<ambience-import-config .hass=${this.hass}></ambience-import-config>`
                   : html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
         }

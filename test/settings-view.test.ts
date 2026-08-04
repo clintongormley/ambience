@@ -33,18 +33,14 @@ vi.mock("../frontend/src/api.js", () => ({
   listExposedActions: vi.fn(async () => []),
   listServices: vi.fn(async () => []),
   getInstallId: vi.fn(async () => "test-install"),
-  getOptions: vi.fn(async () => ({ enable_ai_tab: false })),
 }));
 
-import { getOptions } from "../frontend/src/api.js";
 import "../frontend/src/views/settings-view";
 
 describe("ambience-settings-view", () => {
   let el: any;
   beforeEach(() => {
     vi.clearAllMocks();
-    // AI tab off by default (opt-in); individual tests override before mounting.
-    vi.mocked(getOptions).mockResolvedValue({ enable_ai_tab: false });
   });
   afterEach(() => el?.remove());
 
@@ -56,12 +52,6 @@ describe("ambience-settings-view", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     return el;
-  }
-
-  /** Mount with the AI tab enabled (the opt-in case). */
-  async function mountWithAi() {
-    vi.mocked(getOptions).mockResolvedValue({ enable_ai_tab: true });
-    return mount();
   }
 
   const iconsOf = (e: any) =>
@@ -104,26 +94,18 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
   });
 
-  test("the AI tab is hidden by default (opt-in)", async () => {
+  test("the AI tab is always shown (no opt-in)", async () => {
     el = await mount();
-    expect(iconsOf(el)).not.toContain("mdi:creation");
+    // The AI tab sits between Actions and Advanced, always visible.
+    expect(iconsOf(el)).toContain("mdi:creation");
     const labels = [...el.shadowRoot.querySelectorAll("nav button")].map((b: Element) =>
       b.textContent!.trim(),
     );
-    expect(labels).not.toContain("AI");
-    expect(el.shadowRoot.querySelector("ambience-import-config")).toBeNull();
+    expect(labels).toContain("AI");
   });
 
-  test("the AI tab appears and opens when enabled", async () => {
-    el = await mountWithAi();
-    // The AI tab sits between Actions and Advanced.
-    expect(iconsOf(el)).toEqual([
-      "mdi:shape-outline",
-      "mdi:filter-variant",
-      "mdi:flash",
-      "mdi:creation",
-      "mdi:home-lightbulb",
-    ]);
+  test("the AI tab opens the import view", async () => {
+    el = await mount();
     const aiButton = [...el.shadowRoot.querySelectorAll("nav button")].find((b: Element) =>
       b.textContent!.includes("AI"),
     ) as HTMLButtonElement;
@@ -164,12 +146,13 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 
-  test("each tab renders an HA-style icon (AI hidden by default)", async () => {
+  test("each tab renders an HA-style icon", async () => {
     el = await mount();
     expect(iconsOf(el)).toEqual([
       "mdi:shape-outline",
       "mdi:filter-variant",
       "mdi:flash",
+      "mdi:creation",
       "mdi:home-lightbulb",
     ]);
   });

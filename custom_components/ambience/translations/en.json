@@ -15,12 +15,10 @@
       "init": {
         "title": "Ambience options",
         "data": {
-          "show_sidebar_panel": "Show Ambience in the sidebar",
-          "enable_ai_tab": "Enable the AI authoring tab (beta)"
+          "show_sidebar_panel": "Show Ambience in the sidebar"
         },
         "data_description": {
-          "show_sidebar_panel": "When off, Ambience is removed from the sidebar. You can still add the Ambience card to any dashboard.",
-          "enable_ai_tab": "Adds an AI tab to the Ambience panel for authoring and fixing scenes with an AI assistant. Off by default while in beta."
+          "show_sidebar_panel": "When off, Ambience is removed from the sidebar. You can still add the Ambience card to any dashboard."
         }
       }
     }

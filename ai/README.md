@@ -16,11 +16,9 @@ every release, so the pack never drifts from the integration.
 
 Whichever form you use, the workflow is the same:
 
-1. Enable the AI tab first — it's off by default (Settings → Devices & services →
-   Ambience → Configure → **Enable the AI authoring tab**). Then, in the Ambience
-   panel, open Settings → the **AI** tab and **Download the AI bundle** (your real
-   areas/entities, exposed services, vocabulary, config, and recent traces —
-   person/location data redacted).
+1. In the Ambience panel, open Settings → the **AI** tab and **Download the AI
+   bundle** (your real areas/entities, exposed services, vocabulary, config, and
+   recent traces — person/location data redacted).
 2. Give the AI the bundle plus your request.
 3. The AI returns a **single-scope import block** (YAML or JSON).
 4. Paste/upload it into the panel's **Import** view, preview, and confirm. Every

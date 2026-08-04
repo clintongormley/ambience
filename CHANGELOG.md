@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.1.0-rc.7] - 2026-08-04
+
 ### Changed
 
 - The AI authoring tab in the Ambience panel is now shown by default. The

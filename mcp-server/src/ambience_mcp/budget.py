@@ -75,7 +75,7 @@ def size_of(payload: Any) -> int:
     worst where it matters most, and would let an "it fits" result sail through
     that the client actually rejects. `json.dumps(indent=2)` is not byte-identical
     to MCPServer's `pydantic_core.to_json(indent=2)`, but it is a faithful stand-in,
-    and keeps this module free of a MCPServer/pydantic-core dependency.
+    and keeps this module free of an MCPServer/pydantic-core dependency.
     """
     return len(json.dumps(payload, indent=2, default=str))
 

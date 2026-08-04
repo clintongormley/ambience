@@ -112,8 +112,8 @@ def test_tool_get_guide_accepts_part():
 async def test_bounded_add_tool_disables_structured_output():
     """Every tool is registered with structured output OFF, so MCPServer emits a
     result once (the indent=2 text content block) instead of twice (a second,
-    byte-identical structuredContent copy). That halves the wire size size_of
-    measures — see _BoundedMCPServer.add_tool and budget.size_of.
+    byte-identical structuredContent copy). That halves the wire size that
+    size_of measures — see _BoundedMCPServer.add_tool and budget.size_of.
 
     Registered via @tool() (the real path a production tool takes), NOT
     add_tool() directly: @tool() ALWAYS forwards structured_output explicitly as

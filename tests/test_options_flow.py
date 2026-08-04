@@ -35,43 +35,16 @@ async def test_options_flow_shows_form_and_saves(
     assert mock_config_entry.options[CONF_SHOW_SIDEBAR_PANEL] is False
 
 
-async def test_options_flow_enable_ai_tab_defaults_off(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """The AI authoring tab is off by default; the options flow exposes a toggle
-    for it, and submitting without the key falls back to the default (off)."""
+async def test_options_flow_no_enable_ai_tab_field(hass, mock_config_entry):
+    """The AI authoring tab is always shown now, so the options flow no longer
+    carries an enable_ai_tab toggle."""
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
     schema_keys = {str(k) for k in result["data_schema"].schema}
-    assert "enable_ai_tab" in schema_keys
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_SHOW_SIDEBAR_PANEL: True}
-    )
-    await hass.async_block_till_done()
-    assert mock_config_entry.options["enable_ai_tab"] is False
-
-
-async def test_options_flow_enables_ai_tab(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Toggling the option on persists enable_ai_tab=True."""
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_SHOW_SIDEBAR_PANEL: True, "enable_ai_tab": True}
-    )
-    await hass.async_block_till_done()
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert mock_config_entry.options["enable_ai_tab"] is True
+    assert "enable_ai_tab" not in schema_keys
 
 
 async def test_panel_registered_by_default(

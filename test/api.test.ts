@@ -1,11 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import {
-  getInstallId,
-  getOptions,
-  listPeriods,
-  resetPeriods,
-  savePeriods,
-} from "../frontend/src/api";
+import { getInstallId, listPeriods, resetPeriods, savePeriods } from "../frontend/src/api";
 import type { PeriodDef } from "../frontend/src/types";
 
 function makeFakeHass(): { callWS: ReturnType<typeof vi.fn>; sent: any[] } {
@@ -73,14 +67,5 @@ describe("getInstallId", () => {
   test("returns null when the backend reports no install (mid-teardown)", async () => {
     const callWS = vi.fn(async () => ({ install_id: null }));
     expect(await getInstallId({ callWS } as any)).toBeNull();
-  });
-});
-
-describe("getOptions", () => {
-  test("sends the WS message and returns the panel options", async () => {
-    const callWS = vi.fn(async () => ({ enable_ai_tab: true }));
-    const res = await getOptions({ callWS } as any);
-    expect(callWS).toHaveBeenCalledWith({ type: "ambience/options" });
-    expect(res).toEqual({ enable_ai_tab: true });
   });
 });

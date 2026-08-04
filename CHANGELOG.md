@@ -8,6 +8,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- The AI authoring tab in the Ambience panel is now shown by default. The
+    **Enable the AI authoring tab** option has been removed — the tab is always
+    available (you still review and confirm every AI suggestion before anything
+    is saved).
+
 ### Fixed
 
 - The `ambience-mcp` MCP server now runs on **mcp 2.0**. mcp 2.0 removed the

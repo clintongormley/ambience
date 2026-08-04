@@ -177,10 +177,6 @@ GENERAL_CATEGORY = {
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
 
-# The AI-assisted authoring tab (beta) is hidden unless the user opts in.
-CONF_ENABLE_AI_TAB = "enable_ai_tab"
-DEFAULT_ENABLE_AI_TAB = False
-
 # Voice-assistant exposure. The per-assistant on/off map is stored in the
 # Ambience store (store.DEFAULT_EXPOSED_ASSISTANTS) and edited on the panel's
 # Advanced page. KNOWN_ASSISTANTS / ASSISTANT_FIELDS must stay key-aligned with

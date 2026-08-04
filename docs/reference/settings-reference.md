@@ -1,10 +1,9 @@
 # Settings reference
 
 Open the Settings modal with the cogwheel (⚙) in the Ambience panel header. It
-has four tabs — **Categories**, **Conditions**, **Actions**, and **Advanced** —
-plus an optional fifth **AI** tab shown only when AI authoring is enabled (see
-[AI-assisted scenes](ai-assisted-scenes.md)). Every control has a `(?)` help
-button next to it that opens a short explanation in place.
+has five tabs — **Categories**, **Conditions**, **Actions**, **AI**, and
+**Advanced**. Every control has a `(?)` help button next to it that opens a
+short explanation in place.
 
 Almost everything the Settings modal configures is covered in context elsewhere
 in these docs; this page is a map to where.
@@ -23,6 +22,8 @@ in these docs; this page is a map to where.
     the scene editor. See
     [Exposing actions](../getting-started/step-3-exposing-actions.md) and the
     [Actions](actions/index.md) reference.
+- **AI** — author and diagnose scenes with an AI assistant, always previewing
+    before anything is saved. See [AI-assisted scenes](ai-assisted-scenes.md).
 - **Advanced → Scope switches** — the per-scope pause switches and their
     settings (switch name, auto-resume delay, and voice-assistant exposure). See
     [Pausing & disabling scopes](../getting-started/step-8-pausing-and-disabling-scopes.md).

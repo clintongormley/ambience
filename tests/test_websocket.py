@@ -162,26 +162,6 @@ async def test_resolve_install_id_is_none_without_entry(hass: HomeAssistant) -> 
     assert _resolve_install_id(hass) is None
 
 
-async def test_options_ai_tab_disabled_by_default(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    """The frontend reads enable_ai_tab to decide whether to show the AI tab; it
-    is off by default."""
-    resp = await _ws_send(hass_ws_client, type="ambience/options")
-    assert resp["success"] is True
-    assert resp["result"] == {"enable_ai_tab": False}
-
-
-async def test_options_reflects_enabled_ai_tab(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    """When the option is on, the command reports it so the AI tab appears."""
-    hass.config_entries.async_update_entry(installed, options={"enable_ai_tab": True})
-    await hass.async_block_till_done()
-    resp = await _ws_send(hass_ws_client, type="ambience/options")
-    assert resp["result"]["enable_ai_tab"] is True
-
-
 async def test_frontend_version_returns_hash_and_version(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
@@ -198,15 +178,6 @@ async def test_frontend_version_returns_hash_and_version(
     assert result["hash"]  # non-empty: the bundle file ships in the repo
     integration = await async_get_integration(hass, DOMAIN)
     assert result["version"] == str(integration.version)
-
-
-async def test_ai_tab_enabled_defaults_off_without_entry(hass: HomeAssistant) -> None:
-    """The helper falls back to the default (off) when no Ambience entry exists.
-    The ws command can't reach this (unregistered without an entry), so it's
-    covered here directly — a teardown-race guard against IndexError."""
-    from custom_components.ambience.websocket import _ai_tab_enabled
-
-    assert _ai_tab_enabled(hass) is False
 
 
 async def test_conditions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:

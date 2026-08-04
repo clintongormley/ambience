@@ -10,6 +10,27 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [1.1.0] - 2026-08-04
 
+The **AI-assisted authoring** release. You can now build and fix Ambience scenes
+with an AI — describe what you want in plain English and review a preview before
+anything is saved. This section highlights what 1.1.0 adds over 1.0.0; the
+per-version entries below record how it got here.
+
+### Highlights
+
+- **Author scenes with an AI.** A local MCP server (`ambience-mcp`) lets an AI
+    assistant work with your running Home Assistant directly, and an **AI** tab
+    in the panel (now shown by default) takes a downloaded bundle for AI clients
+    without MCP. Both redact your private data first and preview every change
+    before it is saved.
+- **A robust MCP server.** It agrees a protocol with Ambience on connect, serves
+    the authoring guide live and section by section, heals itself after a Home
+    Assistant restart, and runs on mcp 2.0.
+- **European Portuguese (pt).** Ambience is now translated for Portugal, in
+    addition to English and Spanish.
+- **Sun-relative times in Simulate.** The "When" control now offers
+    sunrise/sunset offsets, so you can preview a scene at, say, "30 minutes
+    before sunset".
+
 ## [1.1.0-rc.7] - 2026-08-04
 
 ### Changed

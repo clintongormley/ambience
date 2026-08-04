@@ -268,10 +268,12 @@ bounded — at any house size. The budget is **60,000 characters of the wire
 payload** (roughly 15k tokens), overridable with
 `AMBIENCE_MCP_MAX_RESULT_CHARS`.
 
-"Wire payload" is deliberate: FastMCP pretty-prints a result *and* repeats it as
-`structuredContent`, so what the client receives is ~2-3x the compact JSON.
-Measuring the compact form would under-count by up to 3x and let an "it fits"
-result sail through that the client then rejects.
+"Wire payload" is deliberate: the result goes on the wire pretty-printed
+(`indent=2`), and for the nested action schemas this budget exists to shed that
+runs up to ~2x the compact JSON a naive measure would use. Measuring the compact
+form would under-count and let an "it fits" result sail through that the client
+then rejects. (Structured output is disabled, so the result is sent once, not
+repeated as a second `structuredContent` copy.)
 
 Nothing is ever **silently** truncated. A result that doesn't fit degrades in a
 way that says so, and says how to get the rest:

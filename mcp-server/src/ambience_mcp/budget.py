@@ -12,7 +12,7 @@ the way to get the rest. `fit_preview` is the odd one out: `preview_write`'s
 diff is NOT appendable/truncatable (see its own docstring for why), so it
 degrades by summarising instead — same idea, different mechanism. `fit_result`,
 the terminal backstop at the serialization boundary (see
-`server.py`'s `_BoundedFastMCP`), has no such shape knowledge, so it never
+`server.py`'s `_BoundedMCPServer`), has no such shape knowledge, so it never
 trims: a result still over budget when it reaches that boundary is replaced by
 a small, bounded error object instead. A silently truncated catalog is worse
 than a hard error, because the model authors against entities it cannot see —
@@ -62,10 +62,10 @@ def max_result_chars() -> int:
 def size_of(payload: Any) -> int:
     """The payload's size as the client will actually receive it on the wire.
 
-    FastMCP does not send compact JSON. Tools disable FastMCP structured output
-    (`_BoundedFastMCP.add_tool` passes `structured_output=False`), so a result is
+    MCPServer does not send compact JSON. Tools disable MCPServer structured output
+    (`_BoundedMCPServer.add_tool` passes `structured_output=False`), so a result is
     serialized ONCE — the pretty-printed (`indent=2`) text content block — not
-    twice. (With structured output enabled FastMCP emits the payload a second
+    twice. (With structured output enabled MCPServer emits the payload a second
     time, byte-for-byte, as `structuredContent`; this server owns its client and
     does not need that backward-compat channel, so it is turned off — halving the
     wire size this function measures.) Nested action schemas — exactly what
@@ -74,8 +74,8 @@ def size_of(payload: Any) -> int:
     Measuring compact `json.dumps` therefore under-counts the real wire size,
     worst where it matters most, and would let an "it fits" result sail through
     that the client actually rejects. `json.dumps(indent=2)` is not byte-identical
-    to FastMCP's `pydantic_core.to_json(indent=2)`, but it is a faithful stand-in,
-    and keeps this module free of a FastMCP/pydantic-core dependency.
+    to MCPServer's `pydantic_core.to_json(indent=2)`, but it is a faithful stand-in,
+    and keeps this module free of an MCPServer/pydantic-core dependency.
     """
     return len(json.dumps(payload, indent=2, default=str))
 
@@ -487,7 +487,7 @@ def fit_preview(result: dict[str, Any], budget: int | None = None) -> dict[str, 
 def fit_result(result: Any, budget: int | None = None) -> Any:
     """The terminal backstop underneath `fit_context`/`fit_entities`/`fit_traces`:
     applied to EVERY tool's return value at the server boundary (see
-    `server.py`'s `_BoundedFastMCP`), so a tool with no shape-aware strategy —
+    `server.py`'s `_BoundedMCPServer`), so a tool with no shape-aware strategy —
     one of the 8 that had none, or a brand new one nobody has written a
     strategy for yet — still cannot ship an unbounded result.
 

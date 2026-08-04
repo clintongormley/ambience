@@ -8,13 +8,13 @@ from ambience_mcp.protocols import PROTOCOLS
 
 def _wire(result):
     """The dict a bounded tool actually puts on the wire. Structured output is
-    disabled (see _BoundedFastMCP.add_tool), so FastMCP returns a plain content
-    sequence — one text block whose text is the indent=2 JSON of the tool's dict
-    result — not a (content, structuredContent) tuple. Parse it back so a test can
-    assert on the fields the client receives."""
-    assert isinstance(result, list), f"expected a content sequence, got {type(result)}"
-    assert len(result) == 1 and result[0].type == "text"
-    return json.loads(result[0].text)
+    disabled (see _BoundedMCPServer.add_tool), so MCPServer returns a CallToolResult
+    whose `content` is a single text block (the indent=2 JSON of the tool's dict
+    result) and whose `structured_content` is None — no second, byte-identical copy.
+    Parse the text back so a test can assert on the fields the client receives."""
+    assert result.structured_content is None, "structured output should be off (no second copy)"
+    assert len(result.content) == 1 and result.content[0].type == "text"
+    return json.loads(result.content[0].text)
 
 
 def _serving(**tools):
@@ -31,7 +31,7 @@ def _serving(**tools):
     return _protocol_
 
 
-def test_exposes_a_fastmcp_instance_and_main():
+def test_exposes_an_mcp_instance_and_main():
     assert server.mcp is not None
     assert callable(server.main)
 
@@ -106,23 +106,23 @@ def test_tool_get_guide_accepts_part():
 # value, not just the 3 (get_context/find_entities/list_traces) that carry a
 # shape-aware fit_* strategy of their own in the protocol adapter
 # (protocols/v1.py). These prove it is wired in structurally (via
-# _BoundedFastMCP.add_tool), not per-tool.
+# _BoundedMCPServer.add_tool), not per-tool.
 
 
 async def test_bounded_add_tool_disables_structured_output():
-    """Every tool is registered with structured output OFF, so FastMCP emits a
+    """Every tool is registered with structured output OFF, so MCPServer emits a
     result once (the indent=2 text content block) instead of twice (a second,
-    byte-identical structuredContent copy). That halves the wire size size_of
-    measures — see _BoundedFastMCP.add_tool and budget.size_of.
+    byte-identical structuredContent copy). That halves the wire size that
+    size_of measures — see _BoundedMCPServer.add_tool and budget.size_of.
 
     Registered via @tool() (the real path a production tool takes), NOT
     add_tool() directly: @tool() ALWAYS forwards structured_output explicitly as
     None ("auto-detect from the return annotation"), so the guard has to override
     that None — a bare `setdefault` on a missing key would leave the second copy
-    on. FastMCP returns a plain content sequence when structured output is off and
-    a (content, structuredContent) tuple when it is on, so the tuple's absence is
-    the proof the second copy is gone."""
-    probe = server._BoundedFastMCP("probe")
+    on. MCPServer returns a CallToolResult whose `structured_content` is None when
+    structured output is off and a populated copy when it is on, so a None
+    `structured_content` is the proof the second copy is gone."""
+    probe = server._BoundedMCPServer("probe")
 
     @probe.tool()
     async def demo() -> dict[str, object]:
@@ -130,8 +130,8 @@ async def test_bounded_add_tool_disables_structured_output():
 
     result = await probe.call_tool("demo", {})
 
-    assert not isinstance(result, tuple)  # no structuredContent second channel
-    assert isinstance(result, list) and len(result) == 1 and result[0].type == "text"
+    assert result.structured_content is None  # no structuredContent second channel
+    assert len(result.content) == 1 and result.content[0].type == "text"
 
 
 async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(monkeypatch):
@@ -145,7 +145,7 @@ async def test_a_newly_registered_tool_is_bounded_with_no_fit_call_of_its_own(mo
     fields (see budget.fit_result's docstring for why a generic trim is
     unsafe)."""
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "1000")
-    probe = server._BoundedFastMCP("probe")
+    probe = server._BoundedMCPServer("probe")
 
     @probe.tool()
     async def oversized_tool() -> dict[str, object]:
@@ -177,11 +177,11 @@ async def test_list_categories_is_bounded_despite_having_no_fit_strategy(monkeyp
 
 
 async def test_a_sync_tool_is_bounded_too(monkeypatch):
-    """_bounded must not assume every tool is async — FastMCP supports sync
+    """_bounded must not assume every tool is async — MCPServer supports sync
     tools, and awaiting a sync function's return value directly would raise at
     call time. Proves the sync branch actually applies fit_result."""
     monkeypatch.setenv("AMBIENCE_MCP_MAX_RESULT_CHARS", "1000")
-    probe = server._BoundedFastMCP("probe")
+    probe = server._BoundedMCPServer("probe")
 
     @probe.tool()
     def oversized_sync_tool() -> dict[str, object]:

@@ -4,7 +4,11 @@ version = "0.2.0-rc.6"
 description = "Local MCP server for authoring Home Assistant Ambience scenes"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.2",
+    # mcp 2.0 removed the bundled FastMCP (mcp.server.fastmcp) in favour of
+    # MCPServer (mcp.server.mcpserver); server.py targets that 2.x API. Cap the
+    # major so a future mcp 3.0 can't silently break installs — the nightly CI
+    # job exercises the latest mcp unpinned to catch that ahead of time.
+    "mcp>=2,<3",
     "packaging>=23",
     "websockets>=12",
 ]

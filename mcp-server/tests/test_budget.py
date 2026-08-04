@@ -22,9 +22,9 @@ def test_max_result_chars_ignores_a_nonsense_override(monkeypatch, bad):
 
 
 def test_size_of_models_the_wire_payload_not_compact_json():
-    # FastMCP serializes a result ONCE, pretty-printed (indent=2), as the text
+    # MCPServer serializes a result ONCE, pretty-printed (indent=2), as the text
     # content block — structured output is disabled, so there is no second
-    # byte-identical structuredContent copy (see _BoundedFastMCP.add_tool).
+    # byte-identical structuredContent copy (see _BoundedMCPServer.add_tool).
     # size_of must model that indent=2 wire form, not the compact json.dumps a
     # naive implementation would reach for.
     schemas = {f"a{i}": {"fields": {"f": "x" * 50}} for i in range(20)}
@@ -38,7 +38,7 @@ def test_size_of_models_the_wire_payload_not_compact_json():
 
 
 def test_size_of_counts_a_single_emission():
-    # Tools disable FastMCP structured output (see _BoundedFastMCP.add_tool), so a
+    # Tools disable MCPServer structured output (see _BoundedMCPServer.add_tool), so a
     # result is serialized ONCE — the indent=2 text content block — not twice.
     payload = {"guide": "x" * 5000}
     assert size_of(payload) == len(json.dumps(payload, indent=2, default=str))

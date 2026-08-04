@@ -1,8 +1,7 @@
 # Installation
 
-Ambience is distributed as a **HACS custom repository**. You add the repository
-to HACS once; from then on HACS handles installs and updates the same way as for
-any other HACS integration.
+Ambience is available in **HACS** (the Home Assistant Community Store), which
+handles installs and updates for you.
 
 ## Prerequisites
 
@@ -11,23 +10,18 @@ any other HACS integration.
 
 ## Install via HACS (recommended)
 
-The fastest path uses Home Assistant's "My" redirect to pre-fill the
-custom-repository dialog. The manual path below has the same effect.
-
 ### Quick add (My Home Assistant button)
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration)
 
-Click the button, confirm the dialog in your Home Assistant, and HACS will add
-the repository. Then continue from step 3 of the manual flow below.
+Click the button to open Ambience directly in HACS, click **Download**, then
+restart Home Assistant.
 
-### Manual add
+### Search in HACS
 
 1. Open **HACS** in the Home Assistant sidebar.
-1. Click the **kebab menu** (⋮, top right) → **Custom repositories**. Paste
-    `https://github.com/clintongormley/ambience` into the **Repository** field,
-    set **Type** to **Integration**, and click **Add**. Close the dialog.
-1. Find **Ambience** in the HACS integrations list and click **Download**.
+1. Search for **Ambience** and open it.
+1. Click **Download**.
 1. Restart Home Assistant.
 
 ## Install manually

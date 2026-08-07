@@ -35,6 +35,20 @@ def _switch(hass: HomeAssistant, kind: str, sid: str | None) -> Any:
     return hass.data[DOMAIN][DATA_SWITCHES][(kind, sid)]
 
 
+def _only_area_id(hass: HomeAssistant) -> str:
+    """The scope_id of the sole area switch (for tests that create one area)."""
+    area_id = next((k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area"), None)
+    assert area_id is not None, "no area switch registered"
+    return area_id
+
+
+def _only_floor_id(hass: HomeAssistant) -> str:
+    """The scope_id of the sole floor switch (for tests that create one floor)."""
+    floor_id = next((k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor"), None)
+    assert floor_id is not None, "no floor switch registered"
+    return floor_id
+
+
 # --- creation ---------------------------------------------------------------
 
 
@@ -82,8 +96,8 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
     assert main.name == "House Ambience"
 
     # Floor + area devices are sub-devices linked to the main device.
-    area_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area")
-    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    area_id = _only_area_id(hass)
+    floor_id = _only_floor_id(hass)
     area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
     floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
     assert area_dev is not None and area_dev.via_device_id == main.id
@@ -476,7 +490,7 @@ async def test_area_device_assigned_to_its_area(hass, mock_config_entry):
     assert area_dev.area_id == area.id
 
     # Floor + house devices have no area.
-    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    floor_id = _only_floor_id(hass)
     floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
     main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
     assert floor_dev.area_id is None
@@ -499,17 +513,101 @@ async def test_area_assignment_does_not_override_user_move(hass, mock_config_ent
     assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}).area_id == other.id
 
 
+# --- via_device_id linking (house <- floor/area) -----------------------------
+
+
+async def test_scope_device_lookup_is_config_entry_scoped_on_new_ha(hass, mock_config_entry):
+    """On HA 2026.8+ (async_get_device_by_identifier available), _link_via_device
+    resolves the house device scoped to our config entry and links the child via
+    via_device_id — not the deprecated identifier-only async_get_device."""
+    from unittest.mock import MagicMock, patch
+
+    from custom_components.ambience import switch as switch_mod
+
+    ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+
+    area_id = _only_area_id(hass)
+    dev_reg = dr.async_get(hass)
+    house = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+
+    sw = _switch(hass, "area", area_id)
+    # Simulate a freshly-created, not-yet-linked child device.
+    sw.device_entry = MagicMock(id=area_dev.id, via_device_id=None)
+
+    mock_reg = MagicMock()
+    mock_reg.async_get_device_by_identifier.return_value = house
+    with (
+        patch.object(switch_mod, "_SUPPORTS_GET_BY_IDENTIFIER", True),
+        patch("custom_components.ambience.switch.dr.async_get", return_value=mock_reg),
+    ):
+        sw._link_via_device()
+
+    mock_reg.async_get_device_by_identifier.assert_called_once_with(
+        (DOMAIN, "ambience"), mock_config_entry.entry_id
+    )
+    mock_reg.async_update_device.assert_called_once_with(area_dev.id, via_device_id=house.id)
+
+
+async def test_link_via_device_skips_when_already_linked(hass, mock_config_entry):
+    """A child device that already carries a via_device_id is left untouched."""
+    from unittest.mock import MagicMock, patch
+
+    ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+    area_id = _only_area_id(hass)
+    sw = _switch(hass, "area", area_id)
+    sw.device_entry = MagicMock(id="dev", via_device_id="already-linked")
+
+    with patch("custom_components.ambience.switch.dr.async_get") as mock_get:
+        sw._link_via_device()
+        mock_get.assert_not_called()
+
+
+async def test_link_via_device_skips_when_no_device(hass, mock_config_entry):
+    """No registered device yet → _link_via_device is a safe no-op."""
+    from unittest.mock import patch
+
+    ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+    area_id = _only_area_id(hass)
+    sw = _switch(hass, "area", area_id)
+    sw.device_entry = None
+
+    with patch("custom_components.ambience.switch.dr.async_get") as mock_get:
+        sw._link_via_device()
+        mock_get.assert_not_called()
+
+
+async def test_link_via_device_skips_when_house_device_missing(hass, mock_config_entry):
+    """When the house device does not exist, a child is not linked (no crash)."""
+    ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+    area_id = _only_area_id(hass)
+    dev_reg = dr.async_get(hass)
+    house = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    dev_reg.async_remove_device(house.id)  # HA clears children's via_device_id
+
+    sw = _switch(hass, "area", area_id)
+    sw.device_entry = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    sw._link_via_device()  # house gone → must not raise, must not re-link
+
+    area_dev = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    assert area_dev.via_device_id is None
+
+
 async def test_sync_device_name_no_device_is_noop(hass, mock_config_entry):
-    """When the scope's device is missing, _sync_device_name returns without
-    attempting a registry update (the `device is None` guard)."""
+    """When the scope's device is missing (device_entry is None), _sync_device_name
+    returns without attempting a registry update (the `device is None` guard)."""
     from unittest.mock import patch
 
     await _setup(hass, mock_config_entry)
     sw = _switch(hass, "house", None)
+    sw.device_entry = None
     with patch("custom_components.ambience.switch.dr.async_get") as mock_get:
-        mock_get.return_value.async_get_device.return_value = None
         sw._sync_device_name()  # must not raise
-        mock_get.return_value.async_update_device.assert_not_called()
+        mock_get.assert_not_called()
 
 
 async def test_config_update_to_zero_delay_cancels_armed_timer(

@@ -212,7 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
-            _remove_scope_device(hass, "area", area_id)
+            _remove_scope_device(hass, entry.entry_id, "area", area_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
@@ -247,7 +247,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
-            _remove_scope_device(hass, "floor", floor_id)
+            _remove_scope_device(hass, entry.entry_id, "floor", floor_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _handle_floor_registry_update)

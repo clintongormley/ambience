@@ -33,9 +33,36 @@ from .naming import scope_device_name
 
 _LOGGER = logging.getLogger(__name__)
 
-# House switch first so its device exists before floor/area switches register their
-# via_device link to it (avoids an HA device-registry warning on fresh setup).
+# House switch first so its device exists before floor/area switches link their
+# device to it (avoids an HA device-registry warning on fresh setup).
 _SCOPE_KIND_ORDER = {"house": 0, "floor": 1, "area": 2}
+
+# HA 2026.8 deprecated DeviceRegistry.async_get_device() lookup by identifier
+# (warns from 2026.8, removed 2027.8) because identifiers are only unique per
+# config entry now. The replacement async_get_device_by_identifier is scoped to a
+# config entry. Feature-detect it so Ambience keeps working on the 2025.2+ range
+# it still supports, where the scoped method does not yet exist.
+_SUPPORTS_GET_BY_IDENTIFIER = hasattr(dr.DeviceRegistry, "async_get_device_by_identifier")
+
+
+def _get_scope_device(
+    dev_reg: dr.DeviceRegistry,
+    entry_id: str,
+    scope_kind: str,
+    scope_id: str | None,
+) -> dr.DeviceEntry | None:
+    """Look up a scope's device, scoped to our config entry.
+
+    Uses async_get_device_by_identifier on HA 2026.8+ (the identifier-only
+    async_get_device is deprecated there); falls back to the identifier lookup on
+    older HA where the scoped method does not yet exist. The fallback isn't
+    entry-scoped, which is safe here: manifest single_config_entry means only one
+    entry's devices ever exist, so an identifier can't be ambiguous.
+    """
+    identifier = _device_identifier(scope_kind, scope_id)
+    if _SUPPORTS_GET_BY_IDENTIFIER:
+        return dev_reg.async_get_device_by_identifier(identifier, entry_id)
+    return dev_reg.async_get_device(identifiers={identifier})
 
 
 class _CancellableTimer:
@@ -83,11 +110,16 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     return None
 
 
-def _device_identifiers(scope_kind: str, scope_id: str | None) -> set[tuple[str, str]]:
-    """Device-registry identifiers for a scope's device."""
+def _device_identifier(scope_kind: str, scope_id: str | None) -> tuple[str, str]:
+    """The single device-registry identifier for a scope's device."""
     if scope_kind == "house":
-        return {(DOMAIN, "ambience")}
-    return {(DOMAIN, f"{scope_kind}_{scope_id}")}
+        return (DOMAIN, "ambience")
+    return (DOMAIN, f"{scope_kind}_{scope_id}")
+
+
+def _device_identifiers(scope_kind: str, scope_id: str | None) -> set[tuple[str, str]]:
+    """A scope's device-registry identifiers, as the set DeviceInfo expects."""
+    return {_device_identifier(scope_kind, scope_id)}
 
 
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
@@ -100,10 +132,12 @@ def _entity_id_for(scope_kind: str, display_name: str) -> str:
     return f"switch.{slugify(display_name)}_ambience"
 
 
-def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
+def _remove_scope_device(
+    hass: HomeAssistant, entry_id: str, scope_kind: str, scope_id: str | None
+) -> None:
     """Remove a scope's device from the device registry (no-op if absent)."""
     dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
+    device = _get_scope_device(dev_reg, entry_id, scope_kind, scope_id)
     if device is not None:
         dev_reg.async_remove_device(device.id)
 
@@ -150,7 +184,7 @@ def _reconcile_switch_registry(
         if scope is None or scope in desired:
             continue
         registry.async_remove(ent.entity_id)
-        _remove_scope_device(hass, scope[0], scope[1])
+        _remove_scope_device(hass, entry.entry_id, scope[0], scope[1])
 
 
 def reconcile_scope_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -213,14 +247,13 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # string) is set entirely by _sync_device_name, called from
         # async_added_to_hass and whenever SIGNAL_SWITCH_CONFIG_UPDATED fires — so
         # it is not set here, avoiding a stale name on restart when the user has
-        # changed the default. Floor/area devices are sub-devices of the main
-        # "ambience" service device.
+        # changed the default. Floor/area devices are linked to the main "ambience"
+        # service device as sub-devices by _link_via_device (via_device_id), not the
+        # deprecated DeviceInfo["via_device"] identifier key (removed HA 2027.8).
         self._attr_device_info = DeviceInfo(
             identifiers=_device_identifiers(scope_kind, scope_id),
             entry_type=DeviceEntryType.SERVICE,
         )
-        if scope_kind != "house":
-            self._attr_device_info["via_device"] = (DOMAIN, "ambience")
         # Deterministic entity_id for clean installs; entity registry takes
         # over after first registration so user-renames stick.
         self.entity_id = _entity_id_for(scope_kind, display_name)
@@ -265,6 +298,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         )
         self._sync_device_name()
         self._assign_area_device()
+        self._link_via_device()
         last = await self.async_get_last_state()
         if last is not None and last.state == "off":
             self._attr_is_on = False
@@ -349,12 +383,33 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         """
         if self._scope_kind != "area":
             return
-        dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device(
-            identifiers=_device_identifiers(self._scope_kind, self._scope_id)
-        )
+        device = self.device_entry
         if device is not None and device.area_id is None:
-            dev_reg.async_update_device(device.id, area_id=self._scope_id)
+            dr.async_get(self.hass).async_update_device(device.id, area_id=self._scope_id)
+
+    def _link_via_device(self) -> None:
+        """Link a floor/area scope device to the house device as its via-device.
+
+        Sets via_device_id directly. DeviceInfo["via_device"] — the identifier-
+        based link — is deprecated in HA 2026.8 and removed in 2027.8, so we set
+        the id instead once the device exists. No-op for the house scope, when
+        this device isn't registered yet, when it is already linked, or when the
+        house device doesn't exist — in the last case the link is retried the next
+        time this entity is added (i.e. on reload), matching how the old
+        DeviceInfo["via_device"] link was only resolved at device creation.
+        async_update_device(via_device_id=...) is available on the whole 2025.2+
+        range; only the house lookup is guarded.
+        """
+        if self._scope_kind == "house":
+            return
+        device = self.device_entry
+        if device is None or device.via_device_id is not None:
+            return
+        dev_reg = dr.async_get(self.hass)
+        entry_id = self.platform.config_entry.entry_id
+        house = _get_scope_device(dev_reg, entry_id, "house", None)
+        if house is not None:
+            dev_reg.async_update_device(device.id, via_device_id=house.id)
 
     def _sync_device_name(self) -> None:
         """Update the scope device's registry name to the composed name.
@@ -362,15 +417,12 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         Writes the integration-provided `name`; HA always displays a user's
         `name_by_user` in preference, so manual device renames are preserved.
         """
-        dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device(
-            identifiers=_device_identifiers(self._scope_kind, self._scope_id)
-        )
+        device = self.device_entry
         if device is None:
             return
         new_name = self._composed_device_name()
         if device.name != new_name:
-            dev_reg.async_update_device(device.id, name=new_name)
+            dr.async_get(self.hass).async_update_device(device.id, name=new_name)
 
     def _schedule_auto_on(self, seconds: int) -> None:
         self._cancel_timer()

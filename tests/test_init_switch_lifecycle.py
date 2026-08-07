@@ -220,4 +220,4 @@ async def test_remove_scope_device_missing_is_noop(hass, installed):
     from custom_components.ambience import _remove_scope_device
 
     # No device exists for this id — must not raise and must remove nothing.
-    _remove_scope_device(hass, "area", "does-not-exist")
+    _remove_scope_device(hass, installed.entry_id, "area", "does-not-exist")

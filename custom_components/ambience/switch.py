@@ -45,24 +45,36 @@ _SCOPE_KIND_ORDER = {"house": 0, "floor": 1, "area": 2}
 _SUPPORTS_GET_BY_IDENTIFIER = hasattr(dr.DeviceRegistry, "async_get_device_by_identifier")
 
 
+def lookup_device_by_identifier(
+    dev_reg: dr.DeviceRegistry,
+    identifier: tuple[str, str],
+    entry_id: str,
+) -> dr.DeviceEntry | None:
+    """Look up a device by identifier, scoped to our config entry.
+
+    Uses async_get_device_by_identifier on HA 2026.8+ (the identifier-only
+    async_get_device is deprecated there, and raises in the test framework from
+    2026.9); falls back to the identifier lookup on older HA where the scoped
+    method does not yet exist. The fallback isn't entry-scoped, which is safe
+    here: manifest single_config_entry means only one entry's devices ever exist,
+    so an identifier can't be ambiguous.
+
+    Shared with the test suite (see tests/__init__.py) so tests query devices the
+    same way across the supported HA range rather than re-implementing this gate.
+    """
+    if _SUPPORTS_GET_BY_IDENTIFIER:
+        return dev_reg.async_get_device_by_identifier(identifier, entry_id)
+    return dev_reg.async_get_device(identifiers={identifier})
+
+
 def _get_scope_device(
     dev_reg: dr.DeviceRegistry,
     entry_id: str,
     scope_kind: str,
     scope_id: str | None,
 ) -> dr.DeviceEntry | None:
-    """Look up a scope's device, scoped to our config entry.
-
-    Uses async_get_device_by_identifier on HA 2026.8+ (the identifier-only
-    async_get_device is deprecated there); falls back to the identifier lookup on
-    older HA where the scoped method does not yet exist. The fallback isn't
-    entry-scoped, which is safe here: manifest single_config_entry means only one
-    entry's devices ever exist, so an identifier can't be ambiguous.
-    """
-    identifier = _device_identifier(scope_kind, scope_id)
-    if _SUPPORTS_GET_BY_IDENTIFIER:
-        return dev_reg.async_get_device_by_identifier(identifier, entry_id)
-    return dev_reg.async_get_device(identifiers={identifier})
+    """Look up a scope's device, scoped to our config entry."""
+    return lookup_device_by_identifier(dev_reg, _device_identifier(scope_kind, scope_id), entry_id)
 
 
 class _CancellableTimer:

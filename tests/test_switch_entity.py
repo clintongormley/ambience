@@ -23,6 +23,7 @@ from custom_components.ambience.const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from tests import get_scope_device
 
 
 async def _setup(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:
@@ -84,22 +85,23 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
 
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
+    entry_id = mock_config_entry.entry_id
 
     # One device per scope: house (main) + 1 floor + 1 area = 3.
     # (The old "Ambience" hub device for the Scene-updates sensor was removed
     # when that sensor was replaced by per-scope logbook entries.)
-    devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
+    devices = dr.async_entries_for_config_entry(dev_reg, entry_id)
     assert len(devices) == 3
 
-    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    main = get_scope_device(dev_reg, (DOMAIN, "ambience"), entry_id)
     assert main is not None
     assert main.name == "House Ambience"
 
     # Floor + area devices are sub-devices linked to the main device.
     area_id = _only_area_id(hass)
     floor_id = _only_floor_id(hass)
-    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
-    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
+    area_dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area_id}"), entry_id)
+    floor_dev = get_scope_device(dev_reg, (DOMAIN, f"floor_{floor_id}"), entry_id)
     assert area_dev is not None and area_dev.via_device_id == main.id
     assert floor_dev is not None and floor_dev.via_device_id == main.id
 
@@ -257,7 +259,7 @@ async def test_area_rename_updates_device_name(hass, mock_config_entry):
     await hass.async_block_till_done()
 
     dev_reg = dr.async_get(hass)
-    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area.id}"), mock_config_entry.entry_id)
     assert dev.name == "Lounge Ambience"
 
 
@@ -266,7 +268,7 @@ async def test_user_device_rename_is_preserved(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
 
     dev_reg = dr.async_get(hass)
-    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area.id}"), mock_config_entry.entry_id)
     dev_reg.async_update_device(dev.id, name_by_user="My Lounge")
 
     # A default-name change must not clobber the user's rename.
@@ -486,13 +488,14 @@ async def test_area_device_assigned_to_its_area(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
 
     dev_reg = dr.async_get(hass)
-    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    entry_id = mock_config_entry.entry_id
+    area_dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area.id}"), entry_id)
     assert area_dev.area_id == area.id
 
     # Floor + house devices have no area.
     floor_id = _only_floor_id(hass)
-    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
-    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    floor_dev = get_scope_device(dev_reg, (DOMAIN, f"floor_{floor_id}"), entry_id)
+    main = get_scope_device(dev_reg, (DOMAIN, "ambience"), entry_id)
     assert floor_dev.area_id is None
     assert main.area_id is None
 
@@ -503,14 +506,15 @@ async def test_area_assignment_does_not_override_user_move(hass, mock_config_ent
     await _setup(hass, mock_config_entry)
 
     dev_reg = dr.async_get(hass)
-    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    entry_id = mock_config_entry.entry_id
+    area_dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area.id}"), entry_id)
     # User moves the device to a different area.
     dev_reg.async_update_device(area_dev.id, area_id=other.id)
 
     # Re-running the assignment (e.g. via a reload) must not move it back.
     sw = _switch(hass, "area", area.id)
     sw._assign_area_device()
-    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}).area_id == other.id
+    assert get_scope_device(dev_reg, (DOMAIN, f"area_{area.id}"), entry_id).area_id == other.id
 
 
 # --- via_device_id linking (house <- floor/area) -----------------------------
@@ -529,8 +533,9 @@ async def test_scope_device_lookup_is_config_entry_scoped_on_new_ha(hass, mock_c
 
     area_id = _only_area_id(hass)
     dev_reg = dr.async_get(hass)
-    house = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
-    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    entry_id = mock_config_entry.entry_id
+    house = get_scope_device(dev_reg, (DOMAIN, "ambience"), entry_id)
+    area_dev = get_scope_device(dev_reg, (DOMAIN, f"area_{area_id}"), entry_id)
 
     sw = _switch(hass, "area", area_id)
     # Simulate a freshly-created, not-yet-linked child device.
@@ -586,14 +591,15 @@ async def test_link_via_device_skips_when_house_device_missing(hass, mock_config
     await _setup(hass, mock_config_entry)
     area_id = _only_area_id(hass)
     dev_reg = dr.async_get(hass)
-    house = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    entry_id = mock_config_entry.entry_id
+    house = get_scope_device(dev_reg, (DOMAIN, "ambience"), entry_id)
     dev_reg.async_remove_device(house.id)  # HA clears children's via_device_id
 
     sw = _switch(hass, "area", area_id)
-    sw.device_entry = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    sw.device_entry = get_scope_device(dev_reg, (DOMAIN, f"area_{area_id}"), entry_id)
     sw._link_via_device()  # house gone → must not raise, must not re-link
 
-    area_dev = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    area_dev = get_scope_device(dr.async_get(hass), (DOMAIN, f"area_{area_id}"), entry_id)
     assert area_dev.via_device_id is None
 
 

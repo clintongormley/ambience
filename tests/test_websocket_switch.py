@@ -16,6 +16,7 @@ from custom_components.ambience.const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from tests import get_scope_device
 
 
 @pytest.fixture
@@ -164,7 +165,7 @@ async def test_set_scope_enabled_deletes_switch_on_disable(hass, installed, hass
     reg = er.async_get(hass)
     assert reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house") is None
     assert ("house", None) not in hass.data[DOMAIN][DATA_SWITCHES]
-    assert dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "ambience")}) is None
+    assert get_scope_device(dr.async_get(hass), (DOMAIN, "ambience"), installed.entry_id) is None
     assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is False
 
 

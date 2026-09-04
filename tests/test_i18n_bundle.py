@@ -96,7 +96,7 @@ def test_parse_locales_on_real_bundle() -> None:
     text = (root / "frontend" / "src" / "i18n-data.ts").read_text()
     loc = parse_locales(text)
     # canary: a forgotten/renamed shipped locale fails loudly here.
-    assert set(loc) == {"en", "es", "pt"}
+    assert set(loc) == {"en", "es", "pt", "fr"}
     # every shipped locale mirrors en's key set, and a healthy number of them.
     en_keys = set(loc["en"])
     for locale in loc.keys() - {"en"}:

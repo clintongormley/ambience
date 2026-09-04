@@ -8,6 +8,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- **French (fr) translation.** Ambience is now available in French — the config
+    flow, repair issues, service names, and the whole panel UI. It joins
+    English, Spanish, and European Portuguese.
+
 ## [1.1.0] - 2026-08-04
 
 The **AI-assisted authoring** release. You can now build and fix Ambience scenes

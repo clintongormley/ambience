@@ -1,0 +1,192 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer Ambience",
+        "description": "Ceci créera l'entrée d'intégration Ambience."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Une seule instance est autorisée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options d'Ambience",
+        "data": {
+          "show_sidebar_panel": "Afficher Ambience dans la barre latérale"
+        },
+        "data_description": {
+          "show_sidebar_panel": "Lorsque cette option est désactivée, Ambience est retiré de la barre latérale. Vous pouvez toujours ajouter la carte Ambience à n'importe quel tableau de bord."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Ambience : une scène fait référence à une entité manquante ou désactivée",
+      "description": "L'entité `{entity_id}` n'existe pas ou est désactivée dans Home Assistant, mais elle est référencée par ces scènes Ambience dans le {scope} :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais ; une action la ciblant échouera silencieusement. Corrigez l'id de l'entité dans l'éditeur Ambience, activez l'entité (ou son appareil), ou supprimez la référence. Ce message disparaît automatiquement une fois que l'entité existe et est activée."
+    },
+    "action_overlap": {
+      "title": "Ambience : une entité est contrôlée par plusieurs groupes",
+      "description": "L'entité `{entity_id}` est contrôlée par plus d'un groupe de catégorie/portée d'Ambience :\n{groups}\n\nChaque groupe est une boucle de contrôle indépendante avec son propre état, ils peuvent donc se disputer cette entité et produire des applications obsolètes ou sans effet. Envisagez de la déplacer dans un seul groupe. Ce message disparaît automatiquement une fois le conflit résolu."
+    },
+    "missing_workday_sensor": {
+      "title": "Ambience : des scènes utilisent un élément jour ouvré mais aucun capteur de jour ouvré n'est configuré",
+      "description": "Ces scènes Ambience utilisent un élément de jour `workday` ou `holiday`, mais aucun **capteur de jour ouvré** n'est configuré (Paramètres → Ambience → Conditions → Jour), elles ne peuvent donc jamais correspondre :\n{scenes}\n\nConfigurez un capteur de jour ouvré, ou supprimez les éléments workday/holiday. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "missing_workday_calendar": {
+      "title": "Ambience : des scènes utilisent un élément calendrier de jours ouvrés mais aucun calendrier n'est configuré",
+      "description": "Ces scènes Ambience utilisent un élément de jour `first_workday`/`last_workday`, mais aucun **calendrier de jours ouvrés** n'est configuré (Paramètres → Ambience → Conditions → Jour), elles ne peuvent donc jamais correspondre :\n{scenes}\n\nConfigurez un calendrier de jours ouvrés, ou supprimez ces éléments. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "missing_weather_entity": {
+      "title": "Ambience : des scènes utilisent une condition météo mais aucune entité météo n'est configurée",
+      "description": "Ces scènes Ambience utilisent une condition météo, mais aucune **entité météo** n'est configurée (Paramètres → Ambience → Conditions → Météo), elles ne peuvent donc jamais correspondre :\n{scenes}\n\nConfigurez une entité météo, ou supprimez les conditions météo. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "missing_weather_group": {
+      "title": "Ambience : des scènes font référence à un groupe météo supprimé",
+      "description": "Le groupe météo `{ref}` n'existe plus, mais il est référencé par ces scènes Ambience :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais. Recréez le groupe ou supprimez la référence. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "missing_period": {
+      "title": "Ambience : des scènes font référence à une période de la journée supprimée",
+      "description": "La période de la journée `{ref}` n'existe plus, mais elle est référencée par ces scènes Ambience :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais. Recréez la période ou supprimez la référence. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "missing_lux_range": {
+      "title": "Ambience : des scènes font référence à une plage de lux supprimée",
+      "description": "La plage de lux `{ref}` n'existe plus, mais elle est référencée par ces scènes Ambience :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais. Recréez la plage ou supprimez la référence. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "unexposed_action": {
+      "title": "Ambience : des scènes utilisent une action qui n'est plus exposée",
+      "description": "L'action `{ref}` n'est plus exposée (Paramètres → Ambience → Actions), mais elle est utilisée par ces scènes Ambience :\n{scenes}\n\nL'action sera ignorée lorsque la scène s'applique. Réexposez l'action ou retirez-la des scènes. Ce message disparaît automatiquement une fois le problème résolu."
+    }
+  },
+  "exceptions": {
+    "unexpected_error": { "message": "Une erreur inattendue s'est produite. Consultez les journaux de Home Assistant pour plus de détails." },
+    "period_clamp_not_object": { "message": "Clamp doit être un objet." },
+    "period_invalid_clamp_dir": { "message": "Direction de clamp invalide : {value}" },
+    "period_invalid_clamp_hh": { "message": "Heure de clamp invalide : {value}" },
+    "period_invalid_clamp_mm": { "message": "Minute de clamp invalide : {value}" },
+    "period_endpoint_not_object": { "message": "Le point d'extrémité doit être un objet avec un 'kind'." },
+    "period_invalid_hh": { "message": "Heure invalide : {value}" },
+    "period_invalid_mm": { "message": "Minute invalide : {value}" },
+    "period_invalid_anchor": { "message": "Ancre invalide : {value}" },
+    "period_offset_not_int": { "message": "offset_min doit être un entier : {value}" },
+    "period_invalid_endpoint_kind": { "message": "Type de point d'extrémité invalide : {value}" },
+    "period_def_not_object": { "message": "La définition de la période doit être un objet." },
+    "period_def_missing_from_to": { "message": "La définition de la période nécessite 'from' et 'to'." },
+    "lux_not_integer": { "message": "{which} doit être un entier : {value}" },
+    "lux_negative": { "message": "{which} doit être >= 0 : {value}" },
+    "lux_def_not_object": { "message": "La définition de la plage de lux doit être un objet." },
+    "lux_def_needs_min_or_max": { "message": "La plage de lux nécessite au moins l'un de 'min'/'max'." },
+    "lux_min_not_below_max": { "message": "Le 'min' de la plage de lux doit être < 'max' : {min} >= {max}" },
+    "named_def_custom_not_object": { "message": "custom doit être un objet." },
+    "named_def_hidden_not_list": { "message": "hidden doit être une liste." },
+    "named_def_invalid_id": { "message": "Id de {kind} invalide : {id}" },
+    "named_def_only_builtin_hideable": { "message": "Seuls les ids intégrés peuvent être masqués : {id}" },
+    "unknown_scope_kind": { "message": "Type de portée inconnu : {scope_kind}" },
+    "store_switch_name_empty": { "message": "Le `name` par défaut de l'interrupteur doit être une chaîne non vide : {name}" },
+    "store_switch_auto_on_delay_invalid": { "message": "`auto_on_delay_seconds` de l'interrupteur doit être un entier positif ou nul : {delay}" },
+    "store_reapply_enabled_invalid": { "message": "Le `enabled` de réapplication doit être un booléen : {enabled}" },
+    "store_reapply_interval_invalid": { "message": "Le `interval_seconds` de réapplication doit être un entier >= {min} : {interval}" },
+    "store_exposure_invalid": { "message": "L'exposition pour {assistant} doit être un booléen : {value}" },
+    "store_unknown_assistants": { "message": "Assistant(s) inconnu(s) : {assistants}" },
+    "last_category_required": { "message": "Au moins une catégorie est requise." },
+    "categories_still_have_scenes": { "message": "Ces catégories contiennent encore des scènes : {categories}" },
+    "cannot_delete_last_category": { "message": "Impossible de supprimer la dernière catégorie." },
+    "category_still_has_scenes": { "message": "La catégorie {category_id} contient encore des scènes." },
+    "exposed_actions_not_list": { "message": "Les actions exposées doivent être une liste." },
+    "exposed_entry_not_object": { "message": "L'entrée doit être un objet : {entry}" },
+    "exposed_invalid_service_id": { "message": "Id de service invalide : {sid}" },
+    "exposed_duplicate_service_id": { "message": "Id de service en double : {sid}" },
+    "exposed_label_not_string": { "message": "{sid} : le libellé doit être une chaîne." },
+    "exposed_visible_fields_not_list": { "message": "{sid} : visible_fields doit être une liste de chaînes." },
+    "exposed_defaults_not_object": { "message": "{sid} : defaults doit être un objet avec des clés de type chaîne." },
+    "exposed_unknown_service": { "message": "Service inconnu : {sid}" },
+    "exposed_unknown_visible_field": { "message": "{sid} : champ inconnu {field} dans visible_fields." },
+    "exposed_unknown_default_field": { "message": "{sid} : champ inconnu {field} dans defaults." },
+    "scene_config_not_object": { "message": "La configuration doit être un objet." },
+    "scene_scenes_not_list": { "message": "`scenes` doit être une liste." },
+    "scene_not_object": { "message": "Scène {scene_idx} : doit être un objet." },
+    "scene_category_not_string": { "message": "Scène {scene_idx} : la catégorie doit être une chaîne." },
+    "scene_description_not_string": { "message": "Scène {scene_idx} : la description doit être du texte." },
+    "scene_dup_name": { "message": "Scène {scene_idx} : une scène nommée {name} existe déjà dans cette catégorie." },
+    "scene_when_not_object": { "message": "Scène {scene_idx} : `when` doit être un objet." },
+    "scene_unknown_condition": { "message": "Scène {scene_idx} : condition inconnue {key}" },
+    "scene_actions_not_list": { "message": "Scène {scene_idx} : `actions` doit être une liste." },
+    "scene_action_not_object": { "message": "Scène {scene_idx} action {action_idx} : doit être un objet." },
+    "scene_action_service_invalid": { "message": "Scène {scene_idx} action {action_idx} : `service` manquant ou mal formé." },
+    "scene_action_entity_ids_not_list": { "message": "Scène {scene_idx} action {action_idx} : entity_ids doit être une liste." },
+    "scene_action_entity_ids_not_strings": { "message": "Scène {scene_idx} action {action_idx} : entity_ids doivent être des chaînes non vides." },
+    "scene_action_params_not_object": { "message": "Scène {scene_idx} action {action_idx} : params doit être un objet." },
+    "scene_apply_invalid": { "message": "Scène {scene_idx} : `apply` doit être \"once\" ou \"always\" : {value}" },
+    "scene_priority_invalid": { "message": "Scène {scene_idx} : `priority` doit être un nombre entier : {value}" },
+    "scene_pinned_invalid": { "message": "Scène {scene_idx} : `pinned` doit être true ou false : {value}" },
+    "weather_groups_not_list": { "message": "Les groupes doivent être une liste." },
+    "weather_group_not_object": { "message": "Chaque groupe doit être un objet." },
+    "weather_group_id_empty": { "message": "L'id du groupe doit être une chaîne non vide : {gid}" },
+    "weather_group_id_duplicate": { "message": "Id de groupe en double : {gid}" },
+    "weather_group_label_empty": { "message": "Le libellé du groupe {gid} doit être une chaîne non vide." },
+    "weather_group_invalid_conditions": { "message": "Le groupe {gid} a une ou plusieurs conditions invalides." },
+    "unknown_area": { "message": "Zone inconnue : {scope_id}" },
+    "unknown_floor": { "message": "Étage inconnu : {scope_id}" },
+    "scope_disabled": { "message": "La portée {scope_kind}/{scope_id} est désactivée." },
+    "scene_index_out_of_range": { "message": "scene_index hors limites : {scene_index}" },
+    "scope_selector_invalid": { "message": "{command} nécessite exactement l'un de area_id/floor_id/house, reçu : {present}" },
+    "invalid_service_id_format": { "message": "L'id du service doit être domain.service : {service_id}" },
+    "no_verdict_snapshot": { "message": "Aucun instantané de verdict pour la condition opaque {condition_key}" },
+    "unknown_service": { "message": "Service inconnu : {service}" },
+    "category_id_empty": { "message": "L'id de catégorie doit être une chaîne non vide." },
+    "duplicate_category_id": { "message": "Id de catégorie en double : {cid}" },
+    "category_name_empty": { "message": "Le nom de la catégorie {cid} doit être une chaîne non vide." },
+    "duplicate_category_name": { "message": "Nom de catégorie en double : {name}" },
+    "unparseable_now": { "message": "Impossible d'analyser now : {now}" },
+    "unparseable_date": { "message": "Impossible d'analyser la date : {date}" },
+    "now_not_timezone_aware": { "message": "`now` doit tenir compte du fuseau horaire : {now}" }
+  },
+  "services": {
+    "turn_on": {
+      "name": "Allumer",
+      "description": "Allume les entités ciblées, en ignorant celles qui sont déjà allumées. Fonctionne dans tous les domaines prenant en charge l'allumage/l'extinction."
+    },
+    "turn_off": {
+      "name": "Éteindre",
+      "description": "Éteint les entités ciblées, en ignorant celles qui sont déjà éteintes. Fonctionne dans tous les domaines prenant en charge l'allumage/l'extinction."
+    },
+    "cover_safe_open": {
+      "name": "Ouvrir le volet (sûr)",
+      "description": "Ouvre les volets ciblés, en ignorant ceux qui sont déjà entièrement ouverts (pas de clic de relais redondant)."
+    },
+    "cover_safe_close": {
+      "name": "Fermer le volet (sûr)",
+      "description": "Ferme les volets ciblés, en ignorant ceux qui sont déjà entièrement fermés (pas de clic de relais redondant)."
+    },
+    "cover_safe_set_position": {
+      "name": "Définir la position du volet (sûr)",
+      "description": "Place les volets ciblés à une position, en ignorant ceux qui sont déjà à cette position.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Position cible, de 0 (fermé) à 100 (ouvert)."
+        }
+      }
+    },
+    "cover_safe_set_tilt_position": {
+      "name": "Définir l'inclinaison du volet (sûr)",
+      "description": "Place les volets ciblés à une position d'inclinaison, en ignorant ceux qui sont déjà à cette inclinaison.",
+      "fields": {
+        "tilt_position": {
+          "name": "Position d'inclinaison",
+          "description": "Position d'inclinaison cible, de 0 à 100."
+        }
+      }
+    }
+  }
+}

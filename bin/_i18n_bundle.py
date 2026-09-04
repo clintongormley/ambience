@@ -135,12 +135,15 @@ class _Reader:
                 )
 
 
-def _flatten(obj: dict, prefix: str = "") -> dict[str, str]:
+def flatten_items(obj: dict, prefix: str = "") -> dict[str, str]:
+    """Flatten a nested dict to dot-joined `key -> leaf value`. Shared by the
+    bundle reader and the strings.json translation gate so there is one
+    flattening rule."""
     flat: dict[str, str] = {}
     for k, v in obj.items():
         key = f"{prefix}.{k}" if prefix else k
         if isinstance(v, dict):
-            flat.update(_flatten(v, key))
+            flat.update(flatten_items(v, key))
         else:
             flat[key] = v
     return flat
@@ -154,7 +157,7 @@ def parse_locales(text: str) -> dict[str, dict[str, str]]:
     anchor = text.index("AMBIENCE_STRINGS_BY_LOCALE")
     brace = text.index("{", anchor)
     top = _Reader(text, brace).object()
-    return {locale: _flatten(block) for locale, block in top.items()}
+    return {locale: flatten_items(block) for locale, block in top.items()}
 
 
 def placeholder_tokens(value: str) -> list[str]:

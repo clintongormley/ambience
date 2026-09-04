@@ -331,6 +331,14 @@ describe("weatherAttrUnit", () => {
 });
 
 describe("getLanguageSupport", () => {
+  it("the locales these tests treat as 'uncovered' are actually unshipped", () => {
+    // Several banner/support tests use "it"/"de" as stand-in uncovered languages.
+    // If Ambience ever ships one of them, those tests would silently exercise a
+    // covered locale on a false premise — so fail loudly here at a single site.
+    for (const code of ["it", "de"]) {
+      expect(code in AMBIENCE_STRINGS_BY_LOCALE).toBe(false);
+    }
+  });
   it("covered base language → available", () => {
     expect(getLanguageSupport({ language: "es" })).toEqual({
       available: true,
@@ -346,10 +354,10 @@ describe("getLanguageSupport", () => {
     });
   });
   it("uncovered language → not available", () => {
-    expect(getLanguageSupport({ language: "fr" })).toEqual({
+    expect(getLanguageSupport({ language: "it" })).toEqual({
       available: false,
-      code: "fr",
-      baseCode: "fr",
+      code: "it",
+      baseCode: "it",
     });
   });
   it("wanted region variant (pt-BR) is nudged and keeps full code + base", () => {

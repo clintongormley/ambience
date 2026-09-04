@@ -21,14 +21,14 @@ describe("ambience-language-banner", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("shows for an uncovered, undismissed language", async () => {
-    const el = await mount("fr");
+    const el = await mount("it");
     expect(innerBanner(el)).not.toBeNull();
-    expect(el.shadowRoot.textContent.toLowerCase()).toContain("français");
+    expect(el.shadowRoot.textContent.toLowerCase()).toContain("italiano");
     // the language name and product are bolded (not just present as plain text)
     const bolded = [...el.shadowRoot.querySelectorAll("strong")].map((s: Element) =>
       s.textContent?.toLowerCase(),
     );
-    expect(bolded).toContain("français");
+    expect(bolded).toContain("italiano");
     expect(bolded).toContain("ambience");
   });
 
@@ -56,23 +56,23 @@ describe("ambience-language-banner", () => {
   });
 
   it("CTA href is the built translation-request URL", async () => {
-    const el = await mount("fr");
+    const el = await mount("it");
     const cta = innerBanner(el).shadowRoot.querySelector('[data-test="banner-cta"]');
-    expect(cta.getAttribute("href")).toBe(buildTranslationRequestUrl("fr", "français"));
+    expect(cta.getAttribute("href")).toBe(buildTranslationRequestUrl("it", "italiano"));
   });
 
   it("dismiss persists and hides the banner", async () => {
-    const el = await mount("fr");
+    const el = await mount("it");
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     expect(innerBanner(el)).toBeNull();
     // persisted: a fresh element for the same locale stays hidden
-    const el2 = await mount("fr");
+    const el2 = await mount("it");
     expect(innerBanner(el2)).toBeNull();
   });
 
   it("reappears for a DIFFERENT uncovered locale after dismissing one", async () => {
-    const el = await mount("fr");
+    const el = await mount("it");
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     el.hass = { language: "de" };
@@ -83,21 +83,21 @@ describe("ambience-language-banner", () => {
   });
 
   it("STAYS dismissed for an earlier locale after dismissing another", async () => {
-    // dismiss fr, dismiss de, switch back to fr → still hidden (set, not single)
-    const fr = await mount("fr");
-    fr.shadowRoot
+    // dismiss it, dismiss de, switch back to it → still hidden (set, not single)
+    const it_ = await mount("it");
+    it_.shadowRoot
       .querySelector("ambience-banner")
       .shadowRoot.querySelector('[data-test="banner-dismiss"]')
       .click();
-    await fr.updateComplete;
+    await it_.updateComplete;
     const de = await mount("de");
     de.shadowRoot
       .querySelector("ambience-banner")
       .shadowRoot.querySelector('[data-test="banner-dismiss"]')
       .click();
     await de.updateComplete;
-    const frAgain = await mount("fr");
-    expect(frAgain.shadowRoot.querySelector("ambience-banner")).toBeNull();
+    const itAgain = await mount("it");
+    expect(itAgain.shadowRoot.querySelector("ambience-banner")).toBeNull();
   });
 
   it("keeps each dismissed locale hidden for the session even when storage is unavailable", async () => {
@@ -109,7 +109,7 @@ describe("ambience-language-banner", () => {
     vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
       throw new Error("denied");
     });
-    const el = await mount("fr");
+    const el = await mount("it");
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     // switch to a second uncovered locale and dismiss it too
@@ -119,7 +119,7 @@ describe("ambience-language-banner", () => {
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     // back to the first locale — still hidden (a single-value store would re-nag)
-    el.hass = { language: "fr" };
+    el.hass = { language: "it" };
     await el.updateComplete;
     expect(innerBanner(el)).toBeNull();
   });

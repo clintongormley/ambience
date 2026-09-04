@@ -802,7 +802,7 @@ describe("ambience-scopes-view", () => {
     el = await mount();
     // Override hass with an uncovered language after mount so the component sees
     // the change via willUpdate.
-    el.hass = { ...el.hass, language: "fr" };
+    el.hass = { ...el.hass, language: "it" };
     await el.updateComplete;
     const lang = el.shadowRoot.querySelector("ambience-language-banner");
     expect(lang).not.toBeNull();

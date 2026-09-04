@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-04
+
 ### Added
 
 - **French (fr) translation.** Ambience is now available in French — the config

@@ -42,9 +42,12 @@ class StateSnapshot:
     # off `last_updated` (any change, including an attribute-only refresh,
     # resets the clock — correct when the atom's LHS *is* an attribute).
     states: dict[str, tuple[str, datetime, datetime]]
-    # entity_id -> attribute dict. Populated alongside states for atoms that
-    # compare an attribute instead of the state itself.
-    attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # entity_id -> attribute mapping. Populated alongside states for atoms that
+    # compare an attribute instead of the state itself. Held by reference: HA's
+    # `State.attributes` is an immutable ReadOnlyDict and a state change
+    # replaces the whole State, so the snapshot stays a frozen view without
+    # copying every entity's attributes on every tick.
+    attributes: dict[str, Mapping[str, Any]] = field(default_factory=dict)
     # Engine-injected per-gate tenure: gate fingerprint -> the time its instant
     # test last became true. When present, `for:` atoms gate off predicate
     # tenure (surviving in-set flips); when None (the simulator and direct
@@ -89,7 +92,7 @@ class StateCondition:
         entities: frozenset[str] | None = None,
     ) -> StateSnapshot:
         states: dict[str, tuple[str, datetime, datetime]] = {}
-        attributes: dict[str, dict[str, Any]] = {}
+        attributes: dict[str, Mapping[str, Any]] = {}
         # `entities` (the entities atoms actually reference) lets us read just
         # those; None (the simulator path) means a full scan. This runs on the
         # hottest path in the system — every motion/door event — so copying
@@ -98,9 +101,7 @@ class StateCondition:
             if s is None:
                 continue  # referenced entity that doesn't exist
             states[s.entity_id] = (s.state, s.last_changed, s.last_updated)
-            # `s.attributes` is a Mapping; copy into a plain dict so the
-            # snapshot stays detached from HA's live state object.
-            attributes[s.entity_id] = dict(s.attributes)
+            attributes[s.entity_id] = s.attributes
         return StateSnapshot(now=now or dt_util.utcnow(), states=states, attributes=attributes)
 
     def matches(self, predicate: Any, snapshot: StateSnapshot) -> bool:

@@ -560,6 +560,14 @@ async def test_snapshot_captures_entity_attributes(hass) -> None:
     assert snap.attributes["media_player.x"]["volume_level"] == 0.5
 
 
+async def test_snapshot_stores_the_state_attributes_mapping_by_reference(hass) -> None:
+    """HA's `State.attributes` is an immutable ReadOnlyDict, so the snapshot
+    holds it directly instead of copying it per entity per fire."""
+    hass.states.async_set("media_player.x", "playing", {"source": "Spotify"})
+    snap = await StateCondition().snapshot(hass)
+    assert snap.attributes["media_player.x"] is hass.states.get("media_player.x").attributes
+
+
 async def test_snapshot_captures_both_last_changed_and_last_updated(hass) -> None:
     """last_updated bumps on any change (state OR attribute), while
     last_changed only bumps on state change. The snapshot captures both as

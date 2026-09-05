@@ -595,6 +595,53 @@ async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
     }
 
 
+async def test_concurrent_hinted_snapshots_keep_every_fresh_result(
+    hass: HomeAssistant,
+) -> None:
+    """Two hinted passes in flight at once each contribute their fresh key: the
+    merge happens over the live baseline, not over the one read before awaiting."""
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": False})
+    _install_service(hass, "script", "two", response={"match": False})
+    key_one = _cache_key("script.one", {})
+    key_two = _cache_key("script.two", {})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0  # never served from the TTL cache
+    baseline = await cond.snapshot(hass)
+    assert baseline.results == {key_one: False, key_two: False}
+
+    gate = asyncio.Event()
+    both_in_flight = asyncio.Event()
+    started = 0
+
+    async def _blocked_call(_hass, _script, _args_json):
+        nonlocal started
+        started += 1
+        if started == 2:
+            both_in_flight.set()
+        await gate.wait()
+        return True
+
+    cond._call_one = _blocked_call
+    first = asyncio.create_task(cond.snapshot(hass, keys=frozenset({key_one})))
+    second = asyncio.create_task(cond.snapshot(hass, keys=frozenset({key_two})))
+    await asyncio.wait_for(both_in_flight.wait(), timeout=5)
+    gate.set()
+    await asyncio.gather(first, second)
+
+    assert cond._previous.results == {key_one: True, key_two: True}
+
+
 # --- verdict plumbing: the simulator's two hooks on the opaque base -----------
 
 

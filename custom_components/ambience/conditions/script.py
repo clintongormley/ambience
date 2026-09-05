@@ -161,11 +161,13 @@ class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
         script, _, args_json = key.partition("|")
         return script, args_json
 
+    def _merge(self, fresh: ScriptSnapshot, previous: ScriptSnapshot) -> ScriptSnapshot:
+        return ScriptSnapshot(results=self._merge_over_previous(previous.results, fresh.results))
+
     async def _compute(
         self,
         hass: HomeAssistant,
         keys: frozenset[str] | None,
-        previous: ScriptSnapshot | None,
     ) -> ScriptSnapshot:
         # A result key round-trips to its work item, so a hint is the work list
         # itself — no store walk, and only the named scripts are called.
@@ -202,9 +204,7 @@ class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
         # spots the no-eviction common case.
         if keys is None and len(self._cache) > len(results):
             self._cache = {k: v for k, v in self._cache.items() if k in results}
-        return ScriptSnapshot(
-            results=self._merge_over_previous(keys, previous.results if previous else {}, results)
-        )
+        return ScriptSnapshot(results=results)
 
     async def _call_one(self, hass: HomeAssistant, script: str, args_json: str) -> bool:
         """Call one script.* service; return True iff response is `{"match": True}`.

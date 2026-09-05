@@ -1257,7 +1257,7 @@ class _FakeOpaqueCondition(OpaquePrecomputedCondition[_FakeSnapshot]):
     def verdict_label(self, predicate, scene):
         return None, "Fake"
 
-    async def _compute(self, hass, keys, previous):
+    async def _compute(self, hass, keys):
         if self.live is None:
             raise AssertionError("live snapshot must not run for an opaque condition")
         return _FakeSnapshot(results=dict(self.live))

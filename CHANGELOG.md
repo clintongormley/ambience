@@ -58,6 +58,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Disabling a scope's Ambience switch entity in Home Assistant now pauses that
     scope instead of leaving it always on.
 - The live 'matched' indicator updates after a manual Apply.
+- Two script or template conditions re-evaluated at the same moment no longer
+    discard one another's result, which could leave a scene matching on a stale
+    verdict until the next full refresh.
 
 ### Performance
 

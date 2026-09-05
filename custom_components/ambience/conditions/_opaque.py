@@ -28,10 +28,10 @@ class OpaquePrecomputedCondition[SnapshotT]:
 
     Subclasses set the protocol attributes
     (``name``/``input``/``priority``/…), implement ``result_key``, ``_compute``,
-    ``snapshot_from_results`` and ``verdict_label``, and call ``_distinct_keys``
-    to gather their work items. Subclassing this base is what marks a condition
-    opaque: the simulator detects it by type and drives it with user verdicts
-    instead of snapshotting it against the hypothetical world."""
+    ``_merge``, ``snapshot_from_results`` and ``verdict_label``, and call
+    ``_distinct_keys`` to gather their work items. Subclassing this base is what
+    marks a condition opaque: the simulator detects it by type and drives it with
+    user verdicts instead of snapshotting it against the hypothetical world."""
 
     # Set by each subclass; used by `_distinct_keys` to pick the right predicates.
     name: str
@@ -95,34 +95,39 @@ class OpaquePrecomputedCondition[SnapshotT]:
         set from the live config and drops it. The hint is also ignored until a
         previous snapshot exists to merge over — a partial result set with no
         baseline would read as "no match" for every scene that didn't fire.
-        Concurrent snapshots resolve last-writer-wins on the baseline, so a
-        hinted pass finishing after a full refresh can re-merge a key that
-        refresh dropped; harmless (no predicate references it) and the next full
-        refresh drops it again.
+
+        The baseline is read *after* the compute, so two hinted passes running
+        concurrently on different keys each merge over whatever the other
+        already stored instead of over a baseline that has since moved on. A
+        hinted pass finishing after a full refresh can therefore re-merge a key
+        that refresh dropped; harmless (no predicate references it) and the next
+        full refresh drops it again.
         """
-        previous = self._previous
-        snap = await self._compute(hass, keys if previous is not None else None, previous)
+        hinted = keys if self._previous is not None else None
+        fresh = await self._compute(hass, hinted)
+        baseline = self._previous
+        snap = fresh if hinted is None or baseline is None else self._merge(fresh, baseline)
         self._previous = snap
         return snap
 
-    async def _compute(
-        self, hass: HomeAssistant, keys: frozenset[str] | None, previous: SnapshotT | None
-    ) -> SnapshotT:
-        """Build one snapshot over the whole work list (``keys is None``) or over
-        just the named result keys, merging the rest of ``previous`` back in via
-        ``_merge_over_previous``. ``previous`` is None only on a full refresh."""
+    async def _compute(self, hass: HomeAssistant, keys: frozenset[str] | None) -> SnapshotT:
+        """Build a snapshot of the whole work list (``keys is None``) or of just
+        the named result keys — the freshly computed values only. Merging a
+        partial result over the previous snapshot is ``snapshot``'s job."""
+        raise NotImplementedError  # pragma: no cover
+
+    def _merge(self, fresh: SnapshotT, previous: SnapshotT) -> SnapshotT:
+        """``fresh``'s partial maps laid over ``previous``'s, as a new snapshot
+        of the subclass's own type."""
         raise NotImplementedError  # pragma: no cover
 
     @staticmethod
     def _merge_over_previous(
-        keys: frozenset[str] | None,
         previous: Mapping[str, Any],
-        fresh: dict[str, Any],
+        fresh: Mapping[str, Any],
     ) -> dict[str, Any]:
-        """``fresh`` laid over the ``previous`` snapshot's matching map when the
-        work was narrowed by a hint; ``fresh`` alone — the whole truth —
-        otherwise."""
-        return fresh if keys is None else {**previous, **fresh}
+        """``fresh`` laid over the ``previous`` snapshot's matching map."""
+        return {**previous, **fresh}
 
     def _distinct_keys(self, key_of: Callable[[dict[str, Any]], Any]) -> list[Any]:
         """Distinct, insertion-ordered ``key_of(pred)`` values over every scope's

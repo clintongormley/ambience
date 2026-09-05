@@ -159,11 +159,16 @@ class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
         predicates across all scopes (areas, floors, house)."""
         return self._distinct_keys(self._template_key)
 
+    def _merge(self, fresh: TemplateSnapshot, previous: TemplateSnapshot) -> TemplateSnapshot:
+        return TemplateSnapshot(
+            results=self._merge_over_previous(previous.results, fresh.results),
+            deps=self._merge_over_previous(previous.deps, fresh.deps),
+        )
+
     async def _compute(
         self,
         hass: HomeAssistant,
         keys: frozenset[str] | None,
-        previous: TemplateSnapshot | None,
     ) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}
@@ -182,7 +187,4 @@ class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
                 all_states=info.all_states,
                 has_time=info.has_time,
             )
-        return TemplateSnapshot(
-            results=self._merge_over_previous(keys, previous.results if previous else {}, results),
-            deps=self._merge_over_previous(keys, previous.deps if previous else {}, deps),
-        )
+        return TemplateSnapshot(results=results, deps=deps)

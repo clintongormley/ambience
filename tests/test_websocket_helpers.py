@@ -367,7 +367,8 @@ class TestValidateScopeConfig:
         assert exc.value.translation_key == "scene_apply_invalid"
 
     def test_rejects_unknown_top_level_key(self) -> None:
-        """Only `scenes` (and the legacy `enabled`) may reach a scope save."""
+        """A scope save carries `scenes` plus the tolerated-but-stripped legacy
+        keys (`enabled`, `conditions`); anything else is rejected."""
         hass = _make_hass()
         with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, {"scenes": [], "foo": 1})
@@ -584,6 +585,13 @@ class TestCanonicalise:
         hass = _make_hass(conditions={})
         result = canonicalise(hass, {"scenes": [], "enabled": False})
         assert "enabled" not in result
+
+    def test_strips_legacy_conditions_field(self) -> None:
+        """The dead top-level `conditions` field is tolerated on the wire but
+        never reaches storage."""
+        hass = _make_hass(conditions={})
+        result = canonicalise(hass, {"scenes": [], "conditions": ["time_of_day"]})
+        assert "conditions" not in result
 
     def test_canonicalise_preserves_description(self) -> None:
         hass = _make_hass(conditions={})

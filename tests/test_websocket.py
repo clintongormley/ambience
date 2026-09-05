@@ -678,7 +678,7 @@ async def test_area_save_cannot_disable_a_scope(
     )
     assert resp["success"] is True, resp
     assert store.get_scope_enabled("area", area_id) is True
-    assert resp["result"]["config"].get("enabled") is not False
+    assert resp["result"]["config"]["enabled"] is True
 
 
 async def test_area_save_rejects_unknown_top_level_key(
@@ -1348,6 +1348,8 @@ async def test_area_save_ignores_legacy_conditions_field(
         },
     )
     assert resp["success"] is True
+    # Tolerated on the wire, never merged into storage.
+    assert "conditions" not in hass.data[DOMAIN][DATA_STORE].scope_config("area", area_id)
 
 
 async def test_conditions_list_includes_weather(

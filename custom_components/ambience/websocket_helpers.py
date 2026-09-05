@@ -30,14 +30,15 @@ _LOGGER = logging.getLogger(__name__)
 # --- scope-save pipeline ----------------------------------------------------
 
 
-# Top-level keys a scope-save payload may carry; anything else is a client bug
-# (or a typo in a hand-written import) and is rejected rather than merged into
-# storage. `enabled` is accepted from older clients but never persisted
-# (canonicalise strips it): `ambience/set_scope_enabled` is the only writer of the
-# scope-level flag, so a save from a stale tab cannot revert a scope someone
-# enabled elsewhere. `conditions` is a dead legacy field, tolerated so an old
-# client's payload still saves.
-_SCOPE_CONFIG_KEYS = ("scenes", "enabled", "conditions")
+# `scenes` is the only key a scope save persists. The legacy keys below are
+# tolerated so an older client's payload still saves, but canonicalise strips
+# them; anything else is a client bug (or a typo in a hand-written import) and is
+# rejected rather than merged into storage. Stripping `enabled` is what keeps
+# `ambience/set_scope_enabled` the only writer of the scope-level flag, so a save
+# from a stale tab cannot revert a scope someone enabled elsewhere; `conditions`
+# is dead input nothing reads.
+_LEGACY_SCOPE_CONFIG_KEYS = ("enabled", "conditions")
+_SCOPE_CONFIG_KEYS = ("scenes", *_LEGACY_SCOPE_CONFIG_KEYS)
 
 
 def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -143,16 +144,16 @@ def canonicalise(
 ) -> dict[str, Any]:
     """Resolve scene order + numbers for storage. Strips the transient per-scene
     frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`,
-    `config_issues`) so they aren't persisted, and the scope-level `enabled`
-    flag — the store merges what it is given, and only
-    `ambience/set_scope_enabled` may write that flag.
+    `config_issues`) so they aren't persisted, and the tolerated legacy top-level
+    keys (`enabled`, `conditions`) — the store merges what it is given, and only
+    `ambience/set_scope_enabled` may write the scope-level `enabled` flag.
 
     When ``minimise_pins`` is set (the import path), a scene carrying an explicit
     ``priority`` is treated as pinned and then unpinned where the containment
     order already reproduces it — so an import can set order while storage keeps
     pins only where they truly override the natural order."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    out = {k: v for k, v in config.items() if k != "enabled"}
+    out = {k: v for k, v in config.items() if k not in _LEGACY_SCOPE_CONFIG_KEYS}
     scenes = [
         {k: v for k, v in r.items() if k not in _TRANSIENT_SCENE_FIELDS}
         for r in config.get("scenes", [])

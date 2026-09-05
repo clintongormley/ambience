@@ -14,6 +14,10 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
+from homeassistant.core import valid_entity_id
+
+from ..errors import AmbienceError
+
 # States that mean "no real value" — treated as a miss by every condition that
 # reads an entity's state.
 UNAVAILABLE: frozenset[str] = frozenset({"unavailable", "unknown"})
@@ -156,15 +160,15 @@ def validate_for(dur: Any) -> None:
     if dur is None:
         return
     if not isinstance(dur, dict):
-        raise ValueError("`for` must be a dict {h,m,s} or null")
+        raise AmbienceError("for_not_object")
     unknown = set(dur) - {"h", "m", "s"}
     if unknown:
         # e.g. {"hours": 1} — dur_seconds would silently read it as 0 seconds.
-        raise ValueError(f"`for` keys must be h/m/s, got {sorted(unknown)!r}")
+        raise AmbienceError("for_keys_invalid", keys=sorted(unknown))
     for k in ("h", "m", "s"):
         v = dur.get(k, 0)
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-            raise ValueError(f"`for.{k}` must be a non-negative int")
+            raise AmbienceError("for_component_invalid", key=k)
 
 
 def validate_for_mode(mode: Any) -> None:
@@ -174,7 +178,28 @@ def validate_for_mode(mode: Any) -> None:
     if mode is None:
         return
     if mode not in ("at_least", "less_than"):
-        raise ValueError('`for_mode` must be "at_least", "less_than" or null')
+        raise AmbienceError("for_mode_invalid")
+
+
+def validate_entity_ids(values: Any, domain: str | None = None, *, key: str) -> None:
+    """Validate a save-time list of entity ids, optionally all in one ``domain``.
+
+    ``key`` is the caller's translation key for "this field must be a list of
+    entity ids" — raised when ``values`` is not a list at all; the per-entry
+    rejections carry the shared ``entity_id_invalid`` / ``entity_id_wrong_domain``
+    keys. Each entry is checked against HA's own entity-id grammar, so a bare
+    domain prefix (``sensor.``) and an id carrying a space or capital
+    (``person.Bad Id``) are both rejected — a ``startswith`` prefix test admits
+    them, and they can never name a real entity."""
+    if not isinstance(values, list):
+        # The key is the caller's string literal; check_exceptions_keys reads it
+        # off the `key=` argument at each call site.
+        raise AmbienceError(key)  # i18n-ignore
+    for value in values:
+        if not isinstance(value, str) or not valid_entity_id(value):
+            raise AmbienceError("entity_id_invalid", entity_id=value)
+        if domain is not None and value.split(".", 1)[0] != domain:
+            raise AmbienceError("entity_id_wrong_domain", entity_id=value, domain=domain)
 
 
 def predicate_has_any(predicate: Any, *keys: str) -> bool:

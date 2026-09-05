@@ -10,6 +10,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- Scene editor validation messages are now translated. Condition validators
+    also reject entity ids that cannot name a real entity, such as a bare
+    `sensor.` prefix or an id containing a space.
 - Reloading Ambience no longer registers a duplicate panel resource each time.
 - A damaged Ambience storage file is no longer overwritten with an empty
     configuration on startup; it is left in place for recovery.

@@ -22,6 +22,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..errors import AmbienceError
 from ..lux_ranges import validate_int_bound
 from ..triggers import TriggerSpec
 from ._common import (
@@ -33,6 +34,7 @@ from ._common import (
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
+    validate_entity_ids,
     wrap_quantified,
 )
 
@@ -116,7 +118,7 @@ class LuxCondition:
             return True  # no constraint
         try:
             lo, hi = self._resolve_range(predicate)
-        except ValueError:
+        except AmbienceError:
             # A referenced named range was hidden/deleted: the predicate can't be
             # evaluated, so fail this scene rather than aborting the whole scope.
             return False
@@ -145,12 +147,13 @@ class LuxCondition:
     def _resolve_range(self, predicate: Any) -> tuple[float | None, float | None]:
         """Return the (min, max) band, resolving a named range via the lookup.
 
-        Either bound may be None (open). Raises ValueError for an unknown id."""
+        Either bound may be None (open). Raises AmbienceError for an unknown id —
+        the signal callers turn into "unevaluable", never a hard failure."""
         if "range" in predicate:
             rid = predicate["range"]
             ranges = self._range_lookup()
             if rid not in ranges:
-                raise ValueError(f"unknown lux range: {rid!r}")
+                raise AmbienceError("lux_unknown_range", range=rid)
             defn = ranges[rid]
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
@@ -179,7 +182,7 @@ class LuxCondition:
             return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
         try:
             lo, hi = self._resolve_range(predicate)
-        except ValueError:
+        except AmbienceError:
             return f"unknown lux range: {predicate.get('range')!r}"
         quant = predicate.get("quant") or "any"
         # Preserve the predicate's sensor order so the line maps to the config.
@@ -224,33 +227,29 @@ class LuxCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("lux predicate must be a dict")
+            raise AmbienceError("lux_predicate_not_object")
         sensors = predicate.get("sensors")
         if sensors is not None:
-            if not isinstance(sensors, list):
-                raise ValueError("`sensors` must be a list of sensor.* ids")
-            for e in sensors:
-                if not isinstance(e, str) or not e.startswith("sensor."):
-                    raise ValueError(f"`sensors` entries must be sensor.* ids, got {e!r}")
+            validate_entity_ids(sensors, "sensor", key="lux_sensors_not_list")
         has_inline = predicate.get("min") is not None or predicate.get("max") is not None
         if "range" in predicate:
             rid = predicate["range"]
             if not isinstance(rid, str):
-                raise ValueError(f"`range` must be a string, got {rid!r}")
+                raise AmbienceError("lux_range_not_string", value=rid)
             if has_inline:
-                raise ValueError("specify `range` or `min`/`max`, not both")
+                raise AmbienceError("lux_range_and_bounds")
         else:
             validate_int_bound(predicate.get("min"), "min")
             validate_int_bound(predicate.get("max"), "max")
             lo, hi = predicate.get("min"), predicate.get("max")
             if lo is not None and hi is not None and lo >= hi:
-                raise ValueError(f"`min` must be < `max`: {lo!r} >= {hi!r}")
+                raise AmbienceError("lux_min_not_below_max", min=lo, max=hi)
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
-            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+            raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
-            raise ValueError(f"`negate` must be a bool, got {negate!r}")
+            raise AmbienceError("negate_invalid", value=negate)
 
     # --- trigger dependencies -------------------------------------------
 
@@ -275,7 +274,7 @@ class LuxCondition:
             try:
                 o_lo, o_hi = self._resolve_range(o)
                 i_lo, i_hi = self._resolve_range(i)
-            except ValueError:
+            except AmbienceError:
                 return False  # unknown range id -> can't prove containment
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 

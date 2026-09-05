@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
 from ._common import UNAVAILABLE, as_float, merge_intervals
 
@@ -129,9 +130,9 @@ class SunCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"sun predicate must be an object or null: {predicate!r}")
+            raise AmbienceError("sun_predicate_not_object", predicate=predicate)
         if "elevation" not in predicate and "azimuth" not in predicate:
-            raise ValueError("sun predicate must define elevation and/or azimuth")
+            raise AmbienceError("sun_needs_axis")
         if "elevation" in predicate:
             self._validate_elevation(predicate["elevation"])
         if "azimuth" in predicate:
@@ -140,45 +141,45 @@ class SunCondition:
     @staticmethod
     def _validate_elevation(constraint: Any) -> None:
         if not isinstance(constraint, dict):
-            raise ValueError(f"sun elevation must be an object: {constraint!r}")
+            raise AmbienceError("sun_elevation_not_object", value=constraint)
         lo = constraint.get("min")
         hi = constraint.get("max")
         if lo is None and hi is None:
-            raise ValueError("sun elevation requires min and/or max")
+            raise AmbienceError("sun_elevation_needs_bound")
         for bound in (lo, hi):
             if bound is None:
                 continue
             if not isinstance(bound, (int, float)) or isinstance(bound, bool):
-                raise ValueError(f"sun elevation bound must be a number: {bound!r}")
+                raise AmbienceError("sun_elevation_not_number", value=bound)
             if not -90 <= bound <= 90:
-                raise ValueError(f"sun elevation out of range [-90, 90]: {bound!r}")
+                raise AmbienceError("sun_elevation_out_of_range", value=bound)
         if lo is not None and hi is not None and lo > hi:
-            raise ValueError(f"sun elevation min > max: {lo!r} > {hi!r}")
+            raise AmbienceError("sun_elevation_min_above_max", min=lo, max=hi)
 
     @staticmethod
     def _validate_azimuth(constraint: Any) -> None:
         if not isinstance(constraint, dict):
-            raise ValueError(f"sun azimuth must be an object: {constraint!r}")
+            raise AmbienceError("sun_azimuth_not_object", value=constraint)
         sectors = constraint.get("sectors") or []
         ranges = constraint.get("ranges") or []
         if not sectors and not ranges:
-            raise ValueError("sun azimuth requires sectors and/or ranges")
+            raise AmbienceError("sun_azimuth_needs_sector_or_range")
         if not isinstance(sectors, list):
-            raise ValueError("sun azimuth sectors must be a list")
+            raise AmbienceError("sun_azimuth_sectors_not_list")
         if not isinstance(ranges, list):
-            raise ValueError("sun azimuth ranges must be a list")
+            raise AmbienceError("sun_azimuth_ranges_not_list")
         for label in sectors:
             if label not in SECTORS:
-                raise ValueError(f"unknown sun azimuth sector: {label!r}")
+                raise AmbienceError("sun_azimuth_unknown_sector", sector=label)
         for rng in ranges:
             if not isinstance(rng, dict):
-                raise ValueError(f"sun azimuth range must be an object: {rng!r}")
+                raise AmbienceError("sun_azimuth_range_not_object", value=rng)
             for key in ("from", "to"):
                 val = rng.get(key)
                 if not isinstance(val, (int, float)) or isinstance(val, bool):
-                    raise ValueError(f"sun azimuth range {key} must be a number: {val!r}")
+                    raise AmbienceError("sun_azimuth_bound_not_number", bound=key, value=val)
                 if not 0 <= val < 360:
-                    raise ValueError(f"sun azimuth {key} out of range [0, 360): {val!r}")
+                    raise AmbienceError("sun_azimuth_out_of_range", bound=key, value=val)
             # from == to (an empty arc that never matches) is left valid: harmless
             # at runtime, and rejecting it would block saving a scope that holds
             # such a previously-valid config.

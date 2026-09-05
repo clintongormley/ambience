@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
@@ -20,6 +21,7 @@ from ._common import (
     for_elapsed_satisfied,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
@@ -454,32 +456,26 @@ class PeopleCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("people predicate must be a dict")
+            raise AmbienceError("people_predicate_not_object")
         who = predicate.get("who")
         if who is not None:
-            if not isinstance(who, list):
-                raise ValueError("`who` must be a list of person entity_ids")
-            if not who:
+            if isinstance(who, list) and not who:
                 # Present-but-empty = "specific mode, nobody picked" (incomplete).
                 # Omit `who` entirely to mean all tracked persons; this keeps the
                 # backend in step with the editor, which flags an empty selection.
-                raise ValueError(
-                    "`who` must list at least one person, or be omitted for all persons"
-                )
-            for p in who:
-                if not isinstance(p, str) or not p.startswith("person."):
-                    raise ValueError(f"`who` entries must be person.* entity_ids, got {p!r}")
+                raise AmbienceError("people_who_empty")
+            validate_entity_ids(who, "person", key="people_who_not_list")
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
-            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+            raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         where = predicate.get("where")
-        if where is not None and (
-            not isinstance(where, str) or (where != _HOME and not where.startswith("zone."))
-        ):
-            raise ValueError(f"`where` must be 'home' or a zone.* id, got {where!r}")
+        if where is not None and where != _HOME:
+            if not isinstance(where, str) or not where.startswith("zone."):
+                raise AmbienceError("people_where_invalid", value=where)
+            validate_entity_ids([where], "zone", key="people_where_invalid")
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
-            raise ValueError(f"`negate` must be a bool, got {negate!r}")
+            raise AmbienceError("negate_invalid", value=negate)
         validate_for(predicate.get("for"))
         validate_for_mode(predicate.get("for_mode"))
 

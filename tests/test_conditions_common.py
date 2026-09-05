@@ -20,9 +20,11 @@ from custom_components.ambience.conditions._common import (
     merge_intervals,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
+from custom_components.ambience.errors import AmbienceError
 
 
 def test_tenure_held_requires_recorded_since_at_or_past_window() -> None:
@@ -138,15 +140,16 @@ def test_validate_for_allows_none_and_valid() -> None:
     ],
 )
 def test_validate_for_rejects_bad_shapes(bad: object) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         validate_for(bad)
 
 
 def test_validate_for_rejects_unknown_keys() -> None:
     """`{"hours": 1}` (a plausible hand-edit) must not validate — dur_seconds
     would silently evaluate it to a 0-second gate."""
-    with pytest.raises(ValueError, match="h/m/s"):
+    with pytest.raises(AmbienceError) as exc:
         validate_for({"hours": 1})
+    assert exc.value.translation_key == "for_keys_invalid"
 
 
 def test_validate_for_mode_allows_none_and_valid() -> None:
@@ -166,7 +169,7 @@ def test_validate_for_mode_allows_none_and_valid() -> None:
     ],
 )
 def test_validate_for_mode_rejects_unknown_values(bad: object) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         validate_for_mode(bad)
 
 
@@ -190,3 +193,51 @@ def test_as_float_rejects_non_finite() -> None:
     assert as_float(float("nan")) is None
     assert as_float(float("inf")) is None
     assert as_float(float("-inf")) is None
+
+
+# ── validate_entity_ids / translatable validator errors ───────────────────────
+
+
+def test_validate_for_raises_translatable_keys() -> None:
+    """Every `for`/`for_mode` rejection carries a translation key, not prose."""
+    with pytest.raises(AmbienceError) as exc:
+        validate_for("not-a-dict")
+    assert exc.value.translation_key == "for_not_object"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for({"hours": 1})
+    assert exc.value.translation_key == "for_keys_invalid"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for({"h": -1})
+    assert exc.value.translation_key == "for_component_invalid"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for_mode("at_most")
+    assert exc.value.translation_key == "for_mode_invalid"
+
+
+def test_validate_entity_ids_accepts_well_formed_ids() -> None:
+    validate_entity_ids(["sensor.hall_lux", "sensor.x2"], "sensor", key="lux_sensors_not_list")
+    validate_entity_ids([], "sensor", key="lux_sensors_not_list")
+    # No domain: only the entity-id grammar is enforced.
+    validate_entity_ids(["light.kitchen", "person.ann"], key="unavailable_pick_entity")
+
+
+def test_validate_entity_ids_rejects_non_list() -> None:
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids("sensor.hall", "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "lux_sensors_not_list"
+
+
+@pytest.mark.parametrize("bad", ["sensor.", "sensor", "", "sensor.Bad Id", 7, None])
+def test_validate_entity_ids_rejects_malformed_ids(bad: object) -> None:
+    """A domain prefix alone (`sensor.`) or a space/uppercase in the object id is
+    not a valid entity id — the old `startswith` test let all of these through."""
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids([bad], "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "entity_id_invalid"
+
+
+def test_validate_entity_ids_rejects_wrong_domain() -> None:
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids(["person.ann"], "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "entity_id_wrong_domain"
+    assert exc.value.translation_placeholders == {"entity_id": "person.ann", "domain": "sensor"}

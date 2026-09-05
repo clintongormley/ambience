@@ -14,6 +14,7 @@ from custom_components.ambience.conditions.script import (
     _cache_key,
 )
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
 
 
 class _StoreStub:
@@ -66,21 +67,24 @@ def test_validate_predicate_accepts_well_formed() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        42,
-        "script.foo",
-        [],
-        {},  # missing script
-        {"script": ""},  # empty
-        {"script": "foo"},  # missing script. prefix
-        {"script": "script.foo", "args": []},  # args not a dict
-        {"script": "script.foo", "args": "x=1"},
+        (42, "script_predicate_not_object"),
+        ("script.foo", "script_predicate_not_object"),
+        ([], "script_predicate_not_object"),
+        ({}, "script_id_invalid"),  # missing script
+        ({"script": ""}, "script_id_invalid"),  # empty
+        ({"script": "foo"}, "script_id_invalid"),  # missing script. prefix
+        ({"script": "script."}, "entity_id_invalid"),  # domain prefix alone
+        ({"script": "script.Bad Id"}, "entity_id_invalid"),
+        ({"script": "script.foo", "args": []}, "script_args_not_object"),
+        ({"script": "script.foo", "args": "x=1"}, "script_args_not_object"),
     ],
 )
-def test_validate_predicate_rejects_bad(bad: object) -> None:
-    with pytest.raises(ValueError):
+def test_validate_predicate_rejects_bad(bad: object, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_order_key_uses_script_id() -> None:
@@ -391,20 +395,23 @@ def test_validate_predicate_accepts_valid_triggers() -> None:
 
 
 def test_validate_predicate_rejects_non_list_triggers() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate({"script": "script.foo", "triggers": "person.john"})
+    assert exc.value.translation_key == "script_triggers_invalid"
 
 
 def test_validate_predicate_rejects_non_string_trigger_items() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate(
             {"script": "script.foo", "triggers": ["person.john", 5]}
         )
+    assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_predicate_rejects_empty_string_trigger() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate({"script": "script.foo", "triggers": [""]})
+    assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_predicate_accepts_empty_triggers_list() -> None:

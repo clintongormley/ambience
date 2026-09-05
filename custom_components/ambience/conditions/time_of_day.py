@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
 from ._common import merge_intervals
@@ -112,7 +113,7 @@ class TimeOfDayCondition:
         Save-time validation still raises via _match_one."""
         try:
             return self._match_one(item, snapshot)
-        except ValueError:
+        except AmbienceError:
             return False
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
@@ -175,14 +176,14 @@ class TimeOfDayCondition:
         self, predicate: Any, snapshot: TimeOfDaySnapshot
     ) -> tuple[datetime, datetime]:
         if not isinstance(predicate, dict):
-            raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+            raise AmbienceError("time_of_day_invalid", predicate=predicate)
         if "period" in predicate:
             pid = predicate["period"]
             if not isinstance(pid, str):
-                raise ValueError(f"period id must be a string: {pid!r}")
+                raise AmbienceError("time_of_day_period_not_string", value=pid)
             periods = self._period_lookup()
             if pid not in periods:
-                raise ValueError(f"unknown time_of_day period: {pid!r}")
+                raise AmbienceError("time_of_day_unknown_period", period=pid)
             defn = periods[pid]
             return (
                 self._resolve_endpoint(defn["from"], snapshot),
@@ -193,33 +194,33 @@ class TimeOfDayCondition:
                 self._resolve_endpoint(predicate["from"], snapshot),
                 self._resolve_endpoint(predicate["to"], snapshot),
             )
-        raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+        raise AmbienceError("time_of_day_invalid", predicate=predicate)
 
     def _resolve_endpoint(self, ep: Any, snapshot: TimeOfDaySnapshot) -> datetime:
         if not isinstance(ep, dict):
-            raise ValueError(f"invalid endpoint: {ep!r}")
+            raise AmbienceError("period_endpoint_not_object")
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
             if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
-                raise ValueError(f"invalid hh: {hh!r}")
+                raise AmbienceError("period_invalid_hh", value=hh)
             if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
-                raise ValueError(f"invalid mm: {mm!r}")
+                raise AmbienceError("period_invalid_mm", value=mm)
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
             return _resolve_wall_clock(dt_util.as_local(snapshot.now), hh, mm)
         if kind == "sun":
             anchor = ep.get("anchor")
             if anchor not in ANCHOR_ATTR:
-                raise ValueError(f"invalid anchor: {anchor!r}")
+                raise AmbienceError("period_invalid_anchor", value=anchor)
             offset = ep.get("offset_min", 0)
             if not isinstance(offset, int) or isinstance(offset, bool):
-                raise ValueError(f"offset_min must be int: {offset!r}")
+                raise AmbienceError("period_offset_not_int", value=offset)
             anchor_dt: datetime | None = getattr(snapshot, anchor)
             if anchor_dt is None:
-                # Unobservable endpoint: ValueError is the same signal a dangling
-                # period gives, so _match_tolerant fails just this predicate.
-                raise ValueError(f"sun anchor unavailable: {anchor}")
+                # Unobservable endpoint: the same signal a dangling period
+                # gives, so _match_tolerant fails just this predicate.
+                raise AmbienceError("time_of_day_anchor_unavailable", anchor=anchor)
             if snapshot.now - anchor_dt > _HALF_DAY:
                 anchor_dt += _DAY
             elif anchor_dt - snapshot.now > _HALF_DAY:
@@ -229,7 +230,7 @@ class TimeOfDayCondition:
             if clamp is not None:
                 anchor_dt = self._apply_clamp(anchor_dt, clamp)
             return anchor_dt
-        raise ValueError(f"invalid endpoint kind: {kind!r}")
+        raise AmbienceError("period_invalid_endpoint_kind", value=kind)
 
     def _apply_clamp(self, anchor_dt: datetime, clamp: Any) -> datetime:
         """Clamp a resolved sun datetime by a local clock time.
@@ -238,13 +239,13 @@ class TimeOfDayCondition:
         clock time is interpreted as HA-local on the anchor's local date, so a
         clamp commutes with DST the same way a `time` endpoint does."""
         if not isinstance(clamp, dict):
-            raise ValueError(f"clamp must be an object: {clamp!r}")
+            raise AmbienceError("period_clamp_not_object")
         direction = clamp.get("dir")
         if direction not in ("not_before", "not_after"):
-            raise ValueError(f"invalid clamp dir: {direction!r}")
+            raise AmbienceError("period_invalid_clamp_dir", value=direction)
         hh, mm = clamp.get("hh"), clamp.get("mm")
         if not _valid_clock(hh, mm):
-            raise ValueError(f"invalid clamp time: {hh!r}:{mm!r}")
+            raise AmbienceError("period_invalid_clamp_time", hh=hh, mm=mm)
         clamp_dt = _resolve_wall_clock(dt_util.as_local(anchor_dt), hh, mm)
         if direction == "not_before":
             return max(anchor_dt, clamp_dt)
@@ -252,15 +253,15 @@ class TimeOfDayCondition:
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:
-            raise ValueError("predicate cannot be None")
+            raise AmbienceError("time_of_day_required")
         if isinstance(predicate, list):
             if not predicate:
-                raise ValueError("time_of_day predicate list must not be empty")
+                raise AmbienceError("time_of_day_list_empty")
             items = predicate
         elif isinstance(predicate, dict):
             items = [predicate]
         else:
-            raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+            raise AmbienceError("time_of_day_invalid", predicate=predicate)
         # Note: from == to is left valid — it matches all day at runtime (the
         # `end <= start` wrap in _in_range), harmless, and rejecting it here
         # would block saving any scope holding such a previously-valid config.
@@ -301,7 +302,7 @@ class TimeOfDayCondition:
             try:
                 if self._match_one({"period": pid}, snapshot):
                     return pid
-            except ValueError:
+            except AmbienceError:
                 continue
         return None
 
@@ -326,7 +327,7 @@ class TimeOfDayCondition:
         try:
             outer_intervals = merge_intervals(self._intervals(outer))
             inner_intervals = self._intervals(inner)
-        except ValueError:
+        except AmbienceError:
             return False  # dangling period — containment can't be proven
         return all(
             any(o_start <= i_start and i_end <= o_end for o_start, o_end in outer_intervals)
@@ -340,7 +341,7 @@ class TimeOfDayCondition:
         for item in items:
             try:
                 keys.append(_minute_of_day(self._resolve_range(item, snapshot)[0]))
-            except ValueError:
+            except AmbienceError:
                 continue  # dangling period / malformed item — no ordering signal
         return min(keys) if keys else float("inf")
 

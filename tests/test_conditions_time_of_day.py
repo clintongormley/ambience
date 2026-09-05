@@ -17,6 +17,7 @@ from custom_components.ambience.conditions.time_of_day import (
     TimeOfDayCondition,
     TimeOfDaySnapshot,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.periods import BUILTIN_PERIODS
 
 
@@ -384,28 +385,33 @@ def test_validate_predicate_accepts_valid(pred: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "pred",
+    "pred,key",
     [
-        "old_string_format",
-        42,
-        None,
-        {},
-        {"period": 123},
-        {"from": _time(8, 0)},
-        _range({"kind": "time", "hh": 25, "mm": 0}, _time(10, 0)),
-        _range(_sun("zenith"), _sun("sunset")),
-        [],
-        [{"period": "evening"}, "garbage"],
+        ("old_string_format", "time_of_day_invalid"),
+        (42, "time_of_day_invalid"),
+        (None, "time_of_day_required"),
+        ({}, "time_of_day_invalid"),
+        ({"period": 123}, "time_of_day_period_not_string"),
+        ({"from": _time(8, 0)}, "time_of_day_invalid"),
+        (_range({"kind": "time", "hh": 25, "mm": 0}, _time(10, 0)), "period_invalid_hh"),
+        (_range(_sun("zenith"), _sun("sunset")), "period_invalid_anchor"),
+        ([], "time_of_day_list_empty"),
+        ([{"period": "evening"}, "garbage"], "time_of_day_invalid"),
         # clamp must be an object — runtime _apply_clamp guard (not the period-store
         # validator), reached because validate_predicate evaluates inline endpoints.
-        _range(
-            {"kind": "sun", "anchor": "sunrise", "offset_min": 0, "clamp": "nope"}, _sun("dusk")
+        (
+            _range(
+                {"kind": "sun", "anchor": "sunrise", "offset_min": 0, "clamp": "nope"},
+                _sun("dusk"),
+            ),
+            "period_clamp_not_object",
         ),
     ],
 )
-def test_validate_predicate_rejects_invalid(pred: Any) -> None:
-    with pytest.raises(ValueError):
+def test_validate_predicate_rejects_invalid(pred: Any, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(pred)
+    assert exc.value.translation_key == key
 
 
 def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
@@ -414,10 +420,11 @@ def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
 
 def test_time_of_day_validate_predicate_still_rejects_malformed_endpoint() -> None:
     cond = TimeOfDayCondition(period_lookup=lambda: {})
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         cond.validate_predicate(
             {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
         )
+    assert exc.value.translation_key == "period_invalid_endpoint_kind"
 
 
 def test_validate_predicate_accepts_identical_endpoints() -> None:
@@ -429,8 +436,9 @@ def test_validate_predicate_accepts_identical_endpoints() -> None:
 def test_validate_predicate_rejects_bool_clock() -> None:
     """bool is an int subclass; `hh: true` must not validate as hour 1 (the
     trigger scheduler already rejects it, so it would never fire)."""
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range({"kind": "time", "hh": True, "mm": 0}, _time(10, 0)))
+    assert exc.value.translation_key == "period_invalid_hh"
 
 
 # ── describe ───────────────────────────────────────────────────────────────
@@ -768,42 +776,47 @@ async def test_polar_day_keeps_clock_ranges_working(hass: HomeAssistant) -> None
 
 
 def test_resolve_endpoint_non_dict_raises() -> None:
-    """_resolve_endpoint raises ValueError when the endpoint is not a dict
-    (e.g. a bare string used as a from/to value)."""
-    with pytest.raises(ValueError, match="invalid endpoint"):
+    """_resolve_endpoint rejects an endpoint that is not a dict (e.g. a bare
+    string used as a from/to value)."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate({"from": "08:00", "to": _time(10, 0)})
+    assert exc.value.translation_key == "period_endpoint_not_object"
 
 
 def test_resolve_endpoint_invalid_mm_raises() -> None:
-    """_resolve_endpoint raises ValueError when mm is out of [0, 59] range."""
-    with pytest.raises(ValueError, match="invalid mm"):
+    """_resolve_endpoint rejects mm out of the [0, 59] range."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_mm"
 
 
 def test_resolve_endpoint_non_int_mm_raises() -> None:
-    """_resolve_endpoint raises ValueError when mm is not an int."""
-    with pytest.raises(ValueError, match="invalid mm"):
+    """_resolve_endpoint rejects a non-int mm."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "time", "hh": 8, "mm": "30"}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_mm"
 
 
 def test_resolve_endpoint_non_int_offset_raises() -> None:
-    """_resolve_endpoint raises ValueError when offset_min is not an int."""
-    with pytest.raises(ValueError, match="offset_min must be int"):
+    """_resolve_endpoint rejects a non-int offset_min."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "sun", "anchor": "sunrise", "offset_min": "30"}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_offset_not_int"
 
 
 def test_resolve_endpoint_unknown_kind_raises() -> None:
-    """_resolve_endpoint raises ValueError when kind is not 'time' or 'sun'."""
-    with pytest.raises(ValueError, match="invalid endpoint kind"):
+    """_resolve_endpoint rejects a kind that is neither 'time' nor 'sun'."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_endpoint_kind"
 
 
 def test_matches_tolerates_malformed_endpoints() -> None:
@@ -918,8 +931,9 @@ def test_clamp_degenerate_inversion_never_matches() -> None:
 def test_validate_predicate_rejects_bool_offset() -> None:
     # bool is an int subclass — reject it so `True` can't become a 1-min offset.
     bad = {"kind": "sun", "anchor": "sunrise", "offset_min": True}
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_offset_not_int"
 
 
 def test_clamp_validation_rejects_bad_dir() -> None:
@@ -929,8 +943,9 @@ def test_clamp_validation_rejects_bad_dir() -> None:
         "offset_min": 0,
         "clamp": {"dir": "sideways", "hh": 8, "mm": 30},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_invalid_clamp_dir"
 
 
 def test_clamp_validation_rejects_bad_time() -> None:
@@ -940,8 +955,9 @@ def test_clamp_validation_rejects_bad_time() -> None:
         "offset_min": 0,
         "clamp": {"dir": "not_before", "hh": 25, "mm": 0},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_invalid_clamp_time"
 
 
 def test_clamp_preserves_legitimate_overnight_wrap() -> None:

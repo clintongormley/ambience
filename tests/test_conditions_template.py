@@ -14,6 +14,7 @@ from custom_components.ambience.conditions.template import (
     TemplateSnapshot,
 )
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
 
 
 class _StoreStub:
@@ -70,25 +71,27 @@ def test_validate_predicate_accepts_well_formed(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        42,
-        "{{ true }}",  # bare string, not a dict
-        [],
-        {},  # missing template
-        {"template": ""},  # empty
-        {"template": "   "},  # whitespace only
-        {"template": 5},  # not a string
+        (42, "template_predicate_not_object"),
+        ("{{ true }}", "template_predicate_not_object"),  # bare string, not a dict
+        ([], "template_predicate_not_object"),
+        ({}, "template_empty"),  # missing template
+        ({"template": ""}, "template_empty"),  # empty
+        ({"template": "   "}, "template_empty"),  # whitespace only
+        ({"template": 5}, "template_empty"),  # not a string
     ],
 )
-def test_validate_predicate_rejects_bad(bad: object) -> None:
-    with pytest.raises(ValueError):
+def test_validate_predicate_rejects_bad(bad: object, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
         TemplateCondition().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_validate_predicate_rejects_invalid_jinja(hass: HomeAssistant) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         TemplateCondition(hass=hass).validate_predicate({"template": "{{ 1 + }}"})
+    assert exc.value.translation_key == "template_invalid_jinja"
 
 
 # --- order_key / describe --------------------------------------------------

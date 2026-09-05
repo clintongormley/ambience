@@ -21,7 +21,9 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..errors import AmbienceError
 from ..triggers import TriggerSpec
+from ._common import validate_entity_ids
 from ._opaque import OpaquePrecomputedCondition
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,20 +84,18 @@ class ScriptCondition(OpaquePrecomputedCondition):
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"script predicate must be a dict or null: {predicate!r}")
+            raise AmbienceError("script_predicate_not_object", predicate=predicate)
         script = predicate.get("script")
         if not isinstance(script, str) or not script.startswith("script."):
-            raise ValueError(
-                f"script predicate `script` must be a 'script.<name>' string: {script!r}"
-            )
+            raise AmbienceError("script_id_invalid", script=script)
+        validate_entity_ids([script], "script", key="script_id_invalid")
         args = predicate.get("args")
         if args is not None and not isinstance(args, dict):
-            raise ValueError(f"script predicate `args` must be a dict or absent: {args!r}")
+            raise AmbienceError("script_args_not_object", args=args)
         triggers = predicate.get("triggers")
-        if triggers is not None and (
-            not isinstance(triggers, list) or not all(isinstance(t, str) and t for t in triggers)
-        ):
-            raise ValueError("script predicate `triggers` must be a list of entity_id strings")
+        if triggers is not None:
+            # Any domain: a trigger is whatever entity should re-run the script.
+            validate_entity_ids(triggers, key="script_triggers_invalid")
 
     # --- evaluation --------------------------------------------------------
 

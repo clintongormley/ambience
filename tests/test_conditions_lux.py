@@ -285,19 +285,22 @@ def test_validate_accepts_valid_and_none() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        {"sensors": "sensor.a"},  # not a list
-        {"sensors": ["light.x"]},  # not a sensor
-        {"sensors": ["sensor.a"], "quant": "some"},  # bad quant
-        {"sensors": ["sensor.a"], "range": "dark", "min": 5},  # range AND inline band
-        {"sensors": ["sensor.a"], "range": 5},  # range not a string
-        {"sensors": ["sensor.a"], "min": 50, "max": 10},  # min >= max
+        ({"sensors": "sensor.a"}, "lux_sensors_not_list"),
+        ({"sensors": ["light.x"]}, "entity_id_wrong_domain"),
+        ({"sensors": ["sensor."]}, "entity_id_invalid"),  # domain prefix alone
+        ({"sensors": ["sensor.Bad Id"]}, "entity_id_invalid"),
+        ({"sensors": ["sensor.a"], "quant": "some"}, "quant_invalid"),
+        ({"sensors": ["sensor.a"], "range": "dark", "min": 5}, "lux_range_and_bounds"),
+        ({"sensors": ["sensor.a"], "range": 5}, "lux_range_not_string"),
+        ({"sensors": ["sensor.a"], "min": 50, "max": 10}, "lux_min_not_below_max"),
     ],
 )
-def test_validate_rejects_value_error(bad) -> None:
-    with pytest.raises(ValueError):
+def test_validate_rejects_with_translation_key(bad, key) -> None:
+    with pytest.raises(AmbienceError) as exc:
         _cond().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_validate_rejects_negative_min() -> None:
@@ -382,8 +385,9 @@ def test_describe_predicate_unbounded_band_omits_want() -> None:
 
 
 def test_validate_non_dict_predicate_raises() -> None:
-    with pytest.raises(ValueError, match="lux predicate must be a dict"):
+    with pytest.raises(AmbienceError) as exc:
         _cond().validate_predicate("not-a-dict")
+    assert exc.value.translation_key == "lux_predicate_not_object"
 
 
 def test_validate_accepts_inline_band_without_sensors() -> None:
@@ -513,8 +517,9 @@ def test_validate_accepts_negate_bool() -> None:
 
 
 def test_validate_rejects_non_bool_negate() -> None:
-    with pytest.raises(ValueError, match="negate"):
+    with pytest.raises(AmbienceError) as exc:
         _cond().validate_predicate({"sensors": ["sensor.a"], "range": "dark", "negate": "yes"})
+    assert exc.value.translation_key == "negate_invalid"
 
 
 def test_matches_negate_inverts_single_sensor() -> None:

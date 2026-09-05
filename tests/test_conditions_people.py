@@ -8,6 +8,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.people import PeopleCondition, PeopleSnapshot
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import DurationGate
 
 
@@ -418,16 +419,29 @@ def test_validate_accepts_none_and_valid() -> None:
 
 
 def test_validate_rejects_non_dict() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeopleCondition().validate_predicate(42)
+    assert exc.value.translation_key == "people_predicate_not_object"
 
 
 def test_validate_rejects_bad_who() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="who"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": "person.a"})
-    with pytest.raises(ValueError, match="person"):
+    assert exc.value.translation_key == "people_who_not_list"
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": ["light.x"]})
+    assert exc.value.translation_key == "entity_id_wrong_domain"
+
+
+def test_validate_rejects_malformed_who_entity_id() -> None:
+    """A bare domain prefix or a spaced/capitalised object id is not a person
+    entity id — the prefix test this replaced accepted both."""
+    m = PeopleCondition()
+    for bad in ("person.", "person.Bad Id"):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"who": [bad]})
+        assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_rejects_present_but_empty_who() -> None:
@@ -436,41 +450,47 @@ def test_validate_rejects_present_but_empty_who() -> None:
     # smuggle it past validation and silently run as "all persons". Omitting
     # `who` entirely (base mode = all persons) stays valid.
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="who"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": [], "quant": "any"})
+    assert exc.value.translation_key == "people_who_empty"
     m.validate_predicate({"quant": "any"})  # absent who is still fine
 
 
 def test_validate_rejects_bad_quant() -> None:
-    with pytest.raises(ValueError, match="quant"):
+    with pytest.raises(AmbienceError) as exc:
         PeopleCondition().validate_predicate({"quant": "some"})
+    assert exc.value.translation_key == "quant_invalid"
 
 
 def test_validate_rejects_bad_where() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": "office"})
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": 5})
-    # "away" is no longer a valid where (replaced by negate).
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": "away"})
+    for bad in ("office", 5, "away"):  # "away" is replaced by negate
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"where": bad})
+        assert exc.value.translation_key == "people_where_invalid"
+
+
+def test_validate_rejects_malformed_where_zone_id() -> None:
+    """`zone.` alone passes a prefix test but is not a valid entity id."""
+    with pytest.raises(AmbienceError) as exc:
+        PeopleCondition().validate_predicate({"where": "zone."})
+    assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_rejects_non_bool_negate() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="negate"):
-        m.validate_predicate({"where": "home", "negate": "yes"})
-    with pytest.raises(ValueError, match="negate"):
-        m.validate_predicate({"where": "home", "negate": 1})
+    for bad in ("yes", 1):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"where": "home", "negate": bad})
+        assert exc.value.translation_key == "negate_invalid"
 
 
 def test_validate_rejects_bad_for() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate({"for": {"h": -1, "m": 0, "s": 0}})
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate({"for": {"h": 0, "m": "five", "s": 0}})
+    for bad in ({"h": -1, "m": 0, "s": 0}, {"h": 0, "m": "five", "s": 0}):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"for": bad})
+        assert exc.value.translation_key == "for_component_invalid"
 
 
 def test_describe_summarises_home_count() -> None:
@@ -1096,8 +1116,9 @@ def test_less_than_legacy_fallback_long_does_not_match() -> None:
 
 def test_validate_rejects_bad_for_mode() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="for_mode"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"for_mode": "sometimes"})
+    assert exc.value.translation_key == "for_mode_invalid"
 
 
 def test_validate_accepts_valid_and_absent_for_mode() -> None:

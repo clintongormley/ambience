@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..const import get_store
+from ..errors import AmbienceError
 from ..triggers import TriggerSpec
 from ._common import predicate_has_any
 
@@ -51,30 +52,32 @@ def _parse_day_spec(spec: Any) -> list[tuple[int, int]]:
     """Parse a day-of-month spec like "1-10, 15" into inclusive (lo, hi) ranges.
 
     Accepts single days ("15") and inclusive ranges ("1-10"), comma-separated,
-    whitespace tolerated. Raises ValueError on anything malformed or out of the
-    1-31 bounds (or a reversed range). At least one token is required.
+    whitespace tolerated. Raises AmbienceError on anything malformed or out of
+    the 1-31 bounds (or a reversed range) — the same carrier the save path
+    surfaces to the editor and the match path swallows. At least one token is
+    required.
     """
     if not isinstance(spec, str):
-        raise ValueError(f"day_of_month `days` must be a string spec: {spec!r}")
+        raise AmbienceError("day_spec_not_string", value=spec)
     tokens = [t.strip() for t in spec.split(",") if t.strip()]
     if not tokens:
-        raise ValueError("day_of_month `days` must list at least one day")
+        raise AmbienceError("day_spec_empty")
     ranges: list[tuple[int, int]] = []
     for tok in tokens:
         if "-" in tok:
             parts = [p.strip() for p in tok.split("-")]
             if len(parts) != 2 or not (parts[0].isdigit() and parts[1].isdigit()):
-                raise ValueError(f"invalid day range: {tok!r}")
+                raise AmbienceError("day_range_invalid", token=tok)
             lo, hi = int(parts[0]), int(parts[1])
             if not 1 <= lo <= hi <= 31:
-                raise ValueError(f"day range out of bounds (1-31, lo<=hi): {tok!r}")
+                raise AmbienceError("day_range_out_of_bounds", token=tok)
             ranges.append((lo, hi))
         else:
             if not tok.isdigit():
-                raise ValueError(f"invalid day: {tok!r}")
+                raise AmbienceError("day_number_invalid", token=tok)
             d = int(tok)
             if not 1 <= d <= 31:
-                raise ValueError(f"day out of bounds (1-31): {tok!r}")
+                raise AmbienceError("day_number_out_of_bounds", token=tok)
             ranges.append((d, d))
     return ranges
 
@@ -188,7 +191,7 @@ class DayCondition:
         if kind == "day_of_month":
             try:
                 ranges = _parse_day_spec(item.get("days"))
-            except ValueError:
+            except AmbienceError:
                 return False
             return any(lo <= snap.today.day <= hi for lo, hi in ranges)
         if kind == "last_day":
@@ -247,17 +250,17 @@ class DayCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"day predicate must be an object or null: {predicate!r}")
+            raise AmbienceError("day_predicate_not_object", predicate=predicate)
         for key in ("include", "exclude"):
             value = predicate.get(key, [])
             if not isinstance(value, list):
-                raise ValueError(f"day predicate `{key}` must be a list")
+                raise AmbienceError("day_list_not_list", key=key)
             for item in value:
                 self._validate_item(item)
 
     def _validate_item(self, item: Any) -> None:
         if not isinstance(item, dict) or "kind" not in item:
-            raise ValueError(f"day item must be {{kind, ...}}: {item!r}")
+            raise AmbienceError("day_item_malformed", item=item)
         kind = item["kind"]
         if kind == "weekday":
             self._validate_int_list(item.get("days"), 0, 6, "weekday")
@@ -282,24 +285,22 @@ class DayCondition:
             # predicate — so don't block the save here.
             pass
         else:
-            raise ValueError(f"unknown day item kind: {kind!r}")
+            raise AmbienceError("day_unknown_kind", kind=kind)
 
     @staticmethod
     def _validate_int_list(value: Any, lo: int, hi: int, label: str) -> None:
         if not isinstance(value, list) or not value:
-            raise ValueError(f"day item {label!r}: `days` must be a non-empty list")
+            raise AmbienceError("day_days_not_list", label=label)
         for v in value:
             if not isinstance(v, int) or not lo <= v <= hi:
-                raise ValueError(
-                    f"day item {label!r}: invalid day {v!r}; expected int in [{lo},{hi}]"
-                )
+                raise AmbienceError("day_days_out_of_range", label=label, value=v, min=lo, max=hi)
 
     @staticmethod
     def _validate_month_day(month: Any, day: Any) -> None:
         if not isinstance(month, int) or not 1 <= month <= 12:
-            raise ValueError(f"day item: invalid month {month!r}")
+            raise AmbienceError("day_invalid_month", month=month)
         if not isinstance(day, int) or not 1 <= day <= 31:
-            raise ValueError(f"day item: invalid day {day!r}")
+            raise AmbienceError("day_invalid_day", day=day)
 
     # --- sorting (containment lattice) ----------------------------------
 

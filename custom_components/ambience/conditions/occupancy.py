@@ -19,6 +19,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
@@ -35,6 +36,7 @@ from ._common import (
     state_sources,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
     wrap_quantified,
@@ -290,23 +292,19 @@ class OccupancyCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("occupancy predicate must be a dict")
+            raise AmbienceError("occupancy_predicate_not_object")
         sensors = predicate.get("sensors")
         if sensors is not None:
-            if not isinstance(sensors, list):
-                raise ValueError("`sensors` must be a list of binary_sensor.* ids")
-            for e in sensors:
-                if not isinstance(e, str) or not e.startswith("binary_sensor."):
-                    raise ValueError(f"`sensors` entries must be binary_sensor.* ids, got {e!r}")
+            validate_entity_ids(sensors, "binary_sensor", key="occupancy_sensors_not_list")
         occupied = predicate.get("occupied")
         if occupied is not None and not isinstance(occupied, bool):
-            raise ValueError(f"`occupied` must be a bool, got {occupied!r}")
+            raise AmbienceError("occupancy_occupied_invalid", value=occupied)
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
-            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+            raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
-            raise ValueError(f"`negate` must be a bool, got {negate!r}")
+            raise AmbienceError("negate_invalid", value=negate)
         validate_for(predicate.get("for"))
         validate_for_mode(predicate.get("for_mode"))
 

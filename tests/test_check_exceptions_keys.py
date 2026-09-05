@@ -37,3 +37,10 @@ def test_main_fails_on_missing(tmp_path):
 
 def test_real_tree_keys_all_defined():
     assert main() == 0  # run from repo root; every carrier key resolves
+
+
+def test_used_keys_extracts_delegated_key_kwarg():
+    """validate_entity_ids raises on its caller's behalf, so its `key=` literal
+    is a key reference too — otherwise those keys read as unused."""
+    src = 'validate_entity_ids(sensors, "sensor", key="lux_sensors_not_list")\n'
+    assert used_keys(src) == {"lux_sensors_not_list"}

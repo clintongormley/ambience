@@ -11,6 +11,7 @@ from custom_components.ambience.conditions.occupancy import (
     OccupancyCondition,
     OccupancySnapshot,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import EMPTY, DurationGate
 
 
@@ -183,8 +184,9 @@ def test_validate_accepts_negate() -> None:
 
 
 def test_validate_rejects_non_bool_negate() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate({"sensors": ["binary_sensor.a"], "negate": "yes"})
+    assert exc.value.translation_key == "negate_invalid"
 
 
 def test_contains_conservative_when_either_side_negates() -> None:
@@ -361,18 +363,21 @@ def test_validate_accepts_valid_and_none() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        {"sensors": ["light.x"]},
-        {"sensors": "binary_sensor.a"},
-        {"quant": "some"},
-        {"occupied": "yes"},
-        {"for": {"h": -1}},
+        ({"sensors": ["light.x"]}, "entity_id_wrong_domain"),
+        ({"sensors": ["binary_sensor."]}, "entity_id_invalid"),  # domain prefix alone
+        ({"sensors": ["binary_sensor.Bad Id"]}, "entity_id_invalid"),
+        ({"sensors": "binary_sensor.a"}, "occupancy_sensors_not_list"),
+        ({"quant": "some"}, "quant_invalid"),
+        ({"occupied": "yes"}, "occupancy_occupied_invalid"),
+        ({"for": {"h": -1}}, "for_component_invalid"),
     ],
 )
-def test_validate_rejects(bad) -> None:
-    with pytest.raises(ValueError):
+def test_validate_rejects(bad, key) -> None:
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_trigger_deps_watches_sensors_and_durations() -> None:
@@ -460,8 +465,9 @@ def test_describe_snapshot_zero_active() -> None:
 
 
 def test_validate_non_dict_predicate_raises() -> None:
-    with pytest.raises(ValueError, match="occupancy predicate must be a dict"):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate("not-a-dict")
+    assert exc.value.translation_key == "occupancy_predicate_not_object"
 
 
 def test_trigger_deps_non_dict_is_empty() -> None:
@@ -836,10 +842,11 @@ def test_validate_accepts_for_mode() -> None:
 
 
 def test_validate_rejects_bad_for_mode() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate(
             {"sensors": ["binary_sensor.a"], "for_mode": "sometimes"}
         )
+    assert exc.value.translation_key == "for_mode_invalid"
 
 
 def test_describe_for_mode_less_than_renders_for_lt() -> None:

@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from ..const import get_store
+from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
 from ._common import UNAVAILABLE, predicate_has_any
 
@@ -207,16 +208,16 @@ class WeatherCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"weather predicate must be an object or null: {predicate!r}")
+            raise AmbienceError("weather_predicate_not_object", predicate=predicate)
         groups = predicate.get("groups", [])
         thresholds = predicate.get("thresholds", [])
         if not isinstance(groups, list):
-            raise ValueError("weather `groups` must be a list")
+            raise AmbienceError("weather_groups_not_list")
         if not isinstance(thresholds, list):
-            raise ValueError("weather `thresholds` must be a list")
+            raise AmbienceError("weather_thresholds_not_list")
         for g in groups:
             if not isinstance(g, str) or not g:
-                raise ValueError(f"weather group id must be a non-empty string: {g!r}")
+                raise AmbienceError("weather_group_id_empty", gid=g)
         for t in thresholds:
             self._validate_threshold(t)
 
@@ -240,11 +241,11 @@ class WeatherCondition:
     @staticmethod
     def _validate_threshold(t: Any) -> None:
         if not isinstance(t, dict):
-            raise ValueError(f"weather threshold must be an object: {t!r}")
+            raise AmbienceError("weather_threshold_not_object", value=t)
         if t.get("attribute") not in THRESHOLD_ATTRIBUTES:
-            raise ValueError(f"unknown weather attribute: {t.get('attribute')!r}")
+            raise AmbienceError("weather_unknown_attribute", attribute=t.get("attribute"))
         if t.get("op") not in THRESHOLD_OPS:
-            raise ValueError(f"invalid threshold operator: {t.get('op')!r}")
+            raise AmbienceError("weather_invalid_operator", op=t.get("op"))
         value = t.get("value")
         if not isinstance(value, (int, float)) or isinstance(value, bool):
-            raise ValueError(f"threshold value must be a number: {value!r}")
+            raise AmbienceError("weather_threshold_not_number", value=value)

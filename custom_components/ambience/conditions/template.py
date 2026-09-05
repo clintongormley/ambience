@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template, result_as_boolean
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
 from ._opaque import OpaquePrecomputedCondition
 
@@ -88,14 +89,14 @@ class TemplateCondition(OpaquePrecomputedCondition):
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"template predicate must be a dict or null: {predicate!r}")
+            raise AmbienceError("template_predicate_not_object", predicate=predicate)
         tmpl = predicate.get("template")
         if not isinstance(tmpl, str) or not tmpl.strip():
-            raise ValueError(f"template predicate `template` must be a non-empty string: {tmpl!r}")
+            raise AmbienceError("template_empty", template=tmpl)
         try:
             Template(tmpl, self._hass).ensure_valid()
         except TemplateError as exc:
-            raise ValueError(f"template predicate has invalid Jinja: {exc}") from exc
+            raise AmbienceError("template_invalid_jinja", error=exc) from exc
 
     # --- evaluation --------------------------------------------------------
 

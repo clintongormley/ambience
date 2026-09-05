@@ -11,6 +11,7 @@ from custom_components.ambience.conditions.unavailable import (
     UnavailableCondition,
     UnavailableSnapshot,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import EMPTY
 
 
@@ -79,16 +80,22 @@ async def test_snapshot_reads_any_domain_and_records_absent_implicitly(
     assert snap.names["binary_sensor.a"] == "A"
 
 
-def test_validate_rejects_empty_and_bad() -> None:
-    m = UnavailableCondition()
-    with pytest.raises(ValueError):
-        m.validate_predicate({"entities": []})
-    with pytest.raises(ValueError):
-        m.validate_predicate({"entities": "x"})
-    with pytest.raises(ValueError):
-        m.validate_predicate({"entities": [""]})
-    with pytest.raises(ValueError):
-        m.validate_predicate({})
+@pytest.mark.parametrize(
+    "predicate,key",
+    [
+        ({"entities": []}, "unavailable_pick_entity"),
+        ({"entities": "x"}, "unavailable_pick_entity"),
+        ({}, "unavailable_pick_entity"),
+        ({"entities": [""]}, "entity_id_invalid"),
+        ({"entities": ["light."]}, "entity_id_invalid"),  # domain prefix alone
+        ({"entities": ["light.Bad Id"]}, "entity_id_invalid"),
+        ({"entities": [42]}, "entity_id_invalid"),
+    ],
+)
+def test_validate_rejects_empty_and_bad(predicate, key) -> None:
+    with pytest.raises(AmbienceError) as exc:
+        UnavailableCondition().validate_predicate(predicate)
+    assert exc.value.translation_key == key
 
 
 def test_validate_accepts_none_and_valid() -> None:
@@ -170,8 +177,9 @@ def test_describe_empty_entities_predicate() -> None:
 
 
 def test_validate_rejects_non_dict() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         UnavailableCondition().validate_predicate("not-a-dict")
+    assert exc.value.translation_key == "unavailable_malformed"
 
 
 def test_trigger_deps_empty_entities_list_is_empty() -> None:

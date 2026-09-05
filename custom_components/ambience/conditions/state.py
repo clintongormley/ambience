@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
@@ -23,6 +24,7 @@ from ._common import (
     state_sources,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
@@ -394,55 +396,57 @@ class StateCondition:
         return expr  # atom — nothing to flatten
 
     def _validate_expr(self, expr: Any) -> None:
-        # Messages here surface verbatim to the user in the scene editor, so they
+        # These keys surface to the user in the scene editor, so their messages
         # read as plain guidance rather than internal jargon (no "atom"/"list").
         if not isinstance(expr, dict):
-            raise ValueError("This state condition is malformed.")
+            raise AmbienceError("state_malformed")
         kind = expr.get("kind")
         if kind not in self._VALID_KINDS:
-            raise ValueError(f"Unknown state condition kind: {kind!r}.")
+            raise AmbienceError("state_unknown_kind", kind=kind)
         if kind in self._ATOM_KINDS:
             self._validate_atom(expr)
         elif kind in ("and", "or"):
             items = expr.get("items")
             if not isinstance(items, list) or not items:
-                raise ValueError(f"An ‘{kind}’ group needs at least one condition.")
+                raise AmbienceError("state_group_empty", kind=kind)
             for it in items:
                 self._validate_expr(it)
         else:  # "not"
             item = expr.get("item")
             if item is None:
-                raise ValueError("A ‘not’ group needs a condition to negate.")
+                raise AmbienceError("state_not_empty")
             self._validate_expr(item)
 
     def _validate_atom(self, atom: dict) -> None:
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str) or not entity_id.strip():
-            raise ValueError("Pick an entity for this state condition.")
+            raise AmbienceError("state_pick_entity")
+        # Any domain: a state test reads whatever entity the user picked.
+        validate_entity_ids([entity_id], key="state_pick_entity")
         kind = atom.get("kind")
         states = atom.get("states")
         if not isinstance(states, list):
-            raise ValueError("This state condition is malformed.")
+            raise AmbienceError("state_malformed")
         # Numeric ops have stricter shape: exactly one numeric string.
         if kind in self._NUMERIC_KINDS:
             if len(states) != 1:
-                raise ValueError(f"The ‘{kind}’ comparison needs exactly one value.")
+                raise AmbienceError("state_compare_one_value", kind=kind)
             if not isinstance(states[0], str) or not states[0]:
-                raise ValueError(f"Enter a number for the ‘{kind}’ comparison.")
+                raise AmbienceError("state_compare_needs_number", kind=kind)
             try:
                 float(states[0])
             except ValueError:
-                raise ValueError(
-                    f"The ‘{kind}’ comparison needs a number, but got {states[0]!r}."
+                raise AmbienceError(
+                    "state_compare_not_number", kind=kind, value=states[0]
                 ) from None
         else:
             if not states:
-                raise ValueError("Pick at least one state to match.")
+                raise AmbienceError("state_pick_state")
             if not all(isinstance(s, str) and s for s in states):
-                raise ValueError("Every state to match must be a non-empty value.")
+                raise AmbienceError("state_states_invalid")
         attribute = atom.get("attribute")
         if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
-            raise ValueError("The attribute name must not be blank.")
+            raise AmbienceError("state_attribute_blank")
         validate_for(atom.get("for"))
         validate_for_mode(atom.get("for_mode"))
 

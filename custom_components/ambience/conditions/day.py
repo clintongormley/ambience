@@ -182,7 +182,9 @@ class DayCondition:
             return False
         kind = item.get("kind")
         if kind == "weekday":
-            return snap.weekday in set(item.get("days", []))
+            # `days: null` (a malformed predicate) is an unsatisfiable item,
+            # not a crash — matching must never raise out of a scene evaluation.
+            return snap.weekday in set(item.get("days") or [])
         if kind == "day_of_month":
             try:
                 ranges = _parse_day_spec(item.get("days"))

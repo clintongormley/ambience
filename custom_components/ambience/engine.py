@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from .protocols import Condition
+
+_LOGGER = logging.getLogger(__name__)
 
 Scene = dict[str, Any]
 
@@ -86,9 +89,17 @@ def evaluate_explained(
     pass True only when tracing). Predicates that cannot be evaluated (missing
     condition or None snapshot) always carry ``detail="unavailable"`` regardless
     of this flag.
+
+    A condition whose `matches` raises (a malformed predicate) fails only its
+    own scene: the predicate is recorded as ``detail="error: <ExcType>"`` and
+    evaluation continues with the next scene, matching the trigger engine's own
+    policy so the two paths cannot disagree. A failure in the trace decoration
+    (`describe` / `unconfigured_reason` / `trigger_deps`) is cosmetic and leaves
+    the verdict from `matches` intact, so tracing cannot change the winner.
     """
     scene_evals: list[SceneEval] = []
     winner: int | None = None
+    warned: set[str] = set()
     for idx, scene in enumerate(scenes):
         if not scene_enabled(scene):
             # Disabled scene: recorded for traces but skipped — it cannot win
@@ -110,34 +121,72 @@ def evaluate_explained(
                 predicates.append(PredicateResult(key, False, "unavailable"))
                 ok = False
                 break
-            passed = bool(condition.matches(predicate, snap))
-            # Pass the predicate so the trace detail is scoped to the sensors/
-            # persons THIS scene references, not the whole shared snapshot.
-            detail = condition.describe(snap, predicate) if describe else None
-            if describe and not passed:
-                reason_fn = getattr(condition, "unconfigured_reason", None)
-                reason = reason_fn(predicate, snap) if reason_fn else None
-                if reason:
-                    detail = reason
-            # Reuse the condition's own dependency analysis for the entity_ids
-            # the trace UI links to — sorted so the (unordered) set serialises
-            # deterministically. Only a predicate that renders a detail string can
-            # have its names linked, so skip the lookup when there's nothing to
-            # link: this both avoids wasted work and, more importantly, keeps the
-            # always-on trace path off any expensive trigger_deps (e.g. the
-            # template condition re-renders its Jinja). `trigger_deps` is optional
-            # (protocols.py), so guard it like scope_triggers. `detail is not None`
-            # already implies tracing (detail is None when describe=False).
-            trigger_deps = getattr(condition, "trigger_deps", None) if detail is not None else None
-            entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
-            predicates.append(PredicateResult(key, passed, detail, entity_ids))
-            if not passed:
+            try:
+                passed = bool(condition.matches(predicate, snap))
+            except Exception as exc:  # noqa: BLE001 — mirror trigger_engine._recompute
+                # A malformed predicate fails its own scene only: raising here
+                # would abort the whole category, so the manual/dry-run paths
+                # would disagree with the trigger engine, which swallows too.
+                _warn_once(warned, key, exc)
+                predicates.append(PredicateResult(key, False, f"error: {type(exc).__name__}"))
+                ok = False
+                break
+            try:
+                result = _describe_predicate(key, predicate, passed, condition, snap, describe)
+            except Exception as exc:  # noqa: BLE001
+                # The trace decoration is cosmetic: a failure there must not
+                # change the verdict, or a traced apply would resolve a
+                # different winner than an untraced one.
+                _warn_once(warned, key, exc)
+                result = PredicateResult(key, passed, f"error: {type(exc).__name__}")
+            predicates.append(result)
+            if not result.passed:
                 ok = False
                 break
         scene_evals.append(SceneEval(idx, scene.get("name"), predicates, ok, True))
         if ok:
             winner = idx
     return Explanation(winner, scene_evals)
+
+
+def _warn_once(warned: set[str], key: str, exc: Exception) -> None:
+    """Warn about a broken condition once per evaluation, not once per scene."""
+    if key not in warned:
+        warned.add(key)
+        _LOGGER.warning("ambience: condition %r evaluation failed: %s", key, exc)
+
+
+def _describe_predicate(
+    key: str,
+    predicate: Any,
+    passed: bool,
+    condition: Condition,
+    snap: Any,
+    describe: bool,
+) -> PredicateResult:
+    """Decorate one predicate's verdict with its trace detail and entity links.
+
+    May raise (the caller guards)."""
+    # Pass the predicate so the trace detail is scoped to the sensors/
+    # persons THIS scene references, not the whole shared snapshot.
+    detail = condition.describe(snap, predicate) if describe else None
+    if describe and not passed:
+        reason_fn = getattr(condition, "unconfigured_reason", None)
+        reason = reason_fn(predicate, snap) if reason_fn else None
+        if reason:
+            detail = reason
+    # Reuse the condition's own dependency analysis for the entity_ids
+    # the trace UI links to — sorted so the (unordered) set serialises
+    # deterministically. Only a predicate that renders a detail string can
+    # have its names linked, so skip the lookup when there's nothing to
+    # link: this both avoids wasted work and, more importantly, keeps the
+    # always-on trace path off any expensive trigger_deps (e.g. the
+    # template condition re-renders its Jinja). `trigger_deps` is optional
+    # (protocols.py), so guard it like scope_triggers. `detail is not None`
+    # already implies tracing (detail is None when describe=False).
+    trigger_deps = getattr(condition, "trigger_deps", None) if detail is not None else None
+    entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
+    return PredicateResult(key, passed, detail, entity_ids)
 
 
 def resolve(

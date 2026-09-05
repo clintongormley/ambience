@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -1443,16 +1444,16 @@ async def test_apply_scene_category_exception_logged_not_raised(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
     """An exception inside _apply_category is caught by asyncio.gather and warned,
-    not re-raised. The remaining categories are unaffected (line 297)."""
+    not re-raised. The remaining categories are unaffected."""
 
-    class BoomCondition:
+    class OkCondition:
         name = "boom"
 
         async def snapshot(self, hass, **_):
             return "x"
 
         def matches(self, predicate, snapshot):
-            raise RuntimeError("boom in matches")
+            return True
 
         def describe(self, snapshot, predicate=None):
             return None
@@ -1474,14 +1475,18 @@ async def test_apply_scene_category_exception_logged_not_raised(
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
-        DATA_CONDITIONS: {"boom": BoomCondition()},
+        DATA_CONDITIONS: {"boom": OkCondition()},
         DATA_SWITCHES: {("area", "a"): _switch(True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
 
     caplog.set_level(logging.WARNING)
     # Must not raise even though _apply_category raises internally.
-    await async_apply_scene(hass, "area", "a")
+    with patch(
+        "custom_components.ambience.service.async_resolve_with_snapshots",
+        side_effect=RuntimeError("boom in resolve"),
+    ):
+        await async_apply_scene(hass, "area", "a")
     assert "category apply failed" in caplog.text
 
 

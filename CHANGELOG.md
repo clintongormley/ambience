@@ -28,6 +28,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     depend on the Home Assistant time zone.
 - Time ranges that cross the daylight-saving switch hour now behave as
     configured.
+- A malformed condition in one scene no longer prevents the other scenes in its
+    category from being evaluated.
 
 ## [1.2.0] - 2026-09-04
 

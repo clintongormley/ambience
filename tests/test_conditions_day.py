@@ -146,6 +146,15 @@ def test_matches_weekday() -> None:
     assert m.matches(pred, sat) is False
 
 
+def test_matches_weekday_null_days_does_not_match_or_raise() -> None:
+    """A malformed `days: null` weekday item is simply unsatisfied, not fatal."""
+    m = DayCondition()
+    mon = _snap(date(2026, 5, 18))  # Monday
+    assert m.matches({"include": [{"kind": "weekday", "days": None}]}, mon) is False
+    # In `exclude` it excludes nothing, so the (wildcard) include still matches.
+    assert m.matches({"exclude": [{"kind": "weekday", "days": None}]}, mon) is True
+
+
 def test_matches_day_of_month() -> None:
     m = DayCondition()
     pred = {"include": [{"kind": "day_of_month", "days": "1, 15"}], "exclude": []}

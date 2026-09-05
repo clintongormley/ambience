@@ -319,3 +319,81 @@ def test_collect_templates_returns_empty_without_hass() -> None:
     # Line 159: _collect_templates() returns [] immediately when hass is None.
     result = TemplateCondition(hass=None)._collect_templates()
     assert result == []
+
+
+# --- snapshot: the `keys` result-key hint ---------------------------------
+
+
+async def test_snapshot_keys_hint_renders_only_the_named_template(hass: HomeAssistant) -> None:
+    """A hint naming one template re-renders only that one; every other
+    template's previous result (and deps) is carried over untouched."""
+    hass.states.async_set("sensor.a", "off")
+    hass.states.async_set("sensor.b", "off")
+    a = "{{ states('sensor.a') == 'on' }}"
+    b = "{{ states('sensor.b') == 'on' }}"
+    _install_store(
+        hass,
+        areas={
+            "a": {"scenes": [{"when": {"template": {"template": a}}}]},
+            "b": {"scenes": [{"when": {"template": {"template": b}}}]},
+        },
+    )
+    cond = TemplateCondition(hass=hass)
+    assert (await cond.snapshot(hass)).results == {a: False, b: False}
+
+    hass.states.async_set("sensor.a", "on")
+    hass.states.async_set("sensor.b", "on")
+    snap = await cond.snapshot(hass, keys=frozenset({a}))
+    assert snap.results[a] is True  # recomputed
+    assert snap.results[b] is False  # stale on purpose: not re-rendered
+    assert snap.deps[b].entities == frozenset({"sensor.b"})  # deps carried over too
+
+
+async def test_snapshot_keys_hint_skips_the_store_walk(hass: HomeAssistant) -> None:
+    """The hint IS the work list — a hinted snapshot never touches the store."""
+    tmpl = "{{ true }}"
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
+    cond = TemplateCondition(hass=hass)
+    await cond.snapshot(hass)
+    hass.data[DOMAIN].pop(DATA_STORE)  # a walk would now find nothing
+    snap = await cond.snapshot(hass, keys=frozenset({tmpl}))
+    assert snap.results[tmpl] is True
+
+
+async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
+    hass: HomeAssistant,
+) -> None:
+    """With nothing to merge over, the hint is dropped and everything renders —
+    a partial result set would silently read as False for every other scene."""
+    a = "{{ true }}"
+    b = "{{ false }}"
+    _install_store(
+        hass,
+        areas={
+            "a": {"scenes": [{"when": {"template": {"template": a}}}]},
+            "b": {"scenes": [{"when": {"template": {"template": b}}}]},
+        },
+    )
+    snap = await TemplateCondition(hass=hass).snapshot(hass, keys=frozenset({a}))
+    assert snap.results == {a: True, b: False}
+
+
+async def test_full_refresh_drops_a_key_no_longer_referenced(hass: HomeAssistant) -> None:
+    """The merge makes the snapshot stateful; a full refresh is where a template
+    that no scene references any more finally disappears."""
+    a = "{{ true }}"
+    b = "{{ false }}"
+    _install_store(
+        hass,
+        areas={
+            "a": {"scenes": [{"when": {"template": {"template": a}}}]},
+            "b": {"scenes": [{"when": {"template": {"template": b}}}]},
+        },
+    )
+    cond = TemplateCondition(hass=hass)
+    await cond.snapshot(hass)
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": a}}}]}})
+    assert b in (await cond.snapshot(hass, keys=frozenset({a}))).results  # merged, still there
+    full = await cond.snapshot(hass)
+    assert full.results == {a: True}
+    assert set(full.deps) == {a}

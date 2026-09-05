@@ -32,6 +32,7 @@ from custom_components.ambience.service import (
     attach_tenure,
     category_ids,
     clear_last_applied,
+    snapshot_conditions,
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
@@ -1746,3 +1747,63 @@ async def test_resolve_with_snapshots_forwards_entity_ids_by_full_scene_index(
     assert plan["matched_scene_index"] == 1
     predicates = plan["explanation"].scenes[0].predicates
     assert predicates[0].entity_ids == ("sensor.blinds",)
+
+
+# --- snapshot_conditions: the per-condition result-key hint ----------------
+
+
+class _HintRecorder:
+    """Opaque-style condition: declares the hint and records what it was given."""
+
+    supports_result_keys = True
+
+    def __init__(self) -> None:
+        self.calls: list[frozenset[str] | None] = []
+
+    async def snapshot(self, hass, *, now=None, entities=None, keys=None):
+        self.calls.append(keys)
+        return "snap"
+
+
+class _PlainRecorder:
+    """A condition with the untouched signature — it must never see `keys`."""
+
+    def __init__(self) -> None:
+        self.calls: list[frozenset[str] | None] = []
+
+    async def snapshot(self, hass, *, now=None, entities=None):
+        self.calls.append(entities)
+        return "snap"
+
+
+async def test_snapshot_conditions_hints_only_conditions_that_declare_support(
+    hass: HomeAssistant,
+) -> None:
+    hinted, plain = _HintRecorder(), _PlainRecorder()
+    snaps = await snapshot_conditions(
+        hass,
+        {"template": hinted, "state": plain},
+        {},
+        result_keys={"template": frozenset({"{{ x }}"}), "state": frozenset({"ignored"})},
+    )
+    assert hinted.calls == [frozenset({"{{ x }}"})]
+    assert plain.calls == [frozenset()]  # entities hint only; no `keys` kwarg
+    assert snaps == {"template": "snap", "state": "snap"}
+
+
+async def test_snapshot_conditions_without_result_keys_is_a_full_refresh(
+    hass: HomeAssistant,
+) -> None:
+    hinted = _HintRecorder()
+    await snapshot_conditions(hass, {"template": hinted}, {})
+    assert hinted.calls == [None]
+
+
+async def test_snapshot_conditions_unhinted_condition_is_a_full_refresh(
+    hass: HomeAssistant,
+) -> None:
+    """A condition absent from the map recomputes everything — that is how the
+    engine asks for a full refresh of one condition among several."""
+    hinted = _HintRecorder()
+    await snapshot_conditions(hass, {"template": hinted}, {}, result_keys={"other": frozenset()})
+    assert hinted.calls == [None]

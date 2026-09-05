@@ -477,3 +477,119 @@ async def test_snapshot_evicts_cache_keys_no_longer_referenced(hass: HomeAssista
     await cond.snapshot(hass)
     assert "stale-key" not in cond._cache
     assert _cache_key("script.live", {}) in cond._cache
+
+
+# --- cache key shape ------------------------------------------------------
+
+
+def test_cache_key_is_script_pipe_sorted_compact_args_json() -> None:
+    """The key format is load-bearing: `snapshot` builds it straight from the
+    already-serialised args, so it must equal what `_cache_key` produces."""
+    assert _cache_key("script.x", {"b": 2, "a": 1}) == 'script.x|{"a":1,"b":2}'
+    assert _cache_key("script.x", {}) == "script.x|{}"
+    assert _cache_key("script.x", None) == "script.x|{}"
+
+
+async def test_snapshot_keys_the_results_the_same_way_result_key_does(
+    hass: HomeAssistant,
+) -> None:
+    pred = {"script": "script.k", "args": {"b": 2, "a": 1}}
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": pred}}]}})
+    _install_service(hass, "script", "k", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    snap = await cond.snapshot(hass)
+    assert snap.results == {'script.k|{"a":1,"b":2}': True}
+    assert cond.result_key(pred) == 'script.k|{"a":1,"b":2}'
+
+
+# --- snapshot: the `keys` result-key hint ---------------------------------
+
+
+async def test_snapshot_keys_hint_calls_only_the_named_script(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    one = _install_service(hass, "script", "one", response={"match": True})
+    two = _install_service(hass, "script", "two", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0  # never served from the TTL cache
+    await cond.snapshot(hass)
+    assert (one.call_count, two.call_count) == (1, 1)
+
+    snap = await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert one.call_count == 2  # recomputed
+    assert two.call_count == 1  # not called again
+    assert snap.results[_cache_key("script.two", {})] is True  # previous result survives
+
+
+async def test_snapshot_keys_hint_skips_the_store_walk(hass: HomeAssistant) -> None:
+    """The hint IS the work list — a hinted snapshot never touches the store."""
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.one"}}}]}})
+    _install_service(hass, "script", "one", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0
+    await cond.snapshot(hass)
+    hass.data[DOMAIN].pop(DATA_STORE)  # a walk would now find nothing
+    snap = await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert snap.results[_cache_key("script.one", {})] is True
+
+
+async def test_snapshot_keys_hint_does_not_evict_unreferenced_cache_entries(
+    hass: HomeAssistant,
+) -> None:
+    """Eviction is a full-refresh job: a hinted pass sees only part of the work
+    list, so pruning against it would throw away every live entry."""
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": True})
+    _install_service(hass, "script", "two", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 60.0
+    await cond.snapshot(hass)
+    await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert set(cond._cache) == {
+        _cache_key("script.one", {}),
+        _cache_key("script.two", {}),
+    }
+
+
+async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
+    hass: HomeAssistant,
+) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": True})
+    _install_service(hass, "script", "two", response={"match": False})
+    snap = await ScriptCondition(hass=hass).snapshot(
+        hass, keys=frozenset({_cache_key("script.one", {})})
+    )
+    assert snap.results == {
+        _cache_key("script.one", {}): True,
+        _cache_key("script.two", {}): False,
+    }

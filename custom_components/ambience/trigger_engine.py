@@ -320,7 +320,30 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             elif gate_key not in tenure:
                 tenure[gate_key] = anchor if seed else now
 
-    async def _refresh_snapshots(self, condition_keys: set[str]) -> None:
+    def _fired_result_keys(self, fired: set[PredKey]) -> dict[str, frozenset[str]]:
+        """Per-condition snapshot hint: the result keys of the fired predicates,
+        for the conditions that accept one. A condition is left out — falling
+        back to a full recompute — as soon as one of its fired predicates has no
+        derivable result key (a scene removed since the fire, or a malformed
+        predicate), since the missing key could otherwise go stale unnoticed."""
+        conditions = self._conditions()
+        hints: dict[str, set[str]] = {}
+        unhinted: set[str] = set()
+        for key in fired:
+            condition_key = key[3]
+            condition = conditions.get(condition_key)
+            if not getattr(condition, "supports_result_keys", False):
+                continue
+            result_key = condition.result_key(self._predicate_for(key))
+            if result_key:
+                hints.setdefault(condition_key, set()).add(result_key)
+            else:
+                unhinted.add(condition_key)
+        return {k: frozenset(v) for k, v in hints.items() if k not in unhinted}
+
+    async def _refresh_snapshots(
+        self, condition_keys: set[str], result_keys: dict[str, frozenset[str]] | None = None
+    ) -> None:
         """Re-snapshot the given conditions into the cache, concurrently
         (None on failure) — one slow condition doesn't delay the rest. Each
         gate-capable snapshot is enriched with a live view of this engine's gate
@@ -328,7 +351,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         clock."""
         conditions = self._conditions()
         fresh = await snapshot_conditions(
-            self._hass, conditions, self._referenced, keys=condition_keys
+            self._hass, conditions, self._referenced, keys=condition_keys, result_keys=result_keys
         )
         self._snapshots.update(attach_tenure(conditions, self._tenure, fresh))
 
@@ -538,7 +561,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         if not fired:
             return
         resolved_cause = cause or TriggerCause(kind=CauseKind.UNKNOWN)
-        await self._refresh_snapshots({key[3] for key in fired})
+        await self._refresh_snapshots(
+            {key[3] for key in fired}, result_keys=self._fired_result_keys(fired)
+        )
         traces = await self._apply_units(
             self._recompute(fired, self._snapshots), cause=resolved_cause
         )

@@ -263,6 +263,7 @@ async def snapshot_conditions(
     conditions_registry: dict[str, Any],
     referenced: dict[str, frozenset[str]],
     keys: Iterable[str] | None = None,
+    result_keys: dict[str, frozenset[str]] | None = None,
 ) -> dict[str, Any]:
     """Snapshot the given conditions concurrently (all of them when `keys` is
     None); a failure becomes a None snapshot (logged), so one broken condition
@@ -273,6 +274,14 @@ async def snapshot_conditions(
     domain. A condition that references nothing gets an empty set (snapshot
     nothing); conditions that aren't entity-driven ignore the hint. Shared by
     the manual apply path and the trigger engine's snapshot cache.
+
+    `result_keys` narrows the work further for the opaque pre-computed
+    conditions (`script`/`template`): {condition: the result keys of the
+    predicates that fired}, so only those items are recomputed and the rest are
+    carried over from the condition's previous snapshot. It is passed only to
+    conditions declaring `supports_result_keys`, leaving every other
+    condition's snapshot signature untouched; a condition absent from the map
+    (or no map at all) gets a full refresh.
     """
     names = (
         list(conditions_registry) if keys is None else [k for k in keys if k in conditions_registry]
@@ -282,9 +291,14 @@ async def snapshot_conditions(
         # Deferring the call into a coroutine keeps a synchronous raise (e.g. a
         # signature mismatch) inside the gather, where it becomes a None
         # snapshot like any other failure.
-        return await conditions_registry[name].snapshot(
-            hass, entities=referenced.get(name, frozenset())
+        condition = conditions_registry[name]
+        hint = result_keys.get(name) if result_keys is not None else None
+        extra = (
+            {"keys": hint}
+            if hint is not None and getattr(condition, "supports_result_keys", False)
+            else {}
         )
+        return await condition.snapshot(hass, entities=referenced.get(name, frozenset()), **extra)
 
     results = await asyncio.gather(*(_one(name) for name in names), return_exceptions=True)
     snapshots: dict[str, Any] = {}

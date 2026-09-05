@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from time import monotonic as _monotonic
 from typing import Any
 
@@ -142,19 +141,29 @@ class ScriptCondition(OpaquePrecomputedCondition):
     # Per-call timeout for script invocations. Tests may override.
     _timeout_seconds: float = 5.0
 
-    async def snapshot(
-        self,
-        hass: HomeAssistant,
-        *,
-        now: datetime | None = None,
-        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
-    ) -> ScriptSnapshot:
-        pairs = self._collect_pairs()
+    @staticmethod
+    def _pair_from_key(key: str) -> tuple[str, str]:
+        """A result key split back into its (script, args-json) pair. The key is
+        built as f"{script}|{args_json}" and a script entity_id can never contain
+        "|", so the first separator is the boundary."""
+        script, _, args_json = key.partition("|")
+        return script, args_json
+
+    async def _compute(self, hass: HomeAssistant, keys: frozenset[str] | None) -> ScriptSnapshot:
+        # A result key round-trips to its work item, so a hint is the work list
+        # itself — no store walk, and only the named scripts are called.
+        pairs = (
+            [self._pair_from_key(k) for k in sorted(keys)]
+            if keys is not None
+            else self._collect_pairs()
+        )
         results: dict[str, bool] = {}
         misses: list[tuple[str, str, str]] = []  # (script, args_json, cache_key)
         now_mono = _monotonic()
         for script, args_json in pairs:
-            key = _cache_key(script, json.loads(args_json))
+            # `args_json` is already the sorted compact form `result_key` uses,
+            # so the key is a join — no re-parse, no re-dump.
+            key = f"{script}|{args_json}"
             cached = self._cache.get(key)
             if cached is not None and cached[1] > now_mono:
                 results[key] = cached[0]
@@ -170,11 +179,13 @@ class ScriptCondition(OpaquePrecomputedCondition):
                 results[key] = value
         # Evict keys whose (script, args) pair is no longer referenced by any
         # scene — the cache lives on a long-lived singleton and would otherwise
-        # grow with every pair ever configured. After the loops above,
-        # results ⊆ cache, so a size check spots the no-eviction common case.
-        if len(self._cache) > len(results):
+        # grow with every pair ever configured. Only a full refresh sees the
+        # whole work list; a hinted pass would prune every live entry it didn't
+        # recompute. After the loops above, results ⊆ cache, so a size check
+        # spots the no-eviction common case.
+        if keys is None and len(self._cache) > len(results):
             self._cache = {k: v for k, v in self._cache.items() if k in results}
-        return ScriptSnapshot(results=results)
+        return ScriptSnapshot(results=self._merge_over_previous(keys, "results", results))
 
     async def _call_one(self, hass: HomeAssistant, script: str, args_json: str) -> bool:
         """Call one script.* service; return True iff response is `{"match": True}`.

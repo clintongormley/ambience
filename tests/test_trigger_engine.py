@@ -2780,3 +2780,80 @@ async def test_trace_entity_ids_come_from_prebuilt_specs(hass) -> None:
     predicates = result.explanation.scenes[0].predicates
     assert predicates[0].entity_ids == ("sensor.evening",)
     assert tod.calls == 0
+
+
+# --- async_evaluate: the per-condition result-key hint ---------------------
+
+
+class HintCondition:
+    """Opaque-style condition: declares the snapshot hint, records what it was
+    given, and uses the predicate string itself as the result key."""
+
+    supports_result_keys = True
+
+    def __init__(self) -> None:
+        self.hints: list[frozenset[str] | None] = []
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(entities=frozenset({"sensor.x"}))
+
+    def result_key(self, predicate: Any) -> str:
+        return predicate if isinstance(predicate, str) else ""
+
+    async def snapshot(self, hass: Any, *, now=None, entities=None, keys=None) -> Any:
+        self.hints.append(keys)
+        return {}
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return False
+
+
+def _hint_engine(hass, scenes: list[dict], conditions: dict) -> AutoTriggerEngine:
+    scopes = [("area", "a", {"scenes": scenes})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: conditions,
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_evaluate_hints_the_fired_predicates_result_keys(hass) -> None:
+    cond = HintCondition()
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "t1"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "t2"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": cond},
+    )
+    await engine.async_evaluate({("area", "a", 0, "tmpl")})
+    assert cond.hints == [frozenset({"t1"})]
+
+
+async def test_evaluate_hint_omits_a_condition_with_an_underivable_result_key(hass) -> None:
+    """A fired predicate whose result key can't be derived (a removed scene)
+    forces its whole condition back to a full refresh."""
+    cond = HintCondition()
+    engine = _hint_engine(
+        hass, [{"when": {"tmpl": "t1"}, "category": "g", "actions": []}], {"tmpl": cond}
+    )
+    fired = {("area", "a", 0, "tmpl"), ("area", "a", 9, "tmpl")}
+    assert engine._fired_result_keys(fired) == {}
+    await engine.async_evaluate(fired)
+    assert cond.hints == [None]
+
+
+async def test_evaluate_does_not_hint_a_condition_without_support(hass) -> None:
+    cond = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    engine = _hint_engine(
+        hass, [{"when": {"tod": "evening"}, "category": "g", "actions": []}], {"tod": cond}
+    )
+    # CacheCondition.snapshot takes **_ — a `keys` kwarg would be silently
+    # swallowed, so assert on the map the engine builds instead.
+    assert engine._fired_result_keys({("area", "a", 0, "tod")}) == {}

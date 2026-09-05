@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -150,16 +149,13 @@ class TemplateCondition(OpaquePrecomputedCondition):
         predicates across all scopes (areas, floors, house)."""
         return self._distinct_keys(self._template_key)
 
-    async def snapshot(
-        self,
-        hass: HomeAssistant,
-        *,
-        now: datetime | None = None,
-        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
-    ) -> TemplateSnapshot:
+    async def _compute(self, hass: HomeAssistant, keys: frozenset[str] | None) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}
-        for tmpl in self._collect_templates():
+        # A result key IS the template string, so a hint is the work list itself
+        # — no store walk, and only the named templates render.
+        work = sorted(keys) if keys is not None else self._collect_templates()
+        for tmpl in work:
             info = Template(tmpl, hass).async_render_to_info()
             if info.exception is not None:
                 _LOGGER.warning("ambience: template %r render failed: %s", tmpl, info.exception)
@@ -171,4 +167,7 @@ class TemplateCondition(OpaquePrecomputedCondition):
                 all_states=info.all_states,
                 has_time=info.has_time,
             )
-        return TemplateSnapshot(results=results, deps=deps)
+        return TemplateSnapshot(
+            results=self._merge_over_previous(keys, "results", results),
+            deps=self._merge_over_previous(keys, "deps", deps),
+        )

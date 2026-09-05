@@ -89,6 +89,7 @@
     "lux_min_not_below_max": { "message": "O 'min' do intervalo de lux tem de ser < 'max': {min} >= {max}" },
     "named_def_custom_not_object": { "message": "custom tem de ser um objeto." },
     "named_def_hidden_not_list": { "message": "hidden tem de ser uma lista." },
+    "named_def_hidden_not_string": { "message": "Cada id de {kind} oculto tem de ser uma cadeia de texto." },
     "named_def_invalid_id": { "message": "id de {kind} inválido: {id}" },
     "named_def_only_builtin_hideable": { "message": "Apenas os ids incorporados podem ser ocultados: {id}" },
     "unknown_scope_kind": { "message": "Tipo de âmbito desconhecido: {scope_kind}" },

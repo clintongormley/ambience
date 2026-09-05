@@ -1330,6 +1330,17 @@ async def test_day_config_save_round_trips(hass, installed, hass_ws_client) -> N
     }
 
 
+async def test_day_config_save_rejects_non_entity_ids(hass, installed, hass_ws_client) -> None:
+    for field in ("workday_sensor", "workday_calendar"):
+        resp = await _ws_send(
+            hass_ws_client,
+            type="ambience/conditions/day/config/save",
+            **{field: "not an entity id"},
+        )
+        assert resp["success"] is False, field
+        assert resp["error"]["code"] == "invalid_format", field
+
+
 # ---------------------------------------------------------------------------
 # C2: scene + config validation
 # ---------------------------------------------------------------------------
@@ -1398,6 +1409,16 @@ async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) 
     assert "warnings" not in resp["result"]
     resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/weather/config/list")
     assert resp2["result"] == {"entity": "weather.home", "groups": custom}
+
+
+async def test_weather_config_save_rejects_non_entity_id(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/conditions/weather/config/save",
+        entity="not an entity id",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_format"
 
 
 async def test_weather_config_save_rejects_malformed_groups(

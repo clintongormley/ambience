@@ -89,6 +89,7 @@
     "lux_min_not_below_max": { "message": "Lux range 'min' must be < 'max': {min} >= {max}" },
     "named_def_custom_not_object": { "message": "custom must be an object." },
     "named_def_hidden_not_list": { "message": "hidden must be a list." },
+    "named_def_hidden_not_string": { "message": "Every hidden {kind} id must be a string." },
     "named_def_invalid_id": { "message": "Invalid {kind} id: {id}" },
     "named_def_only_builtin_hideable": { "message": "Only built-in ids can be hidden: {id}" },
     "unknown_scope_kind": { "message": "Unknown scope kind: {scope_kind}" },

@@ -207,6 +207,11 @@ DATA_CARD_RESOURCE_URL = "card_resource_url"
 DATA_FRONTEND_HASH = "frontend_hash"
 DATA_FRONTEND_VERSION = "frontend_version"
 
+# hass.data key holding the shipped AI guide as ``(version, text)``. The
+# markdown is immutable for a given install, so it is read from disk once and
+# re-read only when the running version changes.
+DATA_AI_GUIDE = "ai_guide"
+
 # Top-level hass.data key (deliberately NOT inside hass.data[DOMAIN], which
 # unload pops) marking that the panel's static path is registered. The aiohttp
 # resource it creates lives for the life of the HA process and cannot be

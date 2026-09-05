@@ -71,6 +71,16 @@ _LOGGER = logging.getLogger(__name__)
 MAX_SIMULATE_ENTRIES = 1000
 
 
+def _strict_int(value: Any) -> int:
+    """An int that is not a bool. `vol.Any(int, …)` admits booleans (bool
+    subclasses int), so `True` would ride in as a paging cursor, a row limit, or
+    a scene index — where `True == 1` silently mis-reports a step as DEBOUNCED."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        # i18n: voluptuous schema validator — English-only (framework layer)
+        raise vol.Invalid("expected an integer")
+    return value
+
+
 def send_ambience_error(
     connection: websocket_api.ActiveConnection,
     msg_id: int,
@@ -782,8 +792,8 @@ async def _ws_day_config_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/conditions/day/config/save",
-        vol.Optional("workday_sensor"): vol.Any(str, None),
-        vol.Optional("workday_calendar"): vol.Any(str, None),
+        vol.Optional("workday_sensor"): vol.Any(cv.entity_id, None),
+        vol.Optional("workday_calendar"): vol.Any(cv.entity_id, None),
     }
 )
 @websocket_api.async_response
@@ -817,7 +827,7 @@ async def _ws_weather_config_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/conditions/weather/config/save",
-        vol.Optional("entity"): vol.Any(str, None),
+        vol.Optional("entity"): vol.Any(cv.entity_id, None),
         vol.Optional("groups"): list,
     }
 )
@@ -1353,7 +1363,7 @@ async def _ws_live_subscribe(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/traces/list",
-        vol.Optional("limit"): vol.All(int, vol.Range(min=1)),
+        vol.Optional("limit"): vol.All(_strict_int, vol.Range(min=1)),
         vol.Optional("redact", default=False): bool,
     }
 )
@@ -1490,8 +1500,8 @@ async def _ws_mcp_hello(
         vol.Optional("domain"): vol.Any(str, [str], None),
         vol.Optional("area_id"): vol.Any(str, [str], None),
         vol.Optional("device_class"): vol.Any(str, [str], None),
-        vol.Optional("limit"): vol.Any(int, None),
-        vol.Optional("cursor"): vol.Any(int, None),
+        vol.Optional("limit"): vol.Any(_strict_int, None),
+        vol.Optional("cursor"): vol.Any(_strict_int, None),
     }
 )
 @websocket_api.async_response
@@ -1564,16 +1574,6 @@ async def _ws_simulate_inputs(
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
-
-
-def _strict_int(value: Any) -> int:
-    """An int that is not a bool. `vol.Any(int, …)` admits booleans (bool
-    subclasses int), and prev_applied is compared against a scene index with
-    `==`, where True == 1 would silently mis-report a step as DEBOUNCED."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        # i18n: voluptuous schema validator — English-only (framework layer)
-        raise vol.Invalid("expected an integer")
-    return value
 
 
 @websocket_api.require_admin

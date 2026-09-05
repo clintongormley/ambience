@@ -7,8 +7,6 @@ single source of truth instead of duplicating the lookups.
 
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_STORE, DOMAIN
@@ -54,10 +52,11 @@ def scope_device_name(
 def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     """Map of category id -> configured category name, from the store.
 
-    Returns an empty map when the store has no category list (e.g. a missing store
-    or a test double), so callers can treat every id as unresolved."""
+    Returns an empty map when there is no store: hass.data[DOMAIN] is filled in
+    stages (the trace sinks land before the store) and is dropped whole on
+    unload, so a caller can arrive with nothing to read. Every id is then left
+    unresolved rather than crashing the caller."""
     store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
-    categories: Any = getattr(store, "categories", None)
-    if not callable(categories):
+    if store is None:
         return {}
-    return {g.get("id"): g.get("name") for g in categories()}
+    return {g.get("id"): g.get("name") for g in store.categories()}

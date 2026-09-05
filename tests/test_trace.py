@@ -12,6 +12,7 @@ from custom_components.ambience.engine import (
     PredicateResult,
     SceneEval,
 )
+from custom_components.ambience.store import AmbienceStore
 from custom_components.ambience.trace import (
     BufferedUnit,
     CauseKind,
@@ -327,17 +328,22 @@ def test_format_action_tolerates_malformed_entity_ids():
     assert "lock.door" in text  # coerced, no TypeError
 
 
-def test_emit_trace_resolves_category_name_for_log(caplog):
-    class StoreStub:
-        def categories(self):
-            return [{"id": "749f3cb81a8d4c3a811c3fd9c0c1d23e", "name": "Master Lights"}]
+async def test_emit_trace_resolves_category_name_for_log(hass, caplog):
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_categories(
+        [{"id": "749f3cb81a8d4c3a811c3fd9c0c1d23e", "name": "Master Lights"}]
+    )
 
     unit = UnitTrace(
         "area", "master_bedroom", "749f3cb81a8d4c3a811c3fd9c0c1d23e", "on", "acted", None
     )
     event = TraceEvent(TriggerCause(kind="manual"), [unit])
-    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [LogSink()], DATA_STORE: StoreStub()}})
+    hass.data.setdefault(DOMAIN, {}).update({DATA_TRACE_SINKS: [LogSink()], DATA_STORE: store})
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        # Drop the store's own writes: the raw-id assertion below is about the
+        # trace line, and a persisted payload naturally contains the id.
+        caplog.clear()
         emit_trace(hass, event)
     assert "area/master_bedroom/Master Lights" in caplog.text
     assert "749f3cb8" not in caplog.text
@@ -360,12 +366,13 @@ def test_logsink_emits_one_record_per_event(caplog):
     assert "area/b/G2: acted -> 'r2'" in message
 
 
-def test_emit_trace_keeps_category_id_when_store_lacks_names(caplog):
-    # A store double without categories() (or a missing store) must not crash; the
-    # log falls back to the category id.
+async def test_emit_trace_keeps_category_id_when_store_is_missing(hass, caplog):
+    # A trace emitted while there is no store (setup not finished, or already
+    # unloaded) must not crash; the log falls back to the category id, and to
+    # the scope id for an area with no registry entry.
     unit = UnitTrace("area", "master_bedroom", "abc123", "on", "acted", None)
     event = TraceEvent(TriggerCause(kind="manual"), [unit])
-    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [LogSink()]}})
+    hass.data.setdefault(DOMAIN, {})[DATA_TRACE_SINKS] = [LogSink()]
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
         emit_trace(hass, event)
     assert "area/master_bedroom/abc123" in caplog.text
@@ -468,9 +475,9 @@ def test_buffersink_clear_empties_all_buckets():
     assert sink.records() == []
 
 
-def test_emit_trace_feeds_the_registered_buffer():
+async def test_emit_trace_feeds_the_registered_buffer(hass):
     buffer = BufferSink()
-    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [buffer], DATA_TRACE_BUFFER: buffer}})
+    hass.data.setdefault(DOMAIN, {}).update({DATA_TRACE_SINKS: [buffer], DATA_TRACE_BUFFER: buffer})
     unit = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name="a")
     emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), [unit]))
     records = buffer.records()

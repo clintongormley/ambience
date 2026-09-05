@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
@@ -23,7 +24,6 @@ from custom_components.ambience.simulate import (
     _in_domain,
     _is_number,
     _record_attr,
-    _safe_category_name,
     _simulate_outcome,
     _SimulatedHass,
     _SimulatedStates,
@@ -32,6 +32,7 @@ from custom_components.ambience.simulate import (
     simulate_inputs,
     simulate_inputs_entities,
 )
+from custom_components.ambience.store import AmbienceStore
 from custom_components.ambience.trace import CauseKind, TriggerCause
 
 
@@ -357,31 +358,35 @@ async def test_simulate_inputs_emits_script_verdict_knob():
 # ---------------------------------------------------------------------------
 
 
-class _ExposedStorage:
-    def __init__(self, ids):
-        self._ids = list(ids)
+async def _resolve_hass(hass, scenes, states, exposed=("light.turn_on", "light.turn_off")):
+    """Wire a real hass the way run_simulation reads it: live states, a real
+    store holding `scenes` under the Kitchen area, and the exposed-action set.
 
-    def get_exposed_actions(self):
-        return [{"id": i, "label": "", "visible_fields": [], "defaults": {}} for i in self._ids]
-
-    async def async_save_exposed_actions(self, actions):
-        self._ids = [a["id"] for a in actions]
-
-
-def _resolve_hass(scenes, states, exposed=("light.turn_on", "light.turn_off")):
+    run_simulation resolves the scope name off the area registry and the
+    category name off the store, so both must be the real thing.
+    """
     from custom_components.ambience.conditions.state import StateCondition
 
-    hass = _Hass(states)
+    for state in states:
+        hass.states.async_set(state.entity_id, state.state, state.attributes)
+    area = ar.async_get(hass).async_create("Kitchen")
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area(area.id, {"scenes": scenes})
+    await store.async_save_categories([{"id": "g1", "name": "Kitchen Lights"}])
+    await store.async_save_exposed_actions(
+        [{"id": i, "label": "", "visible_fields": [], "defaults": {}} for i in exposed]
+    )
     hass.data[DOMAIN] = {
         DATA_CONDITIONS: {"state": StateCondition(hass)},
-        DATA_STORE: _Store(scenes),
-        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_ExposedStorage(exposed)),
+        DATA_STORE: store,
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(store),
     }
-    return hass
+    return area.id
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_returns_winner_as_buffered_unit():
+async def test_run_simulation_returns_winner_as_buffered_unit(hass):
     scenes = [
         {
             "category": "g1",
@@ -392,21 +397,24 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
             "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", area_id, "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
     assert result["explanation"]["scenes"][0]["matched"] is True
+    # Names are resolved off the real registry/store, as production does.
+    assert result["scope_name"] == "Kitchen"
+    assert result["category_name"] == "Kitchen Lights"
     # first win acts and remembers its scene index (0)
     assert _applied == 0
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_marks_unexposed_action():
+async def test_run_simulation_marks_unexposed_action(hass):
     """The what-if preview marks an action whose service isn't exposed, matching
     what the live trace would show (it's skipped at dispatch)."""
     scenes = [
@@ -420,16 +428,16 @@ async def test_run_simulation_marks_unexposed_action():
         }
     ]
     # fan.toggle is not in the exposed set → flagged.
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", area_id, "g1", world)
 
     assert result["outcome"] == "acted"
     assert result["actions"][0]["unexposed"] is True
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_reports_no_op_for_no_action_winner():
+async def test_run_simulation_reports_no_op_for_no_action_winner(hass):
     """A winning scene with no actions (a blocker) reports NO_OP, consistent with
     the engine — not ACTED."""
     scenes = [
@@ -442,16 +450,16 @@ async def test_run_simulation_reports_no_op_for_no_action_winner():
             "actions": [],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", area_id, "g1", world)
 
     assert result["outcome"] == "no_op"
     assert result["winner_name"] == "Blocker"
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_reports_no_match():
+async def test_run_simulation_reports_no_match(hass):
     scenes = [
         {
             "category": "g1",
@@ -461,15 +469,15 @@ async def test_run_simulation_reports_no_match():
             },
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off
-    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", area_id, "g1", world)
     assert result["outcome"] == "no_match"
     assert result["winner_name"] is None
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_debounces_same_winner():
+async def test_run_simulation_debounces_same_winner(hass):
     """Re-winning the same scene (prev_applied == winner) is DEBOUNCED with no
     actions recorded — matching production's non-reapply."""
     scenes = [
@@ -482,9 +490,9 @@ async def test_run_simulation_debounces_same_winner():
             "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+    result, applied = await run_simulation(hass, "area", area_id, "g1", world, prev_applied=0)
 
     assert result["outcome"] == "debounced"
     assert result["winner_name"] == "Motion on"
@@ -493,7 +501,7 @@ async def test_run_simulation_debounces_same_winner():
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_apply_always_reasserts_on_same_winner():
+async def test_run_simulation_apply_always_reasserts_on_same_winner(hass):
     scenes = [
         {
             "category": "g1",
@@ -505,9 +513,9 @@ async def test_run_simulation_apply_always_reasserts_on_same_winner():
             "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+    result, applied = await run_simulation(hass, "area", area_id, "g1", world, prev_applied=0)
 
     assert result["outcome"] == "acted"
     assert result["actions"]  # actions re-asserted
@@ -515,7 +523,7 @@ async def test_run_simulation_apply_always_reasserts_on_same_winner():
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_blocker_is_transparent_to_applied():
+async def test_run_simulation_blocker_is_transparent_to_applied(hass):
     """A pure blocker (no-action winner) reports NO_OP and leaves prev_applied
     untouched, so a later re-win of the prior scene still debounces."""
     scenes = [
@@ -528,16 +536,16 @@ async def test_run_simulation_blocker_is_transparent_to_applied():
             "actions": [],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
-    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=7)
+    result, applied = await run_simulation(hass, "area", area_id, "g1", world, prev_applied=7)
 
     assert result["outcome"] == "no_op"
     assert applied == 7  # transparent
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_no_match_forgets_applied():
+async def test_run_simulation_no_match_forgets_applied(hass):
     scenes = [
         {
             "category": "g1",
@@ -548,9 +556,9 @@ async def test_run_simulation_no_match_forgets_applied():
             "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
         }
     ]
-    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    area_id = await _resolve_hass(hass, scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off -> no match
-    result, applied = await run_simulation(hass, "area", "kitchen", "g1", world, prev_applied=0)
+    result, applied = await run_simulation(hass, "area", area_id, "g1", world, prev_applied=0)
 
     assert result["outcome"] == "no_match"
     assert applied is None  # forgotten
@@ -1132,28 +1140,6 @@ async def test_verdict_knobs_deduplicates_same_predicate_across_scenes():
     assert verdicts[0]["key"] == shared_key
 
 
-# --- _safe_category_name: exception returns None (lines 397-398) ---
-
-
-def test_safe_category_name_returns_none_on_broken_store():
-    """_safe_category_name returns None rather than propagating exceptions from the store."""
-
-    class _RaisingData:
-        """Raises on any attribute access so category_names() itself throws."""
-
-        def get(self, key, default=None):  # noqa: ANN001
-            raise RuntimeError("store exploded")
-
-        def __getitem__(self, key):  # noqa: ANN001
-            raise RuntimeError("store exploded")
-
-    class _BrokenHass:
-        def __init__(self):
-            self.data = _RaisingData()
-
-    assert _safe_category_name(_BrokenHass(), "g1") is None
-
-
 # ---------------------------------------------------------------------------
 # Simulator: the what-if simulator honours the `unavailable` condition.
 # Mirrors the run_simulation pattern used for 'state' scenes above.
@@ -1161,7 +1147,7 @@ def test_safe_category_name_returns_none_on_broken_store():
 
 
 @pytest.mark.asyncio
-async def test_run_simulation_unavailable_condition_matches_when_entity_unavailable():
+async def test_run_simulation_unavailable_condition_matches_when_entity_unavailable(hass):
     """An `unavailable` guard wins in the simulator when the overridden entity
     is set to 'unavailable' — confirming the condition integrates end-to-end
     through build_simulated_snapshots and run_simulation."""
@@ -1176,22 +1162,20 @@ async def test_run_simulation_unavailable_condition_matches_when_entity_unavaila
         }
     ]
 
-    class _UnavailStore:
-        def scope_config(self, scope_kind, scope_id):
-            return {"scenes": scenes}
-
-        def get_condition_config(self, name):
-            return {}
-
-    hass = _Hass([_State("binary_sensor.x", "on")])  # live state is "on" (available)
+    hass.states.async_set("binary_sensor.x", "on")  # live state is "on" (available)
+    area = ar.async_get(hass).async_create("Kitchen")
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area(area.id, {"scenes": scenes})
+    area_id = area.id
     hass.data[DOMAIN] = {
         DATA_CONDITIONS: {"unavailable": UnavailableCondition(hass=hass)},
-        DATA_STORE: _UnavailStore(),
+        DATA_STORE: store,
     }
 
     # Override the entity to "unavailable" in the simulated world.
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.x": {"state": "unavailable"}})
-    result, _applied = await run_simulation(hass, "area", "kitchen", "g1", world)
+    result, _applied = await run_simulation(hass, "area", area_id, "g1", world)
 
     # The guard wins (no_op because it has no actions), confirming the condition matched.
     assert result["outcome"] == "no_op"

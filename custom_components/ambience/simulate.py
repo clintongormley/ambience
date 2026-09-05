@@ -455,23 +455,6 @@ def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
     }
 
 
-def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:
-    try:
-        return scope_display_name(hass, scope_kind, scope_id)
-    except Exception:  # noqa: BLE001 — test doubles may lack registries
-        return None
-
-
-def _safe_category_name(hass: HomeAssistant, category: str) -> str | None:
-    # category_names() already tolerates a missing store (returns {}); this guard
-    # only protects against a present-but-broken store, and keeps symmetry with
-    # _safe_scope_name.
-    try:
-        return category_names(hass).get(category)
-    except Exception:  # noqa: BLE001 — test doubles may lack a full store
-        return None
-
-
 def _simulate_outcome(
     prev_applied: int | None,
     winner_index: int | None,
@@ -523,8 +506,8 @@ async def run_simulation(
     explanation = evaluate_explained(candidates, snapshots, conditions, describe=True)
 
     switch_state = _switch_state(hass, scope_kind, scope_id)
-    scope_name = _safe_scope_name(hass, scope_kind, scope_id)
-    category_name = _safe_category_name(hass, category)
+    scope_name = scope_display_name(hass, scope_kind, scope_id)
+    category_name = category_names(hass).get(category)
 
     winner = explanation.winner_index
     scene = candidates[winner] if winner is not None else None

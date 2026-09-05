@@ -215,3 +215,31 @@ async def test_house_auto_on_skips_child_paused_after_the_house(
     assert kitchen._timer is kitchen_timer
     assert kitchen_timer.cancelled() is False
     assert store.get_scope_switch_off_at("area", ids["kitchen"]) == kitchen_off_at
+
+
+async def test_house_off_then_on_real_clock_resumes_every_descendant(hass, mock_config_entry):
+    """One pause decision means one timestamp — on the real clock too.
+
+    Deliberately runs WITHOUT ``fixed_utcnow``: each ``_apply_off`` would
+    otherwise read a microseconds-later wall clock, making every cascade-paused
+    descendant look "paused after" the house and stranding it off.
+    """
+    ids = await _setup_hierarchy(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+
+    house = _switch(hass, "house", None)
+    await house.async_turn_off()
+    await hass.async_block_till_done()
+
+    house_off_at = store.get_scope_switch_off_at("house", None)
+    cascaded = {key: store.get_scope_switch_off_at(*key) for key in _all_descendants(ids)}
+
+    await house.async_turn_on()
+    await hass.async_block_till_done()
+
+    assert house.is_on is True
+    stranded = [key for key in _all_descendants(ids) if not _switch(hass, *key).is_on]
+    assert stranded == [], stranded
+    # The invariant that makes the skip meaningful: one pause, one timestamp.
+    assert cascaded == dict.fromkeys(cascaded, house_off_at)

@@ -210,8 +210,9 @@ async def test_restore_off_without_off_at_arms_full_delay(hass, mock_config_entr
     store = hass.data[DOMAIN][DATA_STORE]
 
     assert ent.is_on is False
-    assert ent._timer is not None
     # "now" becomes the pause time, so the full 60s delay is armed from here.
+    assert ent._timer is not None
+    assert ent._timer.fire_at == fixed_utcnow["now"] + timedelta(seconds=60)
     assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
 
 
@@ -325,7 +326,7 @@ async def test_cancellable_timer_double_cancel_is_noop(hass, mock_config_entry, 
     from custom_components.ambience.switch import _CancellableTimer
 
     unsub = MagicMock()
-    timer = _CancellableTimer(unsub)
+    timer = _CancellableTimer(unsub, fixed_utcnow["now"])
     timer.cancel()
     assert timer.cancelled()
     assert unsub.call_count == 1
@@ -399,6 +400,7 @@ async def test_schedule_auto_on_from_store_no_off_at_arms_full_delay(
     ent._schedule_auto_on_from_store(turn_on_if_expired=True)
     await hass.async_block_till_done()
     assert ent._timer is not None
+    assert ent._timer.fire_at == fixed_utcnow["now"] + timedelta(seconds=3600)
     assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
 
 

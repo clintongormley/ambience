@@ -80,13 +80,15 @@ def _get_scope_device(
 class _CancellableTimer:
     """Wraps the unsubscribe callable from async_track_point_in_utc_time.
 
-    Provides a `.cancel()` / `.cancelled()` interface so test code can
-    inspect timer state the same way it would with asyncio.TimerHandle.
+    Provides a `.cancel()` / `.cancelled()` interface plus the `fire_at` due
+    time, so test code can inspect timer state the same way it would with
+    asyncio.TimerHandle.
     """
 
-    def __init__(self, unsub_fn: Any) -> None:
+    def __init__(self, unsub_fn: Any, fire_at: datetime) -> None:
         self._unsub = unsub_fn
         self._cancelled = False
+        self.fire_at = fire_at
 
     def cancel(self) -> None:
         if not self._cancelled:
@@ -339,10 +341,15 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             await sw._apply_on()
 
     async def async_turn_off(self, **_: Any) -> None:
-        await self._apply_off()
+        # One pause decision, one timestamp: every switch this cascade pauses is
+        # stamped with the initiating switch's time. Re-reading the clock per
+        # descendant would make each of them microseconds "newer" than us, and
+        # async_turn_on's skip would then strand the whole subtree off.
+        paused_at = dt_util.utcnow()
+        await self._apply_off(paused_at)
         for sw in self._descendant_switches():
             if sw.is_on:
-                await sw._apply_off()
+                await sw._apply_off(paused_at)
 
     async def _apply_on(self) -> None:
         """Turn this switch on locally (no cascade)."""
@@ -351,11 +358,18 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         await self._store().async_set_scope_switch_off_at(self._scope_kind, self._scope_id, None)
         self.async_write_ha_state()
 
-    async def _apply_off(self) -> None:
-        """Turn this switch off locally (no cascade)."""
+    async def _apply_off(self, off_at: datetime | None = None) -> None:
+        """Turn this switch off locally (no cascade).
+
+        *off_at* is the pause time to record; it defaults to now for a switch
+        pausing on its own. A cascade passes the ancestor's time so the whole
+        subtree shares one pause timestamp.
+        """
         self._attr_is_on = False
         await self._store().async_set_scope_switch_off_at(
-            self._scope_kind, self._scope_id, dt_util.utcnow().isoformat()
+            self._scope_kind,
+            self._scope_id,
+            (off_at if off_at is not None else dt_util.utcnow()).isoformat(),
         )
         self._schedule_auto_on(seconds=self._resolved_delay())
         self.async_write_ha_state()
@@ -465,7 +479,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return
         fire_at = dt_util.utcnow() + timedelta(seconds=seconds)
         unsub = async_track_point_in_utc_time(self.hass, self._fire_auto_on, fire_at)
-        self._timer = _CancellableTimer(unsub)
+        self._timer = _CancellableTimer(unsub, fire_at)
 
     def _schedule_auto_on_from_store(self, *, turn_on_if_expired: bool) -> None:
         delay = self._resolved_delay()

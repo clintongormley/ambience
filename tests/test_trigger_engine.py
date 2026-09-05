@@ -1045,7 +1045,9 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     since_after = engine.tenure["people"][gate_key]
 
     assert since_after == since_before  # clock did NOT reset on the zone hop
-    engine._teardown()
+    # async_shutdown, not _teardown: the wildcard `who` watches the person domain,
+    # so creating person.bob armed the refresh debouncer, which only shutdown cancels.
+    engine.async_shutdown()
 
 
 async def test_recompute_gated_key_with_none_snapshot_skips_tenure(hass) -> None:
@@ -2481,3 +2483,87 @@ async def test_dropout_to_unavailable_leaves_last_matched_unchanged(hass) -> Non
     # The blip dropped out before resolving a winner, so last_matched is left as-is
     # (it was NOT updated to the would-be winner 0).
     assert get_last_matched(hass, "area", "a", "g") == 1
+
+
+# ---------------------------------------------------------------------------
+# Wildcard (`who`-less) people predicates track persons added/removed at runtime
+# ---------------------------------------------------------------------------
+
+
+def _people_engine(hass, calls: list[str]) -> AutoTriggerEngine:
+    """Engine over area 'a' whose only scene ("nobody home", category 'g') runs a
+    counting `light.turn_on`. Uses the REAL PeopleCondition so `trigger_deps`
+    enumerates `person.*` out of `hass.states`."""
+    from custom_components.ambience.conditions.people import PeopleCondition
+
+    hass.services.async_register("light", "turn_on", lambda call: calls.append("turn_on"))
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"people": {"quant": "nobody"}}, "category": "g", "actions": act}
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"people": PeopleCondition(hass=hass)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    return AutoTriggerEngine(hass)
+
+
+async def _settle_debounce(hass) -> None:
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+
+
+async def test_person_added_after_startup_is_watched_and_counted(hass) -> None:
+    """A wildcard `nobody home` scene must notice persons added to (and removed
+    from) HA without a restart: the person-domain watch rebuilds the index, so
+    the newcomer is enumerated, snapshotted and watched."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    await engine.async_start()
+    assert engine.index.entities == frozenset({"person.alice"})
+    assert calls == ["turn_on"]  # nobody home → scene 0 applied
+
+    # Alice goes; Bob arrives home. Neither entity is watched by the old index.
+    hass.states.async_remove("person.alice")
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+
+    key = ("area", "a", 0, "people")
+    assert engine.index.entities == frozenset({"person.bob"})
+    assert engine._predicate_state[key] is False  # someone IS home now
+
+    # Bob leaves: the rebuilt watch covers him, so "nobody home" wins again.
+    hass.states.async_set("person.bob", "not_home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[key] is True
+    assert calls == ["turn_on", "turn_on"]
+    engine.async_shutdown()
+
+
+async def test_explicit_who_does_not_subscribe_to_the_person_domain(hass) -> None:
+    """An explicit `who` list is a fixed set — no domain watch, so an unrelated
+    person appearing must not churn the index."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    cfg = hass.data[DOMAIN][DATA_STORE].get_area("a")
+    cfg["scenes"][0]["when"]["people"] = {"quant": "nobody", "who": ["person.alice"]}
+    await engine.async_start()
+    assert engine.index.domains == frozenset()
+
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+    assert engine.index.entities == frozenset({"person.alice"})
+    engine.async_shutdown()

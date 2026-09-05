@@ -768,6 +768,33 @@ async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -
     spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.duration_gates == frozenset()
+    assert spec.domains == frozenset({"person"})
+
+
+def test_trigger_deps_wildcard_who_watches_the_person_domain() -> None:
+    """A `who`-less predicate means "all persons", a set that changes while HA
+    runs — so it names the whole `person` domain, not just today's members."""
+    spec = PeopleCondition().trigger_deps({"quant": "nobody"})
+    assert spec.domains == frozenset({"person"})
+
+
+def test_trigger_deps_explicit_who_has_no_domain_watch() -> None:
+    """An explicit `who` list is a fixed set: no domain watch, so adding an
+    unrelated person doesn't churn the index."""
+    spec = PeopleCondition().trigger_deps({"who": ["person.alice"], "quant": "nobody"})
+    assert spec.domains == frozenset()
+
+
+async def test_trigger_deps_wildcard_with_no_persons_is_not_empty(hass: HomeAssistant) -> None:
+    """With no `person.*` entities yet the wildcard enumerates nothing, but the
+    spec must still be non-EMPTY (the domain watch) or the engine drops the
+    predicate and the first person added is never noticed."""
+    from custom_components.ambience.triggers import EMPTY
+
+    spec = PeopleCondition(hass=hass).trigger_deps({"quant": "nobody"})
+    assert spec.entities == frozenset()
+    assert spec.domains == frozenset({"person"})
+    assert spec != EMPTY
 
 
 def test_all_person_ids_returns_empty_without_hass() -> None:

@@ -238,8 +238,14 @@ class PeopleCondition:
             return EMPTY
         who = predicate.get("who") or []
         # Empty/absent `who` means "all persons": enumerate the current person.*
-        # entities the same way snapshot() does.
+        # entities the same way snapshot() does. That enumeration is a point-in-time
+        # answer, so a wildcard also depends on the `person` domain's MEMBERSHIP —
+        # the engine watches it and rebuilds when a person is added or removed,
+        # which re-enumerates this spec. Without it a person created after startup
+        # is neither watched nor counted, and "nobody home" stays true while they
+        # are home.
         persons = [p for p in who if isinstance(p, str) and p] if who else self._all_person_ids()
+        domains = frozenset() if who else frozenset({"person"})
         seconds = dur_seconds(predicate.get("for"))
         gates = (
             frozenset(
@@ -255,7 +261,7 @@ class PeopleCondition:
             if seconds > 0
             else frozenset()
         )
-        return TriggerSpec(entities=frozenset(persons), duration_gates=gates)
+        return TriggerSpec(entities=frozenset(persons), domains=domains, duration_gates=gates)
 
     def _all_person_ids(self) -> list[str]:
         hass = self._hass

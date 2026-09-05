@@ -20,7 +20,9 @@ from homeassistant.core import Event, callback
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_point_in_time,
+    async_track_state_added_domain,
     async_track_state_change_event,
+    async_track_state_removed_domain,
     async_track_time_change,
     async_track_time_interval,
 )
@@ -96,6 +98,19 @@ class TriggerSubscriptionsMixin:
                     self._hass, list(index.entities), self._on_state_event
                 )
             )
+        if index.domains:
+            # A wildcard predicate ("all persons") enumerated its entities at
+            # build time, so the watch-set above is only as current as the last
+            # rebuild. Watching the domain's membership closes that gap: an
+            # entity appearing or disappearing schedules a rebuild, which
+            # re-enumerates and re-subscribes.
+            domains = sorted(index.domains)
+            self._unsubs.append(
+                async_track_state_added_domain(self._hass, domains, self._on_domain_membership)
+            )
+            self._unsubs.append(
+                async_track_state_removed_domain(self._hass, domains, self._on_domain_membership)
+            )
         for clock in index.clock_times:
             self._unsubs.append(
                 async_track_time_change(
@@ -167,6 +182,16 @@ class TriggerSubscriptionsMixin:
         # timers off that tenure. Arming here (pre-evaluation) would use stale
         # tenure and double-arm.
         self._fire(set(preds), cause)
+
+    @callback
+    def _on_domain_membership(self, _event: Event) -> None:
+        """A watched domain gained or lost an entity: rebuild the index so
+        wildcard predicates re-enumerate. Debounced, so a bulk add (integration
+        setup) costs one rebuild, and the rebuild's own resync re-evaluates
+        every predicate — no fan-out needed here."""
+        if not self._running:
+            return  # queued before teardown; hass.data[DOMAIN] may be gone
+        self._hass.async_create_task(self.async_request_refresh())
 
     def _make_keys_handler(
         self, preds: frozenset[PredKey], cause: TriggerCause | None = None

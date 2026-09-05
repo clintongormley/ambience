@@ -1312,6 +1312,27 @@ async def test_recheck_callback_noop_after_teardown(hass) -> None:
     assert fired == []  # short-circuited on not self._running
 
 
+async def test_domain_membership_requests_a_debounced_rebuild(hass) -> None:
+    """An entity added to/removed from a watched domain schedules the debounced
+    rebuild — that is what re-enumerates a wildcard predicate."""
+    engine = _minimal_engine(hass, [])
+    with patch.object(engine, "async_request_refresh") as refresh:
+        engine._on_domain_membership(None)
+        await hass.async_block_till_done()
+    assert refresh.call_count == 1
+
+
+async def test_domain_membership_noop_after_teardown(hass) -> None:
+    """A membership event queued before teardown must not schedule a rebuild —
+    after unload there is no hass.data[DOMAIN] left to rebuild from."""
+    engine = _minimal_engine(hass, [])
+    engine._running = False
+    with patch.object(engine, "async_request_refresh") as refresh:
+        engine._on_domain_membership(None)
+        await hass.async_block_till_done()
+    assert refresh.call_count == 0
+
+
 async def test_recheck_cause_names_label_for_multi_entity_gate(hass) -> None:
     """A multi-entity gate (entity_id None) names the gate's label in the
     DURATION cause instead of a single entity/state."""

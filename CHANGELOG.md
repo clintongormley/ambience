@@ -19,6 +19,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Undo/redo can no longer restore a scene into a category that has since been
     deleted; such scenes move to General.
 - Saving a scene no longer resets the idle re-apply timer of every other scope.
+- People conditions that apply to everyone now notice persons added to or
+    removed from Home Assistant without a restart.
 
 ## [1.2.0] - 2026-09-04
 

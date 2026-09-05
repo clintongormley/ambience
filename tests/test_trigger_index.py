@@ -15,6 +15,8 @@ def test_empty_entries_build_empty_index() -> None:
     assert idx.has_time == frozenset()
     assert idx.durations == {}
     assert idx.opaque == frozenset()
+    assert idx.by_domain == {}
+    assert idx.domains == frozenset()
     assert idx.entities == frozenset()
     assert idx.clock_times == frozenset()
     assert idx.sun_events == frozenset()
@@ -32,6 +34,37 @@ def test_entity_dedup_fans_out_to_all_predicates() -> None:
     assert idx.by_entity["binary_sensor.motion"] == frozenset({p1, p2})
     assert idx.by_entity["person.bob"] == frozenset({p2})
     assert idx.entities == frozenset({"binary_sensor.motion", "person.bob"})
+
+
+def test_domains_dedup_and_fan_out() -> None:
+    """A wildcard predicate names whole domains as well as the entities it
+    enumerated; the domain bucket fans out to every dependent predicate."""
+    p = ("house", None, 0, "people")
+    q = ("area", "a", 1, "people")
+    idx = build_index(
+        [
+            (p, TriggerSpec(domains=frozenset({"person"}))),
+            (
+                q,
+                TriggerSpec(
+                    entities=frozenset({"person.bob"}),
+                    domains=frozenset({"person"}),
+                ),
+            ),
+        ]
+    )
+    assert idx.by_domain["person"] == frozenset({p, q})
+    assert idx.domains == frozenset({"person"})
+    assert idx.entities == frozenset({"person.bob"})
+
+
+def test_domain_only_predicate_is_in_all_predicates() -> None:
+    """A wildcard people predicate in a house with no persons yet has no entity
+    watch at all — only the domain one — so the domain bucket has to keep it in
+    the evaluated set."""
+    p = ("house", None, 0, "people")
+    idx = build_index([(p, TriggerSpec(domains=frozenset({"person"})))])
+    assert idx.all_predicates() == frozenset({p})
 
 
 def test_clock_sun_midnight_has_time_opaque_collected() -> None:

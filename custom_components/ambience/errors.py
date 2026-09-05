@@ -12,6 +12,7 @@ import json
 from functools import cache
 from pathlib import Path
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 # DOMAIN is imported lazily (inside the two functions below) rather than at module
@@ -27,6 +28,15 @@ _EN_PATH = Path(__file__).parent / "translations" / "en.json"
 def _en_exceptions() -> dict[str, str]:
     data = json.loads(_EN_PATH.read_text(encoding="utf-8"))
     return {k: v["message"] for k, v in data.get("exceptions", {}).items()}
+
+
+async def async_preload_translations(hass: HomeAssistant) -> None:
+    """Warm the English exceptions cache off the event loop.
+
+    Rendering an error otherwise does the first `en.json` read inline, and a
+    blocking file read in the loop is a hard error for custom integrations.
+    """
+    await hass.async_add_executor_job(_en_exceptions)
 
 
 def render_en(translation_key: str, placeholders: dict[str, str]) -> str:

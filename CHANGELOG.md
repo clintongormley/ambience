@@ -10,6 +10,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- Reloading Ambience no longer registers a duplicate panel resource each time.
 - A damaged Ambience storage file is no longer overwritten with an empty
     configuration on startup; it is left in place for recovery.
 - Turning a scope's Ambience switch back on now re-reads every condition before

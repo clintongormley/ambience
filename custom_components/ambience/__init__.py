@@ -57,6 +57,7 @@ from .const import (
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
     DATA_PERIODS,
+    DATA_STATIC_PATHS_REGISTERED,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
@@ -70,6 +71,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
 )
+from .errors import async_preload_translations
 from .exposed_actions import ExposedActionsStore
 from .exposure import async_reapply_all_switch_exposure
 from .history import ChangeHistory
@@ -109,6 +111,10 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # Before anything that can raise a translatable error: the first render
+    # would otherwise read en.json on the event loop.
+    await async_preload_translations(hass)
+
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_SWITCHES] = {}
     domain_data[DATA_LAST_APPLIED] = {}
@@ -178,8 +184,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if isinstance(name, str) and (label := name.strip()):
                 builtin_labels[service_id] = label
         await store.async_apply_builtin_labels(builtin_labels)
-
-    async_register_commands(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
@@ -256,9 +260,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Serve the bundled JS from the integration's frontend/ directory.
     bundle_dir = Path(__file__).parent / "frontend"
     bundle_path = bundle_dir / "ambience-panel.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
-    )
+    if not hass.data.get(DATA_STATIC_PATHS_REGISTERED):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
+        )
+        hass.data[DATA_STATIC_PATHS_REGISTERED] = True
 
     # Content hashes for cache-busting. Each loader URL carries its own bundle
     # hash (`?hash=`) so an edited loader is re-fetched, plus the shared
@@ -356,6 +362,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(
         hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _reconcile_health)
     )
+
+    # Last: the commands read hass.data[DOMAIN], so none may be servable before
+    # every key (the engine included) is in place.
+    async_register_commands(hass)
 
     return True
 

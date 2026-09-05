@@ -207,6 +207,13 @@ DATA_CARD_RESOURCE_URL = "card_resource_url"
 DATA_FRONTEND_HASH = "frontend_hash"
 DATA_FRONTEND_VERSION = "frontend_version"
 
+# Top-level hass.data key (deliberately NOT inside hass.data[DOMAIN], which
+# unload pops) marking that the panel's static path is registered. The aiohttp
+# resource it creates lives for the life of the HA process and cannot be
+# removed, so it must be registered exactly once however often the entry
+# reloads.
+DATA_STATIC_PATHS_REGISTERED = "ambience_static_paths_registered"
+
 
 def get_store(hass: HomeAssistant) -> AmbienceStore | None:
     """The Ambience store for this hass, or None when the integration isn't set

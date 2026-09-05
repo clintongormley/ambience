@@ -13,8 +13,8 @@ import re
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
-from .config_health import Problem, scan
-from .const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
+from .config_health import Problem, referenced_entities_by_scene, scan
+from .const import DATA_CONDITIONS, DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 from .naming import category_names, scope_display_name
 
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
@@ -87,6 +87,26 @@ def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) 
     return "".join(
         f'\n- {phrase} · "{_clean(name)}" — {_category_clause(cat)}' for phrase, cat, name in rows
     )
+
+
+@callback
+def referenced_entity_ids(hass: HomeAssistant) -> frozenset[str]:
+    """Every entity id an enabled scene in any scope monitors or acts on.
+
+    Only these entities can change a config-health verdict, so the entity-registry
+    listener filters on this set: HA fires a registry event for every entity in
+    the instance at boot, and a full rescan per event is pure waste. Derived from
+    `referenced_entities_by_scene`, the same reference policy `scan` applies.
+    """
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is None or DATA_STORE not in domain_data:
+        return frozenset()
+    conditions = domain_data[DATA_CONDITIONS]
+    refs: set[str] = set()
+    for _scope_kind, _scope_id, cfg in domain_data[DATA_STORE].all_scope_configs():
+        for eids in referenced_entities_by_scene(conditions, cfg).values():
+            refs.update(eids)
+    return frozenset(refs)
 
 
 @callback

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.config_health import (
     _build_ref_context,
@@ -406,6 +409,13 @@ async def test_scene_annotations_flags_disabled_entity(hass: HomeAssistant, inst
     assert annos[0]["missing_entities"] == [entry.entity_id]
 
 
+async def _settle_health(hass: HomeAssistant) -> None:
+    """Let the debounced config-health reconcile run."""
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))
+    await hass.async_block_till_done()
+
+
 async def test_scene_annotations_flags_overlap(hass: HomeAssistant, installed) -> None:
     hass.states.async_set("light.shared", "on")
     store = hass.data[DOMAIN][DATA_STORE]
@@ -426,6 +436,9 @@ async def test_scene_annotations_flags_overlap(hass: HomeAssistant, installed) -
         ]
     }
     await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
+    # The cached overlap set is refreshed by the debounced config-health
+    # reconcile; a plain get (no fresh_overlap) sees it once the cooldown lapses.
+    await _settle_health(hass)
     annos = scene_annotations(hass, cfg)
     assert annos[0]["overlap_entities"] == ["light.shared"]
     assert annos[1]["overlap_entities"] == ["light.shared"]

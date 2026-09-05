@@ -650,3 +650,116 @@ async def test_setup_prewarms_exception_translations(
     await hass.async_block_till_done()
 
     assert _en_exceptions.cache_info().currsize == 1
+
+
+# --- Config-health rescans: filtered + debounced -----------------------------
+
+
+async def _settle_health(hass: HomeAssistant) -> None:
+    """Drain any pending config-health debounce."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))
+    await hass.async_block_till_done()
+
+
+async def _install_with_referenced(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, entity_ids: list[str]
+) -> None:
+    """Set the entry up with a house scene acting on *entity_ids*, then settle."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "referenced",
+                    "when": {},
+                    "actions": [{"service": "light.turn_on", "entity_ids": entity_ids}],
+                }
+            ]
+        }
+    )
+    await _settle_health(hass)
+
+
+async def test_registry_event_for_unreferenced_entity_does_not_rescan(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A registry event for an entity no Ambience scope references must not
+    trigger a config-health scan — HA fires thousands of these at boot."""
+    from homeassistant.helpers import entity_registry as er
+
+    await _install_with_referenced(hass, mock_config_entry, ["light.referenced"])
+
+    with patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy:
+        er.async_get(hass).async_get_or_create(
+            "light", "test", "unref-1", suggested_object_id="unreferenced"
+        )
+        await _settle_health(hass)
+        assert spy.call_count == 0
+
+
+async def test_registry_event_for_referenced_entity_rescans(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A registry event for a referenced entity still reconciles — a returned
+    device must clear its Repairs issue."""
+    from homeassistant.helpers import entity_registry as er
+
+    await _install_with_referenced(hass, mock_config_entry, ["light.referenced"])
+
+    with patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy:
+        er.async_get(hass).async_get_or_create(
+            "light", "test", "ref-1", suggested_object_id="referenced"
+        )
+        await _settle_health(hass)
+        assert spy.call_count == 1
+
+
+async def test_rapid_referenced_registry_events_coalesce_into_one_rescan(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Ten referenced-entity registry events inside the cooldown produce one scan."""
+    from homeassistant.helpers import entity_registry as er
+
+    referenced = [f"light.ref{i}" for i in range(10)]
+    await _install_with_referenced(hass, mock_config_entry, referenced)
+
+    with patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy:
+        registry = er.async_get(hass)
+        for i in range(10):
+            registry.async_get_or_create("light", "test", f"ref-{i}", suggested_object_id=f"ref{i}")
+        await _settle_health(hass)
+        assert spy.call_count == 1
+
+
+async def test_rename_away_from_referenced_entity_rescans(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A rename fires under the NEW entity id, so the filter must also match
+    `old_entity_id` — otherwise renaming a referenced entity away never raises
+    its missing-entity issue."""
+    from homeassistant.helpers import entity_registry as er
+
+    await _install_with_referenced(hass, mock_config_entry, ["light.referenced"])
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "light", "test", "ref-rename", suggested_object_id="referenced"
+    )
+    await _settle_health(hass)
+
+    with patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy:
+        registry.async_update_entity(entry.entity_id, new_entity_id="light.renamed_away")
+        await _settle_health(hass)
+        assert spy.call_count == 1

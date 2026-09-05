@@ -2675,7 +2675,15 @@ async def test_exposed_actions_save_reconciles_repairs_live(
         actions=[{"id": "light.turn_off", "label": "", "visible_fields": [], "defaults": {}}],
     )
     assert resp["success"] is True
-    # The save reconciled Repairs live — the issue now exists without a reload.
+    # The save reconciled Repairs live (debounced, so let the cooldown lapse) —
+    # the issue now exists without a reload.
+    from datetime import UTC, datetime, timedelta
+
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=5))
+    await hass.async_block_till_done()
     assert reg.async_get_issue(DOMAIN, "unexposed_action:light.turn_on") is not None
 
 

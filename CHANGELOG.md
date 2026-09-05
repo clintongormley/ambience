@@ -52,6 +52,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Disabling a scope's Ambience switch entity in Home Assistant now pauses that
     scope instead of leaving it always on.
 
+### Performance
+
+- Ambience no longer rescans its configuration for every entity registry change
+    in Home Assistant.
+
 ## [1.2.0] - 2026-09-04
 
 ### Added

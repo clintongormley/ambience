@@ -20,6 +20,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
@@ -44,7 +45,7 @@ from .conditions.template import TemplateCondition
 from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.unavailable import UnavailableCondition
 from .conditions.weather import WeatherCondition
-from .config_health_issues import reconcile_issues
+from .config_health_issues import reconcile_issues, referenced_entity_ids
 from .const import (
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
@@ -96,6 +97,10 @@ _PANEL_URL = "ambience"
 _PANEL_STATIC_PATH = "/ambience-panel"
 _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
+
+# Coalesce a burst of config-health triggers (a multi-scope save, a device
+# integration registering its entities) into one scan.
+_HEALTH_DEBOUNCE_SECONDS = 1.0
 
 
 def _hash_bundle(bundle_path: Path) -> str:
@@ -351,16 +356,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(engine.async_shutdown)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    @callback
-    def _reconcile_health(*_args: object) -> None:
+    # The entity ids any scope references, kept current so the registry listener
+    # can reject the flood of events about entities Ambience never mentions.
+    health_refs = referenced_entity_ids(hass)
+
+    async def _reconcile_health() -> None:
         reconcile_issues(hass)
 
-    # Run once states have settled, then on every config change and whenever the
-    # entity registry changes (a fixed typo / a returned device clears its issue).
-    entry.async_on_unload(async_at_started(hass, _reconcile_health))
-    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _reconcile_health))
+    health_debouncer = Debouncer(
+        hass,
+        _LOGGER,
+        cooldown=_HEALTH_DEBOUNCE_SECONDS,
+        immediate=False,
+        function=_reconcile_health,
+    )
+    entry.async_on_unload(health_debouncer.async_shutdown)
+
+    @callback
+    def _health_on_started(_event: object) -> None:
+        reconcile_issues(hass)
+
+    @callback
+    def _health_on_config_changed(*_args: object) -> None:
+        nonlocal health_refs
+        health_refs = referenced_entity_ids(hass)
+        health_debouncer.async_schedule_call()
+
+    @callback
+    def _health_event_filter(data: er.EventEntityRegistryUpdatedData) -> bool:
+        # A rename fires under the new id, so the old one must match too —
+        # otherwise renaming a referenced entity away never clears its issue.
+        return data["entity_id"] in health_refs or data.get("old_entity_id") in health_refs
+
+    @callback
+    def _health_on_registry_updated(_event: Event) -> None:
+        health_debouncer.async_schedule_call()
+
+    # Run once states have settled, then on every config change and whenever a
+    # referenced entity's registry entry changes (a fixed typo / a returned
+    # device clears its issue).
+    entry.async_on_unload(async_at_started(hass, _health_on_started))
     entry.async_on_unload(
-        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _reconcile_health)
+        async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _health_on_config_changed)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            er.EVENT_ENTITY_REGISTRY_UPDATED,
+            _health_on_registry_updated,
+            event_filter=_health_event_filter,
+        )
     )
 
     # Last: the commands read hass.data[DOMAIN], so none may be servable before

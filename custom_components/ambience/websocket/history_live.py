@@ -75,22 +75,29 @@ async def _ws_history_subscribe(
     connection.send_message(websocket_api.event_message(msg["id"], history.snapshot()))
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/history/undo"})
-@websocket_api.async_response
-async def _ws_history_undo(
+async def _history_step(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
+    op: str,
 ) -> None:
+    """Take one step in direction `op` ("undo" or "redo") — the store exposes a
+    `peek_<op>` / `discard_<op>` / `<op>` trio for each.
+
+    Walk past entries whose scope has been deleted since the snapshot was taken
+    (discarding them, so a stale entry can never resurrect a dead scope) to the
+    first restorable one; answer `{"ok": False}` when the stack runs out."""
     history = hass.data[DOMAIN][DATA_HISTORY]
-    while (entry := history.peek_undo()) is not None:
+    peek = getattr(history, f"peek_{op}")
+    discard = getattr(history, f"discard_{op}")
+    step = getattr(history, op)
+    while (entry := peek()) is not None:
         if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
-            history.discard_undo()
+            discard()
             continue
-        kind, sid, config = history.undo()
+        kind, sid, config = step()
         full = await _apply_scope_config(hass, kind, sid, config)
-        history.notify_changed("undo", kind, sid, connection)
+        history.notify_changed(op, kind, sid, connection)
         connection.send_result(
             msg["id"],
             {
@@ -101,8 +108,19 @@ async def _ws_history_undo(
             },
         )
         return
-    history.notify_changed("undo")
+    history.notify_changed(op)
     connection.send_result(msg["id"], {"ok": False})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/undo"})
+@websocket_api.async_response
+async def _ws_history_undo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _history_step(hass, connection, msg, "undo")
 
 
 @websocket_api.require_admin
@@ -113,26 +131,7 @@ async def _ws_history_redo(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    history = hass.data[DOMAIN][DATA_HISTORY]
-    while (entry := history.peek_redo()) is not None:
-        if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
-            history.discard_redo()
-            continue
-        kind, sid, config = history.redo()
-        full = await _apply_scope_config(hass, kind, sid, config)
-        history.notify_changed("redo", kind, sid, connection)
-        connection.send_result(
-            msg["id"],
-            {
-                "ok": True,
-                "scope_kind": kind,
-                "scope_id": sid,
-                "config": annotate_scenes(hass, full, fresh_overlap=True),
-            },
-        )
-        return
-    history.notify_changed("redo")
-    connection.send_result(msg["id"], {"ok": False})
+    await _history_step(hass, connection, msg, "redo")
 
 
 @websocket_api.require_admin

@@ -112,6 +112,7 @@
     "exposed_unknown_service": { "message": "Serviço desconhecido: {sid}" },
     "exposed_unknown_visible_field": { "message": "{sid}: campo desconhecido {field} em visible_fields." },
     "exposed_unknown_default_field": { "message": "{sid}: campo desconhecido {field} em defaults." },
+    "scene_config_unknown_key": { "message": "Chave de configuração de nível superior desconhecida: {key}" },
     "scene_config_not_object": { "message": "A configuração tem de ser um objeto." },
     "scene_scenes_not_list": { "message": "`scenes` tem de ser uma lista." },
     "scene_not_object": { "message": "Cena {scene_idx}: tem de ser um objeto." },

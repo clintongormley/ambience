@@ -30,6 +30,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     configured.
 - A malformed condition in one scene no longer prevents the other scenes in its
     category from being evaluated.
+- Editing scenes in a stale browser tab can no longer silently disable a scope
+    that was enabled elsewhere.
 
 ## [1.2.0] - 2026-09-04
 

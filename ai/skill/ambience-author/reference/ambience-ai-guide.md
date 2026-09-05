@@ -136,7 +136,7 @@ and house all share this shape:
 ```jsonc
 {
   "scenes": [ /* ordered list of Scene objects */ ],
-  "enabled": true   // optional; default true. false = scope permanently off.
+  "enabled": true   // read-only; default true. false = scope permanently off.
 }
 ```
 
@@ -146,7 +146,8 @@ and house all share this shape:
   order. The backend owns each scene's `priority`; you do not set it. See
   [How scenes are chosen](#how-scenes-are-chosen).
 - `enabled`: a permanent per-scope switch, independent of the runtime pause
-  toggle. You normally do not set this from an import.
+  toggle. Read-only here — a save ignores it, so an import can neither disable
+  nor re-enable a scope; only the panel's scope toggle writes it.
 
 An AI produces the **envelope** (section 1), not a raw ScopeConfig; the
 envelope's `mode` controls how the listed scenes fold into the existing config.

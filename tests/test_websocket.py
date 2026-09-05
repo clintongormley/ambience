@@ -621,7 +621,6 @@ async def test_scope_save_coerces_unknown_category_to_general(
     from custom_components.ambience.const import GENERAL_CATEGORY_ID
 
     config = {
-        "auto_sort": False,
         "scenes": [
             {
                 "name": "ghost scene",
@@ -661,6 +660,39 @@ async def test_scope_save_coerces_unknown_category_to_general(
     scenes = get["result"]["scenes"]
     assert scenes[0]["category"] == GENERAL_CATEGORY_ID
     assert scenes[1]["category"] == GENERAL_CATEGORY_ID
+
+
+async def test_area_save_cannot_disable_a_scope(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """A scene save carrying a stale `enabled: false` must not disable the scope:
+    only ambience/set_scope_enabled writes that flag, and the save response
+    reports the store's value so the client sees the truth."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", area_id, True)
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={"scenes": [], "enabled": False},
+    )
+    assert resp["success"] is True, resp
+    assert store.get_scope_enabled("area", area_id) is True
+    assert resp["result"]["config"].get("enabled") is not False
+
+
+async def test_area_save_rejects_unknown_top_level_key(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={"scenes": [], "foo": 1},
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "foo" in resp["error"]["message"]
 
 
 async def test_area_save_rejects_area_id_not_in_registry(

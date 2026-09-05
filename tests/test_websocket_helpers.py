@@ -366,6 +366,19 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         assert exc.value.translation_key == "scene_apply_invalid"
 
+    def test_rejects_unknown_top_level_key(self) -> None:
+        """Only `scenes` (and the legacy `enabled`) may reach a scope save."""
+        hass = _make_hass()
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, {"scenes": [], "foo": 1})
+        assert exc.value.translation_key == "scene_config_unknown_key"
+        assert exc.value.translation_placeholders["key"] == "foo"
+
+    def test_accepts_legacy_enabled_key(self) -> None:
+        # Accepted for backward compatibility with older clients; canonicalise
+        # strips it, so it never reaches the store.
+        validate_scope_config(_make_hass(), {"scenes": [], "enabled": False})
+
 
 # ---------------------------------------------------------------------------
 # validate_weather_groups
@@ -564,6 +577,13 @@ class TestCanonicalise:
         assert "missing_entities" not in result["scenes"][0]
         assert "overlap_entities" not in result["scenes"][0]
         assert "config_issues" not in result["scenes"][0]
+
+    def test_strips_scope_enabled_flag(self) -> None:
+        """`enabled` is written only by ambience/set_scope_enabled, so the
+        storage form of a scene save never carries it."""
+        hass = _make_hass(conditions={})
+        result = canonicalise(hass, {"scenes": [], "enabled": False})
+        assert "enabled" not in result
 
     def test_canonicalise_preserves_description(self) -> None:
         hass = _make_hass(conditions={})

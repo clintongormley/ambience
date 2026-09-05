@@ -368,10 +368,13 @@ async def _save_scope(
     change = msg.get("change") or {"action": "edit", "scene_name": None}
     if history.record(scope_kind, scope_id, before, after, change):
         history.notify_changed("record", scope_kind, scope_id, connection)
+    # Respond with what the store now holds, not the request's config: the save
+    # never writes the scope-level `enabled` flag, so echoing the request would
+    # tell a stale client its disabled/enabled view had been persisted.
     # Recompute the overlap set so the save response reflects the just-saved config
     # rather than a cached set; the get path reads the cache.
     connection.send_result(
-        msg["id"], {"ok": True, "config": annotate_scenes(hass, config, fresh_overlap=True)}
+        msg["id"], {"ok": True, "config": annotate_scenes(hass, after, fresh_overlap=True)}
     )
 
 

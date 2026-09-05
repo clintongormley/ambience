@@ -2717,3 +2717,66 @@ async def test_explicit_who_does_not_subscribe_to_the_person_domain(hass) -> Non
     await _settle_debounce(hass)
     assert engine.index.entities == frozenset({"person.alice"})
     engine.async_shutdown()
+
+
+async def test_trace_entity_ids_come_from_prebuilt_specs(hass) -> None:
+    """The engine already derives a TriggerSpec per predicate at rebuild, so the
+    always-on trace path must reuse those entity_ids rather than calling
+    `trigger_deps` again per predicate per fire — and it must key them by the FULL
+    scene index, not the category-filtered candidate index."""
+    from custom_components.ambience.trace import Outcome
+
+    class CountingDeps:
+        """One entity per predicate value, counting every trigger_deps call."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            self.calls += 1
+            return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}))
+
+        async def snapshot(self, hass: Any, **_: Any) -> Any:
+            return "evening"
+
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return predicate is None or predicate == snapshot
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> str:
+            return str(snapshot)
+
+    tod = CountingDeps()
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    # Full index 0 is in another category: the resolved unit's
+                    # candidate index 0 is full index 1.
+                    {"when": {"tod": "night"}, "category": "other", "actions": []},
+                    {"when": {"tod": "evening"}, "category": "g", "actions": []},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    tod.calls = 0  # only evaluation-time calls count
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert result is not None
+    assert result.outcome == Outcome.NO_OP
+    predicates = result.explanation.scenes[0].predicates
+    assert predicates[0].entity_ids == ("sensor.evening",)
+    assert tod.calls == 0

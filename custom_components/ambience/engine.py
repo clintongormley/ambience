@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,14 +28,15 @@ def scene_enabled(scene: Scene) -> bool:
 class PredicateResult:
     """One predicate's evaluation within a scene.
 
-    `entity_ids` are the entity_ids this predicate references (from the
-    condition's optional `trigger_deps`), so the trace UI can link the names it
-    shows to their more-info dialogs. Populated only when tracing AND the
-    predicate renders a `detail` to link AND the condition reports entities;
-    empty otherwise — not tracing, no detail (e.g. template/script, or an
-    unevaluated predicate), no `trigger_deps`, or a condition that references no
-    entities (e.g. time_of_day). Which keys are actually rendered as links is a
-    separate frontend decision.
+    `entity_ids` are the entity_ids this predicate references (from the caller's
+    precomputed lookup when it has one, else the condition's optional
+    `trigger_deps`), so the trace UI can link the names it shows to their
+    more-info dialogs. Populated only when tracing AND the predicate renders a
+    `detail` to link AND the predicate references entities; empty otherwise — not
+    tracing, no detail (e.g. template/script, or an unevaluated predicate), no
+    `trigger_deps`, or a condition that references no entities (e.g.
+    time_of_day). Which keys are actually rendered as links is a separate
+    frontend decision.
     """
 
     condition_key: str
@@ -76,6 +78,7 @@ def evaluate_explained(
     conditions: dict[str, Condition],
     *,
     describe: bool = False,
+    entity_ids_for: Callable[[int, str], tuple[str, ...]] | None = None,
 ) -> Explanation:
     """Evaluate `scenes`, recording every predicate result and the winner.
 
@@ -89,6 +92,12 @@ def evaluate_explained(
     pass True only when tracing). Predicates that cannot be evaluated (missing
     condition or None snapshot) always carry ``detail="unavailable"`` regardless
     of this flag.
+
+    `entity_ids_for` supplies a predicate's trace `entity_ids` from the caller's
+    own precomputed dependency analysis, keyed by ``(scene_index, condition_key)``
+    where `scene_index` indexes `scenes` AS PASSED (a caller resolving a filtered
+    subset translates before it hands the lookup over). When given it replaces
+    `trigger_deps` entirely, so the always-on trace path re-derives nothing.
 
     A condition whose `matches` raises (a malformed predicate) fails only its
     own scene: the predicate is recorded as ``detail="error: <ExcType>"`` and
@@ -132,7 +141,9 @@ def evaluate_explained(
                 ok = False
                 break
             try:
-                result = _describe_predicate(key, predicate, passed, condition, snap, describe)
+                result = _describe_predicate(
+                    idx, key, predicate, passed, condition, snap, describe, entity_ids_for
+                )
             except Exception as exc:  # noqa: BLE001
                 # The trace decoration is cosmetic: a failure there must not
                 # change the verdict, or a traced apply would resolve a
@@ -157,12 +168,14 @@ def _warn_once(warned: set[str], key: str, exc: Exception) -> None:
 
 
 def _describe_predicate(
+    scene_index: int,
     key: str,
     predicate: Any,
     passed: bool,
     condition: Condition,
     snap: Any,
     describe: bool,
+    entity_ids_for: Callable[[int, str], tuple[str, ...]] | None,
 ) -> PredicateResult:
     """Decorate one predicate's verdict with its trace detail and entity links.
 
@@ -175,17 +188,21 @@ def _describe_predicate(
         reason = reason_fn(predicate, snap) if reason_fn else None
         if reason:
             detail = reason
-    # Reuse the condition's own dependency analysis for the entity_ids
-    # the trace UI links to — sorted so the (unordered) set serialises
-    # deterministically. Only a predicate that renders a detail string can
-    # have its names linked, so skip the lookup when there's nothing to
-    # link: this both avoids wasted work and, more importantly, keeps the
-    # always-on trace path off any expensive trigger_deps (e.g. the
-    # template condition re-renders its Jinja). `trigger_deps` is optional
-    # (protocols.py), so guard it like scope_triggers. `detail is not None`
-    # already implies tracing (detail is None when describe=False).
-    trigger_deps = getattr(condition, "trigger_deps", None) if detail is not None else None
-    entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
+    # The entity_ids the trace UI links to. Only a predicate that renders a
+    # detail string can have its names linked, so skip the lookup when there's
+    # nothing to link (`detail is not None` already implies tracing). A caller
+    # holding precomputed deps hands them over rather than paying per predicate
+    # per fire; otherwise fall back to the condition's own dependency analysis,
+    # sorted so the (unordered) set serialises deterministically. Deriving deps
+    # can be expensive (the template condition re-renders its Jinja), and
+    # `trigger_deps` is optional (protocols.py), so guard it like scope_triggers.
+    if detail is None:
+        entity_ids: tuple[str, ...] = ()
+    elif entity_ids_for is not None:
+        entity_ids = entity_ids_for(scene_index, key)
+    else:
+        trigger_deps = getattr(condition, "trigger_deps", None)
+        entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
     return PredicateResult(key, passed, detail, entity_ids)
 
 

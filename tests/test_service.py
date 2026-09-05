@@ -1710,3 +1710,39 @@ async def test_execute_plan_no_signal_for_pure_blocker(hass):
     await async_execute_plan(hass, "area", "k", plan, "g")
     await hass.async_block_till_done()  # ensure no late signal sneaks in
     assert seen == []
+
+
+async def test_resolve_with_snapshots_forwards_entity_ids_by_full_scene_index(
+    hass: HomeAssistant,
+) -> None:
+    """`entity_ids_for` is keyed by the FULL scene index, so a category-filtered
+    resolve must translate its candidate index before the lookup — otherwise the
+    trace would link the entities of an unrelated scene."""
+    areas = {
+        "lr": {
+            "scenes": [
+                {"name": "lighting", "category": "lighting", "when": {"tod": "evening"}},
+                {"name": "blinds", "category": "blinds", "when": {"tod": "evening"}},
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {},
+    }
+    lookup = {(0, "tod"): ("sensor.lighting",), (1, "tod"): ("sensor.blinds",)}
+
+    plan = await async_resolve_with_snapshots(
+        hass,
+        "area",
+        "lr",
+        {"tod": "evening"},
+        category="blinds",
+        describe=False,
+        explain=True,
+        entity_ids_for=lambda scene_index, key: lookup.get((scene_index, key), ()),
+    )
+    assert plan["matched_scene_index"] == 1
+    predicates = plan["explanation"].scenes[0].predicates
+    assert predicates[0].entity_ids == ("sensor.blinds",)

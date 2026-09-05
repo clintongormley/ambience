@@ -13,6 +13,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -89,6 +90,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # rebuild — lets sensor-backed conditions snapshot only what scenes use.
         self._referenced: dict[str, frozenset[str]] = {}
         self._index: TriggerIndex = build_index([])
+        # Per-predicate entity_ids from the specs derived at the last rebuild, so
+        # the always-on trace path links entities without re-running trigger_deps
+        # per predicate per fire (a wildcard people predicate would re-scan every
+        # person entity). Sorted for deterministic trace output.
+        self._pred_entities: dict[PredKey, tuple[str, ...]] = {}
         self._snapshots: dict[str, Any] = {}
         self._unsubs: list[Callable[[], None]] = []
         # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
@@ -144,7 +150,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
         self._referenced = referenced_entities(self._conditions(), self._scope_cfgs.values())
-        self._index = build_index(self._build_entries())
+        entries = self._build_entries()
+        self._pred_entities = {key: tuple(sorted(spec.entities)) for key, spec in entries}
+        self._index = build_index(entries)
         # Drop flip-state for predicates that no longer exist (scenes removed /
         # reordered), so it can't grow unbounded across config edits.
         live = self._index.all_predicates()
@@ -177,6 +185,14 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     continue
                 entries.append(((scope_kind, scope_id, scene_index, condition_key), spec))
         return entries
+
+    def _entity_ids_for(
+        self, scope_kind: str, scope_id: str | None, scene_index: int, condition_key: str
+    ) -> tuple[str, ...]:
+        """The entity_ids one predicate references, from the specs captured at the
+        last rebuild. Empty for a predicate with no watchable deps (wildcard,
+        unknown/opaque condition, or a spec with no entities)."""
+        return self._pred_entities.get((scope_kind, scope_id, scene_index, condition_key), ())
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""
@@ -371,6 +387,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 category=category_id,
                 describe=False,
                 explain=active,
+                entity_ids_for=partial(self._entity_ids_for, scope_kind, scope_id),
             )
             index = plan["matched_scene_index"]
             explanation = plan.get("explanation")

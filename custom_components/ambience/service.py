@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from typing import Any
 
@@ -145,6 +145,18 @@ def _scope_enabled(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -
     return store.get_scope_enabled(scope_kind, scope_id)
 
 
+def _candidate_entity_ids_for(
+    entity_ids_for: Callable[[int, str], tuple[str, ...]] | None,
+    to_full: list[int] | None,
+) -> Callable[[int, str], tuple[str, ...]] | None:
+    """Re-key a full-scene-index entity_ids lookup onto the candidate list the
+    engine actually walks. A category filter renumbers the scenes, so without
+    this translation a trace would link another scene's entities."""
+    if entity_ids_for is None or to_full is None:
+        return entity_ids_for
+    return lambda candidate_index, key: entity_ids_for(to_full[candidate_index], key)
+
+
 async def async_resolve_with_snapshots(
     hass: HomeAssistant,
     scope_kind: str,
@@ -154,6 +166,7 @@ async def async_resolve_with_snapshots(
     *,
     describe: bool = True,
     explain: bool = False,
+    entity_ids_for: Callable[[int, str], tuple[str, ...]] | None = None,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{condition_name: snapshot}` dict.
 
@@ -165,6 +178,12 @@ async def async_resolve_with_snapshots(
 
     `explanation` is an `Explanation` (scene list relative to the resolved
     category) when `explain=True`, else None.
+
+    `entity_ids_for` supplies each predicate's trace `entity_ids` from the
+    caller's own precomputed dependency analysis, keyed by ``(scene_index,
+    condition_key)`` with `scene_index` the FULL index in the scope's scenes
+    (the category filter is translated here). Callers without precomputed deps
+    omit it and the engine falls back to each condition's `trigger_deps`.
 
     A `when` key naming a condition that isn't registered (e.g. a stale config
     key) fails the scene, since `resolve()` cannot evaluate it.
@@ -198,7 +217,13 @@ async def async_resolve_with_snapshots(
         # describe=True calls condition.describe() per predicate. With the always-on
         # BufferSink (Increment B), `explain` is true on every evaluation, so this
         # runs in production — bounded, but no longer gated behind debug logging.
-        explanation = evaluate_explained(candidates, snapshots, conditions_registry, describe=True)
+        explanation = evaluate_explained(
+            candidates,
+            snapshots,
+            conditions_registry,
+            describe=True,
+            entity_ids_for=_candidate_entity_ids_for(entity_ids_for, to_full),
+        )
         winner = explanation.winner_index
         match = None if winner is None else (winner, candidates[winner])
     else:

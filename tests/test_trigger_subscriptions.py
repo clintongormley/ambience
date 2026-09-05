@@ -1570,3 +1570,134 @@ async def test_note_reapply_config_changed_rearms_every_timer(hass) -> None:
     assert all(cancel.called for cancel in cancels)  # old handles cancelled
     assert all(engine._reapply_timers[unit] is not handle for unit, handle in before.items())
     engine._teardown()
+
+
+# ---------------------------------------------------------------------------
+# Per-unit snapshot refresh: a re-apply / resync touches only its own scope's
+# conditions
+# ---------------------------------------------------------------------------
+
+
+class _CountingCondition:
+    """Entity condition that counts how often it is snapshotted."""
+
+    def __init__(self, entity_id: str, spec: TriggerSpec | None = None) -> None:
+        self._entity_id = entity_id
+        self._spec = spec
+        self.snapshots = 0
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if self._spec is not None:
+            return self._spec
+        return TriggerSpec(entities=frozenset({self._entity_id}))
+
+    async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+        self.snapshots += 1
+        state = hass.states.get(self._entity_id)
+        return state.state if state else None
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate == snapshot
+
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
+        return snapshot
+
+
+def _disjoint_scope_engine(hass, conditions: dict[str, Any], *, when_a: dict | None = None):
+    """Two scopes whose scenes use disjoint conditions ('ca' in area a, 'cb' in
+    area b), with idle re-apply enabled and both units already applied."""
+    scopes = [
+        (
+            "area",
+            "a",
+            {"scenes": [{"when": when_a or {"ca": "on"}, "category": "g", "actions": []}]},
+        ),
+        ("area", "b", {"scenes": [{"when": {"cb": "on"}, "category": "g", "actions": []}]}),
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes, reapply={"enabled": True, "interval_seconds": 3600}),
+        DATA_CONDITIONS: conditions,
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with(),
+        DATA_LAST_APPLIED: dict.fromkeys([("area", "a", "g"), ("area", "b", "g")], 0),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_reapply_due_refreshes_only_its_own_scopes_conditions(hass) -> None:
+    """An idle re-apply of one unit re-snapshots only the conditions that unit's
+    scenes read — an unrelated scope's conditions are left alone (N units must
+    not cost N full refreshes per interval)."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": cond_a, "cb": cond_b})
+
+    cond_a.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._reapply_due(("area", "a", "g"), 3600)
+
+    assert cond_a.snapshots == 1  # the re-applied unit's own condition
+    assert cond_b.snapshots == 0  # the unrelated scope's condition
+    engine._teardown()
+
+
+async def test_force_resync_scope_refreshes_only_its_own_scopes_conditions(hass) -> None:
+    """The switch off->on resync re-snapshots only the resumed scope's conditions."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": cond_a, "cb": cond_b})
+
+    cond_a.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._force_resync_scope(("area", "a"), "switch.ambience_a")
+
+    assert cond_a.snapshots == 1
+    assert cond_b.snapshots == 0
+    engine._teardown()
+
+
+async def test_reapply_due_refreshes_conditions_absent_from_the_index(hass) -> None:
+    """A predicate whose spec is EMPTY (nothing watchable) never enters the
+    index, but the resolve still reads its snapshot — so the per-unit refresh
+    must cover it, or the re-apply would resolve against a stale verdict."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    unwatched = _CountingCondition("binary_sensor.a", spec=TriggerSpec())
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": unwatched, "cb": cond_b}, when_a={"ca": "on"})
+    assert engine._index.all_predicates() == frozenset({("area", "b", 0, "cb")})
+
+    unwatched.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._reapply_due(("area", "a", "g"), 3600)
+
+    assert unwatched.snapshots == 1
+    assert cond_b.snapshots == 0
+    engine._teardown()
+
+
+async def test_condition_keys_for_skips_disabled_scenes_and_unknown_scopes(hass) -> None:
+    """A disabled scene is never evaluated, so its conditions are not part of the
+    scope's refresh set; a scope that no longer exists contributes nothing."""
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(
+        hass,
+        {"ca": cond_a, "cb": cond_b},
+        when_a={"ca": "on"},
+    )
+    store = hass.data[DOMAIN][DATA_STORE]
+    store._scopes[0][2]["scenes"].append(
+        {"when": {"cb": "on"}, "category": "g", "actions": [], "enabled": False}
+    )
+    engine.async_rebuild()
+
+    assert engine._condition_keys_for("area", "a") == {"ca"}
+    assert engine._condition_keys_for("area", "nope") == set()
+    engine._teardown()

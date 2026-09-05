@@ -27,6 +27,7 @@ from .const import (
     DATA_STORE,
     DOMAIN,
 )
+from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
     _scope_enabled,
@@ -333,6 +334,25 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))
+
+    def _condition_keys_for(self, scope_kind: str, scope_id: str | None) -> set[str]:
+        """The condition keys one scope's resolve will read.
+
+        Derived from the scope's scenes rather than from the index: the index
+        holds only predicates with something watchable, so a predicate whose
+        spec is EMPTY (nothing to subscribe to) is absent from it yet is still
+        evaluated — refreshing off the index would resolve such a scope against
+        a stale snapshot. A `None` predicate (wildcard) reads no snapshot, and a
+        disabled scene is skipped by the evaluation, so neither contributes.
+        """
+        cfg = self._scope_cfgs.get((scope_kind, scope_id)) or {}
+        return {
+            key
+            for scene in cfg.get("scenes", [])
+            if scene_enabled(scene)
+            for key, predicate in scene.get("when", {}).items()
+            if predicate is not None
+        }
 
     async def _resolve_and_apply(
         self,

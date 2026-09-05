@@ -8,6 +8,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- A damaged Ambience storage file is no longer overwritten with an empty
+    configuration on startup; it is left in place for recovery.
+
 ## [1.2.0] - 2026-09-04
 
 ### Added

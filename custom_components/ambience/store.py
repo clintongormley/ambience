@@ -100,6 +100,10 @@ class AmbienceStore:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
+        # Set when the on-disk payload was present but unreadable. While set,
+        # no automatic writer may persist: the degraded empty in-memory config
+        # must not replace the file the user still needs for recovery.
+        self._unreadable_payload = False
 
     def _notify_config_changed(self, affected: tuple[str, str | None] | None = None) -> None:
         """Tell the auto-trigger engine a config save happened, and narrow the
@@ -215,6 +219,8 @@ class AmbienceStore:
         descriptions unavailable this load), it no-ops *without* setting the
         flag, so a later load retries.
         """
+        if self._unreadable_payload:
+            return
         if self._data.get("builtins_labeled"):
             return
         if not labels:
@@ -235,6 +241,7 @@ class AmbienceStore:
 
     async def async_load(self) -> None:
         raw = await self._store.async_load()
+        self._unreadable_payload = False
         if raw is None:
             self._data = self._empty()
         elif not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
@@ -242,7 +249,10 @@ class AmbienceStore:
             self._data = self._empty()
             # Do NOT seed-and-save here: _ensure_builtin_actions persists, which
             # would overwrite the unreadable on-disk payload and destroy any
-            # chance of manual recovery / restore-from-backup.
+            # chance of manual recovery / restore-from-backup. The flag keeps
+            # every other automatic writer (label backfill, unload flush) off
+            # the file too; only an explicit user save may replace it.
+            self._unreadable_payload = True
             return
         else:
             self._data = raw
@@ -275,7 +285,12 @@ class AmbienceStore:
         writes immediately and cancels the pending delay/final-write listeners,
         so nothing survives the unload to recreate the file. On a reload it just
         persists the latest in-memory state, which is harmless.
+
+        Skipped when the loaded payload was unreadable: the in-memory state is
+        a degraded empty config and must not replace the file on disk.
         """
+        if self._unreadable_payload:
+            return
         await self._store.async_save(self._data)
 
     def as_dict(self) -> dict[str, Any]:

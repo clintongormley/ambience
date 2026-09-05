@@ -3,6 +3,7 @@ time-of-day periods, lux ranges, day, weather, and entity state options."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import voluptuous as vol
@@ -40,102 +41,71 @@ async def _ws_conditions_list(
     connection.send_result(msg["id"], result)
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/list"})
-@websocket_api.async_response
-async def _ws_periods_list(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    period_store = hass.data[DOMAIN][DATA_PERIODS]
-    connection.send_result(msg["id"], period_store.view_for_ui())
+# A registered handler, after @websocket_command/@async_response have wrapped it.
+_WsHandler = Callable[[HomeAssistant, websocket_api.ActiveConnection, dict[str, Any]], None]
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/time_of_day_periods/save",
-        vol.Required("custom"): dict,
-        vol.Required("hidden"): list,
-    }
+def _named_def_handlers(prefix: str, data_key: str) -> tuple[_WsHandler, _WsHandler, _WsHandler]:
+    """Build the list/save/reset handlers for one named-definition store under
+    `ambience/<prefix>/`, reading it from `hass.data[DOMAIN][data_key]`.
+
+    Time-of-day periods and lux ranges are the same thing in different units — a
+    map of user-named definitions plus a hidden set over the shipped built-ins —
+    and expose the same `view_for_ui` / `save` / `reset` surface, so one
+    implementation serves both and the two can't drift apart.
+    """
+
+    @websocket_api.require_admin
+    @websocket_api.websocket_command({vol.Required("type"): f"ambience/{prefix}/list"})
+    @websocket_api.async_response
+    async def _list(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        connection.send_result(msg["id"], hass.data[DOMAIN][data_key].view_for_ui())
+
+    @websocket_api.require_admin
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"ambience/{prefix}/save",
+            vol.Required("custom"): dict,
+            vol.Required("hidden"): list,
+        }
+    )
+    @websocket_api.async_response
+    async def _save(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        try:
+            await hass.data[DOMAIN][data_key].save(msg["custom"], msg["hidden"])
+        except (HomeAssistantError, ValueError) as exc:
+            send_ambience_error(connection, msg["id"], exc, code="validation_error")
+            return
+        connection.send_result(msg["id"], {"ok": True})
+
+    @websocket_api.require_admin
+    @websocket_api.websocket_command({vol.Required("type"): f"ambience/{prefix}/reset"})
+    @websocket_api.async_response
+    async def _reset(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        await hass.data[DOMAIN][data_key].reset()
+        connection.send_result(msg["id"], {"ok": True})
+
+    return _list, _save, _reset
+
+
+_ws_periods_list, _ws_periods_save, _ws_periods_reset = _named_def_handlers(
+    "time_of_day_periods", DATA_PERIODS
 )
-@websocket_api.async_response
-async def _ws_periods_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    period_store = hass.data[DOMAIN][DATA_PERIODS]
-    try:
-        await period_store.save(msg["custom"], msg["hidden"])
-    except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
-        return
-
-    connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/reset"})
-@websocket_api.async_response
-async def _ws_periods_reset(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    period_store = hass.data[DOMAIN][DATA_PERIODS]
-    await period_store.reset()
-    connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/lux_ranges/list"})
-@websocket_api.async_response
-async def _ws_lux_ranges_list(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
-    connection.send_result(msg["id"], lux_store.view_for_ui())
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/lux_ranges/save",
-        vol.Required("custom"): dict,
-        vol.Required("hidden"): list,
-    }
+_ws_lux_ranges_list, _ws_lux_ranges_save, _ws_lux_ranges_reset = _named_def_handlers(
+    "lux_ranges", DATA_LUX_RANGES
 )
-@websocket_api.async_response
-async def _ws_lux_ranges_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
-    try:
-        await lux_store.save(msg["custom"], msg["hidden"])
-    except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
-        return
-
-    connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/lux_ranges/reset"})
-@websocket_api.async_response
-async def _ws_lux_ranges_reset(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
-    await lux_store.reset()
-    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin

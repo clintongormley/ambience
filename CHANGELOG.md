@@ -41,6 +41,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Disabled scenes no longer run their script or template conditions.
 - A 'nobody home' condition no longer matches when Home Assistant has no
     persons at all.
+- A scene whose trigger entity vanished and later reappears is applied again
+    instead of being treated as already applied.
 
 ## [1.2.0] - 2026-09-04
 

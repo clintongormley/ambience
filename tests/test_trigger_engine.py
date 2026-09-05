@@ -2210,6 +2210,88 @@ async def test_dropout_suppresses_a_non_guard_fall_through_winner(hass) -> None:
     assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
+async def test_dropout_clears_a_stale_last_applied_but_lets_a_guard_act(hass) -> None:
+    """The drop-out guard suppresses ACTIONS only. It must not preserve a
+    last-applied record for a winner that is no longer winning: on a no-match the
+    record is dropped (so the scene re-applies when it wins again), while a winner
+    that IS an `unavailable` guard still acts and records itself."""
+    from custom_components.ambience.conditions.unavailable import UnavailableCondition
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    calls: list[str] = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append("turn_on"))
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.states.async_set("binary_sensor.x", "on")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {
+                        "when": {"unavailable": {"entities": ["binary_sensor.x"]}},
+                        "category": "g",
+                        "actions": act,
+                    },
+                    {"when": {"tod": "morning"}, "category": "g", "actions": act},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"unavailable": UnavailableCondition(hass=hass), "tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "a", "g"): 1},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_all_snapshots()
+
+    # Drop-out with nothing matching (sensor available, tod=evening): scene 1's
+    # stale record must go, so a later re-win of scene 1 is a real apply.
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="person.alice", old="not_home", new=None)
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+        assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]
+        assert calls == []  # suppression still means no actions ran
+
+        # The guard scene wins on its own drop-out: it acts and records itself.
+        hass.states.async_set("binary_sensor.x", "unavailable")
+        await engine._refresh_all_snapshots()
+        guard_cause = TriggerCause(
+            kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="on", new="unavailable"
+        )
+        result = await engine._resolve_and_apply("area", "a", "g", cause=guard_cause)
+        assert result is not None
+        assert result.outcome == Outcome.ACTED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert calls == ["turn_on"]
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_dropout_keeps_last_applied_when_the_same_scene_still_wins(hass) -> None:
+    """A drop-out whose resolved winner is the scene already applied keeps that
+    record: the unit has not moved on, so the blip must not arm a redundant
+    re-fire when the entity recovers."""
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}  # scene 0 is still the winner
+    hass.data[DOMAIN][DATA_LAST_APPLIED] = {("area", "a", "g"): 0}
+
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
 def test_winner_has_unavailable_guard_detection(hass) -> None:
     """`_winner_has_unavailable` is True only for a winner whose `when` carries a
     non-wildcard `unavailable` predicate; False for no winner, an unknown scope,
@@ -2555,6 +2637,33 @@ async def test_person_added_after_startup_is_watched_and_counted(hass) -> None:
     assert engine._predicate_state[key] is False  # someone IS home now
 
     # Bob leaves: the rebuilt watch covers him, so "nobody home" wins again.
+    hass.states.async_set("person.bob", "not_home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[key] is True
+    assert calls == ["turn_on", "turn_on"]
+    engine.async_shutdown()
+
+
+async def test_person_dropout_does_not_debounce_a_later_re_win(hass) -> None:
+    """A drop-out (the sole tracked person removed from HA) suppresses actions but
+    must not leave the vanished winner recorded as last-applied: when the same
+    scene wins again it is a real apply, not a debounced repeat."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    await engine.async_start()
+    assert calls == ["turn_on"]  # nobody home → scene 0 applied
+
+    # Alice is removed outright (a drop-out, not a state change); Bob arrives home.
+    hass.states.async_remove("person.alice")
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+
+    key = ("area", "a", 0, "people")
+    assert engine.index.entities == frozenset({"person.bob"})
+    assert engine._predicate_state[key] is False  # someone IS home now
+
+    # Bob leaves: "nobody home" (scene 0 again) must re-apply.
     hass.states.async_set("person.bob", "not_home")
     await hass.async_block_till_done()
     assert engine._predicate_state[key] is True

@@ -378,14 +378,20 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             # removed → cause.new is None): only an `unavailable`-guard winner may
             # act on it. A non-guard fall-through winner (or a no-match) is
             # suppressed so a sensor blip can't drive an unrelated scene — devices
-            # and last_applied are left untouched. The guard itself runs normally
-            # below (its actions, or its NO_OP block).
+            # are left untouched. The guard itself runs normally below (its
+            # actions, or its NO_OP block).
             if (
                 cause is not None
                 and cause.kind == CauseKind.ENTITY
                 and (cause.new in UNAVAILABLE or cause.new is None)
                 and not self._winner_has_unavailable(scope_kind, scope_id, index)
             ):
+                # Suppression covers actions only: a last-applied record for a scene
+                # that is no longer the winner would debounce that scene's next real
+                # win, so drop it. set_last_matched stays untouched below — the live
+                # dot deliberately does not react to a blip.
+                if index != get_last_applied(self._hass, scope_kind, scope_id, category_id):
+                    forget_last_applied(self._hass, scope_kind, scope_id, category_id)
                 if active:
                     return UnitTrace(
                         scope_kind,

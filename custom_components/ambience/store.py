@@ -591,6 +591,11 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
+        if self._unreadable_payload:
+            # Runtime state only: the switch reads the in-memory value above,
+            # and losing it costs nothing next to the damaged file a scheduled
+            # write would replace with the degraded empty config.
+            return
         # off_at is loss-tolerant runtime state, and a house toggle writes it
         # once per descendant switch — delay_save coalesces those N+1 writes
         # into one instead of serialising full-store saves.

@@ -44,3 +44,10 @@ def test_used_keys_extracts_delegated_key_kwarg():
     is a key reference too — otherwise those keys read as unused."""
     src = 'validate_entity_ids(sensors, "sensor", key="lux_sensors_not_list")\n'
     assert used_keys(src) == {"lux_sensors_not_list"}
+
+
+def test_used_keys_extracts_scope_table_not_found_keys():
+    """scopes.not_found_error raises on its caller's behalf, so the table's
+    `not_found_key=` literal is the key reference."""
+    src = 'ScopeKind(kind="area", not_found_key="unknown_area")\n'
+    assert used_keys(src) == {"unknown_area"}

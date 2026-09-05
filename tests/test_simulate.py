@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.ambience.conditions.script import ScriptCondition, _cache_key
 from custom_components.ambience.const import (
@@ -91,11 +92,23 @@ class _RecordingCondition:
         }
 
 
+class _EntityRegistry:
+    """Empty entity registry: no Ambience switch is registered in these stubs."""
+
+    def async_get_entity_id(self, domain, platform, unique_id):
+        return None
+
+
 class _Hass:
     def __init__(self, states):
         self.config = _Config()
         self.states = _States(states)
-        self.data = {DOMAIN: {DATA_CONDITIONS: {"recording": _RecordingCondition()}}}
+        self.data = {
+            DOMAIN: {DATA_CONDITIONS: {"recording": _RecordingCondition()}},
+            # The switch gate reads the entity registry when a scope's switch
+            # entity isn't loaded; er.async_get would build a real one here.
+            er.DATA_REGISTRY: _EntityRegistry(),
+        }
 
 
 def test_build_override_states_backdates_clock_for_for_duration():

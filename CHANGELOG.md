@@ -45,6 +45,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     instead of being treated as already applied.
 - Lux conditions accept any numeric sensor you pick, not only sensors declaring
     an illuminance device class.
+- Disabling a scope's Ambience switch entity in Home Assistant now pauses that
+    scope instead of leaving it always on.
 
 ## [1.2.0] - 2026-09-04
 

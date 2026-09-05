@@ -14,6 +14,7 @@ from dataclasses import replace
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
@@ -114,11 +115,28 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     registry not yet set up — simulations can run before switches register).
     Gating reads only the scope's own switch; parent toggles cascade state
     onto descendant switches at turn-on/off time (see switch.py), not here.
+
+    A switch the user disabled in the entity registry has no live entity, but
+    disabling it is how a user pauses the scope from Settings -> Entities, so a
+    registered-but-disabled entry reads 'off'. Only a genuinely unregistered
+    switch is 'unknown'.
     """
     switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
-    if switch is None:
+    if switch is not None:
+        return "on" if switch.is_on else "off"
+
+    # Imported lazily: switch.py pulls in the HA switch platform, which the
+    # modules importing service.py must not load just to read this gate.
+    from .switch import switch_unique_id
+
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id(
+        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
+    )
+    entry = ent_reg.async_get(entity_id) if entity_id is not None else None
+    if entry is None:
         return "unknown"
-    return "on" if switch.is_on else "off"
+    return "off" if entry.disabled_by is not None else "unknown"
 
 
 def _scope_enabled(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:

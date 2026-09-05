@@ -30,6 +30,7 @@ from .const import (
 )
 from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
+from .scopes import iter_scope_kinds, scope_spec
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class _CancellableTimer:
 def switch_unique_id(scope_kind: str, scope_id: str | None) -> str:
     """Deterministic unique_id for a scope's switch entity. Shared with the
     websocket layer so it can look the entity up to enable/disable it."""
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return "ambience_switch_house"
     return f"ambience_switch_{scope_kind}_{scope_id}"
 
@@ -117,16 +118,18 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     """
     if unique_id == "ambience_switch_house":
         return ("house", None)
-    for scope_kind in ("area", "floor"):
-        prefix = f"ambience_switch_{scope_kind}_"
+    for spec in iter_scope_kinds():
+        if not spec.has_id:
+            continue
+        prefix = f"ambience_switch_{spec.kind}_"
         if unique_id.startswith(prefix):
-            return (scope_kind, unique_id[len(prefix) :])
+            return (spec.kind, unique_id[len(prefix) :])
     return None
 
 
 def _device_identifier(scope_kind: str, scope_id: str | None) -> tuple[str, str]:
     """The single device-registry identifier for a scope's device."""
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return (DOMAIN, "ambience")
     return (DOMAIN, f"{scope_kind}_{scope_id}")
 
@@ -136,14 +139,15 @@ def _device_identifiers(scope_kind: str, scope_id: str | None) -> set[tuple[str,
     return {_device_identifier(scope_kind, scope_id)}
 
 
+# A floor's entity_id carries an extra `_floor` segment so a floor and an area
+# with the same name don't collide on the slug.
+_ENTITY_ID_INFIX = {"floor": "_floor"}
+
+
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return "switch.house_ambience"
-    if scope_kind == "floor":
-        # Suffix with `_floor_ambience` so a floor and an area with the same
-        # name don't collide on the entity_id slug.
-        return f"switch.{slugify(display_name)}_floor_ambience"
-    return f"switch.{slugify(display_name)}_ambience"
+    return f"switch.{slugify(display_name)}{_ENTITY_ID_INFIX.get(scope_kind, '')}_ambience"
 
 
 def _remove_scope_device(
@@ -161,13 +165,11 @@ def make_scope_switch(
 ) -> AmbienceScopeSwitch:
     """Build a switch for a scope, resolving its display name from the registry.
     Used by the platform setup and the runtime create-on-enable path."""
-    if scope_kind == "house":
+    spec = scope_spec(scope_kind)
+    if spec.registry_lookup is None:
         return AmbienceScopeSwitch("house", None, "house")
-    if scope_kind == "floor":
-        floor = fr.async_get(hass).async_get_floor(scope_id)
-        return AmbienceScopeSwitch("floor", scope_id, floor.name if floor else str(scope_id))
-    area = ar.async_get(hass).async_get_area(scope_id)
-    return AmbienceScopeSwitch("area", scope_id, area.name if area else str(scope_id))
+    entry = spec.registry_lookup(hass, scope_id)
+    return AmbienceScopeSwitch(scope_kind, scope_id, entry.name if entry else str(scope_id))
 
 
 def _desired_switch_scopes(hass: HomeAssistant, store: Any) -> set[tuple[str, str | None]]:

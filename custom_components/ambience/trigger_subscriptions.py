@@ -255,9 +255,9 @@ class TriggerSubscriptionsMixin:
         re-snapshotted: re-applying one unit must not cost a full refresh, or N
         idle units cost N full refreshes per interval. A successful dispatch re-emits
         SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip dispatches nothing, so
-        the timer stays dead until the next real apply re-arms it. The `_running`
-        guard lives in `_make_reapply_due` (before the task is created) and timers
-        are cancelled on disable/teardown."""
+        the timer stays dead until the next real apply or the next resubscribe
+        re-arms it. The `_running` guard lives in `_make_reapply_due` (before the
+        task is created) and timers are cancelled on disable/teardown."""
         scope_kind, scope_id, _category = unit
         if not _scope_enabled(self._hass, scope_kind, scope_id) or (
             _switch_state(self._hass, scope_kind, scope_id) == "off"

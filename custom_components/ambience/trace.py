@@ -1,8 +1,8 @@
 """Evaluation tracing: cause/unit/event types, log formatting, and sinks.
 
 `emit_trace` is the fan-out seam: a LogSink writes to the HA log, and a
-BufferSink (Increment B) retains recent evaluations in memory for the websocket
-read API. New sinks plug in here without re-instrumenting the engine.
+BufferSink retains recent evaluations in memory for the websocket read API. New
+sinks plug in here without re-instrumenting the engine.
 """
 
 from __future__ import annotations

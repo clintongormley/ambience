@@ -53,8 +53,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     at all.
 - A scene whose trigger entity vanished and later reappears is applied again
     instead of being treated as already applied.
-- Lux conditions accept any numeric sensor you pick, not only sensors declaring
-    an illuminance device class.
+- Lux conditions no longer ignore a configured sensor that declares no
+    illuminance device class.
 - Disabling a scope's Ambience switch entity in Home Assistant now pauses that
     scope instead of leaving it always on.
 - The live 'matched' indicator updates after a manual Apply.

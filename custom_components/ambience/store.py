@@ -249,8 +249,9 @@ class AmbienceStore:
             # Do NOT seed-and-save here: _ensure_builtin_actions persists, which
             # would overwrite the unreadable on-disk payload and destroy any
             # chance of manual recovery / restore-from-backup. The flag keeps
-            # every other automatic writer (label backfill, unload flush) off
-            # the file too; only an explicit user save may replace it.
+            # every other automatic writer (label backfill, unload flush,
+            # switch off_at) off the file too; only an explicit user save may
+            # replace it.
             self._unreadable_payload = True
             return
         else:

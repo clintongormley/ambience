@@ -15,6 +15,7 @@ the dependency info — the trigger engine can later read it for free.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -107,6 +108,15 @@ class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
             return ""
         tmpl = predicate.get("template")
         return tmpl if isinstance(tmpl, str) else ""
+
+    def snapshot_from_results(self, results: dict[str, bool]) -> TemplateSnapshot:
+        # No `deps`: a forced verdict is a leaf, watched by nothing.
+        return TemplateSnapshot(results=dict(results))
+
+    def verdict_label(self, predicate: Any, scene: Mapping[str, Any]) -> tuple[str | None, str]:
+        """A template names no entity, so the owning scene is the only handle a
+        user recognises."""
+        return None, scene.get("name") or "Template"
 
     # --- trigger dependencies ---------------------------------------------
 

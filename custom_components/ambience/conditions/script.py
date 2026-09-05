@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from time import monotonic as _monotonic
 from typing import Any
@@ -109,6 +110,17 @@ class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
         if not isinstance(script, str) or not isinstance(args, dict):
             return ""
         return _cache_key(script, args)
+
+    def snapshot_from_results(self, results: dict[str, bool]) -> ScriptSnapshot:
+        return ScriptSnapshot(results=dict(results))
+
+    def verdict_label(self, predicate: Any, scene: Mapping[str, Any]) -> tuple[str | None, str]:
+        """The script's own entity_id names the knob and is what it links to;
+        a malformed predicate has neither, so the knob reads generically."""
+        script = predicate.get("script")
+        if not isinstance(script, str):
+            return None, self.name
+        return script, script
 
     # --- trigger dependencies ---------------------------------------------
 

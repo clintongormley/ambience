@@ -1,10 +1,12 @@
 """What-if simulator core."""
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from homeassistant.helpers import entity_registry as er
 
+from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.conditions.script import ScriptCondition, _cache_key
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
@@ -12,7 +14,6 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
-from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.simulate import (
     SimulatedWorld,
@@ -26,7 +27,6 @@ from custom_components.ambience.simulate import (
     _simulate_outcome,
     _SimulatedHass,
     _SimulatedStates,
-    _verdict_snapshot,
     build_simulated_snapshots,
     run_simulation,
     simulate_inputs,
@@ -880,24 +880,21 @@ async def test_build_simulated_snapshots_honours_explicit_sun_override():
     assert sun.attributes.get("elevation") == 45.0
 
 
-# --- _verdict_snapshot: template path and unknown key raise (lines 123-125) ---
+# --- opaque snapshots come from verdicts: the template path ---
 
 
-def test_verdict_snapshot_template_returns_template_snapshot():
-    """_verdict_snapshot('template', ...) returns a TemplateSnapshot with the given results."""
-    from custom_components.ambience.conditions.template import TemplateSnapshot
+@pytest.mark.asyncio
+async def test_build_simulated_snapshots_uses_verdicts_for_template():
+    """Template verdicts become a TemplateSnapshot carrying exactly those results."""
+    from custom_components.ambience.conditions.template import TemplateCondition, TemplateSnapshot
 
-    snap = _verdict_snapshot("template", {"tmpl_key": True})
+    hass = _Hass([])
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"template": TemplateCondition(hass)}}
+    world = SimulatedWorld(now=FIXED, verdicts={"template": {"tmpl_key": True}})
+
+    snap = (await build_simulated_snapshots(hass, world))["template"]
     assert isinstance(snap, TemplateSnapshot)
     assert snap.results == {"tmpl_key": True}
-
-
-def test_verdict_snapshot_unknown_key_raises():
-    """_verdict_snapshot raises AmbienceError for an unrecognised condition key."""
-    with pytest.raises(AmbienceError) as exc_info:
-        _verdict_snapshot("unknown_opaque", {})
-    assert exc_info.value.translation_key == "no_verdict_snapshot"
-    assert exc_info.value.translation_placeholders == {"condition_key": "unknown_opaque"}
 
 
 # --- build_simulated_snapshots: snapshot exception degrades to None (lines 148-149) ---
@@ -1013,7 +1010,7 @@ def test_entity_knob_falls_back_to_text_when_no_state_and_no_options():
     assert "options" not in knob
 
 
-# --- _verdict_identity: template path (line 319) ---
+# --- verdict_label: the template path (scene name, no entity) ---
 
 
 @pytest.mark.asyncio
@@ -1243,3 +1240,85 @@ def test_simulate_outcome_new_winner_acts():
     from custom_components.ambience.trace import Outcome
 
     assert _simulate_outcome(5, 2, True, None) == (Outcome.ACTED, 2)
+
+
+# ---------------------------------------------------------------------------
+# Opaqueness is a type, not a name: a condition the simulator has never heard
+# of is driven by verdicts purely by virtue of subclassing the opaque base.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _FakeSnapshot:
+    results: dict[str, bool] = field(default_factory=dict)
+
+
+class _FakeOpaqueCondition(OpaquePrecomputedCondition[_FakeSnapshot]):
+    """A third opaque condition, registered like any built-in."""
+
+    name = "fake_opaque"
+    priority = 900
+
+    def __init__(self, hass=None, live: dict[str, bool] | None = None) -> None:
+        super().__init__(hass)
+        self.live = live
+
+    def result_key(self, predicate):
+        thing = predicate.get("thing") if isinstance(predicate, dict) else None
+        return thing if isinstance(thing, str) else ""
+
+    def snapshot_from_results(self, results):
+        return _FakeSnapshot(results=dict(results))
+
+    def verdict_label(self, predicate, scene):
+        return None, "Fake"
+
+    async def _compute(self, hass, keys, previous):
+        if self.live is None:
+            raise AssertionError("live snapshot must not run for an opaque condition")
+        return _FakeSnapshot(results=dict(self.live))
+
+
+class _StoreF:
+    def __init__(self, scenes):
+        self._scenes = scenes
+
+    def scope_config(self, sk, si):
+        return {"scenes": self._scenes}
+
+    def get_condition_config(self, name):
+        return {"entity": None, "groups": []} if name == "weather" else {}
+
+
+@pytest.mark.asyncio
+async def test_build_simulated_snapshots_drives_any_opaque_subclass_by_verdicts():
+    """An unrecognised opaque condition is snapshotted from verdicts, not run live."""
+    hass = _Hass([])
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"fake_opaque": _FakeOpaqueCondition(hass)}}
+    world = SimulatedWorld(now=FIXED, verdicts={"fake_opaque": {"k": True}})
+
+    snaps = await build_simulated_snapshots(hass, world)
+    assert isinstance(snaps["fake_opaque"], _FakeSnapshot)
+    assert snaps["fake_opaque"].results == {"k": True}
+
+
+@pytest.mark.asyncio
+async def test_verdict_knobs_cover_any_opaque_subclass():
+    """An unrecognised opaque condition gets a verdict knob, seeded from its live value."""
+    scenes = [{"category": "g1", "name": "Fake scene", "when": {"fake_opaque": {"thing": "k"}}}]
+    hass = _Hass([])
+    hass.data[DOMAIN] = {
+        DATA_CONDITIONS: {"fake_opaque": _FakeOpaqueCondition(hass, live={"k": True})},
+        DATA_STORE: _StoreF(scenes),
+    }
+
+    result = await simulate_inputs(hass, "area", "kitchen", "g1")
+    verdicts = [k for k in result["knobs"] if k["kind"] == "verdict"]
+    assert len(verdicts) == 1
+    assert verdicts[0] == {
+        "kind": "verdict",
+        "condition": "fake_opaque",
+        "key": "k",
+        "label": "Fake",
+        "live_value": True,
+    }

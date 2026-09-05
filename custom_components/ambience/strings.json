@@ -143,7 +143,6 @@
     "scene_index_out_of_range": { "message": "scene_index out of range: {scene_index}" },
     "scope_selector_invalid": { "message": "{command} requires exactly one of area_id/floor_id/house, got: {present}" },
     "invalid_service_id_format": { "message": "Service id must be domain.service: {service_id}" },
-    "no_verdict_snapshot": { "message": "No verdict snapshot for opaque condition {condition_key}" },
     "unknown_service": { "message": "Unknown service: {service}" },
     "category_id_empty": { "message": "Category id must be a non-empty string." },
     "duplicate_category_id": { "message": "Duplicate category id: {cid}" },

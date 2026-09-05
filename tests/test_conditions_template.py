@@ -397,3 +397,29 @@ async def test_full_refresh_drops_a_key_no_longer_referenced(hass: HomeAssistant
     full = await cond.snapshot(hass)
     assert full.results == {a: True}
     assert set(full.deps) == {a}
+
+
+# --- verdict plumbing: the simulator's two hooks on the opaque base -----------
+
+
+def test_snapshot_from_results_builds_a_template_snapshot() -> None:
+    """Forced verdicts become a complete TemplateSnapshot (results is a copy)."""
+    results = {"{{ true }}": True}
+    snap = TemplateCondition().snapshot_from_results(results)
+    assert isinstance(snap, TemplateSnapshot)
+    assert snap.results == results
+    assert snap.results is not results
+    assert snap.deps == {}
+
+
+def test_verdict_label_names_the_scene() -> None:
+    """A template has no entity behind it, so its knob is named after the scene."""
+    entity_id, label = TemplateCondition().verdict_label(
+        {"template": "{{ true }}"}, {"name": "Is daytime"}
+    )
+    assert (entity_id, label) == (None, "Is daytime")
+
+
+def test_verdict_label_falls_back_for_an_unnamed_scene() -> None:
+    """An unnamed scene leaves nothing to name the knob after."""
+    assert TemplateCondition().verdict_label({"template": "{{ true }}"}, {}) == (None, "Template")

@@ -593,3 +593,28 @@ async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
         _cache_key("script.one", {}): True,
         _cache_key("script.two", {}): False,
     }
+
+
+# --- verdict plumbing: the simulator's two hooks on the opaque base -----------
+
+
+def test_snapshot_from_results_builds_a_script_snapshot() -> None:
+    """Forced verdicts become a complete ScriptSnapshot (results is a copy)."""
+    results = {_cache_key("script.holiday", {}): True}
+    snap = ScriptCondition().snapshot_from_results(results)
+    assert isinstance(snap, ScriptSnapshot)
+    assert snap.results == results
+    assert snap.results is not results
+
+
+def test_verdict_label_names_the_script_entity() -> None:
+    """A script predicate's knob is labelled by — and links to — the script."""
+    entity_id, label = ScriptCondition().verdict_label(
+        {"script": "script.holiday"}, {"name": "Holiday"}
+    )
+    assert (entity_id, label) == ("script.holiday", "script.holiday")
+
+
+def test_verdict_label_falls_back_when_the_script_is_missing() -> None:
+    """A malformed predicate has no entity to link, so the knob is generic."""
+    assert ScriptCondition().verdict_label({}, {"name": "Holiday"}) == (None, "script")

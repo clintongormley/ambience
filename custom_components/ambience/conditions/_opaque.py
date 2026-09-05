@@ -27,8 +27,11 @@ class OpaquePrecomputedCondition[SnapshotT]:
     through ``snapshot`` / ``_compute`` / ``_previous``.
 
     Subclasses set the protocol attributes
-    (``name``/``input``/``priority``/…), implement ``result_key`` and
-    ``_compute``, and call ``_distinct_keys`` to gather their work items."""
+    (``name``/``input``/``priority``/…), implement ``result_key``, ``_compute``,
+    ``snapshot_from_results`` and ``verdict_label``, and call ``_distinct_keys``
+    to gather their work items. Subclassing this base is what marks a condition
+    opaque: the simulator detects it by type and drives it with user verdicts
+    instead of snapshotting it against the hypothetical world."""
 
     # Set by each subclass; used by `_distinct_keys` to pick the right predicates.
     name: str
@@ -52,6 +55,20 @@ class OpaquePrecomputedCondition[SnapshotT]:
         """The key a predicate's pre-computed result is stored under in the
         snapshot, or "" if malformed. Shared by ``matches`` and the simulator's
         verdict knobs so both agree on identity."""
+        raise NotImplementedError  # pragma: no cover
+
+    def snapshot_from_results(self, results: dict[str, bool]) -> SnapshotT:
+        """A complete snapshot built from forced per-key verdicts, for the
+        what-if simulator: an opaque predicate can't be re-run against a
+        hypothetical world, so the user supplies its result directly. Every
+        opaque snapshot is a ``results`` map ``matches()`` looks up, so a verdict
+        map is the whole snapshot."""
+        raise NotImplementedError  # pragma: no cover
+
+    def verdict_label(self, predicate: Any, scene: Mapping[str, Any]) -> tuple[str | None, str]:
+        """``(entity_id | None, label)`` for one predicate's simulator verdict
+        knob: the entity the knob should link to, if the predicate names one,
+        and the text identifying it to the user."""
         raise NotImplementedError  # pragma: no cover
 
     def matches(self, predicate: Any, snapshot: Any) -> bool:

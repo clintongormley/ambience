@@ -2292,6 +2292,38 @@ async def test_dropout_keeps_last_applied_when_the_same_scene_still_wins(hass) -
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
 
 
+async def test_dropout_to_a_different_suppressed_winner_keeps_last_applied(hass) -> None:
+    """A drop-out that merely *resolves* to a different winner changed no devices,
+    so the record of what IS applied survives it: when the entity recovers and the
+    applied scene wins again, the re-fire is still debounced."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}
+    await engine._resolve_and_apply("area", "a", "g")  # scene 0 applied for real
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        # Drop-out resolving to scene 1: suppressed, so the devices still hold scene 0.
+        engine._snapshots = {"tod": "morning"}
+        cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+
+        # Recovery: scene 0 wins again and is already applied → no redundant re-fire.
+        engine._snapshots = {"tod": "evening"}
+        recovery = TriggerCause(
+            kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="unavailable", new="off"
+        )
+        result = await engine._resolve_and_apply("area", "a", "g", cause=recovery)
+        assert result is not None
+        assert result.outcome == Outcome.DEBOUNCED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
 def test_winner_has_unavailable_guard_detection(hass) -> None:
     """`_winner_has_unavailable` is True only for a winner whose `when` carries a
     non-wildcard `unavailable` predicate; False for no winner, an unknown scope,
@@ -2619,10 +2651,9 @@ async def test_person_added_after_startup_is_watched_and_counted(hass) -> None:
     assert engine.index.entities == frozenset({"person.alice"})
     assert calls == ["turn_on"]  # nobody home → scene 0 applied
 
-    # Alice comes home first: the win is released normally (a no-match clears the
-    # last-applied record), so the later re-win below is a real apply and not a
-    # debounce. Removing her instead would be an entity drop-out, which leaves
-    # last_applied untouched by design.
+    # Alice comes home first, so the win is released by a normal no-match. Removing
+    # her instead makes it a drop-out, covered by
+    # test_person_dropout_does_not_debounce_a_later_re_win.
     hass.states.async_set("person.alice", "home")
     await hass.async_block_till_done()
     assert engine._predicate_state[("area", "a", 0, "people")] is False

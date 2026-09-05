@@ -386,11 +386,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 and (cause.new in UNAVAILABLE or cause.new is None)
                 and not self._winner_has_unavailable(scope_kind, scope_id, index)
             ):
-                # Suppression covers actions only: a last-applied record for a scene
-                # that is no longer the winner would debounce that scene's next real
-                # win, so drop it. set_last_matched stays untouched below — the live
-                # dot deliberately does not react to a blip.
-                if index != get_last_applied(self._hass, scope_kind, scope_id, category_id):
+                # Suppression covers actions only: with the winner gone entirely, a
+                # surviving last-applied record would debounce that scene's next real
+                # win. A different (merely suppressed) winner leaves the record alone
+                # — the devices still hold the recorded scene.
+                if index is None:
                     forget_last_applied(self._hass, scope_kind, scope_id, category_id)
                 if active:
                     return UnitTrace(

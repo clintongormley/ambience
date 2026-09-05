@@ -98,6 +98,9 @@ class _EntityRegistry:
     def async_get_entity_id(self, domain, platform, unique_id):
         return None
 
+    def async_get(self, entity_id):
+        return None
+
 
 class _Hass:
     def __init__(self, states):

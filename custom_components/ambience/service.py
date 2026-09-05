@@ -35,6 +35,7 @@ from .engine import evaluate_explained, resolve
 from .errors import service_validation_error
 from .scope_triggers import referenced_entities
 from .service_logbook import log_apply, log_run_actions
+from .switch import switch_unique_id
 from .trace import (
     CauseKind,
     Outcome,
@@ -124,10 +125,6 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
     if switch is not None:
         return "on" if switch.is_on else "off"
-
-    # Imported lazily: switch.py pulls in the HA switch platform, which the
-    # modules importing service.py must not load just to read this gate.
-    from .switch import switch_unique_id
 
     ent_reg = er.async_get(hass)
     entity_id = ent_reg.async_get_entity_id(

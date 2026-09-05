@@ -282,6 +282,8 @@ async def test_unregistered_switch_stays_unknown(hass, mock_config_entry):
     ent_id = ent_reg.async_get_entity_id("switch", DOMAIN, switch_unique_id("area", area_id))
     assert ent_id is not None
     ent_reg.async_remove(ent_id)
-    hass.data[DOMAIN][DATA_SWITCHES].pop(("area", area_id), None)
+    await hass.async_block_till_done()
+    # Removing the registry entry unloads the entity, clearing DATA_SWITCHES.
+    assert ("area", area_id) not in hass.data[DOMAIN][DATA_SWITCHES]
 
     assert _switch_state(hass, "area", area_id) == "unknown"

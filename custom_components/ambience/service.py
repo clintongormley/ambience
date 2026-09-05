@@ -442,6 +442,8 @@ async def async_resolve_and_apply_unit(
     not veto), the unavailable drop-out and the last-applied debounce, and it
     describes the snapshots for the no-match log. `force` re-applies an unchanged
     winner (an engine reload of edited scenes) without lifting the switch gate.
+    Either way the unit's matched scene is recorded, so the live "matched" state
+    tracks every resolution, manual applies included.
 
     `cause` drives the drop-out suppression: when the fire came from an entity
     going unavailable/removed, only an `unavailable`-guard winner (per
@@ -516,14 +518,12 @@ async def async_resolve_and_apply_unit(
             # A no-match is a transition away from the previous winner: drop
             # the last-applied record so a later win of the same scene re-applies.
             forget_last_applied(hass, scope_kind, scope_id, category_id)
-            if not manual:
-                set_last_matched(hass, scope_kind, scope_id, category_id, None)
+            set_last_matched(hass, scope_kind, scope_id, category_id, None)
             return trace(Outcome.NO_MATCH, explanation)
         # Record the current winner before any action runs (covers no-op /
         # debounce / acted). The unavailable-drop-out above intentionally does
         # not reach here, so a sensor blip leaves the dot untouched.
-        if not manual:
-            set_last_matched(hass, scope_kind, scope_id, category_id, index)
+        set_last_matched(hass, scope_kind, scope_id, category_id, index)
         if not plan["actions"]:
             # A pure blocker (winner with no actions): nothing to run, and it
             # stays transparent to last-applied so it neither records itself nor

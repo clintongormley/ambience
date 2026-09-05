@@ -51,6 +51,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     an illuminance device class.
 - Disabling a scope's Ambience switch entity in Home Assistant now pauses that
     scope instead of leaving it always on.
+- The live 'matched' indicator updates after a manual Apply.
 
 ### Performance
 

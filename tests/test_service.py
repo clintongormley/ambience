@@ -32,6 +32,8 @@ from custom_components.ambience.service import (
     attach_tenure,
     category_ids,
     clear_last_applied,
+    get_last_matched,
+    set_last_matched,
     snapshot_conditions,
 )
 from custom_components.ambience.trace import TraceEvent
@@ -844,6 +846,68 @@ async def test_apply_scene_records_last_applied_scene(hass: HomeAssistant) -> No
     }
     await async_apply_scene(hass, "area", "a")
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 0
+
+
+async def test_apply_scene_records_last_matched(hass: HomeAssistant) -> None:
+    """A manual apply records the winner as the unit's matched scene, so the live
+    'matched' dot agrees with what the manual apply just resolved."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                },
+                {
+                    "name": "evening",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.b"], "params": {}}
+                    ],
+                },
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert get_last_matched(hass, "area", "a", "lighting") == 1
+
+
+async def test_apply_scene_no_match_clears_last_matched(hass: HomeAssistant) -> None:
+    """A manual apply that resolves to nothing clears the unit's matched scene."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    set_last_matched(hass, "area", "a", "lighting", 0)
+
+    await async_apply_scene(hass, "area", "a")
+
+    assert get_last_matched(hass, "area", "a", "lighting") is None
 
 
 async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:

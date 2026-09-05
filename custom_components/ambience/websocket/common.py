@@ -141,7 +141,5 @@ def _require_scope(
     `setdefault` a junk bucket for)."""
     if _scope_exists(hass, scope_kind, scope_id):
         return True
-    send_ambience_error(
-        connection, msg["id"], not_found_error(scope_kind, scope_id), code="validation_error"
-    )
+    send_ambience_error(connection, msg["id"], not_found_error(scope_kind, scope_id))
     return False

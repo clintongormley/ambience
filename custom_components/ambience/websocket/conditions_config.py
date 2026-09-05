@@ -82,7 +82,7 @@ def _named_def_handlers(prefix: str, data_key: str) -> tuple[_WsHandler, _WsHand
         try:
             await hass.data[DOMAIN][data_key].save(msg["custom"], msg["hidden"])
         except (HomeAssistantError, ValueError) as exc:
-            send_ambience_error(connection, msg["id"], exc, code="validation_error")
+            send_ambience_error(connection, msg["id"], exc)
             return
         connection.send_result(msg["id"], {"ok": True})
 
@@ -172,7 +172,7 @@ async def _ws_weather_config_save(
     try:
         groups = validate_weather_groups(msg.get("groups"))
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]

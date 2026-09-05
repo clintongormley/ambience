@@ -40,7 +40,7 @@ async def _ws_scope_diagnostics(
     try:
         result = scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], result)
 
@@ -66,7 +66,7 @@ async def _ws_simulate_inputs(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]
         )
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], result)
 
@@ -115,7 +115,6 @@ async def _ws_simulate(
             connection,
             msg["id"],
             AmbienceError("unparseable_now", now=msg["now"]),
-            code="validation_error",
         )
         return
     if now.tzinfo is None:
@@ -125,7 +124,6 @@ async def _ws_simulate(
             connection,
             msg["id"],
             AmbienceError("now_not_timezone_aware", now=msg["now"]),
-            code="validation_error",
         )
         return
     world = SimulatedWorld(
@@ -143,7 +141,7 @@ async def _ws_simulate(
             prev_applied=msg.get("prev_applied"),
         )
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], {"result": result, "applied_index": applied_index})
 
@@ -166,6 +164,6 @@ async def _ws_simulate_sun_anchors(
     try:
         anchors = sun_anchors(hass, msg["date"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], {"anchors": anchors})

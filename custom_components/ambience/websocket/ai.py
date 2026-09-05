@@ -93,7 +93,7 @@ async def _ws_services_get_schema(
     try:
         schema = await get_service_schema(hass, msg["service"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     if schema is None:
         send_ambience_error(
@@ -137,7 +137,7 @@ async def _ws_exposed_actions_save(
         exposed_store.validate_shape(actions)
         await exposed_store.validate_against_catalog(hass, actions)
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
 
     await exposed_store.save(actions)

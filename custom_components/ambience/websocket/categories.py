@@ -122,6 +122,6 @@ async def _ws_categories_delete(
         send_ambience_error(connection, msg["id"], exc, code="category_in_use")
         return
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"])

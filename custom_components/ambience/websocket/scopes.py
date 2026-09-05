@@ -76,6 +76,22 @@ async def _ws_floors_list(
     connection.send_result(msg["id"], result)
 
 
+def _get_scope(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    scope_kind: str,
+    scope_id: str | None,
+) -> None:
+    """The shared read behind the three scope-get commands, mirroring
+    `_save_scope`'s write (the caller has already verified the scope exists).
+    A scope with no stored config reads back as an empty scene list, so the
+    editor opens on a blank scope rather than an error."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    config = store.scope_config(scope_kind, scope_id) or {"scenes": []}
+    connection.send_result(msg["id"], annotate_scenes(hass, config))
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -92,9 +108,7 @@ async def _ws_area_get(
     area_id = msg["area_id"]
     if not _require_scope(hass, connection, msg, "area", area_id):
         return
-    store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(area_id) or {"scenes": []}
-    connection.send_result(msg["id"], annotate_scenes(hass, area))
+    _get_scope(hass, connection, msg, "area", area_id)
 
 
 async def _save_scope(
@@ -111,7 +125,7 @@ async def _save_scope(
     try:
         validate_scope_config(hass, msg["config"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
@@ -173,9 +187,7 @@ async def _ws_floor_get(
     floor_id = msg["floor_id"]
     if not _require_scope(hass, connection, msg, "floor", floor_id):
         return
-    store = hass.data[DOMAIN][DATA_STORE]
-    cfg = store.get_floor(floor_id) or {"scenes": []}
-    connection.send_result(msg["id"], annotate_scenes(hass, cfg))
+    _get_scope(hass, connection, msg, "floor", floor_id)
 
 
 @websocket_api.require_admin
@@ -208,9 +220,7 @@ async def _ws_house_get(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    house = store.get_house() or {"scenes": []}
-    connection.send_result(msg["id"], annotate_scenes(hass, house))
+    _get_scope(hass, connection, msg, "house", None)
 
 
 @websocket_api.require_admin
@@ -247,7 +257,7 @@ async def _ws_validate(
     try:
         validate_scope_config(hass, msg["config"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], {"ok": True})
 
@@ -279,7 +289,7 @@ async def _ws_auto_triggers_list(
     try:
         cfg = store.scope_config(msg["scope_kind"], msg.get("scope_id"))
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     category = msg.get("category")
     if category is not None:
@@ -336,7 +346,7 @@ async def _ws_dry_run(
             result = redact_plan(result)
             result["categories"] = redacted_categories
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], result)
 
@@ -361,7 +371,7 @@ async def _ws_apply(
             hass, scope_kind, scope_id, category=msg.get("category_id"), force=True
         )
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], {"ok": True})
 
@@ -384,7 +394,7 @@ async def _ws_run_scene_actions(
         scope_kind, scope_id = _parse_scope(msg, "run_actions")
         result = await async_run_scene_actions(hass, scope_kind, scope_id, msg["scene_index"])
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     connection.send_result(msg["id"], result)
 
@@ -428,7 +438,7 @@ async def _ws_set_scope_enabled(
     try:
         scope_kind, scope_id = _parse_scope(msg, "set_scope_enabled")
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     # Validate the id against the registry (like the save handlers): the store
     # setdefaults a scope bucket, so a typo'd/stale id would persist junk.
@@ -486,7 +496,7 @@ async def _ws_switch_defaults_save(
             }
         )
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})
@@ -523,7 +533,7 @@ async def _ws_reapply_save(
             {"enabled": msg["enabled"], "interval_seconds": msg["interval_seconds"]}
         )
     except (HomeAssistantError, ValueError) as exc:
-        send_ambience_error(connection, msg["id"], exc, code="validation_error")
+        send_ambience_error(connection, msg["id"], exc)
         return
     async_dispatcher_send(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})

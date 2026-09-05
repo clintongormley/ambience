@@ -162,6 +162,13 @@ class PeopleCondition:
         tenure (the legacy/fallback clock). `seconds=0` yields the instant test.
         `mode` ("at_least" default / "less_than") selects the `for` comparator."""
         person_ids = list(who) if who else list(snapshot.persons)
+        if not person_ids:
+            # No persons to test: the location test is unobservable, so every
+            # quantifier is False. `nobody` is deliberately NOT vacuously true
+            # here — a "nobody home" scene must not fire on a Home Assistant
+            # that tracks no persons at all, where there is no evidence either
+            # way.
+            return False
 
         def holds(pid: str, want_at: bool) -> bool:
             cur = snapshot.persons.get(pid)
@@ -182,7 +189,7 @@ class PeopleCondition:
             )
 
         if quant == "everyone":
-            return bool(person_ids) and all(holds(p, True) for p in person_ids)
+            return all(holds(p, True) for p in person_ids)
         if quant == "nobody":
             return all(holds(p, False) for p in person_ids)
         # "any" (default)

@@ -1028,6 +1028,9 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
         DATA_LAST_APPLIED: {},
     }
+    # Bob exists before the rebuild so the wildcard `who` enumerates him: with no
+    # persons at all the location test is unobservable and no tenure is recorded.
+    hass.states.async_set("person.bob", "ZoneA", {"in_zones": ["zone.a"]})
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
     engine.async_subscribe()
@@ -1035,7 +1038,6 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     gate_key = PeopleCondition._gate_key(pred)
 
     # Bob is in zone.a (away from home).
-    hass.states.async_set("person.bob", "ZoneA", {"in_zones": ["zone.a"]})
     await engine.async_evaluate({key})
     since_before = engine.tenure["people"][gate_key]
 
@@ -2534,6 +2536,14 @@ async def test_person_added_after_startup_is_watched_and_counted(hass) -> None:
     await engine.async_start()
     assert engine.index.entities == frozenset({"person.alice"})
     assert calls == ["turn_on"]  # nobody home → scene 0 applied
+
+    # Alice comes home first: the win is released normally (a no-match clears the
+    # last-applied record), so the later re-win below is a real apply and not a
+    # debounce. Removing her instead would be an entity drop-out, which leaves
+    # last_applied untouched by design.
+    hass.states.async_set("person.alice", "home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[("area", "a", 0, "people")] is False
 
     # Alice goes; Bob arrives home. Neither entity is watched by the old index.
     hass.states.async_remove("person.alice")

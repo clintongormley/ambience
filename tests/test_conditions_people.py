@@ -372,7 +372,9 @@ def test_matches_empty_household() -> None:
     snap = _snap({})
     assert m.matches({"quant": "any", "where": "home"}, snap) is False
     assert m.matches({"quant": "everyone", "where": "home"}, snap) is False
-    assert m.matches({"quant": "nobody", "where": "home"}, snap) is True
+    # `nobody` is not vacuously true over an empty household: with no persons
+    # the location test is unobservable (see the ruling in _quantified).
+    assert m.matches({"quant": "nobody", "where": "home"}, snap) is False
 
 
 def test_matches_for_duration_met_any() -> None:
@@ -901,8 +903,9 @@ def test_people_gate_states_empty_persons_anchor_is_now() -> None:
     pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
     key = m._gate_key(pred)
     gs = m.gate_states(pred, _snap(persons={}, now=now))
-    # 'nobody home' over zero tracked persons is vacuously true; anchor = now.
-    assert gs == {key: (True, now)}
+    # 'nobody home' over zero tracked persons is unobservable -> instant False;
+    # with no person changes to read, the anchor falls back to now.
+    assert gs == {key: (False, now)}
 
 
 def test_people_gate_states_empty_without_for() -> None:
@@ -1155,3 +1158,16 @@ def test_describe_no_people_tracked() -> None:
     # Empty `who` means "all persons"; with an empty snapshot there are none, so
     # describe reports that rather than an empty body.
     assert PeopleCondition().describe(_snap(), {"who": []}) == "no people tracked"
+
+
+def test_matches_no_persons_at_all_is_false_for_every_quantifier() -> None:
+    """With zero persons in the universe the location test is unobservable, so
+    every quantifier — `nobody` included — reports False rather than vacuous
+    truth. A 'nobody home' scene must not fire on a household HA knows nothing
+    about."""
+    m = PeopleCondition()
+    snap = _snap(persons={})
+    assert m.matches({"quant": "nobody", "where": "home"}, snap) is False
+    assert m.matches({"quant": "everyone", "where": "home"}, snap) is False
+    assert m.matches({"quant": "any", "where": "home"}, snap) is False
+    assert m.matches({"quant": "nobody", "where": "zone.work", "negate": True}, snap) is False

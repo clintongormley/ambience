@@ -114,6 +114,14 @@ class AmbienceStore:
 
     @staticmethod
     def _empty() -> dict[str, Any]:
+        """A fresh, fully-defaulted payload — the single definition of every
+        store default, for a new install and for filling the gaps in a loaded
+        one alike (see :meth:`_apply_defaults`).
+
+        Every nested value is a private copy: the module constants are shared
+        templates, so aliasing one into `_data` would let a user's later edit
+        rewrite the default every other install is seeded from.
+        """
         return {
             "version": STORAGE_VERSION,
             "categories": [dict(GENERAL_CATEGORY)],
@@ -123,7 +131,7 @@ class AmbienceStore:
             "conditions": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
-                "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
+                "weather": {"entity": None, "groups": copy.deepcopy(DEFAULT_WEATHER_GROUPS)},
                 "lux": {"custom": {}, "hidden": []},
             },
             "switch_defaults": {
@@ -138,44 +146,34 @@ class AmbienceStore:
             "exposed_actions": [],
         }
 
-    def _ensure_conditions_namespace(self) -> None:
-        """Make sure `conditions.day` (and any future per-condition key) has a default."""
-        namespace = self._data.setdefault("conditions", {})
-        namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
-        namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
-        weather = namespace.setdefault("weather", {})
-        weather.setdefault("entity", None)
-        weather.setdefault("groups", list(DEFAULT_WEATHER_GROUPS))
-        namespace.setdefault("lux", {"custom": {}, "hidden": []})
+    @classmethod
+    def _fill_defaults(cls, data: dict[str, Any], defaults: dict[str, Any]) -> None:
+        """Recursively fill keys missing from `data` with those in `defaults`.
 
-    def _ensure_scope_buckets(self) -> None:
-        """Floors and house keys are additive — make sure they exist."""
-        self._data.setdefault("floors", {})
-        self._data.setdefault("house", {"scenes": []})
+        A key that is present keeps its stored value — including an explicit
+        `None` or an empty list, which are user state, not gaps. Two dicts are
+        merged key by key; any other pair is left alone. `defaults` must be a
+        private copy, since its values are grafted straight onto `data`.
+        """
+        for key, default in defaults.items():
+            if key not in data:
+                data[key] = default
+            elif isinstance(data[key], dict) and isinstance(default, dict):
+                cls._fill_defaults(data[key], default)
 
-    def _ensure_categories(self) -> None:
-        """Seed the General category when no categories exist. Categories are
-        required: a store must always have at least one."""
-        if not self._data.get("categories"):
-            self._data["categories"] = [dict(GENERAL_CATEGORY)]
-
-    def _ensure_switch_defaults(self) -> None:
-        sd = self._data.setdefault("switch_defaults", {})
-        sd.setdefault("name", DEFAULT_SWITCH_NAME)
-        sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
+    def _apply_defaults(self) -> None:
+        """Bring a loaded payload up to the current default shape."""
+        defaults = self._empty()
+        self._fill_defaults(self._data, defaults)
+        # Categories are required: a scene always points at one, so an empty
+        # list is a gap rather than user intent (unlike every other list).
+        # `defaults` is untouched here — the merge above only grafts on a
+        # value whose key was absent, and this branch needs a present one.
+        if not self._data["categories"]:
+            self._data["categories"] = defaults["categories"]
         # Drop the removed create_switches flag from upgraded installs — a
         # permanent idempotent cleanup, not a version-gated migration.
-        sd.pop("create_switches", None)
-
-    def _ensure_reapply_settings(self) -> None:
-        r = self._data.setdefault("reapply", {})
-        r.setdefault("enabled", DEFAULT_REAPPLY_ENABLED)
-        r.setdefault("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS)
-
-    def _ensure_exposed_assistants(self) -> None:
-        ea = self._data.setdefault("exposed_assistants", {})
-        for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items():
-            ea.setdefault(assistant, default)
+        self._data["switch_defaults"].pop("create_switches", None)
 
     async def _ensure_builtin_actions(self) -> None:
         """Seed the built-in on/off exposed actions exactly once.
@@ -257,12 +255,7 @@ class AmbienceStore:
             return
         else:
             self._data = raw
-            self._ensure_conditions_namespace()
-            self._ensure_scope_buckets()
-            self._ensure_categories()
-            self._ensure_switch_defaults()
-            self._ensure_reapply_settings()
-            self._ensure_exposed_assistants()
+            self._apply_defaults()
         await self._ensure_builtin_actions()
 
     async def async_remove(self) -> None:

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import copy
+from typing import Any
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
+from custom_components.ambience.conditions.weather import DEFAULT_WEATHER_GROUPS
 from custom_components.ambience.const import (
+    DEFAULT_SWITCH_NAME,
+    GENERAL_CATEGORY,
     GENERAL_CATEGORY_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
@@ -357,7 +363,7 @@ async def test_load_empty_seeds_general_category(hass: HomeAssistant) -> None:
     assert [g["id"] for g in store.categories()] == [GENERAL_CATEGORY_ID]
 
 
-async def test_ensure_categories_is_idempotent_and_preserves_user_categories(
+async def test_apply_defaults_is_idempotent_and_preserves_user_categories(
     hass: HomeAssistant,
 ) -> None:
     store = AmbienceStore(hass)
@@ -650,11 +656,11 @@ async def test_save_reapply_settings_rejects_interval_below_floor(hass: HomeAssi
     assert exc.value.translation_key == "store_reapply_interval_invalid"
 
 
-async def test_ensure_reapply_settings_backfills_legacy_store(hass: HomeAssistant) -> None:
+async def test_apply_defaults_backfills_legacy_reapply_settings(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     del store._data["reapply"]  # simulate a store saved before this key existed
-    store._ensure_reapply_settings()
+    store._apply_defaults()
     assert store.get_reapply_settings() == {"enabled": False, "interval_seconds": 3600}
 
 
@@ -693,11 +699,11 @@ async def test_save_and_get_exposed_assistants(hass: HomeAssistant) -> None:
     }
 
 
-async def test_ensure_exposed_assistants_backfills_legacy_store(hass: HomeAssistant) -> None:
+async def test_apply_defaults_backfills_legacy_exposed_assistants(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     del store._data["exposed_assistants"]  # store saved before this key existed
-    store._ensure_exposed_assistants()
+    store._apply_defaults()
     assert store.get_exposed_assistants() == {
         "conversation": True,
         "cloud.google_assistant": False,
@@ -705,11 +711,11 @@ async def test_ensure_exposed_assistants_backfills_legacy_store(hass: HomeAssist
     }
 
 
-async def test_ensure_exposed_assistants_backfills_partial_map(hass: HomeAssistant) -> None:
+async def test_apply_defaults_backfills_partial_exposed_assistants_map(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     store._data["exposed_assistants"] = {"conversation": False}  # missing google/alexa
-    store._ensure_exposed_assistants()
+    store._apply_defaults()
     assert store.get_exposed_assistants() == {
         "conversation": False,
         "cloud.google_assistant": False,
@@ -776,3 +782,184 @@ def test_known_assistants_match_default_map_and_fields() -> None:
 
     assert set(KNOWN_ASSISTANTS) == set(DEFAULT_EXPOSED_ASSISTANTS)
     assert set(ASSISTANT_FIELDS) == set(DEFAULT_EXPOSED_ASSISTANTS)
+
+
+# --- load-time defaults ------------------------------------------------------
+
+
+def _stored_payload() -> dict[str, Any]:
+    """A complete payload with every key explicitly non-default, so a default
+    applied at load time can only show up where a key was removed."""
+    return {
+        "version": STORAGE_VERSION,
+        "categories": [{"id": "blinds", "name": "Blinds"}],
+        "areas": {"a1": {"scenes": [], "switch": {"off_at": "ts"}}},
+        "floors": {"f1": {"scenes": []}},
+        "house": {"scenes": [{"name": "h", "when": {}, "actions": []}]},
+        "conditions": {
+            "time_of_day": {"custom": {"wind_down": {}}, "hidden": ["daytime"]},
+            "day": {"workday_sensor": "binary_sensor.w", "workday_calendar": "calendar.w"},
+            "weather": {"entity": "weather.home", "groups": [{"id": "only", "label": "Only"}]},
+            "lux": {"custom": {"bright": {}}, "hidden": ["dark"]},
+        },
+        "switch_defaults": {"name": "Master", "auto_on_delay_seconds": 600},
+        "reapply": {"enabled": True, "interval_seconds": 900},
+        "exposed_assistants": {
+            "conversation": False,
+            "cloud.google_assistant": True,
+            "cloud.alexa": True,
+        },
+        "exposed_actions": [
+            {"id": "light.turn_on", "label": "L", "visible_fields": [], "defaults": {}}
+        ],
+        # Seeding is a separate concern (and persists); keep it out of the way.
+        "builtins_seeded": True,
+    }
+
+
+_DEFAULT_SLICES: dict[str, Any] = {
+    "categories": [dict(GENERAL_CATEGORY)],
+    "floors": {},
+    "house": {"scenes": []},
+    "conditions": {
+        "time_of_day": {"custom": {}, "hidden": []},
+        "day": {"workday_sensor": None, "workday_calendar": None},
+        "weather": {"entity": None, "groups": DEFAULT_WEATHER_GROUPS},
+        "lux": {"custom": {}, "hidden": []},
+    },
+    "switch_defaults": {"name": DEFAULT_SWITCH_NAME, "auto_on_delay_seconds": 0},
+    "reapply": {"enabled": False, "interval_seconds": 3600},
+    "exposed_assistants": {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    },
+}
+
+
+def _seed(hass_storage, payload: dict[str, Any]) -> None:
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": copy.deepcopy(payload),
+    }
+
+
+@pytest.mark.parametrize("missing", sorted(_DEFAULT_SLICES))
+async def test_load_fills_the_missing_key_and_leaves_the_rest_alone(
+    hass: HomeAssistant, hass_storage, missing: str
+) -> None:
+    """Each top-level key absent from storage is filled with its default; every
+    other key keeps the stored value byte for byte."""
+    payload = _stored_payload()
+    del payload[missing]
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    expected = _stored_payload()
+    expected[missing] = _DEFAULT_SLICES[missing]
+    assert store._data == expected
+
+
+async def test_load_leaves_a_complete_payload_untouched(hass: HomeAssistant, hass_storage) -> None:
+    """Nothing is added, dropped or rewritten when every key is already set."""
+    payload = _stored_payload()
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    assert store._data == payload
+
+
+async def test_load_seeds_general_when_categories_is_empty(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    """Categories are required: an empty list is a gap, not user intent, so
+    General is re-seeded (unlike every other list default)."""
+    payload = _stored_payload()
+    payload["categories"] = []
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    assert store._data["categories"] == [dict(GENERAL_CATEGORY)]
+
+
+async def test_load_keeps_an_explicitly_empty_weather_groups_list(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    """A user who deleted every weather group keeps none — the default groups
+    are seeded only when the key is absent."""
+    payload = _stored_payload()
+    payload["conditions"]["weather"] = {"entity": None, "groups": []}
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    assert store._data["conditions"]["weather"]["groups"] == []
+
+
+async def test_load_keeps_stored_none_scalars(hass: HomeAssistant, hass_storage) -> None:
+    """A stored None is a present value, not a missing key — it is never
+    replaced by the non-None default (the readers apply their own fallbacks)."""
+    payload = _stored_payload()
+    payload["switch_defaults"] = {"name": None, "auto_on_delay_seconds": None}
+    payload["reapply"] = {"enabled": None, "interval_seconds": None}
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    assert store._data["switch_defaults"] == {"name": None, "auto_on_delay_seconds": None}
+    assert store._data["reapply"] == {"enabled": None, "interval_seconds": None}
+
+
+async def test_load_drops_the_removed_create_switches_flag(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    """The removed create_switches flag is cleaned off upgraded installs."""
+    payload = _stored_payload()
+    payload["switch_defaults"] = {
+        "name": "Master",
+        "auto_on_delay_seconds": 600,
+        "create_switches": True,
+    }
+    _seed(hass_storage, payload)
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+
+    assert store._data["switch_defaults"] == {"name": "Master", "auto_on_delay_seconds": 600}
+
+
+async def test_loaded_defaults_are_not_aliased_to_module_constants(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    """Defaults are deep-copied into _data: mutating the store must never reach
+    the module constants that every other install is seeded from."""
+    _seed(hass_storage, {"version": STORAGE_VERSION, "areas": {}, "builtins_seeded": True})
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+    store._data["conditions"]["weather"]["groups"][0]["label"] = "MUTATED"
+    store._data["categories"][0]["name"] = "MUTATED"
+
+    assert DEFAULT_WEATHER_GROUPS[0]["label"] == "Sunny"
+    assert GENERAL_CATEGORY["name"] == "General"
+
+
+async def test_fresh_store_defaults_are_not_aliased_to_module_constants(
+    hass: HomeAssistant,
+) -> None:
+    """The same deep-copy guarantee on the no-storage path."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    store._data["conditions"]["weather"]["groups"][0]["label"] = "MUTATED"
+    store._data["categories"][0]["name"] = "MUTATED"
+
+    assert DEFAULT_WEATHER_GROUPS[0]["label"] == "Sunny"
+    assert GENERAL_CATEGORY["name"] == "General"

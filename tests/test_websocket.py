@@ -2406,7 +2406,7 @@ async def test_categories_save_rejects_empty_list(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
     """An empty list would wipe every category (the at-least-one invariant is
-    only restored by _ensure_categories on the next restart) — mirror the
+    only restored by the store's load-time defaults on the next restart) — mirror the
     delete path's last-category guard."""
     resp = await _ws_send(hass_ws_client, type="ambience/categories/save", categories=[])
     assert not resp["success"]

@@ -38,6 +38,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     automatically.
 - Scenes anchored to a time before sunrise or sunset no longer re-evaluate a
     second time at the sunrise/sunset itself.
+- Disabled scenes no longer run their script or template conditions.
 
 ## [1.2.0] - 2026-09-04
 

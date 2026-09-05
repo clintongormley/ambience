@@ -320,25 +320,43 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             elif gate_key not in tenure:
                 tenure[gate_key] = anchor if seed else now
 
+    def _unwatchable_opaque(self) -> set[PredKey]:
+        """Opaque predicates with no watch of their own — an all-states template,
+        a `script` declaring no `triggers`. Nothing in the index will ever fire
+        them, so a narrowed snapshot has to carry them or they go stale until the
+        next full refresh."""
+        idx = self._index
+        watched: set[PredKey] = set(idx.durations) | idx.midnight | idx.has_time
+        for bucket in (idx.by_entity, idx.by_clock, idx.by_sun, idx.by_domain):
+            for predicates in bucket.values():
+                watched |= predicates
+        return set(idx.opaque) - watched
+
     def _fired_result_keys(self, fired: set[PredKey]) -> dict[str, frozenset[str]]:
-        """Per-condition snapshot hint: the result keys of the fired predicates,
-        for the conditions that accept one. A condition is left out — falling
-        back to a full recompute — as soon as one of its fired predicates has no
+        """Per-condition snapshot hint: the result keys of the fired predicates
+        (plus the condition's unwatchable opaque ones, which no fire can reach),
+        for the conditions that accept a hint. A condition is left out — falling
+        back to a full recompute — as soon as one of its predicates has no
         derivable result key (a scene removed since the fire, or a malformed
         predicate), since the missing key could otherwise go stale unnoticed."""
         conditions = self._conditions()
         hints: dict[str, set[str]] = {}
         unhinted: set[str] = set()
-        for key in fired:
-            condition_key = key[3]
-            condition = conditions.get(condition_key)
-            if not getattr(condition, "supports_result_keys", False):
-                continue
+
+        def _add(key: PredKey, condition: Any) -> None:
             result_key = condition.result_key(self._predicate_for(key))
             if result_key:
-                hints.setdefault(condition_key, set()).add(result_key)
+                hints.setdefault(key[3], set()).add(result_key)
             else:
-                unhinted.add(condition_key)
+                unhinted.add(key[3])
+
+        for key in fired:
+            condition = conditions.get(key[3])
+            if getattr(condition, "supports_result_keys", False):
+                _add(key, condition)
+        for key in self._unwatchable_opaque():
+            if key[3] in hints:
+                _add(key, conditions[key[3]])
         return {k: frozenset(v) for k, v in hints.items() if k not in unhinted}
 
     async def _refresh_snapshots(

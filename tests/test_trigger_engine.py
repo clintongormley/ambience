@@ -2857,3 +2857,93 @@ async def test_evaluate_does_not_hint_a_condition_without_support(hass) -> None:
     # CacheCondition.snapshot takes **_ — a `keys` kwarg would be silently
     # swallowed, so assert on the map the engine builds instead.
     assert engine._fired_result_keys({("area", "a", 0, "tod")}) == {}
+
+
+class OpaqueHintCondition(HintCondition):
+    """Predicates named "watched:*" carry an entity watch of their own; every
+    other predicate is opaque with nothing to subscribe to — the shape of an
+    all-states template, or a `script` that declares no `triggers`."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if isinstance(predicate, str) and predicate.startswith("watched:"):
+            return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}), opaque=True)
+        return TriggerSpec(opaque=True)
+
+
+async def test_evaluate_hint_carries_an_unwatchable_opaque_predicate(hass) -> None:
+    """An `all_states` template is in `index.opaque` and in no watch bucket, so
+    nothing ever fires it. A narrowed snapshot must re-render it alongside the
+    predicate that did fire, or it stays stale until the next full refresh."""
+    from custom_components.ambience.conditions.template import TemplateCondition
+
+    hass.states.async_set("binary_sensor.motion", "off")
+    hass.states.async_set("input_boolean.flag", "off")
+    watched = "{{ states('binary_sensor.motion') == 'on' }}"
+    broad = "{{ states | selectattr('state', 'eq', 'magic-on') | list | count > 0 }}"
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"template": {"template": watched}}, "category": "g", "actions": []},
+            {"when": {"template": {"template": broad}}, "category": "g", "actions": []},
+        ],
+        {"template": TemplateCondition(hass)},
+    )
+    assert engine.index.opaque == frozenset({("area", "a", 1, "template")})
+    await engine.async_initial_sync()  # full refresh: baseline for both
+    assert engine._snapshots["template"].results[broad] is False
+
+    hass.states.async_set("input_boolean.flag", "magic-on")  # only `broad` sees this
+    hass.states.async_set("binary_sensor.motion", "on")
+    await engine.async_evaluate({("area", "a", 0, "template")})
+    assert engine._snapshots["template"].results[broad] is True
+
+
+async def test_evaluate_hint_leaves_a_watched_opaque_predicate_out(hass) -> None:
+    """Only UNWATCHABLE opaque predicates ride along: one the index can fire in
+    its own right (a `script` naming its `triggers`) keeps the narrow hint."""
+    cond = OpaqueHintCondition()
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "watched:b"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "blind"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": cond},
+    )
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
+        "tmpl": frozenset({"watched:a", "blind"})
+    }
+
+
+async def test_evaluate_hint_unwatchable_opaque_with_no_result_key_forces_full_refresh(
+    hass,
+) -> None:
+    """An unwatchable opaque predicate whose result key can't be derived drops
+    its condition back to a full refresh, exactly like a fired one."""
+    cond = OpaqueHintCondition()
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
+            {"when": {"tmpl": 42}, "category": "g", "actions": []},
+        ],
+        {"tmpl": cond},
+    )
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {}
+
+
+async def test_evaluate_hint_ignores_opaque_predicates_of_unfired_conditions(hass) -> None:
+    """An unwatchable opaque predicate belonging to a condition that didn't fire
+    stays out of the map — that condition isn't being re-snapshotted at all."""
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
+            {"when": {"other": "blind"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": OpaqueHintCondition(), "other": OpaqueHintCondition()},
+    )
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
+        "tmpl": frozenset({"watched:a"})
+    }

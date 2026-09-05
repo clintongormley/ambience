@@ -11,7 +11,7 @@ merge) lives here so the two can't drift.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -21,8 +21,12 @@ from ..const import get_store
 from ._collect import collect_scope_predicates
 
 
-class OpaquePrecomputedCondition:
-    """Base for `script`/`template`. Subclasses set the protocol attributes
+class OpaquePrecomputedCondition[SnapshotT]:
+    """Base for `script`/`template`. ``SnapshotT`` is the frozen snapshot the
+    subclass produces (``TemplateSnapshot`` / ``ScriptSnapshot``), carried
+    through ``snapshot`` / ``_compute`` / ``_previous``.
+
+    Subclasses set the protocol attributes
     (``name``/``input``/``priority``/…), implement ``result_key`` and
     ``_compute``, and call ``_distinct_keys`` to gather their work items."""
 
@@ -38,7 +42,7 @@ class OpaquePrecomputedCondition:
         self._hass = hass
         # The last snapshot produced, so a hinted (partial) pass can merge its
         # recomputed keys over it.
-        self._previous: Any = None
+        self._previous: SnapshotT | None = None
 
     def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
         # Opaque by nature — nothing readable to render for a trace.
@@ -63,7 +67,7 @@ class OpaquePrecomputedCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not used here
         keys: frozenset[str] | None = None,
-    ) -> Any:
+    ) -> SnapshotT:
         """Pre-compute every referenced work item, or — when ``keys`` names the
         result keys of the predicates that just fired — only those, merged over
         the previous snapshot's results.
@@ -74,27 +78,34 @@ class OpaquePrecomputedCondition:
         set from the live config and drops it. The hint is also ignored until a
         previous snapshot exists to merge over — a partial result set with no
         baseline would read as "no match" for every scene that didn't fire.
+        Concurrent snapshots resolve last-writer-wins on the baseline, so a
+        hinted pass finishing after a full refresh can re-merge a key that
+        refresh dropped; harmless (no predicate references it) and the next full
+        refresh drops it again.
         """
-        effective = keys if self._previous is not None else None
-        snap = await self._compute(hass, effective)
+        previous = self._previous
+        snap = await self._compute(hass, keys if previous is not None else None, previous)
         self._previous = snap
         return snap
 
-    async def _compute(self, hass: HomeAssistant, keys: frozenset[str] | None) -> Any:
+    async def _compute(
+        self, hass: HomeAssistant, keys: frozenset[str] | None, previous: SnapshotT | None
+    ) -> SnapshotT:
         """Build one snapshot over the whole work list (``keys is None``) or over
-        just the named result keys, merging the rest via ``_merge_over_previous``."""
+        just the named result keys, merging the rest of ``previous`` back in via
+        ``_merge_over_previous``. ``previous`` is None only on a full refresh."""
         raise NotImplementedError  # pragma: no cover
 
+    @staticmethod
     def _merge_over_previous(
-        self, keys: frozenset[str] | None, attr: str, fresh: dict[str, Any]
+        keys: frozenset[str] | None,
+        previous: Mapping[str, Any],
+        fresh: dict[str, Any],
     ) -> dict[str, Any]:
-        """``fresh`` laid over the previous snapshot's ``attr`` map when the work
-        was narrowed by a hint; ``fresh`` alone — the whole truth — otherwise."""
-        if keys is None:
-            return fresh
-        merged = dict(getattr(self._previous, attr))
-        merged.update(fresh)
-        return merged
+        """``fresh`` laid over the ``previous`` snapshot's matching map when the
+        work was narrowed by a hint; ``fresh`` alone — the whole truth —
+        otherwise."""
+        return fresh if keys is None else {**previous, **fresh}
 
     def _distinct_keys(self, key_of: Callable[[dict[str, Any]], Any]) -> list[Any]:
         """Distinct, insertion-ordered ``key_of(pred)`` values over every scope's

@@ -56,7 +56,7 @@ class TemplateSnapshot:
     deps: dict[str, TemplateDeps] = field(default_factory=dict)
 
 
-class TemplateCondition(OpaquePrecomputedCondition):
+class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
     """Matches by rendering a Jinja2 template against HA state to a boolean."""
 
     name = "template"
@@ -149,7 +149,12 @@ class TemplateCondition(OpaquePrecomputedCondition):
         predicates across all scopes (areas, floors, house)."""
         return self._distinct_keys(self._template_key)
 
-    async def _compute(self, hass: HomeAssistant, keys: frozenset[str] | None) -> TemplateSnapshot:
+    async def _compute(
+        self,
+        hass: HomeAssistant,
+        keys: frozenset[str] | None,
+        previous: TemplateSnapshot | None,
+    ) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}
         # A result key IS the template string, so a hint is the work list itself
@@ -168,6 +173,6 @@ class TemplateCondition(OpaquePrecomputedCondition):
                 has_time=info.has_time,
             )
         return TemplateSnapshot(
-            results=self._merge_over_previous(keys, "results", results),
-            deps=self._merge_over_previous(keys, "deps", deps),
+            results=self._merge_over_previous(keys, previous.results if previous else {}, results),
+            deps=self._merge_over_previous(keys, previous.deps if previous else {}, deps),
         )

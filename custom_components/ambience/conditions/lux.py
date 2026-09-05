@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant
 from ..lux_ranges import validate_int_bound
 from ..triggers import TriggerSpec
 from ._common import (
+    UNAVAILABLE,
     as_float,
     kleene_all,
     kleene_any,
@@ -45,6 +46,10 @@ class LuxSnapshot:
     # entity_id -> lux value (float), or None when unobservable.
     sensors: dict[str, float | None]
     names: dict[str, str] = field(default_factory=dict)
+    # entity_id -> raw state, for sensors that exist and are neither
+    # unavailable/unknown nor a number: a misconfiguration the trace explains
+    # rather than a transient outage.
+    non_numeric: dict[str, str] = field(default_factory=dict)
 
 
 class LuxCondition:
@@ -81,19 +86,25 @@ class LuxCondition:
     ) -> LuxSnapshot:
         sensors: dict[str, float | None] = {}
         names: dict[str, str] = {}
+        non_numeric: dict[str, str] = {}
         # `entities` (the sensors scenes actually reference) lets us read those
-        # directly; None means scan the whole sensor domain (back-compat). The
-        # device_class filter stays either way, so a referenced-but-non-lux
-        # sensor is excluded exactly as a domain scan would exclude it.
+        # directly; None means scan the whole sensor domain (back-compat).
         states = state_sources(hass, entities, domain="sensor")
         for s in states:
             if s is None:
                 continue  # referenced entity that doesn't exist
-            if s.attributes.get("device_class") != "illuminance":
+            # A referenced sensor was picked deliberately, so honour it whatever
+            # device_class it declares (plenty of lux sensors declare none). The
+            # unhinted scan has no such choice to honour and keeps the filter, or
+            # it would snapshot every sensor in the house.
+            if entities is None and s.attributes.get("device_class") != "illuminance":
                 continue
-            sensors[s.entity_id] = as_float_state(s.state)
+            value = as_float_state(s.state)
+            sensors[s.entity_id] = value
             names[s.entity_id] = s.attributes.get("friendly_name") or s.entity_id
-        return LuxSnapshot(sensors=sensors, names=names)
+            if value is None and s.state not in UNAVAILABLE:
+                non_numeric[s.entity_id] = s.state
+        return LuxSnapshot(sensors=sensors, names=names, non_numeric=non_numeric)
 
     def matches(self, predicate: Any, snapshot: LuxSnapshot) -> bool:
         if predicate is None:
@@ -145,10 +156,16 @@ class LuxCondition:
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
     def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> str | None:
-        if isinstance(predicate, dict) and "range" in predicate:
+        if not isinstance(predicate, dict):
+            return None
+        if "range" in predicate:
             rid = predicate["range"]
             if isinstance(rid, str) and rid not in self._range_lookup():
                 return f"lux range {rid!r} no longer exists"
+        for eid in predicate.get("sensors") or []:
+            raw = snapshot.non_numeric.get(eid)
+            if raw is not None:
+                return f"{snapshot.names.get(eid, eid)} ({raw!r}) does not report a number"
         return None
 
     def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:

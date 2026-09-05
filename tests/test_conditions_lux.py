@@ -14,8 +14,8 @@ def _cond(ranges=None) -> LuxCondition:
     return LuxCondition(range_lookup=lambda: ranges or BUILTIN_LUX_RANGES)
 
 
-def _snap(sensors=None, names=None) -> LuxSnapshot:
-    return LuxSnapshot(sensors=sensors or {}, names=names or {})
+def _snap(sensors=None, names=None, non_numeric=None) -> LuxSnapshot:
+    return LuxSnapshot(sensors=sensors or {}, names=names or {}, non_numeric=non_numeric or {})
 
 
 def test_protocol_fields() -> None:
@@ -75,13 +75,66 @@ async def test_snapshot_with_entities_does_not_scan_the_domain(
     assert snap.sensors == {"sensor.lounge": 320.0}
 
 
-async def test_snapshot_with_entities_skips_missing_and_non_illuminance(
+async def test_snapshot_with_entities_skips_missing(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.temp", "21", {"device_class": "temperature"})
+    # sensor.ghost is referenced but absent; sensor.temp was chosen deliberately,
+    # so it is snapshotted despite its non-illuminance device_class.
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.ghost", "sensor.temp"}))
+    assert snap.sensors == {"sensor.temp": 21.0}
+
+
+async def test_snapshot_with_entities_keeps_sensor_without_device_class(
     hass: HomeAssistant,
 ) -> None:
+    """An explicitly referenced sensor is the user's deliberate choice, so it is
+    snapshotted (and matched) whatever device_class it declares — or doesn't."""
+    hass.states.async_set("sensor.hallway_lux", "42", {"friendly_name": "Hallway Lux"})
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.hallway_lux"}))
+    assert snap.sensors == {"sensor.hallway_lux": 42.0}
+    assert snap.names["sensor.hallway_lux"] == "Hallway Lux"
+    pred = {"sensors": ["sensor.hallway_lux"], "min": 0, "max": 100}
+    assert _cond().matches(pred, snap) is True
+
+
+async def test_snapshot_referenced_non_numeric_state_gets_reason(
+    hass: HomeAssistant,
+) -> None:
+    """A referenced sensor whose state is not a number can't be banded, so the
+    predicate misses and the trace says why instead of reading 'not found'."""
+    hass.states.async_set("sensor.hallway_lux", "foo", {"friendly_name": "Hallway Lux"})
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.hallway_lux"}))
+    assert snap.sensors == {"sensor.hallway_lux": None}
+    pred = {"sensors": ["sensor.hallway_lux"], "min": 0, "max": 100}
+    m = _cond()
+    assert m.matches(pred, snap) is False
+    reason = m.unconfigured_reason(pred, snap)
+    assert reason == "Hallway Lux ('foo') does not report a number"
+
+
+async def test_snapshot_unavailable_sensor_gets_no_non_numeric_reason(
+    hass: HomeAssistant,
+) -> None:
+    """`unavailable`/`unknown` is a transient outage, not a misconfigured sensor."""
+    hass.states.async_set("sensor.hallway_lux", "unavailable", {})
+    hass.states.async_set("sensor.porch_lux", "unknown", {})
+    snap = await LuxCondition().snapshot(
+        hass, entities=frozenset({"sensor.hallway_lux", "sensor.porch_lux"})
+    )
+    assert snap.non_numeric == {}
+    pred = {"sensors": ["sensor.hallway_lux", "sensor.porch_lux"], "min": 0, "max": 100}
+    assert _cond().unconfigured_reason(pred, snap) is None
+
+
+async def test_snapshot_without_entities_still_filters_by_device_class(
+    hass: HomeAssistant,
+) -> None:
+    """The unhinted full-domain scan has no user choice to honour, so it keeps the
+    illuminance filter rather than snapshotting every sensor in the house."""
     hass.states.async_set("sensor.temp", "21", {"device_class": "temperature"})
-    # sensor.ghost is referenced but absent; sensor.temp is referenced but not lux.
-    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.ghost", "sensor.temp"}))
-    assert snap.sensors == {}
+    hass.states.async_set("sensor.plain", "7", {})
+    hass.states.async_set("sensor.lounge", "320", {"device_class": "illuminance"})
+    snap = await LuxCondition().snapshot(hass)
+    assert snap.sensors == {"sensor.lounge": 320.0}
 
 
 async def test_snapshot_with_empty_entities_captures_nothing(hass: HomeAssistant) -> None:
@@ -414,6 +467,28 @@ def test_unconfigured_reason_non_string_rid_returns_none() -> None:
     snap = _snap()
     # range is an integer, not a string — must not flag it
     assert m.unconfigured_reason({"sensors": ["sensor.a"], "range": 42}, snap) is None
+
+
+def test_unconfigured_reason_numeric_sensor_returns_none() -> None:
+    """A referenced sensor that does report a number → no reason."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap(sensors={"sensor.a": 5.0})
+    assert m.unconfigured_reason({"sensors": ["sensor.a"], "min": 0, "max": 100}, snap) is None
+
+
+def test_unconfigured_reason_ignores_unreferenced_non_numeric_sensor() -> None:
+    """Only the sensors THIS predicate references can explain its miss."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap(sensors={"sensor.b": None}, non_numeric={"sensor.b": "foo"})
+    assert m.unconfigured_reason({"sensors": ["sensor.a"], "min": 0, "max": 100}, snap) is None
+
+
+def test_unconfigured_reason_non_numeric_falls_back_to_entity_id() -> None:
+    """No friendly_name in the snapshot → the reason names the entity_id."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap(sensors={"sensor.a": None}, non_numeric={"sensor.a": "foo"})
+    reason = m.unconfigured_reason({"sensors": ["sensor.a"]}, snap)
+    assert reason == "sensor.a ('foo') does not report a number"
 
 
 def test_unconfigured_reason_none_predicate_returns_none() -> None:

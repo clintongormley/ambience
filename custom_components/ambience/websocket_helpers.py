@@ -183,20 +183,26 @@ def annotate_scenes(
     }
 
 
-def coerce_scene_categories(store, config: dict) -> None:
+def coerce_scene_categories(store, config: dict) -> bool:
     """Point any scene with no category / an unknown category at General (or, if General
     was deleted, the first existing category), logging once. Mutates `config`. This is
-    the single place that enforces the every-scene-has-a-real-category invariant."""
+    the single place that enforces the every-scene-has-a-real-category invariant.
+
+    Returns True when a scene was moved, so a caller that skips canonicalisation
+    can tell that the category buckets changed and must be re-resolved (priorities
+    are only canonical within a category)."""
     known = {c["id"] for c in store.categories()}
     target = (
         GENERAL_CATEGORY_ID
         if GENERAL_CATEGORY_ID in known
         else next(iter(known), GENERAL_CATEGORY_ID)
     )
-    if reassign_orphan_scenes(config.get("scenes", []), known, target):
-        _LOGGER.warning(
-            "ambience: scope save had uncategorised/unknown-category scene(s); set to General"
-        )
+    if not reassign_orphan_scenes(config.get("scenes", []), known, target):
+        return False
+    _LOGGER.warning(
+        "ambience: scope save had uncategorised/unknown-category scene(s); set to General"
+    )
+    return True
 
 
 def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:

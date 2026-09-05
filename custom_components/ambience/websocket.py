@@ -1235,15 +1235,18 @@ def _require_scope(
 async def _apply_scope_config(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None, config: dict[str, Any]
 ) -> dict[str, Any]:
-    """Write a restored scenes-only snapshot straight to the store (no re-validation,
-    no re-canonicalisation — the snapshot's order and priorities are already canonical,
-    and no recording). The store merges it over the existing config, so the scope's
+    """Write a restored scenes-only snapshot to the store: no validation and no
+    history recording. A snapshot is already canonical as taken, and is only
+    re-canonicalised when coercion moved a scene between categories — priorities
+    are resolved per category, so merging two buckets can leave them tied.
+    The store merges the result over the existing config, so the scope's
     `enabled` flag and switch state are preserved. Returns the full post-write
     scope config (scenes + enabled + …) for the response."""
     store = hass.data[DOMAIN][DATA_STORE]
-    # Categories can be deleted after a snapshot is taken, so the snapshot alone
+    # A category can be deleted after a snapshot is taken, so the snapshot alone
     # cannot be trusted to satisfy the every-scene-has-a-real-category invariant.
-    coerce_scene_categories(store, config)
+    if coerce_scene_categories(store, config):
+        config = canonicalise(hass, config)
     await store.async_save_scope(scope_kind, scope_id, config)
     return copy.deepcopy(store.scope_config(scope_kind, scope_id))
 

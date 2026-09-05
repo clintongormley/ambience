@@ -19,6 +19,7 @@ from .const import (
     STORAGE_VERSION,
 )
 from .errors import AmbienceError
+from .scopes import scope_bucket, scope_spec
 
 # Switch / idle re-apply defaults. Defined here (store is their only consumer)
 # rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
@@ -348,21 +349,17 @@ class AmbienceStore:
         """Persist a scope's config, dispatching to the per-kind saver — the
         unified writer mirroring `scope_config()`'s unified reader, behind the
         websocket scope-save handlers and the undo/redo restore."""
-        if scope_kind == "house":
+        spec = scope_spec(scope_kind)
+        if not spec.has_id:
             await self.async_save_house(config)
             return
-        if scope_kind not in ("area", "floor"):
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         if scope_id is None:
             # area/floor always carry an id (only house is id-less); the websocket
             # schema requires it, so a None here is a caller bug, not user input —
             # an internal contract error, not a translatable AmbienceError. This
             # also narrows scope_id to `str` for the per-kind savers below.
             raise ValueError(f"{scope_kind} scope requires a scope_id")
-        if scope_kind == "area":
-            await self.async_save_area(scope_id, config)
-        else:
-            await self.async_save_floor(scope_id, config)
+        await getattr(self, spec.store_saver)(scope_id, config)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.
@@ -468,22 +465,13 @@ class AmbienceStore:
     # Switch defaults + per-scope off-at state
     # -------------------------------------------------------------------------
 
-    _SCOPE_KINDS = ("house", "floor", "area")
-
     def _scope_container(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Return the per-scope config dict (creating a bare shell if needed).
 
         Used internally by switch helpers so they can read/write the `switch`
         sub-dict regardless of whether scenes have been saved for the scope.
         """
-        if scope_kind == "house":
-            self._data.setdefault("house", {"scenes": []})
-            return self._data["house"]
-        if scope_kind == "floor":
-            return self._data["floors"].setdefault(scope_id, {"scenes": []})
-        if scope_kind == "area":
-            return self._data["areas"].setdefault(scope_id, {"scenes": []})
-        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+        return scope_bucket(self._data, scope_kind, scope_id, create=True)
 
     @staticmethod
     def _validate_switch_defaults(payload: dict[str, Any]) -> None:
@@ -578,16 +566,12 @@ class AmbienceStore:
         never set). ``off_at`` is runtime state owned by the switch entity, not
         user configuration — switch name and auto-on delay always come from the
         global defaults (:meth:`get_switch_defaults`)."""
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         sw = self.scope_config(scope_kind, scope_id).get("switch", {})
         return sw.get("off_at") if isinstance(sw, dict) else None
 
     async def async_set_scope_switch_off_at(
         self, scope_kind: str, scope_id: str | None, off_at: str | None
     ) -> None:
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
@@ -607,15 +591,11 @@ class AmbienceStore:
         Independent of the switch's temporary on/off (``off_at``): a scope
         applies scenes only when it is enabled AND its switch is not paused.
         """
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         return bool(self.scope_config(scope_kind, scope_id).get("enabled", True))
 
     async def async_set_scope_enabled(
         self, scope_kind: str, scope_id: str | None, enabled: bool
     ) -> None:
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         container["enabled"] = bool(enabled)
         await self._store.async_save(self._data)
@@ -623,13 +603,7 @@ class AmbienceStore:
 
     def scope_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Read-only per-scope config dict ({} if absent). Does not create."""
-        if scope_kind == "house":
-            return self._data.get("house", {})
-        if scope_kind == "floor":
-            return self._data.get("floors", {}).get(scope_id, {})
-        if scope_kind == "area":
-            return self._data.get("areas", {}).get(scope_id, {})
-        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+        return scope_bucket(self._data, scope_kind, scope_id, create=False)
 
     def get_exposed_actions(self) -> list[dict[str, Any]]:
         """Persisted list of ExposedAction entries (may be empty)."""

@@ -1,7 +1,7 @@
 """Pure helpers for the Ambience websocket API.
 
-Validation, canonicalisation and scene-annotation helpers, factored out
-of websocket.py so that file holds just the command handlers + registration.
+Validation, canonicalisation and scene-annotation helpers, kept out of the
+`websocket` package so it holds just the command handlers + registration.
 None of these touch the connection; they take plain data (and `hass` for store
 lookups) and return values or raise AmbienceError.
 """

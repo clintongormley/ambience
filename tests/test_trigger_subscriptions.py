@@ -941,37 +941,34 @@ async def test_force_resync_scope_emits_trace_when_scenes_applied(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _next_sun_fire: sun.sun state missing (line 303)
+# _next_sun_slot: sun.sun state missing
 # ---------------------------------------------------------------------------
 
 
-async def test_next_sun_fire_returns_none_when_sun_state_missing(hass) -> None:
-    """_next_sun_fire must return None when sun.sun entity is absent."""
+async def test_next_sun_slot_returns_none_when_sun_state_missing(hass) -> None:
+    """_next_sun_slot must return None when sun.sun entity is absent."""
     engine = _minimal_engine(hass, [])
     # Ensure sun.sun is not set.
     assert hass.states.get("sun.sun") is None
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is None
+    assert engine._next_sun_slot("sunset", 0) == (None, False)
 
 
-async def test_next_sun_fire_returns_none_when_attr_missing(hass) -> None:
-    """_next_sun_fire returns None when the sun state exists but the attribute is absent."""
+async def test_next_sun_slot_returns_none_when_attr_missing(hass) -> None:
+    """_next_sun_slot returns None when the sun state exists but the attribute is absent."""
     hass.states.async_set("sun.sun", "above_horizon", {})  # no next_setting attribute
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is None
+    assert engine._next_sun_slot("sunset", 0) == (None, False)
 
 
-async def test_next_sun_fire_returns_none_when_anchor_unknown(hass) -> None:
-    """_next_sun_fire returns None for an anchor not in ANCHOR_ATTR."""
+async def test_next_sun_slot_returns_none_when_anchor_unknown(hass) -> None:
+    """_next_sun_slot returns None for an anchor not in ANCHOR_ATTR."""
     hass.states.async_set(
         "sun.sun",
         "above_horizon",
         {"next_setting": (dt_util.utcnow() + timedelta(hours=1)).isoformat()},
     )
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("totally_unknown_anchor", 0)
-    assert result is None
+    assert engine._next_sun_slot("totally_unknown_anchor", 0) == (None, False)
 
 
 # ---------------------------------------------------------------------------
@@ -980,9 +977,9 @@ async def test_next_sun_fire_returns_none_when_anchor_unknown(hass) -> None:
 
 
 async def test_schedule_sun_does_nothing_when_fire_at_is_none(hass) -> None:
-    """_schedule_sun must not register a handle when _next_sun_fire returns None."""
+    """_schedule_sun must not register a handle when _next_sun_slot returns None."""
     engine = _minimal_engine(hass, [])
-    # sun.sun absent → _next_sun_fire returns None → no handle registered.
+    # sun.sun absent → _next_sun_slot returns None → no handle registered.
     assert hass.states.get("sun.sun") is None
     engine._schedule_sun(("sunset", 0))
     assert engine._sun_unsubs == {}
@@ -1148,11 +1145,11 @@ async def test_schedule_sun_cancels_existing_handle_on_rearm(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _next_sun_fire: negative offsets must not arm a past time (busy-spin)
+# _next_sun_slot: negative offsets must not arm a past time (busy-spin)
 # ---------------------------------------------------------------------------
 
 
-async def test_next_sun_fire_negative_offset_past_falls_forward_to_anchor(hass) -> None:
+async def test_next_sun_slot_negative_offset_past_falls_forward_to_anchor(hass) -> None:
     """With a negative offset, once the offset moment has fired, sun.sun's
     next_* attribute hasn't rolled over yet — re-arming at the (past) offset
     time would fire on the next loop iteration and spin until the anchor
@@ -1161,19 +1158,88 @@ async def test_next_sun_fire_negative_offset_past_falls_forward_to_anchor(hass) 
     anchor = dt_util.utcnow() + timedelta(minutes=10)
     hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", -30)  # offset moment is 20m in the past
-    assert result == anchor + timedelta(seconds=1)
+    when, is_fire = engine._next_sun_slot("sunset", -30)  # offset moment is 20m in the past
+    assert when == anchor + timedelta(seconds=1)
+    assert is_fire is False  # a re-arm slot, not a moment the user configured
 
 
-async def test_next_sun_fire_stale_anchor_polls_instead_of_past(hass) -> None:
+async def test_next_sun_slot_stale_anchor_polls_instead_of_past(hass) -> None:
     """If even the anchor itself is in the past (attribute-update race), poll
     again shortly rather than arming a past time."""
     anchor = dt_util.utcnow() - timedelta(minutes=5)
     hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is not None
-    assert result > dt_util.utcnow()
+    when, is_fire = engine._next_sun_slot("sunset", 0)
+    assert when is not None
+    assert when > dt_util.utcnow()
+    assert is_fire is False
+
+
+async def test_schedule_sun_negative_offset_fires_once_per_day(hass) -> None:
+    """A negative offset must re-evaluate only at the real anchor+offset instant.
+
+    The wake-ups that exist purely to re-arm — anchor+1s, and the 60s poll while
+    `next_*` is still stale — must reschedule without firing the predicates.
+    """
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    t0 = dt_util.utcnow().replace(microsecond=0)
+    anchor = t0 + timedelta(minutes=40)  # next_setting, fixed for the whole test
+    sun_event = ("sunset", -30)  # fire 30 minutes before it
+    hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
+
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "sun")
+    engine._index = TriggerIndex(
+        by_entity={},
+        by_clock={},
+        by_sun={sun_event: frozenset({key})},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={},
+        opaque=frozenset(),
+    )
+
+    fired: list = []
+    engine._fire = lambda preds, cause=None: fired.append((set(preds), cause))  # type: ignore[method-assign]
+
+    scheduled: list = []
+
+    def fake_atpit(_hass, action, point_in_time):
+        scheduled.append((action, point_in_time))
+        return MagicMock()
+
+    clock = [t0]
+
+    with (
+        patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit),
+        patch.object(_ts_mod.dt_util, "utcnow", side_effect=lambda: clock[0]),
+    ):
+        engine._schedule_sun(sun_event)
+        handler, when = scheduled[-1]
+        assert when == anchor - timedelta(minutes=30)
+
+        # 1. the genuine anchor+offset instant — this is the one that fires.
+        clock[0] = when
+        handler(when)
+        handler, when = scheduled[-1]
+        assert when == anchor + timedelta(seconds=1)  # rollover fallback
+
+        # 2. the anchor+1s fallback: `next_setting` has not rolled over yet.
+        clock[0] = when
+        handler(when)
+        handler, when = scheduled[-1]
+        assert when == clock[0] + timedelta(seconds=60)  # stale-anchor poll
+
+        # 3. one 60s poll tick.
+        clock[0] = when
+        handler(when)
+
+    assert len(fired) == 1
+    assert fired[0][0] == {key}
+    assert fired[0][1].kind == CauseKind.SUN
+    engine._teardown()
 
 
 # ---------------------------------------------------------------------------

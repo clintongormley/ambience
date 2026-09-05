@@ -34,8 +34,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     that was enabled elsewhere.
 - A scope paused after its floor or house was paused keeps its own resume time
     when the parent resumes.
-- A scope that was paused when Home Assistant stopped abruptly now still
-    resumes automatically.
+- A scope that was paused when Home Assistant stopped abruptly now still resumes
+    automatically.
+- Scenes anchored to a time before sunrise or sunset no longer re-evaluate a
+    second time at the sunrise/sunset itself.
 
 ## [1.2.0] - 2026-09-04
 

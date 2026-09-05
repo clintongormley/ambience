@@ -419,37 +419,44 @@ class TriggerSubscriptionsMixin:
                 ),
             )
 
-    def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
-        """Next fire time for a sun anchor (+offset), from sun.sun, or None.
+    def _next_sun_slot(self, anchor: str, offset_min: int) -> tuple[Any, bool]:
+        """Next wake-up for a sun anchor (+offset) as `(when, is_fire)`.
 
-        sun.sun's `next_*` attribute only rolls over when the un-offset event
-        fires, so with a negative offset the computed time is already in the
-        past once the handler has fired — arming it would fire again on the
-        next loop iteration and spin until the anchor advances. Fall forward
-        to just after the un-offset anchor instead; once that passes, `next_*`
-        has rolled over and the real next occurrence is computable. If even
-        the anchor is stale (attribute-update race), poll again shortly.
+        `when` is None (with `is_fire` False) when sun.sun cannot supply the
+        anchor. `is_fire` marks the genuine `anchor+offset` instant, the only
+        one that may re-evaluate: sun.sun's `next_*` attribute only rolls over
+        when the un-offset event fires, so with a negative offset the computed
+        time is already in the past once the handler has fired — arming it
+        would fire again on the next loop iteration and spin until the anchor
+        advances. Fall forward to just after the un-offset anchor instead; once
+        that passes, `next_*` has rolled over and the real next occurrence is
+        computable. If even the anchor is stale (attribute-update race), poll
+        again shortly. Both fall-forwards exist only to re-arm.
         """
         state = self._hass.states.get("sun.sun")
         attr = ANCHOR_ATTR.get(anchor)
         raw = state.attributes.get(attr) if (state and attr) else None
         parsed = dt_util.parse_datetime(raw) if raw else None
         if parsed is None:
-            return None
+            return None, False
         fire_at = parsed + timedelta(minutes=offset_min)
         now = dt_util.utcnow()
         if fire_at > now:
-            return fire_at
+            return fire_at, True
         retry_at = parsed + timedelta(seconds=1)
-        return retry_at if retry_at > now else now + timedelta(seconds=60)
+        if retry_at > now:
+            return retry_at, False
+        return now + timedelta(seconds=60), False
 
     def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
-        """Schedule the next firing of a sun event, rescheduling on fire.
+        """Schedule the next sun wake-up, re-arming on every wake-up.
 
-        The handle lives in `_sun_unsubs[sun_event]`; re-arming cancels and
-        replaces the slot so fired (dead) handles never accumulate.
+        Only a wake-up at the genuine `anchor+offset` instant re-evaluates; the
+        rollover fall-forwards just re-arm. The handle lives in
+        `_sun_unsubs[sun_event]`; re-arming cancels and replaces the slot so
+        fired (dead) handles never accumulate.
         """
-        fire_at = self._next_sun_fire(sun_event[0], sun_event[1])
+        fire_at, is_fire = self._next_sun_slot(sun_event[0], sun_event[1])
         if fire_at is None:
             return
 
@@ -457,7 +464,7 @@ class TriggerSubscriptionsMixin:
         def _handler(_now: Any) -> None:
             if not self._running:
                 return  # fired after teardown — don't re-arm into a dead engine
-            preds = self._index.by_sun.get(sun_event)
+            preds = self._index.by_sun.get(sun_event) if is_fire else None
             if preds:
                 self._fire(
                     set(preds),

@@ -29,15 +29,22 @@ _HALF_DAY = timedelta(hours=12)
 
 @dataclass(frozen=True)
 class TimeOfDaySnapshot:
-    """Today's anchor times plus 'now', all tz-aware."""
+    """Today's anchor times plus 'now', all tz-aware.
+
+    An anchor is None when it is undefined here today (polar day/night: above
+    ~60.5°N there is no civil dawn or dusk around midsummer) or when the sun
+    integration is absent. Only the endpoints referencing that anchor become
+    unobservable — clock endpoints, and ranges built solely from defined
+    anchors, keep evaluating."""
 
     now: datetime
-    sunrise: datetime
-    sunset: datetime
-    noon: datetime
-    midnight: datetime
-    dawn: datetime
-    dusk: datetime
+    sunrise: datetime | None
+    sunset: datetime | None
+    noon: datetime | None
+    midnight: datetime | None
+    dawn: datetime | None
+    dusk: datetime | None
+    sun_configured: bool = True
 
 
 class TimeOfDayCondition:
@@ -68,9 +75,9 @@ class TimeOfDayCondition:
     ) -> TimeOfDaySnapshot:
         # Presence check only — sun.sun being available means the sun integration
         # is configured. The anchors themselves come from astral below, not from
-        # this state's attributes.
-        if hass.states.get("sun.sun") is None:
-            raise RuntimeError("sun.sun unavailable")
+        # this state's attributes; without the integration there are no anchors
+        # and only sun-anchored endpoints go unobservable.
+        sun_configured = hass.states.get("sun.sun") is not None
         moment = now or dt_util.utcnow()
         # Resolve each anchor to its occurrence on `moment`'s local date rather
         # than reading sun.sun's `next_*` attributes: the moment an event fires,
@@ -78,20 +85,20 @@ class TimeOfDayCondition:
         # normalisation in `_resolve_endpoint`) drifts a day's solar movement past
         # `now`, flipping a just-crossed boundary back (e.g. blinds reopening the
         # instant after dusk). Today's-date anchors stay put once crossed.
-        try:
-            anchors = anchor_datetimes(hass, moment)
-        except ValueError as err:
-            # Anchor undefined at this location/date (polar day/night) — fail the
-            # snapshot so the condition resolves to None, same as a missing anchor.
-            raise RuntimeError(f"sun anchor undefined: {err}") from err
+        # Anchors undefined at this location/date are simply absent from the map:
+        # a partial snapshot disables only the endpoints that need the missing
+        # anchor, where an all-or-nothing failure would make every time_of_day
+        # scene — clock ranges included — unavailable for the whole day.
+        anchors = anchor_datetimes(hass, moment) if sun_configured else {}
         return TimeOfDaySnapshot(
             now=moment,
-            sunrise=anchors["sunrise"],
-            sunset=anchors["sunset"],
-            noon=anchors["noon"],
-            midnight=anchors["midnight"],
-            dawn=anchors["dawn"],
-            dusk=anchors["dusk"],
+            sunrise=anchors.get("sunrise"),
+            sunset=anchors.get("sunset"),
+            noon=anchors.get("noon"),
+            midnight=anchors.get("midnight"),
+            dawn=anchors.get("dawn"),
+            dusk=anchors.get("dusk"),
+            sun_configured=sun_configured,
         )
 
     def matches(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> bool:
@@ -186,7 +193,11 @@ class TimeOfDayCondition:
             offset = ep.get("offset_min", 0)
             if not isinstance(offset, int) or isinstance(offset, bool):
                 raise ValueError(f"offset_min must be int: {offset!r}")
-            anchor_dt: datetime = getattr(snapshot, anchor)
+            anchor_dt: datetime | None = getattr(snapshot, anchor)
+            if anchor_dt is None:
+                # Unobservable endpoint: ValueError is the same signal a dangling
+                # period gives, so _match_tolerant fails just this predicate.
+                raise ValueError(f"sun anchor unavailable: {anchor}")
             if snapshot.now - anchor_dt > _HALF_DAY:
                 anchor_dt += _DAY
             elif anchor_dt - snapshot.now > _HALF_DAY:
@@ -249,6 +260,17 @@ class TimeOfDayCondition:
                 and item["period"] not in known
             ):
                 return f"time-of-day period {item['period']!r} no longer exists"
+        if not isinstance(snapshot, TimeOfDaySnapshot):
+            return None
+        for item in items:
+            for endpoint in self._dep_endpoints(item):
+                if not isinstance(endpoint, dict) or endpoint.get("kind") != "sun":
+                    continue
+                anchor = endpoint.get("anchor")
+                if anchor in ANCHOR_ATTR and getattr(snapshot, anchor) is None:
+                    if not snapshot.sun_configured:
+                        return "the sun integration is not set up"
+                    return f"{anchor} is undefined at this location today"
         return None
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:

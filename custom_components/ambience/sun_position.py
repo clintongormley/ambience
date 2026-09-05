@@ -41,9 +41,7 @@ def _observer(hass: HomeAssistant) -> Observer:
     )
 
 
-def anchor_datetimes(
-    hass: HomeAssistant, now: datetime, *, allow_missing: bool = False
-) -> dict[str, datetime]:
+def anchor_datetimes(hass: HomeAssistant, now: datetime) -> dict[str, datetime]:
     """The six sun anchors for `now`'s local date, as tz-aware UTC datetimes.
 
     Keyed by the time_of_day anchor names (sunrise/sunset/noon/midnight/dawn/dusk).
@@ -55,10 +53,9 @@ def anchor_datetimes(
     `next_event − 24h` drifts by a day's worth of solar movement (tens of seconds
     to minutes), which would shove the boundary back across `now`.
 
-    By default raises ValueError if any anchor is undefined at the location/date
-    (polar day/night) — the live caller treats that as an unavailable snapshot.
-    With `allow_missing=True`, undefined anchors are omitted from the result
-    instead (the synthetic-state path keeps whatever anchors do exist).
+    An anchor undefined at the location/date (polar day/night) is omitted, so a
+    caller keeps the anchors that do exist and disables only what depends on the
+    missing ones.
     """
     observer = _observer(hass)
     on_date = dt_util.as_local(now).date()
@@ -67,8 +64,7 @@ def anchor_datetimes(
         try:
             result[name] = fn(observer, date=on_date)
         except ValueError:
-            if not allow_missing:
-                raise
+            continue  # undefined here today (polar day/night)
     return result
 
 
@@ -77,13 +73,12 @@ def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
 
     Carries `elevation`/`azimuth` (for the sun condition) and the six `next_*`
     anchors (for the time_of_day condition). Anchors that are undefined at the
-    location/date (polar day/night) are omitted; a condition needing a missing
-    anchor will fail its snapshot and resolve to None, same as live behaviour.
+    location/date (polar day/night) are omitted; a predicate needing a missing
+    anchor is unobservable and reads false, same as live behaviour.
     """
     observer = _observer(hass)
     attributes: dict[str, Any] = {
-        _ANCHORS[name][0]: dt.isoformat()
-        for name, dt in anchor_datetimes(hass, now, allow_missing=True).items()
+        _ANCHORS[name][0]: dt.isoformat() for name, dt in anchor_datetimes(hass, now).items()
     }
     el = float(elevation(observer, now))
     attributes["elevation"] = el

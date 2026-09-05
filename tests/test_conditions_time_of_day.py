@@ -97,9 +97,21 @@ async def test_snapshot_returns_today_anchors(hass: HomeAssistant) -> None:
         assert getattr(snap, field).tzinfo is not None
 
 
-async def test_snapshot_raises_when_sun_unavailable(hass: HomeAssistant) -> None:
-    with pytest.raises(RuntimeError, match="sun.sun"):
-        await _condition().snapshot(hass)
+async def test_snapshot_without_sun_integration_disables_only_sun_endpoints(
+    hass: HomeAssistant,
+) -> None:
+    """No `sun.sun` (the sun integration is absent): the snapshot still resolves,
+    clock endpoints keep working and only sun-anchored ones go unobservable."""
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=datetime(2026, 6, 20, 12, 0, tzinfo=UTC))
+    assert snap.sunrise is None
+    assert snap.dusk is None
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+    sun_pred = _range(_sun("sunrise"), _sun("sunset"))
+    assert cond.matches(sun_pred, snap) is False
+    reason = cond.unconfigured_reason(sun_pred, snap)
+    assert reason is not None
+    assert "sun integration" in reason
 
 
 async def test_snapshot_uses_anchor_for_now_local_date_not_next_event(
@@ -670,20 +682,83 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     )
 
 
-# ── snapshot: anchor undefined at location/date (polar day/night) ───────────
+# ── snapshot: anchor undefined at location/date (polar day/night) ─────────
+
+_REYKJAVIK = (64.13, -21.9, 0)  # latitude, longitude, elevation
+
+# Midsummer noon in Iceland (Atlantic/Reykjavik is UTC year-round, so the local
+# date is the UTC date): above ~60.5°N civil dawn/dusk do not occur, while
+# sunrise/sunset/noon/midnight stay defined.
+_MIDSUMMER = datetime(2026, 6, 20, 12, 0, tzinfo=UTC)
 
 
-async def test_snapshot_raises_when_anchor_undefined(hass: HomeAssistant) -> None:
-    """snapshot() raises RuntimeError when an anchor is undefined at the
-    location/date (e.g. high-latitude midsummer where the sun never reaches the
-    dusk depression), so the condition resolves to None rather than crashing."""
-    hass.config.latitude = 80.0
-    hass.config.longitude = 0.0
-    hass.config.elevation = 0
+def _set_reykjavik(hass: HomeAssistant) -> Observer:
+    """Pin hass to Reykjavík (sun integration up) and return a matching Observer."""
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = _REYKJAVIK
     hass.states.async_set("sun.sun", "above_horizon", {})
-    now = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
-    with pytest.raises(RuntimeError, match="anchor undefined"):
-        await _condition().snapshot(hass, now=now)
+    return Observer(latitude=_REYKJAVIK[0], longitude=_REYKJAVIK[1], elevation=_REYKJAVIK[2])
+
+
+async def test_snapshot_keeps_defined_anchors_when_dusk_undefined(hass: HomeAssistant) -> None:
+    """A day with no civil dawn/dusk yields a partial snapshot, not no snapshot."""
+    obs = _set_reykjavik(hass)
+    snap = await _condition().snapshot(hass, now=_MIDSUMMER)
+    assert snap is not None
+    assert snap.dawn is None
+    assert snap.dusk is None
+    assert snap.sunrise == sunrise(obs, date=date(2026, 6, 20))
+    assert snap.noon is not None
+    assert snap.midnight is not None
+
+
+async def test_clock_range_matches_when_dusk_undefined(hass: HomeAssistant) -> None:
+    """A clock-only range is unaffected by the missing anchor."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+
+
+async def test_dusk_range_false_with_reason_naming_the_anchor(hass: HomeAssistant) -> None:
+    """A range referencing the missing anchor is false and says which anchor."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    pred = _range(_sun("dusk"), _time(8, 30))
+    assert cond.matches(pred, snap) is False
+    reason = cond.unconfigured_reason(pred, snap)
+    assert reason is not None
+    assert "dusk" in reason
+
+
+async def test_period_needing_missing_anchor_false_others_still_evaluate(
+    hass: HomeAssistant,
+) -> None:
+    """Only periods referencing the missing anchor go unobservable: 'evening'
+    (sunset→dusk) is false while 'daytime' (sunrise→sunset) still matches."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    assert cond.matches({"period": "evening"}, snap) is False
+    reason = cond.unconfigured_reason({"period": "evening"}, snap)
+    assert reason is not None
+    assert "dusk" in reason
+    assert cond.matches({"period": "daytime"}, snap) is True
+    assert cond.describe(snap) == "morning"
+
+
+async def test_polar_day_keeps_clock_ranges_working(hass: HomeAssistant) -> None:
+    """At 80°N on midsummer the sun neither rises nor sets: those anchors are
+    undefined, noon/midnight stay defined, and clock ranges keep working."""
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = 80.0, 0.0, 0
+    hass.states.async_set("sun.sun", "above_horizon", {})
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=datetime(2026, 6, 21, 12, 0, tzinfo=UTC))
+    assert snap.sunrise is None
+    assert snap.sunset is None
+    assert snap.noon is not None
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+    assert cond.matches(_range(_sun("sunrise"), _sun("sunset")), snap) is False
 
 
 # ── _resolve_endpoint error paths (via validate_predicate; matches() is

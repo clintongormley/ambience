@@ -471,7 +471,7 @@ def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
     # anchor_datetimes reads only now's local *date*; a tz-aware local noon
     # materialises the date unambiguously (no DST-fold edge at noon).
     now = parsed.replace(hour=12, tzinfo=dt_util.DEFAULT_TIME_ZONE)
-    resolved = anchor_datetimes(hass, now, allow_missing=True)
+    resolved = anchor_datetimes(hass, now)
     return {
         name: (resolved[name].isoformat() if name in resolved else None) for name in ANCHOR_NAMES
     }

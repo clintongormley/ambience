@@ -20,32 +20,22 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.util import dt as dt_util
 
-from .conditions._common import UNAVAILABLE
 from .const import (
     DATA_CONDITIONS,
-    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DOMAIN,
 )
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
-    _scope_enabled,
-    _switch_state,
-    apply_lock,
-    async_execute_plan,
-    async_resolve_with_snapshots,
+    async_resolve_and_apply_unit,
     attach_tenure,
     category_ids,
-    forget_last_applied,
     gather_unit_traces,
-    get_last_applied,
-    set_last_matched,
     snapshot_conditions,
 )
 from .trace import (
     CauseKind,
-    Outcome,
     TraceEvent,
     TriggerCause,
     UnitTrace,
@@ -290,7 +280,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     dirty.add((key[0], key[1], category))
         # Re-arm rechecks off the freshly-updated tenure so a gate that is true
         # but not yet matured will still fire at since+seconds with no further
-        # event. (Was previously driven by per-entity `last_*` heuristics.)
+        # event.
         if gated:
             self._schedule_for_rechecks(gated)
         return dirty
@@ -407,148 +397,25 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         """Resolve a dirty (scope, category) unit and apply if the winner changed
         (or `force`). Skips when the scope is disabled or the switch is off.
         Returns a UnitTrace describing the outcome when tracing is active, else
-        None."""
-        active = tracing_active(self._hass)
-        if not _scope_enabled(self._hass, scope_kind, scope_id):
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    "on",
-                    Outcome.SKIPPED_SCOPE_DISABLED,
-                    None,
-                )
-            return None
-        switch_state = _switch_state(self._hass, scope_kind, scope_id)
-        if switch_state == "off":
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    switch_state,
-                    Outcome.SKIPPED_SWITCH_OFF,
-                    None,
-                )
-            return None
-        # Serialize resolve+apply per (scope, category): a burst of triggers on
-        # one unit arrives as separate tasks. Without this, while one task is
-        # suspended running its actions, another resolves and applies the same
-        # unit — re-firing the same scene. Holding the lock across the whole
-        # resolve+apply makes a waiting task proceed only once the first has
-        # recorded last_applied and finished, so it either debounces (same winner)
-        # or applies in order (new winner) instead of interleaving mid-apply.
-        async with apply_lock(self._hass, scope_kind, scope_id, category_id):
-            plan = await async_resolve_with_snapshots(
-                self._hass,
-                scope_kind,
-                scope_id,
-                self._snapshots,
-                category=category_id,
-                describe=False,
-                explain=active,
-                entity_ids_for=partial(self._entity_ids_for, scope_kind, scope_id),
-            )
-            index = plan["matched_scene_index"]
-            explanation = plan.get("explanation")
-            # Drop-out (the triggering entity went unavailable/unknown, or was
-            # removed → cause.new is None): only an `unavailable`-guard winner may
-            # act on it. A non-guard fall-through winner (or a no-match) is
-            # suppressed so a sensor blip can't drive an unrelated scene — devices
-            # are left untouched. The guard itself runs normally below (its
-            # actions, or its NO_OP block).
-            if (
-                cause is not None
-                and cause.kind == CauseKind.ENTITY
-                and (cause.new in UNAVAILABLE or cause.new is None)
-                and not self._winner_has_unavailable(scope_kind, scope_id, index)
-            ):
-                # Suppression covers actions only: with the winner gone entirely, a
-                # surviving last-applied record would debounce that scene's next real
-                # win. A different (merely suppressed) winner leaves the record alone
-                # — the devices still hold the recorded scene.
-                if index is None:
-                    forget_last_applied(self._hass, scope_kind, scope_id, category_id)
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.SKIPPED_UNAVAILABLE,
-                        explanation,
-                    )
-                return None
-            if index is None:
-                # A no-match is a transition away from the previous winner: drop
-                # the last-applied record so a later win of the same scene re-applies.
-                forget_last_applied(self._hass, scope_kind, scope_id, category_id)
-                set_last_matched(self._hass, scope_kind, scope_id, category_id, None)
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_MATCH,
-                        explanation,
-                    )
-                return None
-            # Record the current winner before any action runs (covers no-op /
-            # debounce / acted). The unavailable-drop-out above intentionally does
-            # not reach here, so a sensor blip leaves the dot untouched.
-            set_last_matched(self._hass, scope_kind, scope_id, category_id, index)
-            if not plan["actions"]:
-                # A pure blocker (winner with no actions): nothing to run, and it
-                # stays transparent to last-applied so it neither records itself nor
-                # clears a prior real winner.
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_OP,
-                        explanation,
-                        winner_name=plan["scene_name"],
-                    )
-                return None
-            always = plan.get("apply") == "always"
-            if (
-                not force
-                and not always
-                and index == get_last_applied(self._hass, scope_kind, scope_id, category_id)
-            ):
-                # Same winner as last applied, with identical actions → suppress the
-                # redundant re-fire. A scene whose `apply` mode is "always" opts out
-                # of this debounce, re-asserting its actions on every re-evaluation.
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.DEBOUNCED,
-                        explanation,
-                        winner_name=plan["scene_name"],
-                    )
-                return None
-            await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
-        if active:
-            return UnitTrace(
-                scope_kind,
-                scope_id,
-                category_id,
-                switch_state,
-                Outcome.ACTED,
-                explanation,
-                winner_name=plan["scene_name"],
-                actions=self._hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(
-                    plan["actions"]
-                ),
-            )
-        return None
+        None.
+
+        Delegates to the shared ladder, supplying the engine's own snapshot cache
+        and the dependency analysis captured at the last rebuild — the store's
+        live config could have moved on since, and a trace must describe the
+        scenes this engine actually evaluated.
+        """
+        return await async_resolve_and_apply_unit(
+            self._hass,
+            scope_kind,
+            scope_id,
+            category_id,
+            self._snapshots,
+            force=force,
+            cause=cause,
+            active=tracing_active(self._hass),
+            entity_ids_for=partial(self._entity_ids_for, scope_kind, scope_id),
+            winner_is_guard=partial(self._winner_has_unavailable, scope_kind, scope_id),
+        )
 
     async def _apply_units(
         self,

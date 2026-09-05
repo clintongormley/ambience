@@ -17,6 +17,7 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from .conditions._common import UNAVAILABLE
 from .const import (
     DATA_APPLY_LOCKS,
     DATA_CONDITIONS,
@@ -214,9 +215,8 @@ async def async_resolve_with_snapshots(
     # winner from the Explanation (resolve() is itself a thin wrapper over
     # evaluate_explained, so calling both would walk the scenes twice).
     if explain:
-        # describe=True calls condition.describe() per predicate. With the always-on
-        # BufferSink (Increment B), `explain` is true on every evaluation, so this
-        # runs in production — bounded, but no longer gated behind debug logging.
+        # `explain` is true on every evaluation (the BufferSink is always on), so
+        # this describe=True walk runs in production — bounded, but not free.
         explanation = evaluate_explained(
             candidates,
             snapshots,
@@ -418,6 +418,140 @@ async def async_resolve_categories_only(
     return await _resolve_all_categories(hass, scope_kind, scope_id, snapshots)
 
 
+async def async_resolve_and_apply_unit(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    category_id: str,
+    snapshots: dict[str, Any],
+    *,
+    force: bool = False,
+    manual: bool = False,
+    cause: TriggerCause | None = None,
+    active: bool = False,
+    entity_ids_for: Callable[[int, str], tuple[str, ...]] | None = None,
+    winner_is_guard: Callable[[int | None], bool] | None = None,
+) -> UnitTrace | None:
+    """Resolve one (scope, category) unit against `snapshots` and apply the winner.
+
+    The single outcome ladder behind both the auto-trigger engine and the manual
+    apply. Returns the unit's UnitTrace when `active` (tracing), else None.
+
+    `manual` marks a user-initiated apply: it runs the winner unconditionally,
+    skipping the switch-off gate (the caller has already decided the switch does
+    not veto), the unavailable drop-out and the last-applied debounce, and it
+    describes the snapshots for the no-match log. `force` re-applies an unchanged
+    winner (an engine reload of edited scenes) without lifting the switch gate.
+
+    `cause` drives the drop-out suppression: when the fire came from an entity
+    going unavailable/removed, only an `unavailable`-guard winner (per
+    `winner_is_guard`, which maps a full-scene index to whether that scene guards
+    availability) may act. `entity_ids_for` supplies precomputed trace entity_ids
+    (see `async_resolve_with_snapshots`).
+    """
+    switch_state = _switch_state(hass, scope_kind, scope_id)
+
+    def trace(outcome: Outcome, explanation: Any = None, **kw: Any) -> UnitTrace | None:
+        """This unit's trace for `outcome`, or None when tracing is inactive."""
+        if not active:
+            return None
+        return UnitTrace(
+            scope_kind, scope_id, category_id, switch_state, outcome, explanation, **kw
+        )
+
+    if not _scope_enabled(hass, scope_kind, scope_id):
+        return trace(Outcome.SKIPPED_SCOPE_DISABLED)
+    if not manual and switch_state == "off":
+        return trace(Outcome.SKIPPED_SWITCH_OFF)
+    # Serialize resolve+apply per (scope, category): a burst of triggers on
+    # one unit arrives as separate tasks. Without this, while one task is
+    # suspended running its actions, another resolves and applies the same
+    # unit — re-firing the same scene. Holding the lock across the whole
+    # resolve+apply makes a waiting task proceed only once the first has
+    # recorded last_applied and finished, so it either debounces (same winner)
+    # or applies in order (new winner) instead of interleaving mid-apply. The
+    # manual path shares it, so the two never interleave dispatch on one unit.
+    async with apply_lock(hass, scope_kind, scope_id, category_id):
+        plan = await async_resolve_with_snapshots(
+            hass,
+            scope_kind,
+            scope_id,
+            snapshots,
+            category=category_id,
+            describe=manual,
+            explain=active,
+            entity_ids_for=entity_ids_for,
+        )
+        index = plan["matched_scene_index"]
+        explanation = plan.get("explanation")
+        # Drop-out (the triggering entity went unavailable/unknown, or was
+        # removed → cause.new is None): only an `unavailable`-guard winner may
+        # act on it. A non-guard fall-through winner (or a no-match) is
+        # suppressed so a sensor blip can't drive an unrelated scene — devices
+        # are left untouched. The guard itself runs normally below (its
+        # actions, or its NO_OP block).
+        if (
+            not manual
+            and cause is not None
+            and cause.kind == CauseKind.ENTITY
+            and (cause.new in UNAVAILABLE or cause.new is None)
+            and not (winner_is_guard is not None and winner_is_guard(index))
+        ):
+            # Suppression covers actions only: with the winner gone entirely, a
+            # surviving last-applied record would debounce that scene's next real
+            # win. A different (merely suppressed) winner leaves the record alone
+            # — the devices still hold the recorded scene.
+            if index is None:
+                forget_last_applied(hass, scope_kind, scope_id, category_id)
+            return trace(Outcome.SKIPPED_UNAVAILABLE, explanation)
+        if index is None:
+            if manual:
+                _LOGGER.info(
+                    "ambience: no scene matched for scope=%s/%s category=%s snapshots=%s",
+                    scope_kind,
+                    scope_id,
+                    category_id,
+                    plan["snapshots_described"],
+                )
+            # A no-match is a transition away from the previous winner: drop
+            # the last-applied record so a later win of the same scene re-applies.
+            forget_last_applied(hass, scope_kind, scope_id, category_id)
+            if not manual:
+                set_last_matched(hass, scope_kind, scope_id, category_id, None)
+            return trace(Outcome.NO_MATCH, explanation)
+        # Record the current winner before any action runs (covers no-op /
+        # debounce / acted). The unavailable-drop-out above intentionally does
+        # not reach here, so a sensor blip leaves the dot untouched.
+        if not manual:
+            set_last_matched(hass, scope_kind, scope_id, category_id, index)
+        if not plan["actions"]:
+            # A pure blocker (winner with no actions): nothing to run, and it
+            # stays transparent to last-applied so it neither records itself nor
+            # clears a prior real winner.
+            return trace(Outcome.NO_OP, explanation, winner_name=plan["scene_name"])
+        always = plan.get("apply") == "always"
+        if (
+            not manual
+            and not force
+            and not always
+            and index == get_last_applied(hass, scope_kind, scope_id, category_id)
+        ):
+            # Same winner as last applied, with identical actions → suppress the
+            # redundant re-fire. A scene whose `apply` mode is "always" opts out
+            # of this debounce, re-asserting its actions on every re-evaluation.
+            return trace(Outcome.DEBOUNCED, explanation, winner_name=plan["scene_name"])
+        await async_execute_plan(hass, scope_kind, scope_id, plan, category_id)
+    if not active:
+        # Annotating the actions is real work; don't do it for a trace nobody builds.
+        return None
+    return trace(
+        Outcome.ACTED,
+        explanation,
+        winner_name=plan["scene_name"],
+        actions=hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(plan["actions"]),
+    )
+
+
 async def async_apply_scene(
     hass: HomeAssistant,
     scope_kind: str,
@@ -457,68 +591,21 @@ async def async_apply_scene(
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
 
-    # Mirrors trigger_engine._resolve_and_apply but deliberately simpler: the
-    # manual path always executes matched categories (no switch-off/no-op/last-applied
-    # gating), so the two are intentionally not unified. It shares the engine's
-    # per-unit lock, so the two never interleave action *dispatch* on one unit;
-    # the manual snapshot is taken before the lock, so a concurrent engine apply
-    # that resolves a newer winner could still be followed by this stale apply —
-    # acceptable for a user-initiated one-shot, and strictly better than the
-    # pre-lock free-for-all.
+    # The manual apply runs the winner unconditionally: `manual=True` lifts the
+    # switch-off, drop-out and debounce gates from the shared ladder. The snapshot
+    # is taken before the unit lock, so a concurrent engine apply that resolves a
+    # newer winner could still be followed by this stale apply — acceptable for a
+    # user-initiated one-shot.
     async def _apply_category(category_id: str) -> UnitTrace | None:
-        async with apply_lock(hass, scope_kind, scope_id, category_id):
-            plan = await async_resolve_with_snapshots(
-                hass, scope_kind, scope_id, snapshots, category=category_id, explain=active
-            )
-            explanation = plan.get("explanation")
-            if plan["matched_scene_index"] is None:
-                _LOGGER.info(
-                    "ambience: no scene matched for scope=%s/%s category=%s snapshots=%s",
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    plan["snapshots_described"],
-                )
-                # A no-match is a transition away from the previous winner: drop the
-                # last-applied record so a later win re-applies (mirrors the engine).
-                forget_last_applied(hass, scope_kind, scope_id, category_id)
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_MATCH,
-                        explanation,
-                    )
-                return None
-            if not plan["actions"]:
-                # A pure blocker (winner with no actions): nothing to run, transparent
-                # to last-applied (mirrors the engine).
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_OP,
-                        explanation,
-                        winner_name=plan["scene_name"],
-                    )
-                return None
-            await async_execute_plan(hass, scope_kind, scope_id, plan, category_id)
-        if active:
-            return UnitTrace(
-                scope_kind,
-                scope_id,
-                category_id,
-                switch_state,
-                Outcome.ACTED,
-                explanation,
-                winner_name=plan["scene_name"],
-                actions=hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(plan["actions"]),
-            )
-        return None
+        return await async_resolve_and_apply_unit(
+            hass,
+            scope_kind,
+            scope_id,
+            category_id,
+            snapshots,
+            manual=True,
+            active=active,
+        )
 
     # category_ids already returns categories in scene order (deterministic);
     # the engine apply path consumes it raw, so don't re-sort here.

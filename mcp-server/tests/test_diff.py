@@ -237,3 +237,86 @@ def test_a_non_string_category_never_crashes_the_diff():
     changes = diff_scopes([], proposed)
     assert len(changes["added"]) == 2
     summarise_diff(changes)  # the elided-summary path must survive it too
+
+
+# --- predicate defaults ------------------------------------------------------
+#
+# The backend materialises the occupancy/lux/people predicate defaults at save
+# (`normalize_predicate`), so a STORED scene carries `negate: false`,
+# `for_mode: "at_least"`, `occupied: true`, `quant`, `where`. The AI guide teaches
+# the compact form, so an author re-submitting an unchanged scene from the guide
+# sends a predicate that differs only by those defaults — which must not preview
+# as an update, or the confirm gate becomes noise a human learns to click through.
+
+
+def test_compact_resubmission_of_a_normalised_scene_is_not_an_update():
+    stored = {
+        "name": "Evening",
+        "category": "lighting",
+        "when": {
+            "occupancy": {
+                "sensors": ["binary_sensor.hall"],
+                "occupied": True,
+                "quant": "any",
+                "negate": False,
+                "for_mode": "at_least",
+            },
+            "lux": {"sensors": ["sensor.lounge"], "range": "dark", "quant": "any", "negate": False},
+            "people": {
+                "who": ["person.alice"],
+                "quant": "any",
+                "where": "home",
+                "negate": False,
+                "for_mode": "at_least",
+            },
+        },
+        "actions": [],
+    }
+    compact = {
+        "name": "Evening",
+        "category": "lighting",
+        "when": {
+            "occupancy": {"sensors": ["binary_sensor.hall"]},
+            "lux": {"sensors": ["sensor.lounge"], "range": "dark"},
+            "people": {"who": ["person.alice"]},
+        },
+        "actions": [],
+    }
+    changes = diff_scopes([stored], [compact])
+    assert changes == {"added": [], "removed": [], "updated": []}
+
+
+def test_a_real_predicate_change_is_still_an_update():
+    """The defaults fill must not swallow a genuine edit hidden among them."""
+    stored = [
+        {
+            "name": "Evening",
+            "category": "lighting",
+            "when": {"occupancy": {"sensors": ["binary_sensor.hall"], "occupied": True}},
+        }
+    ]
+    proposed = [
+        {
+            "name": "Evening",
+            "category": "lighting",
+            "when": {"occupancy": {"sensors": ["binary_sensor.hall"], "occupied": False}},
+        }
+    ]
+    changes = diff_scopes(stored, proposed)
+    assert len(changes["updated"]) == 1
+    assert summarise_diff(changes)["updated"][0]["changed_fields"] == ["when"]
+
+
+def test_defaults_are_only_filled_for_the_conditions_that_declare_them():
+    """A condition with no entry in the table is compared verbatim, so an
+    unrelated key named `negate` is never invented or ignored."""
+    stored = [{"name": "A", "category": "c", "when": {"day": {"include": ["mon"]}}}]
+    proposed = [{"name": "A", "category": "c", "when": {"day": {"include": ["tue"]}}}]
+    assert len(diff_scopes(stored, proposed)["updated"]) == 1
+
+
+def test_a_non_dict_predicate_survives_normalisation():
+    """`when: {people: null}` is the wildcard form; it must not crash the diff
+    or compare unequal to itself."""
+    scene = {"name": "A", "category": "c", "when": {"people": None, "lux": "nonsense"}}
+    assert diff_scopes([scene], [dict(scene)])["updated"] == []

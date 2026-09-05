@@ -8,11 +8,17 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- A people condition saved without an explicit "who"/"quant" now shows as
+    "Anyone" in the panel from its next save onwards; it always evaluated that
+    way.
+
 ### Fixed
 
-- Scene editor validation messages are now translated. Condition validators
-    also reject entity ids that cannot name a real entity, such as a bare
-    `sensor.` prefix or an id containing a space.
+- Scene editor validation messages are now translated. Condition validators also
+    reject entity ids that cannot name a real entity, such as a bare `sensor.`
+    prefix or an id containing a space.
 - Reloading Ambience no longer registers a duplicate panel resource each time.
 - A damaged Ambience storage file is no longer overwritten with an empty
     configuration on startup; it is left in place for recovery.
@@ -43,8 +49,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Scenes anchored to a time before sunrise or sunset no longer re-evaluate a
     second time at the sunrise/sunset itself.
 - Disabled scenes no longer run their script or template conditions.
-- A 'nobody home' condition no longer matches when Home Assistant has no
-    persons at all.
+- A 'nobody home' condition no longer matches when Home Assistant has no persons
+    at all.
 - A scene whose trigger entity vanished and later reappears is applied again
     instead of being treated as already applied.
 - Lux conditions accept any numeric sensor you pick, not only sensors declaring

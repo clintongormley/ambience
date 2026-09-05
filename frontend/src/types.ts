@@ -242,8 +242,11 @@ export type SunPredicate = null | { elevation?: SunElevation; azimuth?: SunAzimu
 export type StateForDuration = { h: number; m: number; s: number };
 
 /** Whether the `for` duration is a minimum ("at least", the default/absent
- *  behaviour) or a strict maximum ("less than"). Omitted on the wire whenever
- *  `for` is null/zero or the mode is "at_least". */
+ *  behaviour) or a strict maximum ("less than"). The editors omit it whenever
+ *  `for` is null/zero or the mode is "at_least"; occupancy and people
+ *  predicates come back from the backend with it stated explicitly, since it
+ *  materialises its predicate defaults at save. Absent and "at_least" are the
+ *  same thing either way. */
 export type ForMode = "at_least" | "less_than";
 
 export type StateAtom = {
@@ -282,7 +285,7 @@ export interface PeoplePredicate {
   where?: string; // positive location: "home" | "zone.*"; default "home"
   negate?: boolean; // default false; true = NOT at `where`
   for?: { h: number; m: number; s: number } | null;
-  for_mode?: ForMode | null; // omitted when `for` is null/zero or mode is "at_least"
+  for_mode?: ForMode | null; // default "at_least"; the backend states it explicitly
 }
 
 // --- occupancy condition ----------------------------------------------------
@@ -295,7 +298,7 @@ export interface OccupancyPredicate {
   occupied?: boolean; // default true; false = vacant
   quant?: OccupancyQuant; // default "any"
   for?: { h: number; m: number; s: number } | null;
-  for_mode?: ForMode | null; // omitted when `for` is null/zero or mode is "at_least"
+  for_mode?: ForMode | null; // default "at_least"; the backend states it explicitly
   negate?: boolean; // default false; inverts the whole match (incl. `for`)
 }
 

@@ -35,6 +35,7 @@ from .const import (
 from .engine import evaluate_explained, resolve
 from .errors import service_validation_error
 from .scope_triggers import referenced_entities
+from .scopes import find_scope_spec, not_found_validation_error
 from .service_logbook import log_apply, log_run_actions
 from .switch import switch_unique_id
 from .trace import (
@@ -60,19 +61,16 @@ def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any
     Raises ServiceValidationError for unknown areas/floors or an unrecognised
     scope kind. For "house", scope_id is ignored.
     """
-    if scope_kind == "area":
-        cfg = store.get_area(scope_id)
-        if cfg is None:
-            raise service_validation_error("unknown_area", scope_id=scope_id)
-        return cfg
-    if scope_kind == "floor":
-        cfg = store.get_floor(scope_id)
-        if cfg is None:
-            raise service_validation_error("unknown_floor", scope_id=scope_id)
-        return cfg
-    if scope_kind == "house":
-        return store.get_house()
-    raise service_validation_error("unknown_scope_kind", scope_kind=scope_kind)
+    spec = find_scope_spec(scope_kind)
+    if spec is None:
+        raise service_validation_error("unknown_scope_kind", scope_kind=scope_kind)
+    getter = getattr(store, spec.store_getter)
+    if not spec.has_id:
+        return getter()
+    cfg = getter(scope_id)
+    if cfg is None:
+        raise not_found_validation_error(scope_kind, scope_id)
+    return cfg
 
 
 def category_ids(cfg: dict[str, Any]) -> list[str]:

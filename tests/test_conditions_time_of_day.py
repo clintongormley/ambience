@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from astral import Observer
@@ -1055,3 +1057,51 @@ def test_unconfigured_reason_ignores_non_string_period() -> None:
     cond = TimeOfDayCondition(period_lookup=lambda: {})
     # A corrupt non-string period must not yield a misleading "no longer exists" reason.
     assert cond.unconfigured_reason({"period": 42}, None) is None
+
+
+# ── clamped sun endpoints are timezone-independent when ordering/shadowing ────
+
+
+@contextmanager
+def _default_tz(name: str):
+    """Run the block with dt_util's default timezone set to `name`."""
+    original = dt_util.DEFAULT_TIME_ZONE
+    dt_util.set_default_time_zone(ZoneInfo(name))
+    try:
+        yield
+    finally:
+        dt_util.set_default_time_zone(original)
+
+
+_TIMEZONES = ["UTC", "America/Los_Angeles", "Australia/Sydney"]
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamped_intervals_are_timezone_independent(tz_name: str) -> None:
+    # Synthetic sunrise is 06:00; the not-before floor lifts the start to 07:00
+    # in every default timezone, so the interval is 420→540 minutes of day.
+    pred = _range(_sun_clamp("sunrise", "not_before", 7, 0), _time(9, 0))
+    with _default_tz(tz_name):
+        assert _condition()._intervals(pred) == [(420.0, 540.0)]
+        assert _condition().order_key(pred) == 420.0
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamped_range_does_not_contain_earlier_start(tz_name: str) -> None:
+    outer = _range(_sun_clamp("sunrise", "not_before", 7, 0), _time(9, 0))
+    inner = _range(_time(6, 30), _time(9, 0))
+    with _default_tz(tz_name):
+        assert _condition().contains(outer, inner) is False
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamp_emptied_detection_is_timezone_independent(tz_name: str) -> None:
+    # Synthetic sunset is 18:00. Clamped not-before 21:00 with a 20:00 end, the
+    # pre-clamp range 18:00→20:00 ran forward, so the clamp emptied it and it
+    # contributes no interval; with a 06:00 end the range wrapped already, so the
+    # clamp keeps it as a genuine overnight wrap that splits at midnight.
+    empty = _range(_sun_clamp("sunset", "not_before", 21, 0), _time(20, 0))
+    wrap = _range(_sun_clamp("sunset", "not_before", 21, 0), _time(6, 0))
+    with _default_tz(tz_name):
+        assert _condition()._intervals(empty) == []
+        assert _condition()._intervals(wrap) == [(1260.0, 1440.0), (0.0, 360.0)]

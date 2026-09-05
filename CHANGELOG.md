@@ -24,6 +24,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Time-of-day conditions keep working at high latitudes on days when dawn or
     dusk does not occur; only the endpoints that need the missing anchor are
     unavailable.
+- Scene ordering and shadowing for sun-anchored times with a clamp no longer
+    depend on the Home Assistant time zone.
 
 ## [1.2.0] - 2026-09-04
 

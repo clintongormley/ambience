@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -419,7 +419,15 @@ def _minute_of_day(value: datetime) -> float:
 
 
 def _synthetic_snapshot() -> TimeOfDaySnapshot:
-    base = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    """A fixed stand-in day for the paths that reason about a range's shape
+    rather than about the current instant."""
+    # The sorting/containment paths (_intervals, _clamp_emptied, order_key,
+    # contains) reduce these datetimes to a minute of day, so every endpoint
+    # must resolve in one domain: `time` endpoints and clock clamps land on
+    # HA-local wall time, so the sun anchors are nominal local wall times too.
+    # Anchoring them in UTC instead would compare instants across the offset and
+    # make ordering and shadowing depend on the Home Assistant time zone.
+    base = datetime(2026, 1, 1, 12, 0, tzinfo=dt_util.DEFAULT_TIME_ZONE)
     return TimeOfDaySnapshot(
         now=base,
         sunrise=base.replace(hour=6),

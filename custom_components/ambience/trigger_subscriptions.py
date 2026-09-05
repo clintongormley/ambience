@@ -62,7 +62,17 @@ class TriggerSubscriptionsMixin:
             self._hass.async_create_task(self.async_evaluate(fired, cause))
 
     def _teardown(self) -> None:
-        """Cancel all subscriptions and pending timers."""
+        """Cancel all subscriptions and pending timers (engine shutdown)."""
+        self._teardown_subscriptions()
+        self._cancel_all_reapply_timers()
+
+    def _teardown_subscriptions(self) -> None:
+        """Cancel the index-derived subscriptions and `for:` timers.
+
+        Idle-reapply timers are deliberately left alone: they track wall-clock
+        idleness per unit, not the index, and a resubscribe (any config save)
+        must not restart them.
+        """
         self._running = False
         while self._unsubs:
             self._unsubs.pop()()
@@ -74,11 +84,10 @@ class TriggerSubscriptionsMixin:
                 cancel()
         self._for_handles.clear()
         self._switch_scopes.clear()
-        self._cancel_all_reapply_timers()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
-        self._teardown()
+        self._teardown_subscriptions()
         self._running = True
         index = self._index
         if index.entities:
@@ -138,7 +147,7 @@ class TriggerSubscriptionsMixin:
                     self._hass, list(self._switch_scopes), self._on_switch_event
                 )
             )
-        self._rearm_all_reapply_timers()
+        self._sync_reapply_timers()
 
     @callback
     def _on_state_event(self, event: Event) -> None:
@@ -246,6 +255,20 @@ class TriggerSubscriptionsMixin:
     def _rearm_all_reapply_timers(self) -> None:
         for unit in self._all_units():
             if get_last_applied(self._hass, *unit) is not None:
+                self._arm_reapply_timer(unit)
+
+    def _sync_reapply_timers(self) -> None:
+        """Reconcile the idle-reapply timers with the rebuilt unit set, without
+        disturbing live ones — a config save anywhere must not reset every unit's
+        idle clock. Drop timers for units the rebuild removed, and arm applied
+        units that have no timer yet (first subscribe, or a unit whose timer fired
+        and was consumed while its scope was gated out)."""
+        live = self._all_units()
+        live_set = set(live)
+        for unit in [u for u in self._reapply_timers if u not in live_set]:
+            self._reapply_timers.pop(unit)()
+        for unit in live:
+            if unit not in self._reapply_timers and get_last_applied(self._hass, *unit) is not None:
                 self._arm_reapply_timer(unit)
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:

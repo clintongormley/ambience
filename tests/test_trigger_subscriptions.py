@@ -1373,3 +1373,113 @@ async def test_schedule_sun_handler_noop_after_teardown(hass) -> None:
         captured[0](None)  # the already-queued handler runs after teardown
     assert engine._sun_unsubs == {}
     assert len(captured) == 1  # no re-arm happened
+
+
+# ---------------------------------------------------------------------------
+# Idle-reapply timers survive a resubscribe (config save)
+# ---------------------------------------------------------------------------
+
+
+def _reapply_engine(hass, scopes, *, last_applied, interval=3600):
+    """Engine whose store has idle-reapply enabled, with seeded last-applied units."""
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes, reapply={"enabled": True, "interval_seconds": interval}),
+        DATA_CONDITIONS: {},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: dict.fromkeys(last_applied, 0),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+def _scope_with_category(category_id: str) -> dict:
+    return {"scenes": [{"when": {}, "category": category_id, "name": "S", "actions": []}]}
+
+
+def _call_later_spy():
+    """Patch context for async_call_later that records delays and wraps each
+    returned cancel callable so cancellation is observable."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    calls: list[float] = []
+    cancels: list[MagicMock] = []
+    real = _ts_mod.async_call_later
+
+    def _spy(hass_, delay, action):
+        calls.append(delay)
+        cancel = MagicMock(side_effect=real(hass_, delay, action))
+        cancels.append(cancel)
+        return cancel
+
+    return patch.object(_ts_mod, "async_call_later", side_effect=_spy), calls, cancels
+
+
+async def test_resubscribe_leaves_live_reapply_timer_untouched(hass) -> None:
+    """A config save (rebuild + resubscribe) must not reset a unit's idle clock:
+    the armed handle is the same object and no new timer is scheduled for it."""
+    engine = _reapply_engine(
+        hass, [("area", "k", _scope_with_category("g"))], last_applied=[("area", "k", "g")]
+    )
+    engine.async_subscribe()
+    unit = ("area", "k", "g")
+    armed = engine._reapply_timers[unit]
+
+    spy, calls, _cancels = _call_later_spy()
+    with spy:
+        engine.async_rebuild()
+        engine.async_subscribe()
+    assert calls == []  # nothing re-armed
+    assert engine._reapply_timers[unit] is armed
+    engine._teardown()
+
+
+async def test_resubscribe_cancels_timer_for_removed_unit(hass) -> None:
+    """A unit deleted from the config loses its idle-reapply timer on resubscribe."""
+    store_scopes = [
+        ("area", "k", _scope_with_category("g")),
+        ("area", "z", _scope_with_category("g")),
+    ]
+    engine = _reapply_engine(
+        hass, store_scopes, last_applied=[("area", "k", "g"), ("area", "z", "g")]
+    )
+    spy, _calls, cancels = _call_later_spy()
+    with spy:
+        engine.async_subscribe()
+    assert set(engine._reapply_timers) == {("area", "k", "g"), ("area", "z", "g")}
+    gone = engine._reapply_timers[("area", "z", "g")]
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    store._scopes = store_scopes[:1]
+    store._by_key = {(kind, sid): cfg for kind, sid, cfg in store._scopes}
+    engine.async_rebuild()
+    engine.async_subscribe()
+
+    assert set(engine._reapply_timers) == {("area", "k", "g")}
+    assert gone in cancels and gone.called  # the dead unit's timer was cancelled
+    engine._teardown()
+
+
+async def test_note_reapply_config_changed_rearms_every_timer(hass) -> None:
+    """Changed reapply settings still cancel and re-arm every applied unit, so the
+    new interval takes effect immediately."""
+    engine = _reapply_engine(
+        hass,
+        [("area", "k", _scope_with_category("g")), ("area", "z", _scope_with_category("g"))],
+        last_applied=[("area", "k", "g"), ("area", "z", "g")],
+    )
+    spy, _calls, cancels = _call_later_spy()
+    with spy:
+        engine.async_subscribe()
+    before = dict(engine._reapply_timers)
+    assert len(before) == 2
+
+    engine._store()._reapply = {"enabled": True, "interval_seconds": 120}
+    spy2, calls2, _c2 = _call_later_spy()
+    with spy2:
+        engine.note_reapply_config_changed(None)
+    assert calls2 == [120, 120]  # both re-armed at the new interval
+    assert all(cancel.called for cancel in cancels)  # old handles cancelled
+    assert all(engine._reapply_timers[unit] is not handle for unit, handle in before.items())
+    engine._teardown()

@@ -18,6 +18,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Re-enabling a scope no longer runs its winning scene's actions twice.
 - Undo/redo can no longer restore a scene into a category that has since been
     deleted; such scenes move to General.
+- Saving a scene no longer resets the idle re-apply timer of every other scope.
 
 ## [1.2.0] - 2026-09-04
 

@@ -178,3 +178,69 @@ async def test_scope_exists_unknown_kind_returns_false(hass, installed) -> None:
 
     assert _scope_exists(hass, "house", None) is True
     assert _scope_exists(hass, "nonsense", None) is False
+
+
+async def _save_categories(client, msg_id, ids):
+    await client.send_json(
+        {
+            "id": msg_id,
+            "type": "ambience/categories/save",
+            "categories": [{"id": cid, "name": cid.title()} for cid in ids],
+        }
+    )
+    assert (await client.receive_json())["success"] is True
+
+
+async def _save_house_scene(client, msg_id, category):
+    await client.send_json(
+        {
+            "id": msg_id,
+            "type": "ambience/house/save",
+            "config": {"scenes": [{"name": "S", "category": category}]},
+            "change": {"action": "edit", "scene_name": "S"},
+        }
+    )
+    assert (await client.receive_json())["success"] is True
+
+
+async def test_undo_coerces_scene_out_of_deleted_category(hass, hass_ws_client, installed):
+    """A snapshot restored by undo may name a category deleted since; the scene
+    must land in an existing category, not dangle."""
+    client = await hass_ws_client()
+    await _save_categories(client, 1, ["general", "a", "b"])
+    await _save_house_scene(client, 2, "b")
+    await _save_house_scene(client, 3, "a")
+    await client.send_json({"id": 4, "type": "ambience/categories/delete", "category_id": "b"})
+    assert (await client.receive_json())["success"] is True
+
+    await client.send_json({"id": 5, "type": "ambience/history/undo"})
+    res = (await client.receive_json())["result"]
+    assert res["ok"] is True
+    store = hass.data[DOMAIN][DATA_STORE]
+    known = {c["id"] for c in store.categories()}
+    assert res["config"]["scenes"][0]["category"] in known
+    assert store.get_house()["scenes"][0]["category"] == "general"
+    # The store invariant holds: a later categories/save is not blocked by the
+    # restored scene.
+    await _save_categories(client, 6, ["general", "a"])
+
+
+async def test_redo_coerces_scene_out_of_deleted_category(hass, hass_ws_client, installed):
+    """The redo mirror: the forward snapshot's category may also be gone."""
+    client = await hass_ws_client()
+    await _save_categories(client, 1, ["general", "a", "b"])
+    await _save_house_scene(client, 2, "a")
+    await _save_house_scene(client, 3, "b")
+    await client.send_json({"id": 4, "type": "ambience/history/undo"})
+    assert (await client.receive_json())["result"]["ok"] is True
+    await client.send_json({"id": 5, "type": "ambience/categories/delete", "category_id": "b"})
+    assert (await client.receive_json())["success"] is True
+
+    await client.send_json({"id": 6, "type": "ambience/history/redo"})
+    res = (await client.receive_json())["result"]
+    assert res["ok"] is True
+    store = hass.data[DOMAIN][DATA_STORE]
+    known = {c["id"] for c in store.categories()}
+    assert res["config"]["scenes"][0]["category"] in known
+    assert store.get_house()["scenes"][0]["category"] == "general"
+    await _save_categories(client, 7, ["general", "a"])

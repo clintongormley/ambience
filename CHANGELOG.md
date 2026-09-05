@@ -16,6 +16,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     re-applying, so scenes reflect the current state rather than the state
     cached while the switch was off.
 - Re-enabling a scope no longer runs its winning scene's actions twice.
+- Undo/redo can no longer restore a scene into a category that has since been
+    deleted; such scenes move to General.
 
 ## [1.2.0] - 2026-09-04
 

@@ -170,3 +170,48 @@ async def test_house_on_overrides_individually_off_child(hass, mock_config_entry
     assert bedroom._timer is None
     # A sibling that was already on is unaffected.
     assert _switch(hass, "area", ids["kitchen"]).is_on is True
+
+
+async def test_house_auto_on_skips_child_paused_after_the_house(
+    hass, mock_config_entry, fixed_utcnow
+):
+    """A scope paused after the house keeps its own, later resume time.
+
+    House paused at 10:00 for an hour; the kitchen is paused explicitly at
+    10:30. When the house resumes at 11:00 the kitchen must still be off with
+    its own timer intact (due 11:30).
+    """
+    ids = await _setup_hierarchy(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+
+    house = _switch(hass, "house", None)
+    await house.async_turn_off()
+    await hass.async_block_till_done()
+
+    fixed_utcnow["now"] += timedelta(minutes=30)
+    kitchen = _switch(hass, "area", ids["kitchen"])
+    await kitchen.async_turn_off()
+    await hass.async_block_till_done()
+    kitchen_off_at = store.get_scope_switch_off_at("area", ids["kitchen"])
+    kitchen_timer = kitchen._timer
+    assert kitchen_timer is not None
+
+    # Drive the house's auto-on timer directly: under fixed_utcnow,
+    # async_fire_time_changed fires every pending handle, which would also fire
+    # the kitchen's own timer and hide the defect.
+    fixed_utcnow["now"] += timedelta(minutes=30)
+    house._cancel_timer()  # drop the real handle we are standing in for
+    house._fire_auto_on()
+    await hass.async_block_till_done()
+
+    assert house.is_on is True
+    for kind, sid in _all_descendants(ids):
+        if (kind, sid) == ("area", ids["kitchen"]):
+            continue
+        assert _switch(hass, kind, sid).is_on is True, (kind, sid)
+
+    assert kitchen.is_on is False
+    assert kitchen._timer is kitchen_timer
+    assert kitchen_timer.cancelled() is False
+    assert store.get_scope_switch_off_at("area", ids["kitchen"]) == kitchen_off_at

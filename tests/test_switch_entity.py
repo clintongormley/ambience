@@ -194,6 +194,27 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
     assert ent._timer is not None
 
 
+async def test_restore_off_without_off_at_arms_full_delay(hass, mock_config_entry, fixed_utcnow):
+    """HA stopped before the delayed off_at save landed: the switch restores as
+    off with no persisted pause time and must still resume automatically."""
+    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
+    from custom_components.ambience.store import AmbienceStore
+
+    pre = AmbienceStore(hass)
+    await pre.async_load()
+    await pre.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 60})
+    # No off_at is persisted at all — the crash lost it.
+
+    await _setup(hass, mock_config_entry)
+    ent = _switch(hass, "house", None)
+    store = hass.data[DOMAIN][DATA_STORE]
+
+    assert ent.is_on is False
+    assert ent._timer is not None
+    # "now" becomes the pause time, so the full 60s delay is armed from here.
+    assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
+
+
 async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry, fixed_utcnow):
     mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
     from custom_components.ambience.store import AmbienceStore
@@ -362,11 +383,11 @@ async def test_schedule_auto_on_from_store_zero_delay_returns_early(
     assert ent._timer is None
 
 
-async def test_schedule_auto_on_from_store_no_off_at_returns_early(
+async def test_schedule_auto_on_from_store_no_off_at_arms_full_delay(
     hass, mock_config_entry, fixed_utcnow
 ):
-    """When the store has no off_at recorded, _schedule_auto_on_from_store must
-    return without scheduling a timer (line 247)."""
+    """A paused switch with no recorded off_at treats now as its pause time:
+    the full delay is armed and the pause time is persisted."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
@@ -376,7 +397,9 @@ async def test_schedule_auto_on_from_store_no_off_at_returns_early(
     assert store.get_scope_switch_off_at("house", None) is None
 
     ent._schedule_auto_on_from_store(turn_on_if_expired=True)
-    assert ent._timer is None
+    await hass.async_block_till_done()
+    assert ent._timer is not None
+    assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
 
 
 async def test_schedule_auto_on_from_store_invalid_off_at_logs_warning(

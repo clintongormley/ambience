@@ -32,6 +32,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     category from being evaluated.
 - Editing scenes in a stale browser tab can no longer silently disable a scope
     that was enabled elsewhere.
+- A scope paused after its floor or house was paused keeps its own resume time
+    when the parent resumes.
+- A scope that was paused when Home Assistant stopped abruptly now still
+    resumes automatically.
 
 ## [1.2.0] - 2026-09-04
 

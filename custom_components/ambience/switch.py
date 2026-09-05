@@ -325,10 +325,18 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     # ---- on/off ----
 
     async def async_turn_on(self, **_: Any) -> None:
+        # Read our own pause time before _apply_on clears it: a descendant
+        # paused *after* this scope was paused made a later, more specific
+        # choice, so it keeps its own timer instead of resuming with us.
+        paused_at = self._off_at()
         await self._apply_on()
         for sw in self._descendant_switches():
-            if not sw.is_on:
-                await sw._apply_on()
+            if sw.is_on:
+                continue
+            own = sw._off_at()
+            if paused_at is not None and own is not None and own > paused_at:
+                continue
+            await sw._apply_on()
 
     async def async_turn_off(self, **_: Any) -> None:
         await self._apply_off()
@@ -364,6 +372,21 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     def _resolved_delay(self) -> int:
         return self._store().get_switch_defaults()["auto_on_delay_seconds"]
+
+    def _off_at(self) -> datetime | None:
+        """This switch's persisted pause time, or None when it is not paused or
+        the stored value is unusable.
+
+        Normalised to UTC-aware so it can be compared and subtracted against
+        ``dt_util.utcnow()`` even if a naive timestamp ever reaches the store.
+        """
+        off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
+        if not off_at_iso:
+            return None
+        try:
+            return dt_util.as_utc(datetime.fromisoformat(off_at_iso))
+        except (ValueError, TypeError):
+            return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -453,13 +476,22 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return
         off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:
+            # Paused with no recorded pause time (HA stopped before the delayed
+            # save landed). Treat now as the pause time and arm the full delay,
+            # so the switch still resumes instead of staying off forever.
+            now = dt_util.utcnow()
+            self.hass.async_create_task(
+                self._store().async_set_scope_switch_off_at(
+                    self._scope_kind, self._scope_id, now.isoformat()
+                )
+            )
+            self._schedule_auto_on(seconds=delay)
             return
-        try:
-            off_at = datetime.fromisoformat(off_at_iso)
-            remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
-        except (ValueError, TypeError):
+        off_at = self._off_at()
+        if off_at is None:
             _LOGGER.warning("ambience switch: invalid off_at %r — ignoring", off_at_iso)
             return
+        remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
         if remaining <= 0:
             if turn_on_if_expired:
                 self.hass.async_create_task(self.async_turn_on())

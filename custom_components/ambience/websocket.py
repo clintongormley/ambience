@@ -40,6 +40,8 @@ from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
 from .redact import redact_plan, redacted_traces
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
+from .scopes import not_found_error, scope_spec
+from .scopes import scope_exists as _scope_exists
 from .service import (
     all_live_states,
     async_apply_scene,
@@ -559,6 +561,10 @@ _SCOPE_SELECTOR_SCHEMA = {
     vol.Optional("house"): _house_must_be_true,
 }
 
+# Selector key -> scope kind, in the order `_parse_scope` lists them back to a
+# caller that sent the wrong number of them.
+_SCOPE_SELECTOR_KINDS: dict[str, str] = {"area_id": "area", "floor_id": "floor", "house": "house"}
+
 
 def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     """Map a ws message's scope selector to (scope_kind, scope_id).
@@ -566,16 +572,14 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     Raises ServiceValidationError (named for `command`, so the client sees which
     request failed) when not exactly one of area_id/floor_id/house is present.
     """
-    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
+    present = [k for k in _SCOPE_SELECTOR_KINDS if k in msg]
     if len(present) != 1:
         raise service_validation_error(
             "scope_selector_invalid", command=command, present=", ".join(present) or "(none)"
         )
-    if "area_id" in msg:
-        return "area", msg["area_id"]
-    if "floor_id" in msg:
-        return "floor", msg["floor_id"]
-    return "house", None
+    selector = present[0]
+    spec = scope_spec(_SCOPE_SELECTOR_KINDS[selector])
+    return spec.kind, (msg[selector] if spec.has_id else None)
 
 
 @websocket_api.require_admin
@@ -1208,17 +1212,6 @@ async def _ws_history_subscribe(
     connection.send_message(websocket_api.event_message(msg["id"], history.snapshot()))
 
 
-def _scope_exists(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
-    """True if an undo/redo target scope still exists. House always exists."""
-    if scope_kind == "house":
-        return True
-    if scope_kind == "area":
-        return ar.async_get(hass).async_get_area(scope_id) is not None
-    if scope_kind == "floor":
-        return fr.async_get(hass).async_get_floor(scope_id) is not None
-    return False
-
-
 def _require_scope(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
@@ -1234,14 +1227,9 @@ def _require_scope(
     `setdefault` a junk bucket for)."""
     if _scope_exists(hass, scope_kind, scope_id):
         return True
-    # Literal keys: the exceptions-key gate requires AmbienceError's first arg to
-    # be a string literal so it can statically verify the key exists in strings.json.
-    error = (
-        AmbienceError("unknown_area", scope_id=scope_id)
-        if scope_kind == "area"
-        else AmbienceError("unknown_floor", scope_id=scope_id)
+    send_ambience_error(
+        connection, msg["id"], not_found_error(scope_kind, scope_id), code="validation_error"
     )
-    send_ambience_error(connection, msg["id"], error, code="validation_error")
     return False
 
 

@@ -12,6 +12,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - A damaged Ambience storage file is no longer overwritten with an empty
     configuration on startup; it is left in place for recovery.
+- Turning a scope's Ambience switch back on now re-reads every condition before
+    re-applying, so scenes reflect the current state rather than the state
+    cached while the switch was off.
 
 ## [1.2.0] - 2026-09-04
 

@@ -350,9 +350,14 @@ class TriggerSubscriptionsMixin:
     async def _force_resync_scope(
         self, scope: tuple[str, str | None], switch_entity_id: str | None = None
     ) -> None:
-        """Force-apply every category of a scope (used on a switch off->on)."""
+        """Force-apply every category of a scope (used on a switch off->on).
+
+        Re-snapshot first: while the switch was off, verdicts can have moved
+        without any watch firing (opaque conditions, or watches whose flips were
+        gated out), so the cache would replay a stale winner."""
         scope_kind, scope_id = scope
         self.rearm_scope_rechecks(scope_kind, scope_id)
+        await self._refresh_all_snapshots()
         cfg = self._scope_cfgs.get(scope)
         traces = await self._apply_units(
             [(scope_kind, scope_id, cid) for cid in category_ids(cfg or {})], force=True

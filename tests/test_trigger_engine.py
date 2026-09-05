@@ -1157,6 +1157,69 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     engine._teardown()
 
 
+class _BoxCondition:
+    """Opaque condition: its verdict comes from a mutable box, so it changes
+    only where the engine takes a fresh snapshot (no watch can fire for it)."""
+
+    def __init__(self, box: dict[str, str]) -> None:
+        self._box = box
+        self.snapshots = 0
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(opaque=True)
+
+    async def snapshot(self, hass: Any, **_: Any) -> Any:
+        self.snapshots += 1
+        return self._box["value"]
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate == snapshot
+
+    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+        return None
+
+
+async def test_switch_off_to_on_resync_refreshes_snapshots(hass) -> None:
+    """A verdict that changed while the switch was off (opaque condition: no
+    watch fires for it) must be re-read by the resync, not replayed from the
+    cache — otherwise the stale winner is re-applied."""
+    box = {"value": "a"}
+    cond = _BoxCondition(box)
+    act = _light_action(hass)
+    switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"box": "a"}, "category": "g", "actions": act},
+                    {"when": {"box": "b"}, "category": "g", "actions": act},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"box": cond},
+        DATA_SWITCHES: {("area", "a"): switch},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # box "a" -> scene 0 wins
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+    box["value"] = "b"  # changes while the switch is off; nothing notifies the engine
+    cond.snapshots = 0
+    hass.states.async_set("switch.ambience_a", "off")
+    hass.states.async_set("switch.ambience_a", "on")  # off->on transition
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 1
+    assert cond.snapshots >= 1  # the resync re-read the condition
+    engine._teardown()
+
+
 async def test_initial_sync_skips_scene_with_unregistered_condition(hass) -> None:
     # A scene whose `when` names a condition that isn't registered (e.g. a stale
     # config key) cannot be evaluated, so the engine must NOT auto-apply it.

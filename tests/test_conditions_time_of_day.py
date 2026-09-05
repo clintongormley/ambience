@@ -1105,3 +1105,71 @@ def test_clamp_emptied_detection_is_timezone_independent(tz_name: str) -> None:
     with _default_tz(tz_name):
         assert _condition()._intervals(empty) == []
         assert _condition()._intervals(wrap) == [(1260.0, 1440.0), (0.0, 360.0)]
+
+
+# ── absolute ranges across a DST switch ──────────────────────────────────────
+
+_BERLIN = "Europe/Berlin"
+# 2026-03-29 Europe/Berlin: 02:00 → 03:00, the 02:00–03:00 wall hour is skipped.
+# 2026-10-25 Europe/Berlin: 03:00 → 02:00, the 02:00–03:00 wall hour repeats.
+
+
+def _matches_at(pred: dict, moment: datetime) -> bool:
+    return _condition().matches(pred, _build_snapshot(moment))
+
+
+def test_spring_forward_range_inside_skipped_hour_keeps_its_length() -> None:
+    """{02:30 → 03:30} on the spring-forward day: 02:30 never strikes, so it
+    resolves to the instant the clock jumps to (03:00 local) and the range runs
+    03:00 → 03:30 local rather than collapsing to a zero-length window."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        # 03:15 local, inside the range.
+        assert _matches_at(pred, datetime(2026, 3, 29, 1, 15, tzinfo=UTC)) is True
+        # 01:45 local, before the range starts.
+        assert _matches_at(pred, datetime(2026, 3, 29, 0, 45, tzinfo=UTC)) is False
+        # 05:00 local, well after it ends.
+        assert _matches_at(pred, datetime(2026, 3, 29, 3, 0, tzinfo=UTC)) is False
+
+
+def test_spring_forward_range_spanning_the_gap_matches_both_sides() -> None:
+    """{01:30 → 03:30} spans the skipped hour: both the pre-jump and post-jump
+    wall times inside it match, and the range still ends at 03:30 local."""
+    pred = _range(_time(1, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 3, 29, 0, 45, tzinfo=UTC)) is True  # 01:45
+        assert _matches_at(pred, datetime(2026, 3, 29, 1, 15, tzinfo=UTC)) is True  # 03:15
+        assert _matches_at(pred, datetime(2026, 3, 29, 2, 0, tzinfo=UTC)) is False  # 04:00
+
+
+def test_ordinary_day_range_is_unchanged_by_dst_handling() -> None:
+    """The same range a week earlier, with no switch, keeps plain wall-clock
+    behaviour."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 3, 22, 2, 15, tzinfo=UTC)) is True  # 03:15
+        assert _matches_at(pred, datetime(2026, 3, 22, 1, 15, tzinfo=UTC)) is False  # 02:15
+        assert _matches_at(pred, datetime(2026, 3, 22, 4, 0, tzinfo=UTC)) is False  # 05:00
+
+
+def test_autumn_fold_range_matches_once_across_the_repeated_hour() -> None:
+    """{02:30 → 03:30} on the fold day: 02:30 strikes twice, and the range takes
+    the first occurrence, so it matches as one window covering both passes of
+    the repeated hour — and still ends at 03:30 local."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 10, 25, 0, 15, tzinfo=UTC)) is False  # 02:15 CEST
+        assert _matches_at(pred, datetime(2026, 10, 25, 0, 45, tzinfo=UTC)) is True  # 02:45 CEST
+        assert _matches_at(pred, datetime(2026, 10, 25, 1, 45, tzinfo=UTC)) is True  # 02:45 CET
+        assert _matches_at(pred, datetime(2026, 10, 25, 2, 15, tzinfo=UTC)) is True  # 03:15 CET
+        assert _matches_at(pred, datetime(2026, 10, 25, 2, 45, tzinfo=UTC)) is False  # 03:45 CET
+
+
+def test_spring_forward_range_wholly_inside_skipped_hour_never_matches() -> None:
+    """A window the skipped hour swallows whole is empty for the day, not the
+    all-day range that two identical endpoints would mean."""
+    pred = _range(_time(2, 15), _time(2, 45))
+    with _default_tz(_BERLIN):
+        for step in range(96):
+            moment = datetime(2026, 3, 29, tzinfo=UTC) + timedelta(minutes=15 * step)
+            assert _matches_at(pred, moment) is False

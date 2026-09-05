@@ -117,7 +117,16 @@ class TimeOfDayCondition:
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
-        if start >= end and self._clamp_emptied(item, snapshot):
+        # Compare wrap detection and matching in one domain. Two aware datetimes
+        # sharing a tzinfo compare by wall clock, so without this a DST switch —
+        # where two clock times an hour apart can name the same instant — decides
+        # the wrap on the clock but the match on the instant, and the range can
+        # never fire.
+        start, end = dt_util.as_utc(start), dt_util.as_utc(end)
+        now = dt_util.as_utc(snapshot.now)
+        if start >= end and (
+            self._clamp_emptied(item, snapshot) or (start == end and self._gap_swallowed(item))
+        ):
             return False
         # `from` and `to` resolve independently (sun → within ±12h of now,
         # time → on now's local date), so they can land more than a day apart:
@@ -128,7 +137,21 @@ class TimeOfDayCondition:
             end -= _DAY
         while start - end >= _DAY:
             end += _DAY
-        return _in_range(snapshot.now, start, end)
+        return _in_range(now, start, end)
+
+    def _gap_swallowed(self, item: Any) -> bool:
+        """True if a spring-forward gap swallowed the whole range.
+
+        Only consulted once the endpoints resolved to the same instant: two
+        different clock times can land on one instant only when both sit inside
+        the hour the clock skips. The window never happens today, so the range
+        is empty rather than the all-day range that from == to means."""
+        clocks = [
+            (ep.get("hh"), ep.get("mm"))
+            for ep in self._dep_endpoints(item)
+            if isinstance(ep, dict) and ep.get("kind") == "time"
+        ]
+        return len(clocks) == 2 and clocks[0] != clocks[1]
 
     def _clamp_emptied(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         """True if a clamp turned an otherwise-forward range into an empty one.
@@ -184,8 +207,7 @@ class TimeOfDayCondition:
                 raise ValueError(f"invalid mm: {mm!r}")
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
-            local_now = dt_util.as_local(snapshot.now)
-            return local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            return _resolve_wall_clock(dt_util.as_local(snapshot.now), hh, mm)
         if kind == "sun":
             anchor = ep.get("anchor")
             if anchor not in ANCHOR_ATTR:
@@ -223,7 +245,7 @@ class TimeOfDayCondition:
         hh, mm = clamp.get("hh"), clamp.get("mm")
         if not _valid_clock(hh, mm):
             raise ValueError(f"invalid clamp time: {hh!r}:{mm!r}")
-        clamp_dt = dt_util.as_local(anchor_dt).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        clamp_dt = _resolve_wall_clock(dt_util.as_local(anchor_dt), hh, mm)
         if direction == "not_before":
             return max(anchor_dt, clamp_dt)
         return min(anchor_dt, clamp_dt)
@@ -406,6 +428,32 @@ def _strip_clamp(ep: Any) -> Any:
 
 def _endpoint_has_clamp(ep: Any) -> bool:
     return isinstance(ep, dict) and ep.get("clamp") is not None
+
+
+def _wall_clock_exists(value: datetime) -> bool:
+    """False for a wall-clock time the spring-forward gap skips — such a time
+    does not survive a round trip through UTC."""
+    return value == value.astimezone(dt_util.UTC).astimezone(value.tzinfo)
+
+
+def _resolve_wall_clock(reference: datetime, hh: int, mm: int) -> datetime:
+    """Resolve a wall-clock time on `reference`'s local date to one instant.
+
+    A range's endpoints and its overnight-wrap test all read this single rule,
+    so a DST switch cannot make them disagree. The rule is the first instant
+    whose local clock reads at or after the requested time:
+
+    - a time the spring-forward gap skips resolves to the instant the clock
+      jumps to — with a 02:00 → 03:00 jump, 02:30 means 03:00 local;
+    - a time the autumn fold repeats resolves to its first occurrence, so the
+      range matches once, running across both passes of the repeated hour.
+    """
+    candidate = reference.replace(hour=hh, minute=mm, second=0, microsecond=0, fold=0)
+    # Wall-clock arithmetic (same tzinfo), so this walks the clock face forward
+    # a minute at a time until it reaches a time the day actually contains.
+    while not _wall_clock_exists(candidate):
+        candidate += timedelta(minutes=1)
+    return candidate
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:

@@ -26,6 +26,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     unavailable.
 - Scene ordering and shadowing for sun-anchored times with a clamp no longer
     depend on the Home Assistant time zone.
+- Time ranges that cross the daylight-saving switch hour now behave as
+    configured.
 
 ## [1.2.0] - 2026-09-04
 

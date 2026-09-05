@@ -26,9 +26,11 @@ class Condition(Protocol):
         period/lux range). The engine records it in the trace so a skipped scene
         explains itself. Absent / None => evaluate normally.
       - ``normalize_predicate(predicate)``: return the predicate in its canonical
-        stored form (e.g. flatten a redundant single-child or same-op nested
-        group). Called once at save (``canonicalise``); a no-op for evaluation.
-        Absent => the predicate is stored verbatim.
+        stored form — flatten a redundant single-child or same-op nested group,
+        materialise the defaults a reader would otherwise re-derive. Called once
+        at save (``canonicalise``); semantically a no-op, since every read path
+        applies the same defaults to a predicate stored without them. Absent =>
+        the predicate is stored verbatim.
     """
 
     name: str

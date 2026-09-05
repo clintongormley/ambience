@@ -557,3 +557,69 @@ def test_describe_predicate_negate_wraps_in_not() -> None:
     snap = _snap({"sensor.a": 500.0}, names={"sensor.a": "Lounge"})
     pred = {"sensors": ["sensor.a"], "min": 0, "max": 10, "negate": True}
     assert _cond().describe(snap, pred) == "want 0-10 lx; not(Lounge: 500 lx ✗)"
+
+
+# --- normalize_predicate: save-time default materialisation -------------------
+#
+# `quant` and `negate` have documented defaults that every read used to
+# re-derive inline. They are filled once at save; predicates stored before that
+# still omit them, so every read path must agree between the two forms.
+
+_LEGACY_LUX = {"sensors": ["sensor.a", "sensor.b"], "range": "dark"}
+_NORM_LUX = {
+    "sensors": ["sensor.a", "sensor.b"],
+    "range": "dark",
+    "quant": "any",
+    "negate": False,
+}
+
+
+def test_normalize_predicate_fills_defaults() -> None:
+    assert _cond().normalize_predicate(_LEGACY_LUX) == _NORM_LUX
+
+
+def test_normalize_predicate_keeps_explicit_values() -> None:
+    pred = {"sensors": ["sensor.a"], "min": 0, "max": 10, "quant": "all", "negate": True}
+    assert _cond().normalize_predicate(pred) == pred
+
+
+def test_normalize_predicate_does_not_invent_a_range_key() -> None:
+    """`_resolve_range` branches on `"range" in predicate`, so an inline band
+    must not gain one."""
+    out = _cond().normalize_predicate({"sensors": ["sensor.a"], "min": 5})
+    assert "range" not in out
+    assert "max" not in out
+
+
+def test_normalize_predicate_passes_through_non_dicts() -> None:
+    m = _cond()
+    assert m.normalize_predicate(None) is None
+    assert m.normalize_predicate("nonsense") == "nonsense"
+
+
+def test_normalize_predicate_is_idempotent_and_pure() -> None:
+    m = _cond()
+    before = dict(_LEGACY_LUX)
+    once = m.normalize_predicate(_LEGACY_LUX)
+    assert m.normalize_predicate(once) == once
+    assert before == _LEGACY_LUX  # input untouched
+
+
+def test_contains_agrees_across_legacy_and_normalised_forms() -> None:
+    m = _cond()
+    inner_legacy = {"sensors": ["sensor.a"], "range": "dark"}
+    inner_norm = m.normalize_predicate(inner_legacy)
+    baseline = m.contains(_LEGACY_LUX, inner_legacy)
+    assert baseline is True
+    assert m.contains(_NORM_LUX, inner_legacy) is baseline
+    assert m.contains(_LEGACY_LUX, inner_norm) is baseline
+    assert m.contains(_NORM_LUX, inner_norm) is baseline
+    assert m.contains(inner_norm, _LEGACY_LUX) is m.contains(inner_legacy, _LEGACY_LUX)
+
+
+def test_matches_describe_and_deps_agree_across_forms() -> None:
+    m = _cond()
+    snap = _snap({"sensor.a": 2.0, "sensor.b": 500.0}, names={"sensor.a": "A", "sensor.b": "B"})
+    assert m.matches(_NORM_LUX, snap) == m.matches(_LEGACY_LUX, snap)
+    assert m.describe(snap, _NORM_LUX) == m.describe(snap, _LEGACY_LUX)
+    assert m.trigger_deps(_NORM_LUX) == m.trigger_deps(_LEGACY_LUX)

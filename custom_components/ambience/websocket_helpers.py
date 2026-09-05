@@ -159,9 +159,10 @@ def canonicalise(
         for r in config.get("scenes", [])
     ]
     # Normalise each condition predicate into its stored form. A condition may
-    # expose an optional `normalize_predicate` (only `state` does today) to strip
-    # redundant editor wrappers (e.g. the group "( )" wrap's single-child / same-op
-    # nesting). Runs once here at save, so live editing keeps the wrappers visible.
+    # expose an optional `normalize_predicate` to strip redundant editor wrappers
+    # (`state`'s group "( )" single-child / same-op nesting) and to materialise
+    # its documented defaults (occupancy/lux/people). Runs once here at save, so
+    # live editing keeps the wrappers visible.
     for scene in scenes:
         when = scene.get("when")
         if not isinstance(when, dict):

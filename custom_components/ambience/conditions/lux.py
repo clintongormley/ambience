@@ -41,6 +41,24 @@ from ._common import (
 _QUANTS = ("any", "all")
 
 
+def _norm(predicate: Any) -> Any:
+    """A predicate with its documented defaults materialised.
+
+    ``normalize_predicate`` writes this form at save, but predicates stored
+    earlier omit the keys, so every read path funnels through here and both
+    forms read identically. Non-dict predicates (None, malformed) pass through
+    untouched. Pure and idempotent. The band keys are deliberately untouched:
+    ``_resolve_range`` branches on ``"range" in predicate``, so inventing one
+    would change the band."""
+    if not isinstance(predicate, dict):
+        return predicate
+    return {
+        **predicate,
+        "quant": predicate.get("quant") or "any",
+        "negate": bool(predicate.get("negate")),
+    }
+
+
 @dataclass(frozen=True)
 class LuxSnapshot:
     """Frozen view of illuminance sensor values at tick time."""
@@ -116,13 +134,14 @@ class LuxCondition:
         sensors = predicate.get("sensors") or []
         if not sensors:
             return True  # no constraint
+        pred = _norm(predicate)
         try:
-            lo, hi = self._resolve_range(predicate)
+            lo, hi = self._resolve_range(pred)
         except AmbienceError:
             # A referenced named range was hidden/deleted: the predicate can't be
             # evaluated, so fail this scene rather than aborting the whole scope.
             return False
-        quant = predicate.get("quant") or "any"
+        quant = pred["quant"]
         # Keep per-sensor verdicts tri-state (None = unobservable) through the
         # quantifier and negate, so an unavailable sensor can never be inverted
         # into a spurious match — "is not dark" must not fire on `unavailable`.
@@ -130,7 +149,7 @@ class LuxCondition:
         result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
         # `negate` wraps the whole match (band + quant). An unobservable result
         # (None) stays a miss even under negate.
-        if predicate.get("negate"):
+        if pred["negate"]:
             result = kleene_not(result)
         return result is True
 
@@ -177,14 +196,15 @@ class LuxCondition:
             return self._describe_snapshot(snapshot)
         if not isinstance(predicate, dict):
             return None
-        sensors = predicate.get("sensors") or []
+        pred = _norm(predicate)
+        sensors = pred.get("sensors") or []
         if not sensors:
             return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
         try:
-            lo, hi = self._resolve_range(predicate)
+            lo, hi = self._resolve_range(pred)
         except AmbienceError:
-            return f"unknown lux range: {predicate.get('range')!r}"
-        quant = predicate.get("quant") or "any"
+            return f"unknown lux range: {pred.get('range')!r}"
+        quant = pred["quant"]
         # Preserve the predicate's sensor order so the line maps to the config.
         parts: list[str] = []
         for eid in sensors:
@@ -198,7 +218,7 @@ class LuxCondition:
                 continue
             val = snapshot.sensors[eid]
             parts.append(f"{name}: {_fmt_lux(val)} lx {'✓' if held else '✗'}")
-        body = wrap_quantified(parts, quant, bool(predicate.get("negate")))
+        body = wrap_quantified(parts, quant, pred["negate"])
         band = self._fmt_band(lo, hi)
         # A bare reading is meaningless without the target band, so state it once.
         return f"want {band}; {body}" if band else body
@@ -278,7 +298,17 @@ class LuxCondition:
                 return False  # unknown range id -> can't prove containment
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 
-        return sensor_quant_contains(outer, inner, _axis)
+        return sensor_quant_contains(_norm(outer), _norm(inner), _axis)
+
+    # --- normalisation (save-time) --------------------------------------
+
+    def normalize_predicate(self, predicate: Any) -> Any:
+        """Materialise the predicate's documented defaults for storage, so a
+        stored predicate says what it means instead of leaning on a reader's
+        `or`. Semantically a no-op: every read path applies the same defaults to
+        a predicate that omits them. Called once at save (``canonicalise``).
+        Pure: returns a new dict, never mutates the input."""
+        return _norm(predicate)
 
 
 def as_float_state(state: str) -> float | None:

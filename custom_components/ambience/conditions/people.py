@@ -30,6 +30,28 @@ _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
 
 
+def _norm(predicate: Any) -> Any:
+    """A predicate with its documented defaults materialised.
+
+    ``normalize_predicate`` writes this form at save, but predicates stored
+    earlier omit the keys, so every read path funnels through here and both
+    forms read identically — ``_gate_key`` included, whose string keys the
+    engine's tenure clocks. Non-dict predicates (None, malformed) pass through
+    untouched. Pure and idempotent. `who` is deliberately left alone: a
+    present-but-empty list means "specific mode, nobody picked" and
+    ``validate_predicate`` rejects it, so the all-persons wildcard must keep the
+    key off."""
+    if not isinstance(predicate, dict):
+        return predicate
+    return {
+        **predicate,
+        "quant": predicate.get("quant") or "any",
+        "where": predicate.get("where") or _HOME,
+        "negate": bool(predicate.get("negate")),
+        "for_mode": predicate.get("for_mode") or "at_least",
+    }
+
+
 @dataclass(frozen=True)
 class PeopleSnapshot:
     """Frozen view of person/zone state at tick time."""
@@ -133,12 +155,13 @@ class PeopleCondition:
             return True
         if not isinstance(predicate, dict):
             return False
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        seconds = dur_seconds(predicate.get("for"))
-        mode = predicate.get("for_mode")
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        quant = pred["quant"]
+        where = pred["where"]
+        negate = pred["negate"]
+        seconds = dur_seconds(pred.get("for"))
+        mode = pred["for_mode"]
 
         if seconds > 0 and snapshot.tenure is not None:
             # Engine-tracked predicate tenure: evaluate the instant test
@@ -147,7 +170,7 @@ class PeopleCondition:
             if not self._quantified(who, quant, where, negate, 0.0, snapshot):
                 return False
             gate = tenure_within if mode == "less_than" else tenure_held
-            return gate(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+            return gate(snapshot.tenure, self._gate_key(pred), snapshot.now, seconds)
         return self._quantified(who, quant, where, negate, seconds, snapshot, mode)
 
     def _quantified(
@@ -203,21 +226,18 @@ class PeopleCondition:
 
         Same quantifier / location / negate / who-set anywhere in the config →
         same key → shared tenure clock."""
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = int(bool(predicate.get("negate")))
-        who = predicate.get("who") or []
+        pred = _norm(predicate)
+        who = pred.get("who") or []
         who_part = "|".join(sorted(who)) if who else "*"
-        return f"{quant}:{where}:{negate}:{who_part}"
+        return f"{pred['quant']}:{pred['where']}:{int(pred['negate'])}:{who_part}"
 
     def _gate_label(self, predicate: dict) -> str:
         """Human-readable instant description, for a multi-person DURATION trace
         cause (e.g. "nobody home", "anyone not in Work")."""
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
+        pred = _norm(predicate)
+        where = pred["where"]
         place = "home" if where == _HOME else f"in {where}"
-        return f"{self._quant_word(quant)} {'not ' if negate else ''}{place}"
+        return f"{self._quant_word(pred['quant'])} {'not ' if pred['negate'] else ''}{place}"
 
     def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
@@ -230,15 +250,13 @@ class PeopleCondition:
         seconds = dur_seconds(predicate.get("for"))
         if seconds <= 0:
             return {}
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        instant = self._quantified(who, quant, where, negate, 0.0, snapshot)
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        instant = self._quantified(who, pred["quant"], pred["where"], pred["negate"], 0.0, snapshot)
         person_ids = list(who) if who else list(snapshot.persons)
         changes = [cur[1] for pid in person_ids if (cur := snapshot.persons.get(pid)) is not None]
         anchor = max(changes) if changes else snapshot.now
-        return {self._gate_key(predicate): (instant, anchor)}
+        return {self._gate_key(pred): (instant, anchor)}
 
     # --- trigger dependencies -------------------------------------------
 
@@ -364,12 +382,13 @@ class PeopleCondition:
             return self._describe_snapshot(snapshot)
         if not isinstance(predicate, dict):
             return None
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        seconds = dur_seconds(predicate.get("for"))
-        mode = predicate.get("for_mode")
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        quant = pred["quant"]
+        where = pred["where"]
+        negate = pred["negate"]
+        seconds = dur_seconds(pred.get("for"))
+        mode = pred["for_mode"]
         # Empty `who` means "all persons" (a real constraint, unlike occupancy's
         # empty `sensors` wildcard), so enumerate the snapshot's persons.
         person_ids = list(who) if who else list(snapshot.persons)
@@ -415,7 +434,7 @@ class PeopleCondition:
             rel = for_comparator_symbol(mode)
             prefix += f" for {rel}{fmt_duration(seconds)}"
         if tenure_mode:
-            since = snapshot.tenure.get(self._gate_key(predicate))
+            since = snapshot.tenure.get(self._gate_key(pred))
             prefix += (
                 f" (held {fmt_duration((snapshot.now - since).total_seconds())})"
                 if since
@@ -491,20 +510,21 @@ class PeopleCondition:
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
             return False
+        o, i = _norm(outer), _norm(inner)
         # Comparable only when the positive location AND the negate flag match:
         # a different `negate` is a different (disjoint) match-set.
-        if (outer.get("where") or _HOME) != (inner.get("where") or _HOME):
+        if o["where"] != i["where"]:
             return False
-        if bool(outer.get("negate")) != bool(inner.get("negate")):
+        if o["negate"] != i["negate"]:
             return False
         # The `for`/`for_mode` duration axis must permit inner ⊆ outer
         # (at_least: longer is stricter; less_than: shorter is stricter).
-        if not for_contains(outer, inner):
+        if not for_contains(o, i):
             return False
-        qo = outer.get("quant") or "any"
-        qi = inner.get("quant") or "any"
-        so = self._who_set(outer.get("who"))
-        si = self._who_set(inner.get("who"))
+        qo = o["quant"]
+        qi = i["quant"]
+        so = self._who_set(o.get("who"))
+        si = self._who_set(i.get("who"))
         if qo == "any" and qi == "any":
             return self._subset(si, so)
         if qo == "everyone" and qi == "everyone":
@@ -538,3 +558,13 @@ class PeopleCondition:
         if a is None or b is None:
             return True
         return bool(a & b)
+
+    # --- normalisation (save-time) --------------------------------------
+
+    def normalize_predicate(self, predicate: Any) -> Any:
+        """Materialise the predicate's documented defaults for storage, so a
+        stored predicate says what it means instead of leaning on a reader's
+        `or`. Semantically a no-op: every read path applies the same defaults to
+        a predicate that omits them. Called once at save (``canonicalise``).
+        Pure: returns a new dict, never mutates the input."""
+        return _norm(predicate)

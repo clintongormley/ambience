@@ -131,9 +131,13 @@ def for_contains(outer: Any, inner: Any) -> bool:
     inner_for = dur_seconds(inner.get("for"))
     if inner_for <= 0:
         return False
-    if (outer.get("for_mode") or "at_least") != (inner.get("for_mode") or "at_least"):
+    # Read the default here rather than trusting the caller: the conditions
+    # materialise `for_mode` at save, but this helper also runs against
+    # predicates stored before that, which omit it.
+    mode = outer.get("for_mode") or "at_least"
+    if mode != (inner.get("for_mode") or "at_least"):
         return False
-    if (outer.get("for_mode") or "at_least") == "less_than":
+    if mode == "less_than":
         return inner_for <= outer_for
     return inner_for >= outer_for
 

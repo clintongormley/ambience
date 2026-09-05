@@ -693,7 +693,7 @@ async def test_switch_resync_rearms_for_rechecks(hass, monkeypatch) -> None:
 
 
 async def test_rearm_scope_rechecks_only_touches_its_own_scope(hass, monkeypatch) -> None:
-    """rearm_scope_rechecks (used by switch-on resync and scope re-enable) must
+    """rearm_scope_rechecks (used by the switch-on resync) must
     re-arm only the named scope's pending duration predicates, leaving other
     scopes' live timers untouched."""
     import custom_components.ambience.trigger_subscriptions as _ts_mod

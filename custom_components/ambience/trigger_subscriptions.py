@@ -285,12 +285,12 @@ class TriggerSubscriptionsMixin:
                 self._for_handles[key] = handles
 
     def rearm_scope_rechecks(self, scope_kind: str, scope_id: str | None) -> None:
-        """(Re)arm just this scope's pending `for:` rechecks. Used by paths that
-        resume a scope without the full teardown/rebuild of a reload — a switch
-        off->on resync, and scope re-enable. A duration timer is a one-shot: if
-        it matured while the scope was inactive it fired as a no-op and was
-        consumed, so without this a still-pending gate whose timer elapsed during
-        the inactive window would never re-arm. `_schedule_for_rechecks` reads the
+        """(Re)arm just this scope's pending `for:` rechecks. Used by the switch
+        off->on resync, which resumes a scope without the full teardown/rebuild
+        of a reload. A duration timer is a one-shot: if it matured while the
+        scope was inactive it fired as a no-op and was consumed, so without this
+        a still-pending gate whose timer elapsed during the inactive window would
+        never re-arm. `_schedule_for_rechecks` reads the
         live tenure and cancels/replaces any still-live handles, so calling this
         is idempotent."""
         self._schedule_for_rechecks(

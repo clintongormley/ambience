@@ -15,6 +15,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Turning a scope's Ambience switch back on now re-reads every condition before
     re-applying, so scenes reflect the current state rather than the state
     cached while the switch was off.
+- Re-enabling a scope no longer runs its winning scene's actions twice.
 
 ## [1.2.0] - 2026-09-04
 

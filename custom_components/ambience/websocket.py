@@ -19,7 +19,6 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ASSISTANT_FIELDS,
     DATA_CONDITIONS,
-    DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_FRONTEND_HASH,
     DATA_FRONTEND_VERSION,
@@ -1047,13 +1046,10 @@ async def _ws_set_scope_enabled(
     # of truth for which switches exist — applies the change, rather than
     # duplicating per-scope create/remove logic here.
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
-    # Re-enabling resyncs the scope (mirrors switch turn-on's force resync). Re-arm
-    # the scope's `for:` rechecks too — a duration timer that matured while the
-    # scope was disabled was consumed as a no-op, so without this a "switch on for
-    # 2h" rule whose timer elapsed during the disabled window would never fire.
-    if enabled:
-        hass.data[DOMAIN][DATA_ENGINE].rearm_scope_rechecks(scope_kind, scope_id)
-        await async_apply_scene(hass, scope_kind, scope_id)
+    # The scope's re-apply is the engine's job: the store's config-changed signal
+    # drives a forced refresh that re-snapshots, re-seeds every predicate's tenure
+    # (re-arming `for:` gates) and re-applies the scope's winners. Applying here
+    # too would run non-idempotent actions twice.
 
     connection.send_result(msg["id"], {"ok": True})
 

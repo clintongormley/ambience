@@ -10,6 +10,10 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- The trace panel's per-condition detail (the live reading beside each
+    predicate, such as "3 of 5 home" or "want anyone in Kitchen") is now shown
+    in your language rather than always in English. Logs and the AI/MCP trace
+    export keep their English rendering.
 - A people condition saved without an explicit "who"/"quant" now shows as
     "Anybody" in the panel from its next save onwards; it always evaluated that
     way. The panel's summary and editor now read such a legacy condition as

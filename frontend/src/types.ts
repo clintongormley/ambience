@@ -349,6 +349,7 @@ export type ScopeConfig = AreaConfig;
 // Purely informational — there are no enable/disable controls (auto-triggers
 // are always on). Entities get one row each; clock times / periodic re-check /
 // date rollover collapse into a single `time` group; sun events into a `sun`
+// group; a wildcard predicate's whole-domain membership watch into a `domain`
 // group.
 export type AutoTrigger = { key: string } & (
   | { kind: "entity"; entity_id: string }
@@ -359,6 +360,7 @@ export type AutoTrigger = { key: string } & (
       date_rollover: boolean;
     }
   | { kind: "sun"; suns: { anchor: string; offset: number }[] }
+  | { kind: "domain"; domains: string[] }
 );
 
 export type AutoTriggerList = {

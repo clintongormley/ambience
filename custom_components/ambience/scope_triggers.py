@@ -20,6 +20,7 @@ from .triggers import TriggerSpec, merge
 # Auto-triggers display to identify each row).
 GROUP_TIME_KEY = "group:time"
 GROUP_SUN_KEY = "group:sun"
+GROUP_DOMAIN_KEY = "group:domain"
 
 
 def _entity_key(entity_id: str) -> str:
@@ -32,8 +33,9 @@ def trigger_descriptors(spec: TriggerSpec) -> list[dict[str, Any]]:
 
     One row per entity (sorted), then a single ``time`` group row (if any clock
     times / periodic re-check / date rollover) carrying its members, then a
-    single ``sun`` group row (if any sun events). ``opaque`` produces no row.
-    The UI does final display ordering (it sorts entities by name).
+    single ``sun`` group row (if any sun events), then a single ``domain`` row
+    when a wildcard predicate watches a domain's membership. ``opaque`` produces
+    no row. The UI does final display ordering (it sorts entities by name).
     """
     rows: list[dict[str, Any]] = []
     for entity_id in sorted(spec.entities):
@@ -56,6 +58,8 @@ def trigger_descriptors(spec: TriggerSpec) -> list[dict[str, Any]]:
                 "suns": [{"anchor": a, "offset": o} for a, o in sorted(spec.sun_events)],
             }
         )
+    if spec.domains:
+        rows.append({"key": GROUP_DOMAIN_KEY, "kind": "domain", "domains": sorted(spec.domains)})
     return rows
 
 

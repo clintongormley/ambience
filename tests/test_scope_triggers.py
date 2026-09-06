@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from custom_components.ambience.scope_triggers import (
+    GROUP_DOMAIN_KEY,
     iter_predicate_specs,
     referenced_entities,
     scope_trigger_spec,
@@ -62,13 +63,21 @@ def test_descriptors_sun_group_collects_events_only() -> None:
     ]
 
 
-def test_descriptors_order_entities_then_time_then_sun() -> None:
+def test_trigger_descriptors_emit_a_domain_row_after_sun() -> None:
+    spec = TriggerSpec(entities=frozenset({"person.a"}), domains=frozenset({"person"}))
+    rows = trigger_descriptors(spec)
+    assert [r["kind"] for r in rows] == ["entity", "domain"]
+    assert rows[1] == {"key": GROUP_DOMAIN_KEY, "kind": "domain", "domains": ["person"]}
+
+
+def test_descriptors_order_entities_then_time_then_sun_then_domain() -> None:
     spec = TriggerSpec(
         entities=frozenset({"person.bob"}),
         clock_times=frozenset({(7, 0)}),
         sun_events=frozenset({("dusk", 0)}),
+        domains=frozenset({"person"}),
     )
-    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity", "time", "sun"]
+    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity", "time", "sun", "domain"]
 
 
 def test_descriptors_no_time_group_when_no_clocks_or_periodic() -> None:

@@ -72,6 +72,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     of a faster condition that was refreshed at the same time.
 - A time range that starts inside the hour skipped when clocks go forward now
     triggers at the moment the clock jumps, instead of missing that day.
+- The Auto-triggers list now shows the "People list" watch that an
+    everybody/anybody/nobody people condition adds.
 
 ### Performance
 

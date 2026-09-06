@@ -589,9 +589,8 @@ async def test_authentication_times_out_instead_of_hanging(monkeypatch):
     ],
 )
 def test_every_write_is_classified_as_mutating(command: str) -> None:
-    """A write whose reply was lost must never be re-sent. Before the explicit
-    set, only `/save` counted — so a lost `delete`/`undo`/`apply` reply was
-    silently applied twice."""
+    """A lost reply to a write must never be re-sent: the write may already have
+    been applied."""
     assert _mutates(command)
     assert command in MUTATING_COMMANDS
 

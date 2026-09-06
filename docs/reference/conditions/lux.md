@@ -5,9 +5,8 @@ as: _"the lounge is dark"_, or _"the office is brighter than 300 lx"_.
 
 This is the natural condition for daylight-aware lighting: instead of guessing
 from the time of day or the weather, it reads what your light sensors actually
-measure. The entity picker offers every sensor that reports a number
-(illuminance sensors first among them); the backend accepts any numeric
-`sensor`.
+measure. The entity picker offers every sensor that reports a number, including
+your illuminance sensors; the backend accepts any numeric `sensor`.
 
 When you add a Lux condition to a scene, the editor shows (top to bottom):
 

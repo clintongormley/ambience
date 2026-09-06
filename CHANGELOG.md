@@ -74,14 +74,25 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     event; the check is retried a minute later.
 - Two quick switch-related saves during startup can no longer make Home
     Assistant log a duplicate Ambience switch entity.
-- Turning a scope's switch on shortly after re-enabling the scope, or after
-    creating its area or floor, now always re-applies the scope's scenes.
+- A scope's switch that finishes registering after the engine's config refresh
+    has already run is still watched, so turning it on re-applies the scope's
+    scenes.
 - A slow template or script condition can no longer overwrite a fresher reading
     of a faster condition that was refreshed at the same time.
 - A time range that starts inside the hour skipped when clocks go forward now
-    triggers at the moment the clock jumps, instead of missing that day.
+    triggers at the moment the clock jumps, instead of missing that day; a time
+    inside the hour repeated when clocks go back now fires once, on its first
+    pass.
 - The Auto-triggers list now shows the "People list" watch that an
     everybody/anybody/nobody people condition adds.
+- Running a scene's actions by hand while the engine is applying the same scope
+    and category now waits for that apply to finish instead of interleaving with
+    it.
+- The MCP server no longer re-sends a write whose reply was lost for commands
+    that do not end in "/save" (deleting a category, undo/redo, resetting
+    periods or lux ranges, clearing traces, applying a scope, running a scene's
+    actions, enabling or disabling a scope); a lost reply could previously apply
+    such a write twice.
 
 ### Performance
 

@@ -225,7 +225,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
-        scenes = cfg.get("scenes", [])
+        scenes = cfg.get("scenes") or []
         if not 0 <= scene_index < len(scenes):
             return None
         return scenes[scene_index]

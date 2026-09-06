@@ -277,10 +277,10 @@ class _WebsocketsTransport:
 # in this set is never re-sent after a lost reply (it may already have been
 # applied); anything else is a read and is safe to retry. Classified by the
 # command itself — a fact about the protocol — rather than by a flag each tool has
-# to remember to set, and enumerated rather than matched on a `/save` suffix,
-# which silently classed delete/undo/redo/reset/clear/apply as retry-safe reads.
-# Kept identical to the backend's websocket.WRITE_COMMANDS by
-# tests/test_protocol_shape.py.
+# to remember to set. Enumerated rather than suffix-matched: several writes
+# (`delete`, `undo`, `redo`, `reset`, `clear`, `apply`, `run_actions`,
+# `set_scope_enabled`) have no `/save` suffix. Kept identical to the backend's
+# websocket.WRITE_COMMANDS by tests/test_protocol_shape.py.
 MUTATING_COMMANDS: frozenset[str] = frozenset(
     {
         "ambience/apply",

@@ -84,3 +84,59 @@ def test_main_fails_on_missing_issue_key(tmp_path):
         'raise AmbienceError("nope")\n'
     )
     assert main(["--component", str(comp)]) == 1
+
+
+def test_two_multiline_repairs_calls_leave_later_keys_intact():
+    """Both Repairs calls' keys are read and a carrier after them still counts —
+    a scanner that rewrites the source between AST reads would misread the offsets
+    (the em dash makes the byte offsets differ from the character ones)."""
+    src = (
+        "ir.async_create_issue(\n"
+        "    hass,\n"
+        "    DOMAIN,\n"
+        '    "first",\n'
+        "    # storage is unreadable — nothing to migrate\n"
+        "    is_fixable=False,\n"
+        '    translation_key="first",\n'
+        ")\n"
+        "ir.async_create_issue(\n"
+        "    hass,\n"
+        "    DOMAIN,\n"
+        '    "second",\n'
+        "    is_fixable=False,\n"
+        '    translation_key="second",\n'
+        ")\n"
+        'raise AmbienceError("late_key")\n'
+    )
+    assert used_keys(src) == {"late_key"}
+    assert issue_keys(src) == {"first", "second"}
+
+
+def test_carrier_nested_in_repairs_call_still_counts():
+    """Only the Repairs `translation_key` is an issues key; a carrier call nested
+    in the same call still references an exceptions key, so blanking the whole
+    call would hide it and let a missing exceptions key pass the gate."""
+    src = (
+        'ir.async_create_issue(hass, DOMAIN, "x", translation_key="iss",\n'
+        '    translation_placeholders={"hint": render_en("nested_key", {})})\n'
+    )
+    assert used_keys(src) == {"nested_key"}
+    assert issue_keys(src) == {"iss"}
+
+
+def test_commented_out_repairs_call_does_not_shadow_the_real_one():
+    """Keys come from the parsed tree, not from matching call text back against
+    the source — a comment that repeats a call verbatim must not be mistaken for it."""
+    src = (
+        '# ir.async_create_issue(hass, DOMAIN, "x", translation_key="a")\n'
+        'ir.async_create_issue(hass, DOMAIN, "x", translation_key="a")\n'
+    )
+    assert issue_keys(src) == {"a"}
+    assert used_keys(src) == set()
+
+
+def test_non_literal_issue_key_is_not_reported():
+    """Only literal keys can be checked against strings.json — a key passed as a
+    constant is invisible to the gate, by design, and must not be guessed at."""
+    src = 'ir.async_create_issue(hass, DOMAIN, "x", translation_key=KEY)\n'
+    assert issue_keys(src) == set()

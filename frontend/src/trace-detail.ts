@@ -29,10 +29,11 @@ type HassLike = { localize?: (key: string) => string | undefined; [key: string]:
  *  period id in a trace detail resolves to its configured label. */
 export type CustomPeriods = Record<string, PeriodDef>;
 
-// A predicate's `detail` is the condition's `describe()` output. Most conditions
-// already return a human phrase (e.g. "3 of 5 home (Alice, Bob)"); a couple
-// emit a raw enum id that needs a friendly label. Humanize only those — passing
-// the human phrases through untouched (humanizeId would lower-case them).
+// Only ever sees an UNKEYED `describe()` detail — a keyed reason is a localised
+// sentence and `predicateDetail` routes it around this. Most conditions already
+// return a human phrase (e.g. "3 of 5 home (Alice, Bob)"); a couple emit a raw
+// enum id that needs a friendly label. Humanize only those — passing the human
+// phrases through untouched (humanizeId would lower-case them).
 function formatDetail(
   hass: HassLike | undefined,
   conditionKey: string,
@@ -152,13 +153,9 @@ const LINKABLE_DETAIL_CONDITIONS: ReadonlySet<string> = new Set([
 function renderDetailWithLinks(
   hass: HassLike | undefined,
   conditionKey: string,
-  detail: string,
-  periods: CustomPeriods,
+  text: string,
   entityIds: string[] | undefined,
-  isReason = false,
 ): TemplateResult | string {
-  // A keyed reason is already prose; only a raw `describe()` id needs labelling.
-  const text = isReason ? detail : formatDetail(hass, conditionKey, detail, periods);
   if (!entityIds?.length || !LINKABLE_DETAIL_CONDITIONS.has(conditionKey)) return text;
 
   const hits: Array<{ start: number; end: number; id: string; name: string }> = [];
@@ -477,16 +474,19 @@ function isSkipped(outcome: TraceOutcome): boolean {
   );
 }
 
-// A predicate's detail in the reader's language. A structured
+// A predicate's detail as the reader should see it. A structured
 // `unconfigured_reason` ships its `trace_reason` key and placeholders alongside
-// the backend's English render; everything else (a condition's `describe()`
-// prose) is already the only text there is. The result still goes through
-// `renderDetailWithLinks`, so a localized reason keeps its entity more-info
-// links, but skips `formatDetail`: that labels raw ids, and would humanise
-// (lower-case) a sentence.
-function predicateDetail(hass: HassLike | undefined, p: TracePredicate): string {
+// the backend's English render, and is already a sentence — it must not go
+// through `formatDetail`, which labels a raw enum id and so would humanise
+// (lower-case) the period or weather name the sentence quotes. Everything else
+// is a condition's `describe()` output, where that labelling is the point.
+function predicateDetail(
+  hass: HassLike | undefined,
+  p: TracePredicate,
+  periods: CustomPeriods,
+): string {
   const detail = p.detail ?? "";
-  if (!p.detail_key) return detail;
+  if (!p.detail_key) return formatDetail(hass, p.condition_key, detail, periods);
   return localize(hass, `trace_reason.${p.detail_key}`, detail, p.detail_placeholders ?? {});
 }
 
@@ -511,7 +511,7 @@ function renderScene(
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p), periods, p.entity_ids, Boolean(p.detail_key))}]</span>`
+              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p, periods), p.entity_ids)}]</span>`
               : nothing
           }
         </div>`,

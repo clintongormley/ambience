@@ -1,6 +1,6 @@
 """bin/check_exceptions_keys — every carrier-call key has an exceptions entry."""
 
-from bin.check_exceptions_keys import defined_keys, main, used_keys
+from bin.check_exceptions_keys import defined_keys, issue_keys, main, used_keys
 
 
 def test_used_keys_extracts_carrier_literals():
@@ -55,3 +55,32 @@ def test_used_keys_extracts_any_key_suffixed_kwarg():
         'HomeAssistantError(translation_key="unexpected_error")\n'
     )
     assert used_keys(src) == {"unknown_area", "unexpected_error"}
+
+
+def test_used_keys_skips_repairs_issue_translation_key():
+    """A Repairs issue's `translation_key=` names an `issues.*` entry, not an
+    exceptions key — an inline literal must not fail the exceptions gate."""
+    src = (
+        "ir.async_create_issue(\n"
+        '    hass, DOMAIN, "storage_unreadable", is_fixable=False,\n'
+        '    translation_key="storage_unreadable",\n'
+        ")\n"
+        'raise AmbienceError("scope_disabled")\n'
+    )
+    assert used_keys(src) == {"scope_disabled"}
+    assert issue_keys(src) == {"storage_unreadable"}
+
+
+def test_main_fails_on_missing_issue_key(tmp_path):
+    """An issue key is checked against `issues`, not `exceptions` — a key that
+    only exists under exceptions is still missing for a Repairs issue."""
+    comp = tmp_path / "c"
+    comp.mkdir()
+    (comp / "strings.json").write_text(
+        '{"exceptions": {"nope": {"message": "N"}}, "issues": {"known": {"title": "K"}}}'
+    )
+    (comp / "x.py").write_text(
+        'ir.async_create_issue(hass, DOMAIN, "x", translation_key="nope")\n'
+        'raise AmbienceError("nope")\n'
+    )
+    assert main(["--component", str(comp)]) == 1

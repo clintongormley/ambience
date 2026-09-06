@@ -155,8 +155,10 @@ function renderDetailWithLinks(
   detail: string,
   periods: CustomPeriods,
   entityIds: string[] | undefined,
+  isReason = false,
 ): TemplateResult | string {
-  const text = formatDetail(hass, conditionKey, detail, periods);
+  // A keyed reason is already prose; only a raw `describe()` id needs labelling.
+  const text = isReason ? detail : formatDetail(hass, conditionKey, detail, periods);
   if (!entityIds?.length || !LINKABLE_DETAIL_CONDITIONS.has(conditionKey)) return text;
 
   const hits: Array<{ start: number; end: number; id: string; name: string }> = [];
@@ -480,7 +482,8 @@ function isSkipped(outcome: TraceOutcome): boolean {
 // the backend's English render; everything else (a condition's `describe()`
 // prose) is already the only text there is. The result still goes through
 // `renderDetailWithLinks`, so a localized reason keeps its entity more-info
-// links and its `formatDetail` labelling.
+// links, but skips `formatDetail`: that labels raw ids, and would humanise
+// (lower-case) a sentence.
 function predicateDetail(hass: HassLike | undefined, p: TracePredicate): string {
   const detail = p.detail ?? "";
   if (!p.detail_key) return detail;
@@ -508,7 +511,7 @@ function renderScene(
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p), periods, p.entity_ids)}]</span>`
+              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p), periods, p.entity_ids, Boolean(p.detail_key))}]</span>`
               : nothing
           }
         </div>`,

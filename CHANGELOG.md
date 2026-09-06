@@ -13,6 +13,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - A people condition saved without an explicit "who"/"quant" now shows as
     "Anybody" in the panel from its next save onwards; it always evaluated that
     way.
+- The lux condition's sensor picker now offers every numeric sensor, not only
+    those with the illuminance device class.
 
 ### Fixed
 

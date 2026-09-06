@@ -7,12 +7,13 @@ import type { HaFormSchema } from "../ha-form.js";
 import { type HassLike, localize, luxLabel } from "../i18n.js";
 import type { LuxPredicate, LuxQuant, LuxRangeStoreView } from "../types.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
+import { type StateObj, statesMap } from "./hass-states.js";
 import { effectiveDefIds } from "./named-def-config.js";
 
 const CUSTOM = "__custom__";
 
 /**
- * Editor for a `lux` predicate: an illuminance-sensor picker, a band selector
+ * Editor for a `lux` predicate: a numeric-sensor picker, a band selector
  * (a named lux range or "Custom range" with min/max inputs), and an Any/All
  * quantifier (shown only when more than one sensor is selected).
  *
@@ -57,6 +58,21 @@ export function luxPredicateError(pred: unknown, hass?: HassConnection): string 
   const p = pred as { range?: unknown; min?: unknown; max?: unknown };
   if (typeof p.range === "string") return null; // named ranges validate server-side
   return luxBoundsError(p.min, p.max, hass);
+}
+
+/**
+ * A sensor the lux condition can read: `conditions/lux.py` accepts any `sensor.*`
+ * whose state parses as a finite number. Class/unit/state_class keep a sensor
+ * listed while it is offline, when its state alone would not qualify it.
+ */
+export function isLuxCandidate(st: StateObj | undefined): boolean {
+  if (!st) return false;
+  const a = st.attributes ?? {};
+  if (a.device_class === "illuminance" || a.unit_of_measurement === "lx") return true;
+  if (a.state_class === "measurement") return true;
+  return (
+    typeof st.state === "string" && st.state.trim() !== "" && Number.isFinite(Number(st.state))
+  );
 }
 
 @customElement("ambience-lux-input")
@@ -175,13 +191,21 @@ export class AmbienceLuxInput extends LitElement {
 
   // --- schemas -------------------------------------------------------------
 
+  /** HA's entity selector has no "numeric" filter, so the candidate list is
+   *  computed from `hass.states` and passed as `include_entities`. The current
+   *  selection is always unioned in, so a configured sensor that is missing or
+   *  offline never silently vanishes from the picker; with no candidates at all
+   *  the plain `sensor` selector is the fallback (an empty `include_entities`
+   *  would offer nothing). */
   _sensorSchema(): HaFormSchema[] {
-    return [
-      {
-        name: "sensors",
-        selector: { entity: { domain: "sensor", device_class: ["illuminance"], multiple: true } },
-      },
-    ];
+    const states = statesMap(this.hass);
+    const ids = new Set(this._sensors());
+    for (const [id, st] of Object.entries(states)) {
+      if (id.startsWith("sensor.") && isLuxCandidate(st)) ids.add(id);
+    }
+    const entity: Record<string, unknown> = { domain: "sensor", multiple: true };
+    if (ids.size) entity.include_entities = [...ids].sort();
+    return [{ name: "sensors", selector: { entity } }];
   }
 
   // --- render --------------------------------------------------------------

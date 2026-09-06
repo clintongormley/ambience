@@ -5,17 +5,17 @@ as: _"the lounge is dark"_, or _"the office is brighter than 300 lx"_.
 
 This is the natural condition for daylight-aware lighting: instead of guessing
 from the time of day or the weather, it reads what your light sensors actually
-measure. The entity picker offers sensors with the `illuminance` device class;
-any numeric `sensor` also works if you configure it through an import or the MCP
-server.
+measure. The entity picker offers every sensor that reports a number
+(illuminance sensors first among them); the backend accepts any numeric
+`sensor`.
 
 When you add a Lux condition to a scene, the editor shows (top to bottom):
 
 - **Any of** or **All of** — shown above the sensors once you pick more than
     one. "Any of" passes when at least one sensor reads inside the range; "All
     of" requires every sensor to match.
-- **Entity** — a picker listing your illuminance sensors. Pick one or more.
-    Leaving it empty makes the condition match anything (no constraint).
+- **Entity** — a picker listing your numeric sensors. Pick one or more. Leaving
+    it empty makes the condition match anything (no constraint).
 - **is** / **is not** — whether each reading must fall **inside** the chosen
     range (*is*) or **outside** it (*is not*). "is not" inverts the whole test —
     the band *and* the Any-of/All-of quantifier — so *Any of (hall, landing) is

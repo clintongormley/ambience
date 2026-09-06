@@ -2,8 +2,11 @@
 
 Several conditions need the same primitives: a frozenset of the HA "no real
 value" states, a tolerant `{h,m,s}` duration reader, the matching save-time
-validator for that duration, a numeric-interval merge, and a bool-rejecting
-float coercion. Keeping one copy here avoids the set/tuple and
+validator for that duration, a numeric-interval merge, the two float
+coercions (bool-rejecting and state-string-tolerant), the ordering-operator
+comparison, the clock-field validators (`valid_hour`, `valid_minute`,
+`valid_clock`) and the `Reason` / `REASON_EN` table behind a trace's
+"why this cannot match". Keeping one copy here avoids the set/tuple and
 fix-it-in-one-place drift that crept in when each condition carried its own.
 """
 
@@ -11,6 +14,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
@@ -362,3 +366,81 @@ def as_float(value: Any) -> float | None:
         return None
     result = float(value)
     return result if math.isfinite(result) else None
+
+
+def as_float_state(value: Any) -> float | None:
+    """Coerce an entity state (or any user-typed value) to a finite float, else
+    None. Accepts numeric strings, unlike `as_float`, because HA states are
+    strings. Non-finite values are unobservable: NaN fails every band
+    comparison (`nan < lo` and `nan >= hi` are both False), which would
+    otherwise make a NaN reading match every band."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def compare_numeric(actual: float, op: str, threshold: float) -> bool:
+    """`actual <op> threshold` for the four ordering operators; False for any
+    other op so an unknown operator never matches."""
+    if op == "<":
+        return actual < threshold
+    if op == "<=":
+        return actual <= threshold
+    if op == ">":
+        return actual > threshold
+    if op == ">=":
+        return actual >= threshold
+    return False
+
+
+def valid_hour(hh: Any) -> bool:
+    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
+    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
+
+
+def valid_minute(mm: Any) -> bool:
+    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
+    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
+
+
+def valid_clock(hh: Any, mm: Any) -> bool:
+    """True if hh/mm together are an in-range clock time."""
+    return valid_hour(hh) and valid_minute(mm)
+
+
+@dataclass(frozen=True)
+class Reason:
+    """A translatable "why this predicate cannot match": a key into the panel's
+    `trace_reason` bundle plus its placeholders.
+
+    `render()` is the English the backend puts in the trace's `detail` for logs,
+    diagnostics and the MCP; the panel localises `key` itself and falls back to
+    that English. `tests/test_trace_reasons.py` keeps `REASON_EN` equal to the
+    bundle's `en` table so the two can never drift."""
+
+    key: str
+    placeholders: Mapping[str, str] = field(default_factory=dict)
+
+    # `placeholders` is an arbitrary Mapping, so the generated hash would raise
+    # on the usual dict. Unhashable by declaration rather than by accident.
+    __hash__ = None  # type: ignore[assignment]
+
+    def render(self) -> str:
+        return REASON_EN[self.key].format(**self.placeholders)
+
+
+# The English for every `Reason` key. Mirrored (and pinned) by the panel bundle's
+# `trace_reason` namespace in frontend/src/i18n-data.ts.
+REASON_EN: dict[str, str] = {
+    "day_workday_sensor_unconfigured": "workday sensor not configured",
+    "day_workday_calendar_unconfigured": "workday calendar not configured",
+    "lux_range_missing": "lux range {range} no longer exists",
+    "lux_sensor_not_numeric": "{name} ({value}) does not report a number",
+    "period_missing": "time-of-day period {period} no longer exists",
+    "sun_not_configured": "the sun integration is not set up",
+    "sun_anchor_undefined": "{anchor} is undefined at this location today",
+    "weather_entity_unconfigured": "weather entity not configured",
+    "weather_group_missing": "weather group {group} no longer exists",
+}

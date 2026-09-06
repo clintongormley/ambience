@@ -11,13 +11,14 @@ import { DEFAULT_ENTITY_ICON, renderEntityIcon } from "./entity-row.js";
 const _GROUP_ICON: Record<string, string> = {
   time: "mdi:clock-outline",
   sun: "mdi:weather-sunny",
+  domain: "mdi:account-multiple-plus",
 };
 
 /**
  * Read-only "Auto-triggers" modal for one category of a scope. Lists every
  * watch the engine derives from that category's scenes (entities, clock times,
- * sun events, date rollover, periodic re-check) as a plain list — no
- * enable/disable controls (auto-triggers are always on).
+ * sun events, date rollover, periodic re-check, whole-domain membership) as a
+ * plain list — no enable/disable controls (auto-triggers are always on).
  *
  * Follows the modal pattern of `traces-modal.ts`; fetches lazily on open and
  * re-fetches when `scenes`/`scope`/`category` change while open.
@@ -208,7 +209,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
   }
 
   /** Entity rows sorted alphabetically by display name (case-insensitive), then
-   *  group rows in backend order (time, sun). */
+   *  group rows in backend order (time, sun, domain). */
   private get _sortedTriggers(): AutoTrigger[] {
     const nameOf = (t: Extract<AutoTrigger, { kind: "entity" }>) =>
       this._entityName(t.entity_id).toLowerCase();
@@ -253,6 +254,18 @@ export class AmbienceAutoTriggersModal extends LitElement {
         return {
           title: localize(this.hass, "ui.auto_trigger_group_sun", "Sun"),
           detail: t.suns.map((s) => this._sunPart(s)).join(", "),
+        };
+      case "domain":
+        return {
+          title: localize(this.hass, "ui.auto_trigger_group_domain", "People list"),
+          detail: localize(
+            this.hass,
+            "ui.auto_trigger_domain_membership",
+            "{domains} added or removed",
+            {
+              domains: t.domains.join(", "),
+            },
+          ),
         };
     }
   }

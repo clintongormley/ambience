@@ -12,7 +12,7 @@ build + flip detection + resolve/apply). The methods reference engine state
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.const import STATE_UNKNOWN
@@ -23,14 +23,13 @@ from homeassistant.helpers.event import (
     async_track_state_added_domain,
     async_track_state_change_event,
     async_track_state_removed_domain,
-    async_track_time_change,
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
 
 from .conditions._common import fmt_duration
-from .conditions.time_of_day import ANCHOR_ATTR
-from .const import DATA_SWITCHES, DOMAIN
+from .conditions.time_of_day import ANCHOR_ATTR, next_wall_clock
+from .const import get_switches
 from .service import (
     _scope_enabled,
     _switch_state,
@@ -48,6 +47,16 @@ from .triggers import DurationGate
 
 # How often wall-clock-dependent (has_time) predicates are recomputed.
 _HAS_TIME_INTERVAL = timedelta(seconds=60)
+
+# Retry cadence for a matured `for:` gate whose condition could not be
+# snapshotted when its recheck fired. Without it the recheck (one-shot) is
+# consumed, no flip is recorded and the tenure is past due, so nothing would
+# ever wake that predicate again.
+_FOR_RETRY_SECONDS = 60.0
+# A condition still unreadable after this many retries is a configuration
+# problem (each failed snapshot logs a warning); stop polling it. The budget
+# bounds retries that FIRE per gate; re-arming does not spend it.
+_FOR_RETRY_LIMIT = 10
 
 
 class TriggerSubscriptionsMixin:
@@ -81,10 +90,14 @@ class TriggerSubscriptionsMixin:
         for cancel in self._sun_unsubs.values():
             cancel()
         self._sun_unsubs.clear()
+        for cancel in self._clock_unsubs.values():
+            cancel()
+        self._clock_unsubs.clear()
         for handles in self._for_handles.values():
             for cancel in handles.values():
                 cancel()
         self._for_handles.clear()
+        self._for_retries.clear()
         self._switch_scopes.clear()
 
     def async_subscribe(self) -> None:
@@ -111,32 +124,14 @@ class TriggerSubscriptionsMixin:
             self._unsubs.append(
                 async_track_state_removed_domain(self._hass, domains, self._on_domain_membership)
             )
-        for clock in index.clock_times:
-            self._unsubs.append(
-                async_track_time_change(
-                    self._hass,
-                    self._make_keys_handler(
-                        index.by_clock[clock],
-                        TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}"),
-                    ),
-                    hour=clock[0],
-                    minute=clock[1],
-                    second=0,
-                )
-            )
+        # Midnight preds share the 00:00 slot: one wake-up, one fire.
+        clocks: dict[tuple[int, int], frozenset[PredKey]] = {
+            clock: index.by_clock[clock] for clock in index.clock_times
+        }
         if index.midnight:
-            self._unsubs.append(
-                async_track_time_change(
-                    self._hass,
-                    self._make_keys_handler(
-                        index.midnight,
-                        TriggerCause(kind=CauseKind.CLOCK, detail="00:00"),
-                    ),
-                    hour=0,
-                    minute=0,
-                    second=0,
-                )
-            )
+            clocks[(0, 0)] = clocks.get((0, 0), frozenset()) | index.midnight
+        for clock, preds in clocks.items():
+            self._schedule_clock(clock, preds)
         for sun_event in index.sun_events:
             self._schedule_sun(sun_event)
         if index.has_time:
@@ -151,7 +146,7 @@ class TriggerSubscriptionsMixin:
                 )
             )
         self._switch_scopes = {}
-        switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
+        switches = get_switches(self._hass)
         for scope_key in self._scope_cfgs:
             entity_id = getattr(switches.get(scope_key), "entity_id", None)
             if entity_id:
@@ -306,8 +301,11 @@ class TriggerSubscriptionsMixin:
         Gates that are NOT in tenure (instant test currently false) need no
         timer: they re-arm event-driven via the flip that records their tenure.
         A gate already matured (delay <= 0) needs none either: the evaluation
-        that armed this pass already saw it true. Cancels and replaces any prior
-        handles per predicate, so calling this is idempotent.
+        that armed this pass already saw it true — unless that evaluation could
+        not read the condition at all (None snapshot), in which case it saw
+        nothing and a bounded retry stands in for the flip it could not record.
+        Cancels and replaces any prior handles per predicate, so calling this is
+        idempotent.
 
         Arms nothing once the engine is torn down: teardown is the only thing
         that cancels these handles, so a timer armed after it would outlive the
@@ -322,16 +320,30 @@ class TriggerSubscriptionsMixin:
             for cancel in self._for_handles.pop(key, {}).values():
                 cancel()
             tenure = self._tenure.get(key[3], {})
+            # Any evaluation that could read the condition clears the retry
+            # budget, so an exhausted one never outlives the outage that spent it.
+            readable = self._snapshots.get(key[3]) is not None
+            if readable:
+                self._for_retries.pop(key, None)
             handles: dict[tuple[str, float], Callable[[], None]] = {}
             for gate in gates:
                 since = tenure.get(gate.key)
                 if since is None:
                     continue  # instant test not currently true → no pending flip
+                retry = False
                 delay = gate.seconds - (now - since).total_seconds()
                 if delay <= 0:
-                    continue  # already matured; this evaluation covered it
+                    if readable:
+                        continue  # already matured; this evaluation covered it
+                    # Read the budget, never spend it here: this pass cancels and
+                    # replaces any pending retry, so a burst of unrelated events
+                    # would otherwise exhaust it with no retry ever firing.
+                    if self._for_retries.get(key, 0) >= _FOR_RETRY_LIMIT:
+                        continue
+                    delay = _FOR_RETRY_SECONDS  # matured but unobservable — try again
+                    retry = True
                 handles[(gate.key, gate.seconds)] = async_call_later(
-                    self._hass, delay, self._make_for_recheck(key, gate)
+                    self._hass, delay, self._make_for_recheck(key, gate, retry=retry)
                 )
             if handles:
                 self._for_handles[key] = handles
@@ -349,11 +361,16 @@ class TriggerSubscriptionsMixin:
             key for key in self._index.durations if (key[0], key[1]) == (scope_kind, scope_id)
         )
 
-    def _make_for_recheck(self, key: PredKey, gate: DurationGate) -> Callable[[Any], None]:
+    def _make_for_recheck(
+        self, key: PredKey, gate: DurationGate, *, retry: bool = False
+    ) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
             if not self._running:
                 return  # fired after teardown — don't evaluate
+            if retry:
+                # Spend the budget here, where a retry actually runs.
+                self._for_retries[key] = self._for_retries.get(key, 0) + 1
             # Drop only this timer's handle; sibling gate rechecks for the same
             # predicate stay tracked and cancellable.
             handles = self._for_handles.get(key)
@@ -453,22 +470,43 @@ class TriggerSubscriptionsMixin:
             return retry_at, False
         return now + timedelta(seconds=60), False
 
+    def _arm_slot[K](
+        self,
+        slots: dict[K, Callable[[], None]],
+        key: K,
+        fire_at: datetime,
+        on_fire: Callable[[], None],
+    ) -> None:
+        """Hold a one-shot timer for `fire_at` in `slots[key]`, running `on_fire`
+        when it fires.
+
+        Never arm into a dead engine: a handle that survives teardown fires into
+        a no-op. Re-arming replaces the slot (cancelling whatever it held), so
+        fired handles never accumulate.
+        """
+
+        @callback
+        def _handler(_now: Any) -> None:
+            if not self._running:
+                return
+            on_fire()
+
+        old = slots.pop(key, None)
+        if old is not None:
+            old()
+        slots[key] = async_track_point_in_time(self._hass, _handler, fire_at)
+
     def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
         """Schedule the next sun wake-up, re-arming on every wake-up.
 
         Only a wake-up at the genuine `anchor+offset` instant re-evaluates; the
-        rollover fall-forwards just re-arm. The handle lives in
-        `_sun_unsubs[sun_event]`; re-arming cancels and replaces the slot so
-        fired (dead) handles never accumulate.
+        rollover fall-forwards just re-arm.
         """
         fire_at, is_fire = self._next_sun_slot(sun_event[0], sun_event[1])
         if fire_at is None:
             return
 
-        @callback
-        def _handler(_now: Any) -> None:
-            if not self._running:
-                return  # fired after teardown — don't re-arm into a dead engine
+        def _on_fire() -> None:
             preds = self._index.by_sun.get(sun_event) if is_fire else None
             if preds:
                 self._fire(
@@ -477,7 +515,21 @@ class TriggerSubscriptionsMixin:
                 )
             self._schedule_sun(sun_event)  # arm the next occurrence
 
-        old = self._sun_unsubs.pop(sun_event, None)
-        if old is not None:
-            old()
-        self._sun_unsubs[sun_event] = async_track_point_in_time(self._hass, _handler, fire_at)
+        self._arm_slot(self._sun_unsubs, sun_event, fire_at, _on_fire)
+
+    def _schedule_clock(self, clock: tuple[int, int], preds: frozenset[PredKey]) -> None:
+        """Arm the next wake-up for a wall-clock time, re-arming on every fire.
+
+        Ambience's own scheduler rather than HA's `async_track_time_change`: HA
+        skips a clock time that falls in the spring-forward gap for the whole
+        day, whereas matching resolves it to the jump instant
+        (`next_wall_clock`), and HA fires a time inside the autumn fold twice.
+        """
+        fire_at = next_wall_clock(dt_util.utcnow(), clock[0], clock[1])
+        cause = TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}")
+
+        def _on_fire() -> None:
+            self._fire(set(preds), cause)
+            self._schedule_clock(clock, preds)
+
+        self._arm_slot(self._clock_unsubs, clock, fire_at, _on_fire)

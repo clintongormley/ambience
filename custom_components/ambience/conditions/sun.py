@@ -110,9 +110,9 @@ class SunCondition:
     def order_key(self, predicate: Any) -> float:
         elevation = predicate.get("elevation") if isinstance(predicate, dict) else None
         if isinstance(elevation, dict):
-            lo = elevation.get("min")
-            if isinstance(lo, (int, float)) and not isinstance(lo, bool):
-                return float(lo)
+            lo = as_float(elevation.get("min"))
+            if lo is not None:
+                return lo
         return float("-inf")
 
     def describe(self, snapshot: SunSnapshot, predicate: Any = None) -> str | None:
@@ -149,7 +149,7 @@ class SunCondition:
         for bound in (lo, hi):
             if bound is None:
                 continue
-            if not isinstance(bound, (int, float)) or isinstance(bound, bool):
+            if as_float(bound) is None:
                 raise AmbienceError("sun_elevation_not_number", value=bound)
             if not -90 <= bound <= 90:
                 raise AmbienceError("sun_elevation_out_of_range", value=bound)
@@ -176,7 +176,7 @@ class SunCondition:
                 raise AmbienceError("sun_azimuth_range_not_object", value=rng)
             for key in ("from", "to"):
                 val = rng.get(key)
-                if not isinstance(val, (int, float)) or isinstance(val, bool):
+                if as_float(val) is None:
                     raise AmbienceError("sun_azimuth_bound_not_number", bound=key, value=val)
                 if not 0 <= val < 360:
                     raise AmbienceError("sun_azimuth_out_of_range", bound=key, value=val)
@@ -210,11 +210,12 @@ class SunCondition:
 
 def _in_arc(value: float, lo: Any, hi: Any) -> bool:
     """Half-open circular containment [lo, hi); lo > hi wraps past 360."""
-    if not isinstance(lo, (int, float)) or not isinstance(hi, (int, float)):
+    lo_f, hi_f = as_float(lo), as_float(hi)
+    if lo_f is None or hi_f is None:
         return False
-    if lo <= hi:
-        return lo <= value < hi
-    return value >= lo or value < hi
+    if lo_f <= hi_f:
+        return lo_f <= value < hi_f
+    return value >= lo_f or value < hi_f
 
 
 def _elevation_interval(predicate: Any) -> tuple[float, float]:
@@ -222,11 +223,12 @@ def _elevation_interval(predicate: Any) -> tuple[float, float]:
     constraint = predicate.get("elevation") if isinstance(predicate, dict) else None
     if not isinstance(constraint, dict):
         return (float("-inf"), float("inf"))
-    lo = constraint.get("min")
-    hi = constraint.get("max")
-    lo_f = float(lo) if isinstance(lo, (int, float)) and not isinstance(lo, bool) else float("-inf")
-    hi_f = float(hi) if isinstance(hi, (int, float)) and not isinstance(hi, bool) else float("inf")
-    return (lo_f, hi_f)
+    lo_f = as_float(constraint.get("min"))
+    hi_f = as_float(constraint.get("max"))
+    return (
+        lo_f if lo_f is not None else float("-inf"),
+        hi_f if hi_f is not None else float("inf"),
+    )
 
 
 def _azimuth_intervals(predicate: Any) -> list[tuple[float, float]]:
@@ -244,9 +246,9 @@ def _azimuth_intervals(predicate: Any) -> list[tuple[float, float]]:
             arcs.append(arc)
     for rng in constraint.get("ranges") or []:
         if isinstance(rng, dict):
-            lo, hi = rng.get("from"), rng.get("to")
-            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
-                arcs.append((float(lo), float(hi)))
+            lo_f, hi_f = as_float(rng.get("from")), as_float(rng.get("to"))
+            if lo_f is not None and hi_f is not None:
+                arcs.append((lo_f, hi_f))
     intervals: list[tuple[float, float]] = []
     for lo, hi in arcs:
         if lo <= hi:

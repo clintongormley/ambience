@@ -62,6 +62,7 @@ from .const import (
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DATA_SWITCHES_PENDING,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
@@ -71,6 +72,9 @@ from .const import (
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
+    STORAGE_KEY,
+    STORAGE_UNREADABLE_ISSUE,
+    get_store,
 )
 from .errors import async_preload_translations
 from .exposed_actions import ExposedActionsStore
@@ -124,6 +128,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_SWITCHES] = {}
+    # hass.data[DOMAIN] survives a setup that raised after this point, so a
+    # pending-add claim left by the failed attempt would block that scope's
+    # switch until its TTL expired.
+    domain_data[DATA_SWITCHES_PENDING] = {}
     domain_data[DATA_LAST_APPLIED] = {}
     trace_buffer = BufferSink()
     domain_data[DATA_TRACE_BUFFER] = trace_buffer
@@ -131,6 +139,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     store = AmbienceStore(hass)
     await store.async_load()
+
+    # A damaged file is left in place for recovery (store.async_load), so the
+    # only other signal is one warning in the log — surface it in Repairs.
+    if store.payload_unreadable:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            STORAGE_UNREADABLE_ISSUE,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=STORAGE_UNREADABLE_ISSUE,
+            translation_placeholders={"path": f".storage/{STORAGE_KEY}"},
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, STORAGE_UNREADABLE_ISSUE)
 
     # Reconcile against HA registries: drop stored configs whose registry
     # entry has gone away (e.g. while HA was down).
@@ -433,7 +456,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Flush any pending delayed store save before dropping our reference, so a
     # subsequent removal can't be resurrected by a late write from this instance
     # (see AmbienceStore.async_flush). Only runs on a clean unload.
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is not None:
         await store.async_flush()
     hass.data.pop(DOMAIN, None)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -20,6 +21,7 @@ from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
     DATA_STORE,
+    DATA_SWITCHES_PENDING,
     DOMAIN,
 )
 
@@ -51,6 +53,23 @@ async def test_setup_and_unload_entry(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_setup_clears_a_stale_pending_switch_claim(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """hass.data[DOMAIN] outlives a setup that raised, so a pending-add claim
+    from the failed attempt must not survive into the next one — it would block
+    that scope's switch until the claim's TTL expired."""
+    # Claimed just now, so reconcile's TTL sweep would not clear it either.
+    hass.data[DOMAIN] = {DATA_SWITCHES_PENDING: {("house", None): time.monotonic()}}
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("switch.house_ambience") is not None
+    assert ("house", None) not in hass.data[DOMAIN][DATA_SWITCHES_PENDING]
 
 
 async def test_setup_seeds_registries_and_store(
@@ -763,3 +782,45 @@ async def test_rename_away_from_referenced_entity_rescans(
         registry.async_update_entity(entry.entity_id, new_entity_id="light.renamed_away")
         await _settle_health(hass)
         assert spy.call_count == 1
+
+
+async def test_unreadable_storage_raises_a_repairs_issue_and_a_clean_load_clears_it(
+    hass: HomeAssistant,
+    hass_storage,
+) -> None:
+    """A malformed payload is left on disk for recovery, so Repairs is the only
+    user-visible signal; a later clean load must take the issue back down."""
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ambience.const import STORAGE_KEY, STORAGE_VERSION
+
+    bad = {"not": "a config"}
+    stored = {"version": STORAGE_VERSION, "key": STORAGE_KEY, "data": bad}
+    hass_storage[STORAGE_KEY] = dict(stored)
+    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={}, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable")
+    assert issue is not None
+    assert issue.severity == ir.IssueSeverity.ERROR
+    assert issue.is_fixable is False
+    assert issue.translation_placeholders == {"path": f".storage/{STORAGE_KEY}"}
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    # The damaged file must survive setup and unload untouched, and unload must
+    # not take the issue down — only a clean load may.
+    assert hass_storage[STORAGE_KEY] == stored
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable") is not None
+
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "key": STORAGE_KEY,
+        "data": {"areas": {}},
+    }
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable") is None

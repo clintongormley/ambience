@@ -1,15 +1,16 @@
-"""Canonical human-readable names for scopes and categories.
+"""Canonical human-readable names for scopes, categories and scenes.
 
-Shared by the logbook attribution (`service_logbook.log_apply`) and the evaluation
-trace (`trace`), so both render the same friendly area/floor/category names from a
-single source of truth instead of duplicating the lookups.
+Shared by the logbook attribution (`service_logbook.log_apply`), the evaluation
+trace (`trace`) and Repairs (`config_health_issues`), so all of them render the
+same friendly names from a single source of truth instead of duplicating the
+lookups and the fallbacks.
 """
 
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_STORE, DOMAIN
+from .const import get_store
 from .scopes import scope_spec
 
 
@@ -49,6 +50,20 @@ def scope_device_name(
     return f"{prefix} {default_name}"
 
 
+def scene_label(name: str | None, index: int | None = None) -> str:
+    """Display label for a scene: its name, else "scene N" (1-based) when the
+    index is known, else "(unnamed)".
+
+    Repairs and the logbook both name scenes through here, so an unnamed scene
+    reads the same in both. The trace log is not a caller: it renders its own
+    "scene #N" form from the winner index. A blank or whitespace-only name
+    counts as no name.
+    """
+    if name and name.strip():
+        return name
+    return f"scene {index + 1}" if index is not None else "(unnamed)"
+
+
 def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     """Map of category id -> configured category name, from the store.
 
@@ -56,7 +71,7 @@ def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     stages (the trace sinks land before the store) and is dropped whole on
     unload, so a caller can arrive with nothing to read. Every id is then left
     unresolved rather than crashing the caller."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is None:
         return {}
     return {g.get("id"): g.get("name") for g in store.categories()}

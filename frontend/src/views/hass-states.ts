@@ -15,6 +15,16 @@ export function statesMap(hass: unknown): Record<string, StateObj> {
 }
 
 /**
+ * Does the entity's state read as a number? `Number("")`, `Number("unknown")`
+ * and `Number("unavailable")` are all NaN, so the trim-and-finite test excludes
+ * them without naming them.
+ */
+export function hasNumericState(st: StateObj | undefined): boolean {
+  const s = st?.state;
+  return typeof s === "string" && s.trim() !== "" && Number.isFinite(Number(s));
+}
+
+/**
  * All entities in `domain` (e.g. "person", "zone"), as `{id, name}` sorted by id.
  */
 export function entitiesOfDomain(

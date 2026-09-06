@@ -13,9 +13,9 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import (
     DATA_STORE,
-    DATA_SWITCHES,
     DOMAIN,
     KNOWN_ASSISTANTS,
+    get_switches,
 )
 
 
@@ -33,5 +33,5 @@ def async_apply_switch_exposure(hass: HomeAssistant, entity_id: str) -> None:
 @callback
 def async_reapply_all_switch_exposure(hass: HomeAssistant, _: object = None) -> None:
     """Re-apply exposure to every live ambience switch (after a settings change)."""
-    for switch in list(hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).values()):
+    for switch in list(get_switches(hass).values()):
         async_apply_switch_exposure(hass, switch.entity_id)

@@ -11,10 +11,10 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..const import get_store
+from ..const import DATA_STORE, DOMAIN, get_store
 from ..errors import AmbienceError
 from ..triggers import TriggerSpec
-from ._common import predicate_has_any
+from ._common import Reason, predicate_has_any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,8 +115,8 @@ class DayCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> DaySnapshot:
-        from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
-
+        # Strict index: snapshot() only runs after setup, so a missing store is a
+        # bug, not a state to tolerate.
         store = hass.data[DOMAIN][DATA_STORE]
         cfg = store.get_condition_config("day")
         today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()
@@ -231,16 +231,16 @@ class DayCondition:
         # wraparound (e.g. Dec 20 -> Jan 5)
         return today_md >= from_md or today_md <= to_md
 
-    def unconfigured_reason(self, predicate: Any, snapshot: DaySnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: DaySnapshot) -> Reason | None:
         if not isinstance(predicate, dict):
             return None
         cfg = self._day_config()
         for slot in (predicate.get("include") or []) + (predicate.get("exclude") or []):
             kind = slot.get("kind") if isinstance(slot, dict) else None
             if kind in SENSOR_DEPENDENT_KINDS and not cfg.get("workday_sensor"):
-                return "workday sensor not configured"
+                return Reason("day_workday_sensor_unconfigured")
             if kind in CALENDAR_DEPENDENT_KINDS and not cfg.get("workday_calendar"):
-                return "workday calendar not configured"
+                return Reason("day_workday_calendar_unconfigured")
         return None
 
     def describe(self, snapshot: DaySnapshot, predicate: Any = None) -> str | None:

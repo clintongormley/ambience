@@ -73,9 +73,14 @@ from .simulate import (
 )
 
 # `custom_components.ambience.websocket` is the one import path for the ws API:
-# registration and unregistration. Everything else lives in the module that
-# owns it.
-__all__ = ["async_register_commands", "async_unregister_commands"]
+# registration, unregistration, and the read/write classification of every
+# command. Everything else lives in the module that owns it.
+__all__ = [
+    "READ_COMMANDS",
+    "WRITE_COMMANDS",
+    "async_register_commands",
+    "async_unregister_commands",
+]
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -150,4 +155,79 @@ _WS_HANDLERS = (
     _ws_simulate_inputs,
     _ws_simulate,
     _ws_simulate_sun_anchors,
+)
+
+# Every registered command is in exactly one of these two sets: a write persists
+# configuration or clears state Ambience owns; a read does neither — though a read
+# may still evaluate a user script or template condition, which runs that script.
+# The MCP client
+# mirrors WRITE_COMMANDS as `ambience_mcp.ha_client.MUTATING_COMMANDS` to decide
+# which commands it may re-send after a lost reply, and
+# tests/test_protocol_shape.py gates both the partition and the mirroring.
+WRITE_COMMANDS: frozenset[str] = frozenset(
+    {
+        "ambience/apply",
+        "ambience/area/save",
+        "ambience/categories/delete",
+        "ambience/categories/save",
+        "ambience/conditions/day/config/save",
+        "ambience/conditions/weather/config/save",
+        "ambience/exposed_actions/save",
+        "ambience/exposed_assistants/save",
+        "ambience/floor/save",
+        "ambience/history/redo",
+        "ambience/history/undo",
+        "ambience/house/save",
+        "ambience/lux_ranges/reset",
+        "ambience/lux_ranges/save",
+        "ambience/reapply/save",
+        "ambience/scene/run_actions",
+        "ambience/set_scope_enabled",
+        "ambience/switch_defaults/save",
+        "ambience/time_of_day_periods/reset",
+        "ambience/time_of_day_periods/save",
+        "ambience/traces/clear",
+    }
+)
+
+READ_COMMANDS: frozenset[str] = frozenset(
+    {
+        "ambience/ai_bundle",
+        "ambience/ai_context",
+        "ambience/ai_guide",
+        "ambience/area/get",
+        "ambience/areas/list",
+        "ambience/auto_triggers/list",
+        "ambience/categories/list",
+        "ambience/conditions/day/config/list",
+        "ambience/conditions/list",
+        "ambience/conditions/weather/config/list",
+        "ambience/diagnostics/scope",
+        "ambience/dry_run",
+        "ambience/entities/find",
+        "ambience/exposed_actions/list",
+        "ambience/exposed_assistants/list",
+        "ambience/floor/get",
+        "ambience/floors/list",
+        "ambience/frontend_version",
+        "ambience/history/subscribe",
+        "ambience/house/get",
+        "ambience/install_id",
+        "ambience/live/subscribe",
+        "ambience/lux_ranges/list",
+        "ambience/mcp/hello",
+        "ambience/reapply/list",
+        "ambience/services/get_schema",
+        "ambience/services/list",
+        "ambience/simulate",
+        "ambience/simulate/inputs",
+        "ambience/simulate/sun_anchors",
+        "ambience/state/known_attribute_values",
+        "ambience/state/known_states",
+        "ambience/switch_defaults/list",
+        "ambience/switches/list",
+        "ambience/time_of_day_periods/list",
+        "ambience/traces/list",
+        "ambience/validate",
+    }
 )

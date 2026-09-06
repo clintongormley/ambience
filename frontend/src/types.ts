@@ -182,7 +182,7 @@ export type LuxRangeStoreView = {
 /** Per-scene predicate. `null` = wildcard (no lux constraint). A predicate
  *  references a named `range` XOR an inline `min`/`max` band. */
 export interface LuxPredicate {
-  sensors: string[]; // sensor.* (illuminance) entity_ids; empty = match-anything
+  sensors: string[]; // sensor.* entity_ids (any numeric sensor); empty = match-anything
   range?: string; // a named lux range id
   min?: number; // inline band lower bound (inclusive)
   max?: number; // inline band upper bound (exclusive)
@@ -349,6 +349,7 @@ export type ScopeConfig = AreaConfig;
 // Purely informational — there are no enable/disable controls (auto-triggers
 // are always on). Entities get one row each; clock times / periodic re-check /
 // date rollover collapse into a single `time` group; sun events into a `sun`
+// group; a wildcard predicate's whole-domain membership watch into a `domain`
 // group.
 export type AutoTrigger = { key: string } & (
   | { kind: "entity"; entity_id: string }
@@ -359,6 +360,7 @@ export type AutoTrigger = { key: string } & (
       date_rollover: boolean;
     }
   | { kind: "sun"; suns: { anchor: string; offset: number }[] }
+  | { kind: "domain"; domains: string[] }
 );
 
 export type AutoTriggerList = {
@@ -407,6 +409,13 @@ export type TracePredicate = {
   // trace. Optional so a trace captured before this field existed (or an
   // ambient condition with no entities) renders as plain text.
   entity_ids?: string[];
+  // `detail` is always the backend's English. When it came from a condition's
+  // `unconfigured_reason` these carry the `trace_reason` bundle key and its
+  // placeholders so the panel can render the same sentence in the user's
+  // language; null/absent for a `describe()` detail (per-house prose) and for
+  // any trace captured before these fields existed.
+  detail_key?: string | null;
+  detail_placeholders?: Record<string, string> | null;
 };
 export type TraceSceneEval = {
   index: number;

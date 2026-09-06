@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
@@ -13,15 +11,12 @@ from custom_components.ambience.config_health_issues import (
     reconcile_issues,
     referenced_entity_ids,
 )
-from custom_components.ambience.const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
-
-
-@pytest.fixture
-async def installed(hass: HomeAssistant, mock_config_entry) -> Any:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
+from custom_components.ambience.const import (
+    DATA_OVERLAP_SET,
+    DATA_STORE,
+    DOMAIN,
+    STORAGE_UNREADABLE_ISSUE,
+)
 
 
 @pytest.fixture
@@ -300,6 +295,31 @@ async def test_missing_entity_message_collapses_newline_in_scene_name(
     assert scenes == '\n- "two lines" — uncategorised'
 
 
+async def test_missing_entity_message_labels_a_nameless_scene_as_unnamed(
+    hass, installed, area_id
+) -> None:
+    # A scene with no name carries scene_name=None all the way to the bullet, so
+    # the "(unnamed)" placeholder has to be applied at render time.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
+    scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
+    assert scenes == '\n- "(unnamed)" — uncategorised'
+
+
 async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     a = ar.async_get(hass).async_create("Kitchen").id
@@ -383,3 +403,21 @@ async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed)
         "unexposed_action:fan.toggle",
     ):
         assert reg.async_get_issue(DOMAIN, iid) is not None, iid
+
+
+async def test_reconcile_leaves_another_module_s_issue_alone(
+    hass: HomeAssistant, installed
+) -> None:
+    """`__init__` owns the storage-unreadable issue; the config-health sweep must
+    not clear it just because it isn't one of the problems this scan found."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        STORAGE_UNREADABLE_ISSUE,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=STORAGE_UNREADABLE_ISSUE,
+        translation_placeholders={"path": ".storage/ambience"},
+    )
+    reconcile_issues(hass)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, STORAGE_UNREADABLE_ISSUE) is not None

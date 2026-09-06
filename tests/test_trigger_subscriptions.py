@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
@@ -185,7 +187,7 @@ async def test_subscribe_skips_entity_subscription_when_no_entities(hass) -> Non
 
 
 async def test_subscribe_registers_clock_time_subscription(hass) -> None:
-    """A clock_times entry in the index creates an async_track_time_change subscription."""
+    """A clock_times entry in the index arms a wake-up for that wall-clock time."""
 
     class ClockCondition:
         def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -211,14 +213,14 @@ async def test_subscribe_registers_clock_time_subscription(hass) -> None:
     engine.async_rebuild()
     assert (9, 0) in engine._index.clock_times
     engine.async_subscribe()
-    # One subscription for the clock time was added.
-    assert len(engine._unsubs) == 1
+    # One wake-up for the clock time was armed.
+    assert (9, 0) in engine._clock_unsubs
     engine._teardown()
-    assert engine._unsubs == []
+    assert engine._clock_unsubs == {}
 
 
 async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> None:
-    """Midnight clock subscription is created when the index carries midnight preds."""
+    """Midnight preds in the index arm the (0, 0) wall-clock wake-up."""
 
     # Inject midnight directly into the built index via a spec with date_rollover=True
     class MidnightCondition:
@@ -245,10 +247,55 @@ async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> Non
     engine.async_rebuild()
     assert engine._index.midnight  # confirmed: midnight pred in index
     engine.async_subscribe()
-    # One subscription for midnight was added (only subscription — no entity dep).
-    assert len(engine._unsubs) == 1
+    # Midnight is armed as the (0, 0) wall-clock wake-up.
+    assert (0, 0) in engine._clock_unsubs
     engine._teardown()
-    assert engine._unsubs == []
+    assert engine._clock_unsubs == {}
+
+
+async def test_clock_trigger_fires_at_the_dst_jump_and_rearms_for_tomorrow(
+    hass, fixed_utcnow
+) -> None:
+    """HA's own clock tracker skips 02:30 for the whole spring-forward day;
+    Ambience fires at the instant the clock jumps to (03:00 local) instead."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    fixed_utcnow["now"] = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local
+
+    class ClockCondition:
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            return TriggerSpec(clock_times=frozenset({(2, 30)}))
+
+        async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+            return "v"
+
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
+            return None
+
+    scopes = [("area", "a", {"scenes": [{"when": {"clk": "x"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"clk": ClockCondition()},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    fired: list[Any] = []
+
+    async def _record(keys: Any, cause: Any = None) -> None:
+        fired.append(cause)
+
+    with patch.object(engine, "async_evaluate", new=AsyncMock(side_effect=_record)):
+        engine.async_subscribe()
+        fixed_utcnow["now"] = datetime(2026, 3, 29, 1, 0, tzinfo=UTC)  # 03:00 local, the jump
+        async_fire_time_changed(hass, fixed_utcnow["now"])
+        await hass.async_block_till_done()
+    assert [c.detail for c in fired] == ["02:30"]
+    assert (2, 30) in engine._clock_unsubs  # re-armed (for 02:30 tomorrow)
+    engine._teardown()
 
 
 # ---------------------------------------------------------------------------
@@ -528,6 +575,9 @@ class _ForCondition:
     tenure from the entity's last_changed; matches off engine tenure when
     attached, else the instant value."""
 
+    # Flipped by tests that need the snapshot to blow up mid-run.
+    fail = False
+
     def __init__(self, entity_id: str, seconds: float) -> None:
         self._entity_id = entity_id
         self._seconds = seconds
@@ -540,6 +590,8 @@ class _ForCondition:
         )
 
     async def snapshot(self, hass: Any, entities: Any = None) -> _ForSnap:
+        if self.fail:
+            raise RuntimeError("boom")
         state = hass.states.get(self._entity_id)
         return _ForSnap(
             value=state.state if state else None,
@@ -577,15 +629,46 @@ def _for_engine(hass, seconds: float):
     return engine
 
 
-def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
-    """Set switch.radiator on, then pin dt_util.utcnow() `age` past the state's
-    real last_updated so the engine sees the switch as having been on that long.
-    (hass.states.get is read-only, so we move the clock rather than the state.)"""
+def _movable_clock(hass, monkeypatch) -> dict[str, timedelta]:
+    """Set switch.radiator on and pin dt_util.utcnow() to its last_updated plus
+    a mutable offset the test can advance.
+
+    The `fixed_utcnow` fixture cannot be used for gate ageing: its autouse
+    companion pins time.time() near zero, so a state written under it is stamped
+    at the epoch while dt_util.utcnow() reads 2026 — every gate is born already
+    matured. Anchoring the clock on the state's own timestamp keeps the two in
+    step.
+    """
     import custom_components.ambience.trigger_subscriptions as _ts_mod
 
     hass.states.async_set("switch.radiator", "on")
     last_updated = hass.states.get("switch.radiator").last_updated
-    monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + age)
+    clock = {"offset": timedelta(0)}
+    monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + clock["offset"])
+    return clock
+
+
+def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
+    """Set switch.radiator on with the clock pinned `age` past its last_updated,
+    so the engine sees the switch as having been on that long."""
+    _movable_clock(hass, monkeypatch)["offset"] = age
+
+
+@contextmanager
+def _capture_call_later():
+    """Patch async_call_later for the duration of the block, yielding the list of
+    `(seconds, callback)` it was asked to arm. The callbacks are the test's only
+    handle on a pending timer — nothing else fires them."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    captured: list[tuple[float, Any]] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        yield captured
 
 
 async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatch) -> None:
@@ -611,6 +694,118 @@ async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatc
     assert key in engine._for_handles
     # ...for the remaining 2h - 26m = 5640s, not the full 7200s.
     assert captured == [5640.0]
+    engine._teardown()
+
+
+async def test_matured_for_gate_with_failed_snapshot_rearms_a_retry(hass, monkeypatch) -> None:
+    """A recheck that fires while the condition's snapshot fails must not
+    consume the gate: no flip is recorded, the tenure has already matured, and
+    nothing else would re-arm it. The engine arms a short retry instead."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+
+    with _capture_call_later() as captured:
+        await engine.async_initial_sync()
+        assert [s for s, _ in captured] == [60.0]
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        captured[0][1](None)  # the recheck fires with a broken snapshot
+        await hass.async_block_till_done()
+        # A retry is armed rather than the gate going silent.
+        assert [s for s, _ in captured] == [60.0, _ts_mod._FOR_RETRY_SECONDS]
+        cond.fail = False
+        captured[1][1](None)  # the retry fires with a healthy snapshot
+        await hass.async_block_till_done()
+    key = ("area", "a", 0, "rad")
+    assert engine._predicate_state[key] is True
+    engine._teardown()
+
+
+async def test_for_gate_retries_stop_after_the_limit(hass, monkeypatch) -> None:
+    """A condition that stays unreadable is not polled forever."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+
+    with _capture_call_later() as captured:
+        await engine.async_initial_sync()
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        for _ in range(_ts_mod._FOR_RETRY_LIMIT + 1):
+            captured[-1][1](None)
+            await hass.async_block_till_done()
+    # initial recheck + exactly LIMIT retries, then silence
+    assert len(captured) == 1 + _ts_mod._FOR_RETRY_LIMIT
+    engine._teardown()
+
+
+async def test_for_gate_retry_budget_resets_after_a_healthy_read(hass, monkeypatch) -> None:
+    """An exhausted retry budget must not outlive the outage that spent it —
+    otherwise a much later one-off snapshot failure would silently get no retry
+    at all."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    key = ("area", "a", 0, "rad")
+
+    with _capture_call_later() as captured:
+        await engine.async_initial_sync()
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        # The first fire is the gate's own (non-retry) recheck, so exhausting a
+        # budget of N retries takes N+1 fires.
+        for _ in range(_ts_mod._FOR_RETRY_LIMIT + 1):
+            captured[-1][1](None)
+            await hass.async_block_till_done()
+        assert engine._for_retries[key] == _ts_mod._FOR_RETRY_LIMIT
+
+        # The gate restarts its window (switch cycled) and the condition reads
+        # cleanly again: the budget belongs to the outage, not to the gate.
+        engine._tenure["rad"] = {"gate:switch.radiator": _ts_mod.dt_util.utcnow()}
+        cond.fail = False
+        await engine.async_evaluate({key})
+    assert key not in engine._for_retries
+    engine._teardown()
+
+
+async def test_for_gate_retry_budget_is_not_spent_by_rearming(hass, monkeypatch) -> None:
+    """The budget bounds retries that actually FIRE. Re-arming is idempotent —
+    every evaluation pass over a matured, unreadable gate cancels and replaces
+    the pending retry — so a burst of unrelated events must not exhaust the
+    budget without a single retry having run."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    key = ("area", "a", 0, "rad")
+
+    # A matured gate whose condition cannot be read: tenure past the window and
+    # the cached snapshot is None.
+    engine._tenure["rad"] = {"gate:switch.radiator": _ts_mod.dt_util.utcnow()}
+    clock["offset"] += timedelta(seconds=61)
+    engine._snapshots["rad"] = None
+    cond.fail = True
+
+    with _capture_call_later() as captured:
+        for _ in range(10):
+            engine._schedule_for_rechecks({key})
+        # Ten arming passes, no retry fired: the budget is untouched and the
+        # last-armed retry is still pending.
+        assert engine._for_retries.get(key, 0) == 0
+        assert [s for s, _ in captured] == [_ts_mod._FOR_RETRY_SECONDS] * 10
+        assert key in engine._for_handles
+
+        captured[-1][1](None)  # the surviving retry fires
+        await hass.async_block_till_done()
+    assert engine._for_retries[key] == 1
     engine._teardown()
 
 
@@ -1308,6 +1503,9 @@ async def test_schedule_for_rechecks_skips_matured_and_untracked_gates(hass) -> 
     now = dt_util.utcnow()
     # matured gate's window has fully elapsed; untracked gate has no tenure.
     engine._tenure["state"] = {g_matured.key: now - timedelta(seconds=200)}
+    # The condition reads cleanly, so the matured gate was genuinely covered by
+    # the evaluation that armed this pass (a None snapshot would earn a retry).
+    engine._snapshots["state"] = _ForSnap(value="on")
 
     captured: list[float] = []
     with patch.object(
@@ -1459,6 +1657,35 @@ async def test_schedule_sun_handler_noop_after_teardown(hass) -> None:
     with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
         captured[0](None)  # the already-queued handler runs after teardown
     assert engine._sun_unsubs == {}
+    assert len(captured) == 1  # no re-arm happened
+
+
+async def test_schedule_clock_handler_noop_after_teardown(hass) -> None:
+    """A clock handler in the loop's ready queue at teardown must not fire nor
+    insert a fresh live timer into the torn-down engine."""
+    engine = _minimal_engine(hass, [])
+    engine.async_subscribe()
+
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    captured: list = []
+
+    def fake_atpit(_hass, action, _point):
+        captured.append(action)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
+        engine._schedule_clock((9, 0), frozenset({("area", "a", 0, "state")}))
+    assert len(captured) == 1
+    engine._teardown()
+    fired: list = []
+    with (
+        patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit),
+        patch.object(engine, "_fire", side_effect=lambda *a, **k: fired.append(a)),
+    ):
+        captured[0](None)  # the already-queued handler runs after teardown
+    assert fired == []
+    assert engine._clock_unsubs == {}
     assert len(captured) == 1  # no re-arm happened
 
 

@@ -9,15 +9,6 @@ import pytest
 from homeassistant.components.diagnostics import REDACTED
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-
-@pytest.fixture
-async def installed(hass, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
 
 
 async def _ws_send(hass_ws_client, **payload: Any) -> dict:

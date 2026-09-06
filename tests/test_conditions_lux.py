@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import Reason
 from custom_components.ambience.conditions.lux import LuxCondition, LuxSnapshot
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.lux_ranges import BUILTIN_LUX_RANGES
@@ -108,7 +109,7 @@ async def test_snapshot_referenced_non_numeric_state_gets_reason(
     m = _cond()
     assert m.matches(pred, snap) is False
     reason = m.unconfigured_reason(pred, snap)
-    assert reason == "Hallway Lux ('foo') does not report a number"
+    assert reason == Reason("lux_sensor_not_numeric", {"name": "Hallway Lux", "value": "foo"})
 
 
 async def test_snapshot_unavailable_sensor_gets_no_non_numeric_reason(
@@ -445,8 +446,7 @@ def test_unconfigured_reason_dangling_range_returns_reason() -> None:
     m = LuxCondition(range_lookup=lambda: {})
     snap = _snap()
     reason = m.unconfigured_reason({"sensors": ["sensor.a"], "range": "gone"}, snap)
-    assert reason is not None
-    assert "gone" in reason
+    assert reason == Reason("lux_range_missing", {"range": "gone"})
 
 
 def test_unconfigured_reason_known_range_returns_none() -> None:
@@ -492,7 +492,7 @@ def test_unconfigured_reason_non_numeric_falls_back_to_entity_id() -> None:
     m = LuxCondition(range_lookup=lambda: {})
     snap = _snap(sensors={"sensor.a": None}, non_numeric={"sensor.a": "foo"})
     reason = m.unconfigured_reason({"sensors": ["sensor.a"]}, snap)
-    assert reason == "sensor.a ('foo') does not report a number"
+    assert reason == Reason("lux_sensor_not_numeric", {"name": "sensor.a", "value": "foo"})
 
 
 def test_unconfigured_reason_none_predicate_returns_none() -> None:

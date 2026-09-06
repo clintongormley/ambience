@@ -8,6 +8,7 @@ the auto-trigger engine, and the dry-run / simulate paths.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import replace
@@ -27,10 +28,11 @@ from .const import (
     DATA_LAST_APPLIED_SCENE,
     DATA_LAST_MATCHED,
     DATA_STORE,
-    DATA_SWITCHES,
     DOMAIN,
     SIGNAL_UNIT_APPLIED,
     SIGNAL_UNIT_LIVE,
+    get_store,
+    get_switch,
 )
 from .engine import evaluate_explained, resolve
 from .errors import service_validation_error
@@ -97,7 +99,14 @@ def apply_lock(
     """The per-(scope, category) apply lock, shared by the trigger engine and
     the manual apply path so resolve+apply never interleaves across the two
     (each would otherwise read a stale last_applied mid-apply). Bounded by
-    scopes×categories; tiny and stable."""
+    scopes×categories; tiny and stable.
+
+    Not reentrant: a task holding it must never reach
+    `async_resolve_and_apply_unit` or `async_run_scene_actions` for the same
+    unit again. That holds because no Ambience service reaches the apply path
+    (they are all pass-throughs to other domains -
+    tests/test_builtin_registration.py pins the set) and every apply is entered
+    from its own websocket or engine task."""
     locks: dict[tuple[str, str | None, str], asyncio.Lock] = hass.data[DOMAIN].setdefault(
         DATA_APPLY_LOCKS, {}
     )
@@ -121,7 +130,7 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     registered-but-disabled entry reads 'off'. 'unknown' therefore covers both
     an unregistered switch and a registered, enabled one that has not loaded yet.
     """
-    switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
+    switch = get_switch(hass, scope_kind, scope_id)
     if switch is not None:
         return "on" if switch.is_on else "off"
 
@@ -134,7 +143,7 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
 def _scope_enabled(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
     """Whether the scope is permanently enabled. Disabled scopes never apply,
     even on the manual force path."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is None:
         return True
     return store.get_scope_enabled(scope_kind, scope_id)
@@ -162,6 +171,7 @@ async def async_resolve_with_snapshots(
     describe: bool = True,
     explain: bool = False,
     entity_ids_for: Callable[[int, str], tuple[str, ...]] | None = None,
+    switch_state: str | None = None,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{condition_name: snapshot}` dict.
 
@@ -170,6 +180,9 @@ async def async_resolve_with_snapshots(
     actions, apply, snapshots_described, switch_state, explanation} (`apply` is
     the winner's per-scene re-apply mode, "once"/"always"/None; present only on a
     match).
+
+    `switch_state` lets a caller that already read it pass it through, so the
+    trace and the plan agree.
 
     `explanation` is an `Explanation` (scene list relative to the resolved
     category) when `explain=True`, else None.
@@ -227,7 +240,9 @@ async def async_resolve_with_snapshots(
     if match is not None and to_full is not None:
         match = (to_full[match[0]], match[1])
 
-    switch_state = _switch_state(hass, scope_kind, scope_id)
+    switch_state = (
+        switch_state if switch_state is not None else _switch_state(hass, scope_kind, scope_id)
+    )
     if match is None:
         return {
             "matched_scene_index": None,
@@ -446,9 +461,9 @@ async def async_resolve_and_apply_unit(
     cached_switch_state: str | None = None
 
     def switch_state() -> str:
-        """The scope's switch state, read at most once and only where it is
-        actually consumed — a registry lookup that a disabled scope, and an
-        untraced manual apply, both discard."""
+        """The scope's switch state, read at most once — the memoised value is
+        also handed to `async_resolve_with_snapshots` below so the plan and the
+        trace report the same read rather than the registry being hit twice."""
         nonlocal cached_switch_state
         if cached_switch_state is None:
             cached_switch_state = _switch_state(hass, scope_kind, scope_id)
@@ -484,6 +499,7 @@ async def async_resolve_and_apply_unit(
             describe=manual,
             explain=active,
             entity_ids_for=entity_ids_for,
+            switch_state=switch_state(),
         )
         index = plan["matched_scene_index"]
         explanation = plan.get("explanation")
@@ -684,6 +700,9 @@ async def async_run_scene_actions(
     permanently disabled (`enabled` is False), raising ServiceValidationError.
     Returns {ran, scene_name} for UI feedback. An out-of-range `scene_index`
     raises ServiceValidationError.
+
+    It DOES serialise with an in-flight apply of the same scope/category, so
+    the two never interleave their action dispatch on the same unit.
     """
     if not _scope_enabled(hass, scope_kind, scope_id):
         raise service_validation_error("scope_disabled", scope_kind=scope_kind, scope_id=scope_id)
@@ -695,12 +714,24 @@ async def async_run_scene_actions(
     scene = scenes[scene_index]
     actions = scene.get("actions", [])
     scene_name = scene.get("name")
-    context = (
-        log_run_actions(hass, scope_kind, scope_id, scene_name, scene_index) if actions else None
+    category = scene.get("category")
+    # A live scene always carries a category (they are coerced at load); a
+    # category-less scene has no engine unit to collide with, so there is
+    # nothing to serialise against.
+    lock = (
+        apply_lock(hass, scope_kind, scope_id, category)
+        if isinstance(category, str)
+        else contextlib.nullcontext()
     )
-    await async_execute_actions(
-        hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
-    )
+    async with lock:
+        context = (
+            log_run_actions(hass, scope_kind, scope_id, scene_name, scene_index)
+            if actions
+            else None
+        )
+        await async_execute_actions(
+            hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
+        )
     return {"ran": len(actions), "scene_name": scene_name}
 
 

@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from ..errors import AmbienceError
 from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
-from ._common import merge_intervals
+from ._common import Reason, merge_intervals, valid_clock, valid_hour, valid_minute
 
 ANCHOR_ATTR = {
     "sunrise": "next_rising",
@@ -202,10 +202,10 @@ class TimeOfDayCondition:
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
-            # Field by field, not `_valid_clock`: each carries its own key.
-            if not _valid_hour(hh):
+            # Field by field, not `valid_clock`: each carries its own key.
+            if not valid_hour(hh):
                 raise AmbienceError("period_invalid_hh", value=hh)
-            if not _valid_minute(mm):
+            if not valid_minute(mm):
                 raise AmbienceError("period_invalid_mm", value=mm)
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
@@ -245,7 +245,7 @@ class TimeOfDayCondition:
         if direction not in ("not_before", "not_after"):
             raise AmbienceError("period_invalid_clamp_dir", value=direction)
         hh, mm = clamp.get("hh"), clamp.get("mm")
-        if not _valid_clock(hh, mm):
+        if not valid_clock(hh, mm):
             raise AmbienceError("period_invalid_clamp_time", hh=hh, mm=mm)
         clamp_dt = _resolve_wall_clock(dt_util.as_local(anchor_dt), hh, mm)
         if direction == "not_before":
@@ -274,7 +274,7 @@ class TimeOfDayCondition:
                 continue  # dangling period ref is a config-health problem, not malformed
             self._match_one(item, synthetic)
 
-    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> Reason | None:
         known = set(self._period_lookup())
         items = predicate if isinstance(predicate, list) else [predicate]
         for item in items:
@@ -283,7 +283,7 @@ class TimeOfDayCondition:
                 and isinstance(item.get("period"), str)
                 and item["period"] not in known
             ):
-                return f"time-of-day period {item['period']!r} no longer exists"
+                return Reason("period_missing", {"period": item["period"]})
         if not isinstance(snapshot, TimeOfDaySnapshot):
             return None
         for item in items:
@@ -293,8 +293,8 @@ class TimeOfDayCondition:
                 anchor = endpoint.get("anchor")
                 if anchor in ANCHOR_ATTR and getattr(snapshot, anchor) is None:
                     if not snapshot.sun_configured:
-                        return "the sun integration is not set up"
-                    return f"{anchor} is undefined at this location today"
+                        return Reason("sun_not_configured")
+                    return Reason("sun_anchor_undefined", {"anchor": anchor})
         return None
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
@@ -385,17 +385,9 @@ class TimeOfDayCondition:
         kind = endpoint.get("kind")
         if kind == "time":
             hh, mm = endpoint.get("hh"), endpoint.get("mm")
-            # Mirror _resolve_endpoint's bounds (and reject bool, which is an
-            # int subclass) so an unvalidated predicate can't seed an
-            # unschedulable clock-time.
-            if (
-                isinstance(hh, int)
-                and not isinstance(hh, bool)
-                and 0 <= hh <= 23
-                and isinstance(mm, int)
-                and not isinstance(mm, bool)
-                and 0 <= mm <= 59
-            ):
+            # Same bounds as _resolve_endpoint so an unvalidated predicate
+            # can't seed an unschedulable clock-time.
+            if valid_clock(hh, mm):
                 clock_times.add((hh, mm))
         elif kind == "sun":
             anchor = endpoint.get("anchor")
@@ -403,23 +395,8 @@ class TimeOfDayCondition:
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
             clamp = endpoint.get("clamp")
-            if isinstance(clamp, dict) and _valid_clock(clamp.get("hh"), clamp.get("mm")):
+            if isinstance(clamp, dict) and valid_clock(clamp.get("hh"), clamp.get("mm")):
                 clock_times.add((clamp["hh"], clamp["mm"]))
-
-
-def _valid_hour(hh: Any) -> bool:
-    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
-    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
-
-
-def _valid_minute(mm: Any) -> bool:
-    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
-    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
-
-
-def _valid_clock(hh: Any, mm: Any) -> bool:
-    """True if hh/mm together are an in-range clock time."""
-    return _valid_hour(hh) and _valid_minute(mm)
 
 
 def _strip_clamp(ep: Any) -> Any:
@@ -458,6 +435,32 @@ def _resolve_wall_clock(reference: datetime, hh: int, mm: int) -> datetime:
     # a minute at a time until it reaches a time the day actually contains.
     while not _wall_clock_exists(candidate):
         candidate += timedelta(minutes=1)
+    return candidate
+
+
+def next_wall_clock(now: datetime, hh: int, mm: int) -> datetime:
+    """The first instant strictly after `now` whose local wall clock reads hh:mm,
+    resolved the way matching resolves it (`_resolve_wall_clock`).
+
+    - A time the spring-forward gap skips fires at the jump instant, so a range
+      that starts in the gap still gets its entry trigger that day.
+    - A time the autumn fold repeats fires on its first pass only, so from
+      inside the second pass the next occurrence is tomorrow's — matching the
+      way such a range matches once across both passes.
+
+    The comparison is in absolute time: inside the fold two instants share one
+    wall clock, so a clock-face comparison would call a past instant future.
+    """
+    now_utc = dt_util.as_utc(now)
+    local = dt_util.as_local(now)
+    # Same-tzinfo arithmetic advances the calendar day, not 24 h of UTC. Loops
+    # rather than branches so a `now` in the fold's second pass — whose day
+    # already holds its only occurrence, in the past — rolls cleanly; two
+    # iterations at most.
+    candidate = _resolve_wall_clock(local, hh, mm)
+    while dt_util.as_utc(candidate) <= now_utc:
+        local = local + timedelta(days=1)
+        candidate = _resolve_wall_clock(local, hh, mm)
     return candidate
 
 

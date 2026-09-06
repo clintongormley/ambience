@@ -69,9 +69,28 @@ dead.
 | **scenes use a workday item but no workday sensor is configured**      | A Day condition uses a `workday` or `holiday` item with no workday sensor set.           | Configure a workday sensor on the **Conditions → Day** settings tab, or remove those items.                |
 | **scenes use a workday-calendar item but no calendar is configured**   | A Day condition uses a `first_workday`/`last_workday` item with no workday calendar set. | Configure a workday calendar on the **Conditions → Day** settings tab, or remove those items.              |
 
-All of these issues are **warnings** — they do not stop Ambience from running,
+Every issue in the tables above — and the missing-entity and action-overlap
+issues before them — is a **warning**: they do not stop Ambience from running,
 and only **enabled** scenes are checked. Each one clears automatically once the
 underlying problem is fixed.
+
+### Damaged configuration file
+
+> **Ambience: the saved configuration could not be read**
+
+Unlike the checks above, this one is an **error**, and it is not about your
+scenes: the file Ambience stores its configuration in (`.storage/ambience`)
+exists but could not be read, so Ambience started with an empty configuration.
+
+The damaged file is left exactly as it is, so nothing is lost while you recover.
+You have two ways forward:
+
+- **Restore it from a backup** and restart Home Assistant.
+- **Delete the file and restart** to start fresh. Saving anything from the
+    Ambience panel also replaces the file.
+
+This issue is raised only while Ambience is starting up, so it stays visible
+until Home Assistant restarts and the file loads cleanly.
 
 ______________________________________________________________________
 

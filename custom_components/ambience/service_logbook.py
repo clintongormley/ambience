@@ -16,13 +16,8 @@ from __future__ import annotations
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context, HomeAssistant
 
-from .const import DATA_SWITCHES, DOMAIN, EVENT_AMBIENCE_ACTIVITY
-from .naming import category_names
-
-
-def resolved_scene_name(scene_name: str | None, scene_index: int) -> str:
-    """Scene display name, falling back to a 1-based "scene <N>" when unnamed."""
-    return scene_name or f"scene {scene_index + 1}"
+from .const import EVENT_AMBIENCE_ACTIVITY, get_switches
+from .naming import category_names, scene_label
 
 
 def compose_apply_message(
@@ -41,7 +36,7 @@ def compose_apply_message(
     than one category exists and a label is known. Unnamed scenes fall back to
     "scene <N>" (1-based).
     """
-    scene = resolved_scene_name(scene_name, scene_index)
+    scene = scene_label(scene_name, scene_index)
     if category_count > 1 and category_label:
         return f"'{category_label}/{scene}'"
     return f"'{scene}'"
@@ -55,7 +50,7 @@ def _switch_entity_id(hass: HomeAssistant, scope_kind: str, scope_id: str | None
     scope); returns None when not even the house switch exists, so the caller
     skips the logbook entry rather than crashing.
     """
-    switches = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+    switches = get_switches(hass)
     switch = switches.get((scope_kind, scope_id))
     if switch is None and scope_kind != "house":
         switch = switches.get(("house", None))
@@ -116,5 +111,5 @@ def log_run_actions(
 ) -> Context:
     """Record a manual run-actions as a logbook entry on the scope switch; return
     its Context."""
-    scene = resolved_scene_name(scene_name, scene_index)
+    scene = scene_label(scene_name, scene_index)
     return _record(hass, scope_kind, scope_id, f"'{scene}'")

@@ -34,12 +34,16 @@ ScopeTriple = tuple[str, str | None, dict[str, Any]]
 
 @dataclass(frozen=True)
 class Location:
-    """Where a problem was found."""
+    """Where a problem was found.
+
+    `scene_name` is the raw stored name, None when the scene has none: the
+    display fallback is a rendering decision, made once in `naming.scene_label`.
+    """
 
     scope_kind: str
     scope_id: str | None
     category_id: str | None
-    scene_name: str
+    scene_name: str | None
 
 
 @dataclass(frozen=True)
@@ -220,7 +224,7 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     ) -> None:
         if entity_exists(hass, eid):
             return
-        loc = Location(scope_kind, scope_id, scene.get("category"), scene.get("name") or "")
+        loc = Location(scope_kind, scope_id, scene.get("category"), scene.get("name"))
         bucket = missing.setdefault((scope_kind, scope_id, eid), [])
         if loc not in bucket:
             bucket.append(loc)
@@ -252,7 +256,7 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
                 per_entity = groups.setdefault(eid, {})
                 per_entity.setdefault(
                     group_key,
-                    Location(scope_kind, scope_id, category, scene.get("name") or ""),
+                    Location(scope_kind, scope_id, category, scene.get("name")),
                 )
 
     problems: list[Problem] = []
@@ -268,7 +272,7 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     for scope_kind, scope_id, cfg in configs:
         for scene in cfg.get("scenes", []) or []:
             for kind, ref in scene_config_issues(ctx, scene):
-                loc = Location(scope_kind, scope_id, scene.get("category"), scene.get("name") or "")
+                loc = Location(scope_kind, scope_id, scene.get("category"), scene.get("name"))
                 bucket = config_refs.setdefault((kind, ref), [])
                 if loc not in bucket:
                     bucket.append(loc)

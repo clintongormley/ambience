@@ -131,6 +131,21 @@ describe("ambience-auto-triggers-modal", () => {
     expect(time?.getAttribute("icon")).toBe("mdi:clock-outline");
   });
 
+  test("renders a domain row for a wildcard people watch", async () => {
+    el = await mount({
+      open: true,
+      triggers: [{ key: "group:domain", kind: "domain", domains: ["person"] }],
+    });
+    const row = el.shadowRoot.querySelector("li[data-test='trigger-ro-group:domain']");
+    expect(row.querySelector(".row-title").textContent).toBe("People list");
+    expect(row.querySelector(".row-detail").textContent).toBe("person added or removed");
+    expect(row.querySelector("ha-icon.row-icon")?.getAttribute("icon")).toBe(
+      "mdi:account-multiple-plus",
+    );
+    // No entity behind a domain watch, so the row stays non-interactive.
+    expect(row.getAttribute("role")).toBeNull();
+  });
+
   test("shows the opaque note when opaque is true", async () => {
     el = await mount({ open: true, opaque: true });
     expect(el.shadowRoot.textContent.toLowerCase()).toContain("script");

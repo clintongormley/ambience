@@ -22,7 +22,6 @@ from custom_components.ambience.simulate import (
     _collect_state_attributes,
     _entity_knob,
     _in_domain,
-    _is_number,
     _record_attr,
     _simulate_outcome,
     _SimulatedHass,
@@ -983,14 +982,6 @@ def test_referenced_attributes_skips_threshold_without_attribute():
     assert weather_knob["attributes"] == []
 
 
-# --- _is_number: None input returns False (line 238) ---
-
-
-def test_is_number_none_returns_false():
-    """_is_number(None) must return False without raising."""
-    assert _is_number(None) is False
-
-
 # --- _entity_knob: text fallback (line 269) ---
 
 
@@ -1010,7 +1001,7 @@ def test_entity_knob_falls_back_to_text_when_no_state_and_no_options():
         }
     ]
     # No live state → known_states_for returns [] → no categorical, live_state=None
-    # → _is_number(None) is False → falls through to "text" branch (line 269).
+    # → as_float_state(None) is None → falls through to the "text" branch.
     hass = _inputs_hass(scenes, [])  # entity not in live states at all
     knobs = simulate_inputs_entities(hass, "area", "kitchen", "g1")
     knob = next(k for k in knobs if k["entity_id"] == "sensor.mystery")

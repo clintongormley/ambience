@@ -13,9 +13,11 @@ from astral.sun import dusk, sunrise
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from custom_components.ambience.conditions._common import Reason
 from custom_components.ambience.conditions.time_of_day import (
     TimeOfDayCondition,
     TimeOfDaySnapshot,
+    next_wall_clock,
 )
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.periods import BUILTIN_PERIODS
@@ -112,9 +114,7 @@ async def test_snapshot_without_sun_integration_disables_only_sun_endpoints(
     assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
     sun_pred = _range(_sun("sunrise"), _sun("sunset"))
     assert cond.matches(sun_pred, snap) is False
-    reason = cond.unconfigured_reason(sun_pred, snap)
-    assert reason is not None
-    assert "sun integration" in reason
+    assert cond.unconfigured_reason(sun_pred, snap) == Reason("sun_not_configured")
 
 
 async def test_snapshot_uses_anchor_for_now_local_date_not_next_event(
@@ -736,9 +736,9 @@ async def test_dusk_range_false_with_reason_naming_the_anchor(hass: HomeAssistan
     snap = await cond.snapshot(hass, now=_MIDSUMMER)
     pred = _range(_sun("dusk"), _time(8, 30))
     assert cond.matches(pred, snap) is False
-    reason = cond.unconfigured_reason(pred, snap)
-    assert reason is not None
-    assert "dusk" in reason
+    assert cond.unconfigured_reason(pred, snap) == Reason(
+        "sun_anchor_undefined", {"anchor": "dusk"}
+    )
 
 
 async def test_period_needing_missing_anchor_false_others_still_evaluate(
@@ -750,9 +750,9 @@ async def test_period_needing_missing_anchor_false_others_still_evaluate(
     cond = _condition()
     snap = await cond.snapshot(hass, now=_MIDSUMMER)
     assert cond.matches({"period": "evening"}, snap) is False
-    reason = cond.unconfigured_reason({"period": "evening"}, snap)
-    assert reason is not None
-    assert "dusk" in reason
+    assert cond.unconfigured_reason({"period": "evening"}, snap) == Reason(
+        "sun_anchor_undefined", {"anchor": "dusk"}
+    )
     assert cond.matches({"period": "daytime"}, snap) is True
     assert cond.describe(snap) == "morning"
 
@@ -1033,9 +1033,9 @@ def test_unconfigured_reason_dangling_period_returns_reason() -> None:
     """A period id that is no longer in the lookup → descriptive reason string."""
     m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
     snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
-    reason = m.unconfigured_reason({"period": "gone"}, snap)
-    assert reason is not None
-    assert "gone" in reason
+    assert m.unconfigured_reason({"period": "gone"}, snap) == Reason(
+        "period_missing", {"period": "gone"}
+    )
 
 
 def test_unconfigured_reason_known_period_returns_none() -> None:
@@ -1064,9 +1064,9 @@ def test_unconfigured_reason_list_with_dangling_period_returns_reason() -> None:
     """A list predicate containing a dangling period → reason for that period."""
     m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
     snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
-    reason = m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap)
-    assert reason is not None
-    assert "gone" in reason
+    assert m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap) == Reason(
+        "period_missing", {"period": "gone"}
+    )
 
 
 def test_unconfigured_reason_ignores_non_string_period() -> None:
@@ -1189,3 +1189,61 @@ def test_spring_forward_range_wholly_inside_skipped_hour_never_matches() -> None
         for step in range(96):
             moment = datetime(2026, 3, 29, tzinfo=UTC) + timedelta(minutes=15 * step)
             assert _matches_at(pred, moment) is False
+
+
+# ---------------------------------------------------------------------------
+# next_wall_clock — the scheduler's view of a wall-clock time
+# ---------------------------------------------------------------------------
+
+_MADRID = ZoneInfo("Europe/Madrid")
+
+
+async def test_next_wall_clock_in_the_spring_forward_gap_fires_at_the_jump(
+    hass: HomeAssistant,
+) -> None:
+    """02:30 does not exist on the jump day, so the wake-up lands on the instant
+    the clock jumps to — the same resolution matching uses."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local, an hour before the jump
+    assert next_wall_clock(now, 2, 30) == datetime(2026, 3, 29, 3, 0, tzinfo=_MADRID)
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 3, 29, 1, 0, tzinfo=UTC)
+
+
+async def test_next_wall_clock_rolls_to_tomorrow_when_today_has_passed(
+    hass: HomeAssistant,
+) -> None:
+    """A time at or before `now` belongs to the next calendar day."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local
+    assert next_wall_clock(now, 1, 0) == datetime(2026, 3, 30, 1, 0, tzinfo=_MADRID)
+    assert next_wall_clock(now, 0, 59) == datetime(2026, 3, 30, 0, 59, tzinfo=_MADRID)
+
+
+async def test_next_wall_clock_in_the_autumn_fold_uses_the_first_pass(
+    hass: HomeAssistant,
+) -> None:
+    """02:30 strikes twice on the fold day; the wake-up takes the first pass, so
+    the predicate fires once."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 24, 23, 30, tzinfo=UTC)  # 01:30 local, before the fold
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+
+async def test_next_wall_clock_from_inside_the_fold_first_pass_stays_today(
+    hass: HomeAssistant,
+) -> None:
+    """Inside the first pass of the repeated hour, today's 02:30 is still ahead."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 25, 0, 15, tzinfo=UTC)  # 02:15 CEST, first pass
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+
+async def test_next_wall_clock_from_inside_the_fold_second_pass_rolls_to_tomorrow(
+    hass: HomeAssistant,
+) -> None:
+    """The second pass reads 02:15 on the clock face but is past today's 02:30,
+    which resolves to the first pass — so the next wake-up is tomorrow's."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 25, 1, 15, tzinfo=UTC)  # 02:15 CET, second pass
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 26, 1, 30, tzinfo=UTC)
+    assert next_wall_clock(now, 2, 30) > now

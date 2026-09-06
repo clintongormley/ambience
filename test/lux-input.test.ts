@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { LuxPredicate, LuxRangeStoreView } from "../frontend/src/types";
-import { luxPredicateError } from "../frontend/src/views/lux-input";
+import { isLuxCandidate, luxPredicateError } from "../frontend/src/views/lux-input";
 
 const luxRanges: LuxRangeStoreView = {
   builtins: {
@@ -60,12 +60,68 @@ describe("ambience-lux-input", () => {
     expect(luxPredicateError({ min: 10, max: 100 })).toBeNull();
   });
 
-  test("sensor picker is a sensor entity selector filtered to illuminance", async () => {
-    const el = await mount({ sensors: [], range: "dark" });
+  test.each([
+    [
+      "illuminance class, unavailable",
+      { state: "unavailable", attributes: { device_class: "illuminance" } },
+      true,
+    ],
+    ["lx unit, no class", { state: "unknown", attributes: { unit_of_measurement: "lx" } }, true],
+    ["bare numeric state", { state: "12.5", attributes: {} }, true],
+    [
+      "measurement state_class, offline",
+      { state: "unavailable", attributes: { state_class: "measurement" } },
+      true,
+    ],
+    ["text state", { state: "cloudy", attributes: {} }, false],
+    ["unavailable, nothing else", { state: "unavailable", attributes: {} }, false],
+    ["missing", undefined, false],
+  ])("isLuxCandidate: %s", (_label, st, expected) => {
+    expect(isLuxCandidate(st as never)).toBe(expected);
+  });
+
+  test("sensor picker lists numeric sensors plus the current selection", async () => {
+    const el = await mount({ sensors: ["sensor.gone"], range: "dark" });
+    el.hass = {
+      ...el.hass,
+      states: {
+        "sensor.lux": { state: "40", attributes: { device_class: "illuminance" } },
+        "sensor.temp": { state: "21.5", attributes: {} },
+        "sensor.text": { state: "foo", attributes: {} },
+        "binary_sensor.n": { state: "1", attributes: {} },
+      },
+    } as never;
     const sel = el._sensorSchema()[0].selector.entity;
     expect(sel.domain).toBe("sensor");
     expect(sel.multiple).toBe(true);
-    expect(sel.device_class).toEqual(["illuminance"]);
+    expect(sel.include_entities).toEqual(["sensor.gone", "sensor.lux", "sensor.temp"]);
+    el.remove();
+  });
+
+  test("candidate list is cached per hass.states identity", async () => {
+    // HA replaces `hass` on every state tick; rescanning every entity per render
+    // is the thing being avoided, so a same-states call must reuse the list.
+    const el = await mount({ sensors: ["sensor.gone"], range: "dark" });
+    const states = { "sensor.lux": { state: "40", attributes: { device_class: "illuminance" } } };
+    el.hass = { ...el.hass, states } as never;
+    const first = el._sensorSchema()[0].selector.entity.include_entities;
+    expect(el._sensorSchema()[0].selector.entity.include_entities).toBe(first);
+
+    el.hass = {
+      ...el.hass,
+      states: { ...states, "sensor.b": { state: "7", attributes: {} } },
+    } as never;
+    const second = el._sensorSchema()[0].selector.entity.include_entities;
+    expect(second).not.toBe(first);
+    expect(second).toEqual(["sensor.b", "sensor.gone", "sensor.lux"]);
+    el.remove();
+  });
+
+  test("sensor picker falls back to the plain sensor selector when nothing qualifies", async () => {
+    const el = await mount({ sensors: [], range: "dark" });
+    el.hass = { ...el.hass, states: {} } as never;
+    const sel = el._sensorSchema()[0].selector.entity;
+    expect(sel).toEqual({ domain: "sensor", multiple: true });
     el.remove();
   });
 

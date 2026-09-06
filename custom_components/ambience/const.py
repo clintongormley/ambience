@@ -18,6 +18,11 @@ DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
 
+# Repairs issue id for an unreadable store payload; doubles as its `issues`
+# translation key. Raised in `__init__`, and named in `config_health_issues` so
+# that module's delete-pass knowingly leaves it alone.
+STORAGE_UNREADABLE_ISSUE = "storage_unreadable"
+
 # Structure version of the AI bundle (see ai_bundle.py). Bump ONLY when the
 # bundle's shape changes incompatibly — the knowledge pack stamps this so the
 # skill can refuse a bundle it's too old to read. Independent of the release
@@ -83,6 +88,11 @@ DATA_STORE = "store"
 
 # Switch entity
 DATA_SWITCHES = "switches"
+# {scope_key: monotonic claim time} for switches handed to add_entities but
+# not yet through async_added_to_hass, so the reconcile does not hand HA a
+# duplicate unique_id for a scope whose add is still in flight. Claims are
+# timestamped because HA can abandon an add silently; see switch.py.
+DATA_SWITCHES_PENDING = "switches_pending"
 DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 
 # Last-applied scene index: {(scope_kind, scope_id, category_id): scene_index}.
@@ -234,3 +244,20 @@ def get_store(hass: HomeAssistant) -> Any:
     need an import of ``.store``, which this leaf module must not have.
     """
     return hass.data.get(DOMAIN, {}).get(DATA_STORE)
+
+
+def get_switches(hass: HomeAssistant) -> dict[tuple[str, str | None], Any]:
+    """The live scope-switch entities keyed by (scope_kind, scope_id); empty
+    before the switch platform is up and after unload.
+
+    Returns the stored dict when it exists and a throwaway `{}` otherwise, so
+    callers must treat the result as read-only — a write to the throwaway is
+    silently lost. The writers (the entity's add/remove hooks, reconcile) index
+    or setdefault on hass.data directly so the dict they mutate is the stored
+    one."""
+    return hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+
+
+def get_switch(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> Any:
+    """One scope's live switch entity, or None when it is not (yet) live."""
+    return get_switches(hass).get((scope_kind, scope_id))

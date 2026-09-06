@@ -14,6 +14,8 @@ from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
+    as_float_state,
+    compare_numeric,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
@@ -329,25 +331,15 @@ class StateCondition:
 
     @staticmethod
     def _numeric_op(kind: str, value: str, rhs: list) -> bool:
-        """Parse both sides as float and apply the comparison. Returns
-        False on any parse failure or unexpected RHS shape (we don't fail
-        the predicate hard — the scene just doesn't match)."""
+        """Parse both sides as float and apply the comparison. False on any
+        parse failure or unexpected RHS shape — the scene just doesn't match."""
         if len(rhs) != 1:
             return False
-        try:
-            actual = float(value)
-            threshold = float(rhs[0])
-        except (ValueError, TypeError):
+        actual = as_float_state(value)
+        threshold = as_float_state(rhs[0])
+        if actual is None or threshold is None:
             return False
-        if kind == ">":
-            return actual > threshold
-        if kind == ">=":
-            return actual >= threshold
-        if kind == "<":
-            return actual < threshold
-        if kind == "<=":
-            return actual <= threshold
-        return False
+        return compare_numeric(actual, kind, threshold)
 
     # --- validation -----------------------------------------------------
 

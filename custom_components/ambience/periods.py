@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .conditions._common import valid_hour, valid_minute
 from .errors import AmbienceError
 from .named_def_store import NamedDefStore
 
@@ -59,9 +60,9 @@ def _validate_clamp(clamp: Any) -> None:
     if clamp.get("dir") not in ("not_before", "not_after"):
         raise AmbienceError("period_invalid_clamp_dir", value=clamp.get("dir"))
     hh, mm = clamp.get("hh"), clamp.get("mm")
-    if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
+    if not valid_hour(hh):
         raise AmbienceError("period_invalid_clamp_hh", value=hh)
-    if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
+    if not valid_minute(mm):
         raise AmbienceError("period_invalid_clamp_mm", value=mm)
 
 
@@ -71,9 +72,9 @@ def _validate_endpoint(ep: Any) -> None:
     kind = ep["kind"]
     if kind == "time":
         hh, mm = ep.get("hh"), ep.get("mm")
-        if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
+        if not valid_hour(hh):
             raise AmbienceError("period_invalid_hh", value=hh)
-        if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
+        if not valid_minute(mm):
             raise AmbienceError("period_invalid_mm", value=mm)
     elif kind == "sun":
         if ep.get("anchor") not in _VALID_ANCHORS:

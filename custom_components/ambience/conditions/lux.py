@@ -32,7 +32,9 @@ from ._common import (
     UNAVAILABLE,
     NormalisesPredicate,
     PredicateDefaults,
+    Reason,
     as_float,
+    as_float_state,
     kleene_all,
     kleene_any,
     kleene_not,
@@ -178,17 +180,20 @@ class LuxCondition(NormalisesPredicate):
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
-    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> Reason | None:
         if not isinstance(predicate, dict):
             return None
         if "range" in predicate:
             rid = predicate["range"]
             if isinstance(rid, str) and rid not in self._range_lookup():
-                return f"lux range {rid!r} no longer exists"
+                return Reason("lux_range_missing", {"range": rid})
         for eid in predicate.get("sensors") or []:
             raw = snapshot.non_numeric.get(eid)
             if raw is not None:
-                return f"{snapshot.names.get(eid, eid)} ({raw!r}) does not report a number"
+                return Reason(
+                    "lux_sensor_not_numeric",
+                    {"name": snapshot.names.get(eid, eid), "value": str(raw)},
+                )
         return None
 
     def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:
@@ -300,19 +305,6 @@ class LuxCondition(NormalisesPredicate):
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 
         return sensor_quant_contains(_norm(outer), _norm(inner), _axis)
-
-
-def as_float_state(state: str) -> float | None:
-    """Coerce an entity state string to a finite lux float, else None.
-
-    Non-finite values are treated as unobservable: ``float('nan')`` succeeds but
-    NaN fails every band comparison (``nan < lo`` and ``nan >= hi`` are both
-    False), which would otherwise make a NaN reading match *every* band."""
-    try:
-        value = float(state)
-    except (TypeError, ValueError):
-        return None
-    return value if math.isfinite(value) else None
 
 
 def _band_within(

@@ -37,12 +37,20 @@ class PredicateResult:
     `trigger_deps`, or a condition that references no entities (e.g.
     time_of_day). Which keys are actually rendered as links is a separate
     frontend decision.
+
+    `detail_key` / `detail_placeholders` are set only when `detail` came from a
+    condition's `unconfigured_reason` (a `Reason`): `detail` holds its English
+    render for logs, diagnostics and the MCP, while the pair lets the panel
+    localise the same sentence. None for a `describe()` detail, which is
+    per-house prose with no fixed translation.
     """
 
     condition_key: str
     passed: bool
     detail: str | None = None
     entity_ids: tuple[str, ...] = ()
+    detail_key: str | None = None
+    detail_placeholders: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -183,11 +191,15 @@ def _describe_predicate(
     # Pass the predicate so the trace detail is scoped to the sensors/
     # persons THIS scene references, not the whole shared snapshot.
     detail = condition.describe(snap, predicate) if describe else None
+    detail_key: str | None = None
+    detail_placeholders: dict[str, str] | None = None
     if describe and not passed:
         reason_fn = getattr(condition, "unconfigured_reason", None)
         reason = reason_fn(predicate, snap) if reason_fn else None
         if reason:
-            detail = reason
+            detail = reason.render()
+            detail_key = reason.key
+            detail_placeholders = dict(reason.placeholders)
     # The entity_ids the trace UI links to. Only a predicate that renders a
     # detail string can have its names linked, so skip the lookup when there's
     # nothing to link (`detail is not None` already implies tracing). A caller
@@ -203,7 +215,7 @@ def _describe_predicate(
     else:
         trigger_deps = getattr(condition, "trigger_deps", None)
         entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
-    return PredicateResult(key, passed, detail, entity_ids)
+    return PredicateResult(key, passed, detail, entity_ids, detail_key, detail_placeholders)
 
 
 def resolve(

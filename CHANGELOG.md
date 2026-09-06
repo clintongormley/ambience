@@ -12,16 +12,24 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - A people condition saved without an explicit "who"/"quant" now shows as
     "Anybody" in the panel from its next save onwards; it always evaluated that
-    way.
+    way. The panel's summary and editor now read such a legacy condition as
+    "Anybody" too, instead of "Everybody".
+- The lux condition's sensor picker now offers every numeric sensor, not only
+    those with the illuminance device class.
 
 ### Fixed
 
+- The trace's explanation of why a condition cannot currently match (a missing
+    period, lux range or weather group, an unconfigured workday sensor or
+    weather entity, a sun anchor that does not occur today) is now translated.
 - Scene editor validation messages are now translated. Condition validators also
     reject entity ids that cannot name a real entity, such as a bare `sensor.`
     prefix or an id containing a space.
 - Reloading Ambience no longer registers a duplicate panel resource each time.
 - A damaged Ambience storage file is no longer overwritten with an empty
     configuration on startup; it is left in place for recovery.
+- A damaged Ambience storage file now raises a Repairs issue explaining how to
+    recover, instead of only a line in the log.
 - Turning a scope's Ambience switch back on now re-reads every condition before
     re-applying, so scenes reflect the current state rather than the state
     cached while the switch was off.
@@ -36,7 +44,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     unavailable.
 - Scene ordering and shadowing for sun-anchored times with a clamp no longer
     depend on the Home Assistant time zone.
-- Time ranges that cross the daylight-saving switch hour now behave as
+- Time ranges that cross the daylight-saving switch hour now match as
     configured.
 - A malformed condition in one scene no longer prevents the other scenes in its
     category from being evaluated.
@@ -61,6 +69,33 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Two script or template conditions re-evaluated at the same moment no longer
     discard one another's result, which could leave a scene matching on a stale
     verdict until the next full refresh.
+- A scene with a `for:` duration whose condition briefly could not be read at
+    the moment its timer fired no longer stays silent until the next unrelated
+    event; the check is retried a minute later.
+- Two quick switch-related saves during startup can no longer make Home
+    Assistant log a duplicate Ambience switch entity.
+- A scope's switch that finishes registering after the engine's config refresh
+    has already run is still watched, so turning it on re-applies the scope's
+    scenes.
+- A slow template or script condition can no longer overwrite a fresher reading
+    of a faster condition that was refreshed at the same time.
+- A time range that starts inside the hour skipped when clocks go forward now
+    triggers at the moment the clock jumps, instead of missing that day; a time
+    inside the hour repeated when clocks go back now fires once, on its first
+    pass.
+- The Auto-triggers list now shows the "People list" watch that an
+    everybody/anybody/nobody people condition adds.
+- Running a scene's actions by hand while the engine is applying the same scope
+    and category now waits for that apply to finish instead of interleaving with
+    it.
+- The MCP server no longer re-sends a write whose reply was lost for writes
+    other than a scope or category save (deleting a category, undo/redo,
+    resetting periods or lux ranges, clearing traces, applying a scope, running
+    a scene's actions, enabling or disabling a scope); a lost reply could
+    previously apply such a write twice.
+- Sun elevation and azimuth bounds and weather thresholds that are not finite
+    numbers are now rejected when saving, and a numeric state comparison against
+    an infinite value no longer matches.
 
 ### Performance
 

@@ -535,33 +535,45 @@ async def test_categories_list_shape_is_pinned(
     assert resp["result"]["categories"], "an empty category list would pin nothing"
 
 
-def _read_mcp_diff_set_literal(name: str) -> set[Any]:
-    """The value of one module-level set-literal assignment in mcp-server's
-    diff.py, read with `ast` rather than imported — the two packages cannot
-    import each other (separate venvs), so this is how a backend test reads an
-    MCP literal (same technique bin/check_mcp_protocol.py uses for
-    MCP_PROTOCOL). Shared by the `_TRANSIENT_FIELDS` and `_ORDER_FIELDS` gates
-    below so the ast-walking isn't duplicated between them."""
+def _read_mcp_set_literal(module: str, name: str) -> set[Any]:
+    """The value of one module-level set (or `frozenset({...})`) assignment in an
+    mcp-server module, read with `ast` rather than imported — the two packages
+    cannot import each other (separate venvs), so this is how a backend test reads
+    an MCP literal (same technique bin/check_mcp_protocol.py uses for
+    MCP_PROTOCOL). Shared by the gates below so the ast-walking isn't duplicated
+    between them."""
     import ast
     from pathlib import Path
 
-    diff_py = Path(__file__).parents[1] / "mcp-server" / "src" / "ambience_mcp" / "diff.py"
-    module = ast.parse(diff_py.read_text())
-    for node in module.body:
+    path = Path(__file__).parents[1] / "mcp-server" / "src" / "ambience_mcp" / module
+    for node in ast.parse(path.read_text()).body:
+        # `X = {...}` and the annotated `X: frozenset[str] = frozenset({...})` are
+        # different nodes; both spellings are in use in mcp-server.
+        if isinstance(node, ast.Assign):
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, value = node.target, node.value
+        else:
+            continue
+        if not (isinstance(target, ast.Name) and target.id == name):
+            continue
         if (
-            isinstance(node, ast.Assign)
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == name
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "frozenset"
         ):
-            return ast.literal_eval(node.value)
-    pytest.fail(f"no module-level {name} assignment in mcp-server diff.py")
+            if not value.args:
+                continue  # bare frozenset() — no literal to read
+            value = value.args[0]
+        return set(ast.literal_eval(value))
+    raise AssertionError(f"no module-level {name} assignment in mcp-server {module}")
 
 
 def _load_mcp_diff():
     """mcp-server's `diff` module, loaded BY PATH rather than imported.
 
     The two packages live in separate venvs, so `import ambience_mcp` fails from
-    the backend test env (see `_read_mcp_diff_set_literal`). `diff.py` imports
+    the backend test env (see `_read_mcp_set_literal`). `diff.py` imports
     nothing but the stdlib, though, so loading it from its file gives a backend
     test the real functions to call — a stronger gate than comparing literals,
     because it pins BEHAVIOUR rather than a copied value."""
@@ -690,7 +702,7 @@ def test_mcp_diff_transient_fields_match_the_backends():
     as 'updated', turning the human approval surface into noise."""
     from custom_components.ambience.websocket_helpers import _TRANSIENT_SCENE_FIELDS
 
-    assert _read_mcp_diff_set_literal("_TRANSIENT_FIELDS") == set(_TRANSIENT_SCENE_FIELDS)
+    assert _read_mcp_set_literal("diff.py", "_TRANSIENT_FIELDS") == set(_TRANSIENT_SCENE_FIELDS)
 
 
 def test_mcp_diff_order_fields_match_the_backend():
@@ -714,4 +726,22 @@ def test_mcp_diff_order_fields_match_the_backend():
     since there is nothing on the backend side to read. If a maintainer adds
     one, this test's hardcoded set must be updated by hand.
     """
-    assert _read_mcp_diff_set_literal("_ORDER_FIELDS") == {"priority", "pinned"}
+    assert _read_mcp_set_literal("diff.py", "_ORDER_FIELDS") == {"priority", "pinned"}
+
+
+def test_every_registered_ws_command_is_classified_read_or_write():
+    """A new command must be placed in exactly one set, so the MCP client can
+    never mistake a write for a retry-safe read."""
+    from custom_components.ambience import websocket as ws
+
+    registered = {handler._ws_command for handler in ws._WS_HANDLERS}  # noqa: SLF001
+    assert registered == ws.WRITE_COMMANDS | ws.READ_COMMANDS
+    assert not (ws.WRITE_COMMANDS & ws.READ_COMMANDS)
+
+
+def test_mcp_mutating_commands_match_the_backends_write_set():
+    """ha_client re-sends a command whose reply was lost only when it is a read;
+    the two sides must agree on what a write is."""
+    from custom_components.ambience import websocket as ws
+
+    assert _read_mcp_set_literal("ha_client.py", "MUTATING_COMMANDS") == set(ws.WRITE_COMMANDS)

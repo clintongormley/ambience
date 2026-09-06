@@ -9,6 +9,7 @@ top of these methods.
 
 from __future__ import annotations
 
+import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -94,14 +95,28 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # is per-rebuild data, not per-fire.
         self._opaque_ride_along: set[PredKey] = set()
         self._snapshots: dict[str, Any] = {}
+        # Snapshot refreshes overlap (one per fire, plus resyncs), and a slow
+        # condition can make an earlier refresh land after a later one. Each
+        # refresh takes a sequence number when it starts and records it per
+        # condition, so a stale read is dropped instead of rolling the cache
+        # back to the view it began with.
+        self._snapshot_seq = itertools.count()
+        self._snapshot_written: dict[str, int] = {}
         self._unsubs: list[Callable[[], None]] = []
         # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
         # separate from _unsubs because they re-arm on each fire — the slot is
         # replaced rather than appended, so dead handles never accumulate.
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
+        # Wall-clock point-in-time handles, one slot per (hour, minute), armed
+        # by Ambience rather than HA's clock tracker so a time inside the
+        # spring-forward gap still fires (see `_schedule_clock`).
+        self._clock_unsubs: dict[tuple[int, int], Callable[[], None]] = {}
         # Per predicate, one recheck timer per `for:` gate, keyed by
         # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
+        # Consecutive retries armed for a matured gate whose condition could not
+        # be snapshotted; reset the moment the condition reads cleanly again.
+        self._for_retries: dict[PredKey, int] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         # Per-unit idle-reapply one-shot timers, keyed by (scope_kind, scope_id,
         # category_id). The cancel callable from async_call_later is stored
@@ -147,7 +162,8 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._scope_cfgs = {
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
-        self._referenced = referenced_entities(self._conditions(), self._scope_cfgs.values())
+        conditions = self._conditions()
+        self._referenced = referenced_entities(conditions, self._scope_cfgs.values())
         entries = self._build_entries()
         self._pred_entities = {key: tuple(sorted(spec.entities)) for key, spec in entries}
         self._index = build_index(entries)
@@ -157,6 +173,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         live = self._index.all_predicates()
         self._predicate_state = {
             key: value for key, value in self._predicate_state.items() if key in live
+        }
+        # Likewise for the snapshot ordering marks of unregistered conditions.
+        self._snapshot_written = {
+            key: seq for key, seq in self._snapshot_written.items() if key in conditions
         }
         # Prune dead gate fingerprints from tenure, mutating the inner dicts IN
         # PLACE so any snapshot already holding a reference still sees the same
@@ -193,28 +213,34 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         unknown/opaque condition, or a spec with no entities)."""
         return self._pred_entities.get((scope_kind, scope_id, scene_index, condition_key), ())
 
-    def _predicate_for(self, key: PredKey) -> Any:
-        """The stored predicate for a PredKey, or None if it no longer exists."""
-        scope_kind, scope_id, scene_index, condition_key = key
+    def _scene_at(
+        self, scope_kind: str, scope_id: str | None, scene_index: int | None
+    ) -> dict[str, Any] | None:
+        """The stored scene dict at a full-scene index (`matched_scene_index`,
+        aligned with `self._scope_cfgs`), or None when the scope or the scene no
+        longer exists — config drift between a rebuild and a resolve, which every
+        caller treats as "drop this unit"."""
+        if scene_index is None:
+            return None
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
-        scenes = cfg.get("scenes", [])
+        scenes = cfg.get("scenes") or []
         if not 0 <= scene_index < len(scenes):
             return None
-        return scenes[scene_index].get("when", {}).get(condition_key)
+        return scenes[scene_index]
+
+    def _predicate_for(self, key: PredKey) -> Any:
+        """The stored predicate for a PredKey, or None if it no longer exists."""
+        scene = self._scene_at(key[0], key[1], key[2])
+        return None if scene is None else scene.get("when", {}).get(key[3])
 
     def _category_for(self, scope_kind: str, scope_id: str | None, scene_index: int) -> str | None:
         """The category id a scene belongs to (always a real id for a live scene);
         None only when the scope/scene no longer exists, in which case the caller
         must drop the unit (a None category must never reach the apply path)."""
-        cfg = self._scope_cfgs.get((scope_kind, scope_id))
-        if cfg is None:
-            return None
-        scenes = cfg.get("scenes", [])
-        if 0 <= scene_index < len(scenes):
-            return scenes[scene_index].get("category")
-        return None
+        scene = self._scene_at(scope_kind, scope_id, scene_index)
+        return None if scene is None else scene.get("category")
 
     def _winner_has_unavailable(
         self, scope_kind: str, scope_id: str | None, scene_index: int | None
@@ -224,18 +250,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         Such a scene is an availability guard — the one scene allowed to act on an
         entity drop-out (a winner that won *because* an entity is unavailable). A
         winning `unavailable` predicate is necessarily non-None and matched true,
-        so its presence in the winner's `when` is sufficient. `scene_index` is the
-        full-scene index (`matched_scene_index`), aligned with `self._scope_cfgs`.
+        so its presence in the winner's `when` is sufficient.
         """
-        if scene_index is None:
-            return False
-        cfg = self._scope_cfgs.get((scope_kind, scope_id))
-        if cfg is None:
-            return False
-        scenes = cfg.get("scenes", [])
-        if not 0 <= scene_index < len(scenes):
-            return False
-        return scenes[scene_index].get("when", {}).get("unavailable") is not None
+        scene = self._scene_at(scope_kind, scope_id, scene_index)
+        return scene is not None and scene.get("when", {}).get("unavailable") is not None
 
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any], *, seed: bool = False
@@ -353,15 +371,23 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self, condition_keys: set[str], result_keys: dict[str, frozenset[str]] | None = None
     ) -> None:
         """Re-snapshot the given conditions into the cache, concurrently
-        (None on failure) — one slow condition doesn't delay the rest. Each
-        gate-capable snapshot is enriched with a live view of this engine's gate
-        tenure so `for:` clauses gate off predicate tenure, not the exact-state
-        clock."""
+        (None on failure) — one slow condition doesn't delay the rest, and a
+        refresh that started earlier never overwrites a condition a later one
+        already published. Each gate-capable snapshot is enriched with a live
+        view of this engine's gate tenure so `for:` clauses gate off predicate
+        tenure, not the exact-state clock."""
+        seq = next(self._snapshot_seq)  # taken at start: ordering is by when the read began
         conditions = self._conditions()
         fresh = await snapshot_conditions(
             self._hass, conditions, self._referenced, keys=condition_keys, result_keys=result_keys
         )
-        self._snapshots.update(attach_tenure(conditions, self._tenure, fresh))
+        for key, value in attach_tenure(conditions, self._tenure, fresh).items():
+            # A refresh that started later has already published a newer view
+            # of this condition; landing ours now would roll the cache back.
+            if self._snapshot_written.get(key, -1) > seq:
+                continue
+            self._snapshot_written[key] = seq
+            self._snapshots[key] = value
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -22,14 +23,17 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
+    DATA_ENGINE,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DATA_SWITCHES_PENDING,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    get_switches,
 )
 from .exposure import async_apply_switch_exposure
-from .naming import scope_device_name
+from .naming import scope_device_name, scope_display_name
 from .scopes import iter_scope_kinds, scope_spec
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +41,15 @@ _LOGGER = logging.getLogger(__name__)
 # House switch first so its device exists before floor/area switches link their
 # device to it (avoids an HA device-registry warning on fresh setup).
 _SCOPE_KIND_ORDER = {"house": 0, "floor": 1, "area": 2}
+
+# How long a pending-add claim (DATA_SWITCHES_PENDING) is honoured. Our
+# async_added_to_hass completes in milliseconds, so a claim older than this
+# belongs to an add HA abandoned: entity_platform swallows a per-entity add
+# exception, and an add timeout drops every entity it had not reached yet —
+# neither calls add_to_platform_abort, so neither releases the claim itself.
+# Retrying a stale claim costs at worst one duplicate-id log line; never
+# retrying strands the scope with no switch until the next reload.
+_PENDING_CLAIM_TTL = 60.0
 
 # HA 2026.8 deprecated DeviceRegistry.async_get_device() lookup by identifier
 # (warns from 2026.8, removed 2027.8) because identifiers are only unique per
@@ -185,13 +198,9 @@ def _remove_scope_device(
 def make_scope_switch(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None
 ) -> AmbienceScopeSwitch:
-    """Build a switch for a scope, resolving its display name from the registry.
-    Used by the platform setup and the runtime create-on-enable path."""
-    spec = scope_spec(scope_kind)
-    if spec.registry_lookup is None:
-        return AmbienceScopeSwitch("house", None, "house")
-    entry = spec.registry_lookup(hass, scope_id)
-    return AmbienceScopeSwitch(scope_kind, scope_id, entry.name if entry else str(scope_id))
+    """Build a switch for a scope, named from the registry like every other scope
+    label. Used by the platform setup and the runtime create-on-enable path."""
+    return AmbienceScopeSwitch(scope_kind, scope_id, scope_display_name(hass, scope_kind, scope_id))
 
 
 def _desired_switch_scopes(hass: HomeAssistant, store: Any) -> set[tuple[str, str | None]]:
@@ -232,9 +241,23 @@ def reconcile_scope_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     desired = _desired_switch_scopes(hass, store)
     add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
-    live = hass.data[DOMAIN].get(DATA_SWITCHES, {})
-    missing = [s for s in desired if s not in live]
+    live = get_switches(hass)
+    # Claimed by an add that has not reached async_added_to_hass yet: adding
+    # again would hand HA a duplicate unique_id. A claim covers only that
+    # window, so it is dropped once it expires (the add never landed and never
+    # will), and once its scope is no longer desired (or a re-enable would find
+    # the scope still claimed and never build its switch). Unload takes the
+    # rest with hass.data[DOMAIN].
+    pending: dict[tuple[str, str | None], float] = hass.data[DOMAIN].setdefault(
+        DATA_SWITCHES_PENDING, {}
+    )
+    now = time.monotonic()
+    for scope, claimed_at in list(pending.items()):
+        if scope not in desired or now - claimed_at > _PENDING_CLAIM_TTL:
+            del pending[scope]
+    missing = [s for s in desired if s not in live and s not in pending]
     if missing and add_entities is not None:
+        pending.update(dict.fromkeys(missing, now))
         ordered = sorted(missing, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
         add_entities([make_scope_switch(hass, kind, sid) for (kind, sid) in ordered])
     _reconcile_switch_registry(hass, entry, desired)
@@ -309,9 +332,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         - floor: area switches whose area is on this floor.
         - area:  none (leaf).
         """
-        switches: dict[tuple[str, str | None], AmbienceScopeSwitch] = self.hass.data[DOMAIN].get(
-            DATA_SWITCHES, {}
-        )
+        switches: dict[tuple[str, str | None], AmbienceScopeSwitch] = get_switches(self.hass)
         if self._scope_kind == "house":
             return [sw for key, sw in switches.items() if key != self.scope_key]
         if self._scope_kind == "floor":
@@ -328,7 +349,9 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self.hass.data[DOMAIN].setdefault(DATA_SWITCHES, {})[self.scope_key] = self
+        domain_data = self.hass.data[DOMAIN]
+        domain_data.setdefault(DATA_SWITCHES, {})[self.scope_key] = self
+        domain_data.get(DATA_SWITCHES_PENDING, {}).pop(self.scope_key, None)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, SIGNAL_SWITCH_CONFIG_UPDATED, self._handle_config_updated
@@ -342,6 +365,24 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = False
             self._schedule_auto_on_from_store(turn_on_if_expired=True)
         async_apply_switch_exposure(self.hass, self.entity_id)
+        # The engine snapshots which switch entities to watch at subscribe;
+        # a switch that appears later (scope re-enabled, area created) must
+        # make it re-subscribe or its off->on transitions go unseen. Absent
+        # during the platform's initial adds: the engine is built afterwards
+        # and subscribes once, seeing every switch.
+        engine = self.hass.data[DOMAIN].get(DATA_ENGINE)
+        if engine is not None:
+            engine.note_config_changed(self.scope_key)
+            await engine.async_request_refresh()
+
+    @callback
+    def add_to_platform_abort(self) -> None:
+        """HA dropped this entity before adding it (duplicate id, or disabled in
+        the registry): release the reconcile's pending claim so a later reconcile
+        may try again without waiting out the claim's TTL. Runs before super(),
+        which nulls self.hass."""
+        self.hass.data.get(DOMAIN, {}).get(DATA_SWITCHES_PENDING, {}).pop(self.scope_key, None)
+        super().add_to_platform_abort()
 
     async def async_will_remove_from_hass(self) -> None:
         self._cancel_timer()

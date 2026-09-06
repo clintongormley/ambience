@@ -57,3 +57,24 @@ async def test_builtin_ids_pass_catalog_validation(
             },
         ],
     )
+
+
+async def test_ambience_registers_only_pass_through_services(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """`apply_lock` is not reentrant. That is safe only while no Ambience
+    service can reach the apply path from inside a scene action; every name
+    below is a pass-through to another domain's service.
+
+    The set is spelled out rather than read from `_SERVICES` on purpose: adding
+    a service must break this test, so whoever adds one reads `apply_lock`'s
+    docstring and confirms the new service cannot re-enter the lock.
+    """
+    assert set(hass.services.async_services_for_domain(DOMAIN)) == {
+        "turn_on",
+        "turn_off",
+        "cover_safe_open",
+        "cover_safe_close",
+        "cover_safe_set_position",
+        "cover_safe_set_tilt_position",
+    }

@@ -10,20 +10,19 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from ..ai_common import areas, floors
 from ..const import (
     ASSISTANT_FIELDS,
     DATA_CONDITIONS,
     DATA_HISTORY,
     DATA_STORE,
-    DATA_SWITCHES,
     DOMAIN,
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    get_switches,
 )
 from ..redact import redact_plan
 from ..scope_triggers import scope_trigger_spec, trigger_descriptors
@@ -52,12 +51,9 @@ async def _ws_areas_list(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    area_reg = ar.async_get(hass)
-    result = [
-        {"area_id": entry.id, "name": entry.name}
-        for entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name)
-    ]
-    connection.send_result(msg["id"], result)
+    """The panel's area list, served from the same builder as the AI exports so
+    the two can never disagree about what an area is."""
+    connection.send_result(msg["id"], areas(hass))
 
 
 @websocket_api.require_admin
@@ -68,12 +64,8 @@ async def _ws_floors_list(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    floor_reg = fr.async_get(hass)
-    result = [
-        {"floor_id": entry.floor_id, "name": entry.name}
-        for entry in sorted(floor_reg.async_list_floors(), key=lambda f: f.name)
-    ]
-    connection.send_result(msg["id"], result)
+    """The panel's floor list — see `_ws_areas_list` for why it shares a builder."""
+    connection.send_result(msg["id"], floors(hass))
 
 
 def _get_scope(
@@ -413,7 +405,7 @@ async def _ws_switches_list(
     after first registration, so user renames stick. Read it from the live
     switch entities tracked in DATA_SWITCHES.
     """
-    switches = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    switches = get_switches(hass)
     result = [
         {"scope_kind": kind, "scope_id": scope_id, "entity_id": sw.entity_id}
         for (kind, scope_id), sw in switches.items()

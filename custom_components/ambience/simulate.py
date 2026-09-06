@@ -18,7 +18,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from .conditions._common import dur_seconds
+from .conditions._common import as_float_state, dur_seconds
 from .conditions._opaque import OpaquePrecomputedCondition
 from .conditions.weather import WEATHER_CONDITIONS
 from .const import DATA_CONDITIONS, DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
@@ -270,16 +270,6 @@ def _time_derived_entities(conditions: dict[str, Any], category_cfg: dict[str, A
     return out
 
 
-def _is_number(value: str | None) -> bool:
-    if value is None:
-        return False
-    try:
-        float(value)
-        return True
-    except ValueError:
-        return False
-
-
 def _attribute_knob(
     hass: HomeAssistant, entity_id: str, live: State | None, spec: dict[str, str]
 ) -> dict[str, Any]:
@@ -298,7 +288,7 @@ def _attribute_knob(
         opts = known_attribute_values_for(hass, entity_id, name)
         # ≥2 categorical values means a real list to pick from; a lone current
         # value stays free text (see docstring) so a native select can't trap it.
-        if sum(1 for o in opts if not _is_number(o)) >= 2:
+        if sum(1 for o in opts if as_float_state(o) is None) >= 2:
             knob["control"] = "select"
             knob["options"] = opts
     return knob
@@ -321,10 +311,10 @@ def _entity_knob(
         # was echoed back by known_states_for), treat it as a number control.
         # (Edge: a select whose options are all numeric strings becomes a number
         # field too — acceptable for v1, a number still yields a valid value.)
-        categorical = [o for o in opts if not _is_number(o)]
+        categorical = [o for o in opts if as_float_state(o) is None]
         if categorical:
             control, options = "select", opts
-        elif _is_number(live_state):
+        elif as_float_state(live_state) is not None:
             control, options = "number", None
         else:
             control, options = "text", None

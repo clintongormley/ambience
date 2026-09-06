@@ -2,26 +2,60 @@
 
 from __future__ import annotations
 
-import pytest
+from datetime import timedelta
+from unittest.mock import AsyncMock, patch
+
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.const import DATA_SWITCH_ADD_ENTITIES, DATA_SWITCHES, DOMAIN
 from tests import get_scope_device
 
 
-@pytest.fixture
-async def installed(hass, mock_config_entry):
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
-
-
 async def test_house_switch_present_after_setup(hass, installed):
     assert ("house", None) in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_initial_platform_adds_do_not_request_an_engine_refresh(
+    hass, mock_config_entry
+) -> None:
+    """The platform's initial switch adds happen before the engine is built
+    (DATA_ENGINE absent), so they must not touch it — only a switch that
+    appears afterwards should."""
+    from custom_components.ambience.trigger_engine import AutoTriggerEngine
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch.object(AutoTriggerEngine, "note_config_changed") as noted,
+        patch.object(AutoTriggerEngine, "async_request_refresh", new=AsyncMock()) as refresh,
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    noted.assert_not_called()
+    refresh.assert_not_awaited()
+
+
+async def test_a_switch_added_at_runtime_requests_an_engine_refresh(hass, installed) -> None:
+    """The engine's switch watch is frozen at subscribe; a switch that appears
+    later must trigger a re-subscribe or its off->on is never seen."""
+    from homeassistant.helpers import area_registry as ar
+
+    from custom_components.ambience.trigger_engine import AutoTriggerEngine
+
+    with (
+        patch.object(AutoTriggerEngine, "note_config_changed") as noted,
+        patch.object(AutoTriggerEngine, "async_request_refresh", new=AsyncMock()) as refresh,
+    ):
+        area = ar.async_get(hass).async_create("Attic")
+        await hass.async_block_till_done()
+
+    noted.assert_called_with(("area", area.id))
+    refresh.assert_awaited()
 
 
 async def test_area_added_post_setup_gets_a_switch(hass, installed):
@@ -226,3 +260,69 @@ async def test_remove_scope_device_missing_is_noop(hass, installed):
 
     # No device exists for this id — must not raise and must remove nothing.
     _remove_scope_device(hass, installed.entry_id, "area", "does-not-exist")
+
+
+async def test_switch_registered_after_the_config_refresh_is_still_watched(
+    hass, mock_config_entry, monkeypatch
+) -> None:
+    """The engine snapshots which switch entities to watch when it subscribes. A
+    switch that finishes registering after that refresh has already run is only
+    picked up by the refresh the entity itself requests on add.
+
+    Debounce 0 makes the config-changed refresh flush inside
+    `async_block_till_done`, so the switch is deliberately created afterwards.
+    """
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    from homeassistant.helpers.storage import Store
+
+    from custom_components.ambience import trigger_engine as trigger_engine_module
+    from custom_components.ambience.const import (
+        DATA_ENGINE,
+        DATA_STORE,
+        SIGNAL_SWITCH_CONFIG_UPDATED,
+    )
+
+    monkeypatch.setattr(trigger_engine_module, "_CONFIG_DEBOUNCE_SECONDS", 0)
+
+    area = ar.async_get(hass).async_create("Lounge")
+    await Store(hass, 1, "ambience").async_save(
+        {
+            "version": 1,
+            "areas": {area.id: {"scenes": [{"category": "general", "when": {}, "actions": []}]}},
+            "floors": {},
+            "house": {},
+            "conditions": {},
+            "switch_defaults": {"name": "Ambience", "auto_on_delay_seconds": 0},
+        }
+    )
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    engine = hass.data[DOMAIN][DATA_ENGINE]
+    assert hass.data[DOMAIN][DATA_SWITCHES][("area", area.id)].entity_id in engine._switch_scopes
+
+    # Disable the scope: the reconcile deletes its switch, and the engine
+    # re-subscribes without it.
+    await store.async_set_scope_enabled("area", area.id, False)
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+    await hass.async_block_till_done()
+    assert ("area", area.id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+    # Re-enable it and let the store's config-changed refresh run to completion
+    # BEFORE the switch is recreated — the ordering this guards against.
+    await store.async_set_scope_enabled("area", area.id, True)
+    await hass.async_block_till_done()
+    assert not any(scope == ("area", area.id) for scope in engine._switch_scopes.values())
+
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+    await hass.async_block_till_done()
+    # The debouncer arms a cooldown handle after every run, so the refresh the
+    # new entity requests during that window only executes when the handle
+    # fires — drive it rather than waiting on wall-clock time.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+
+    switch = hass.data[DOMAIN][DATA_SWITCHES][("area", area.id)]
+    assert switch.entity_id in engine._switch_scopes

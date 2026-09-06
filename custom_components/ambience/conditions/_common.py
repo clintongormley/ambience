@@ -2,8 +2,9 @@
 
 Several conditions need the same primitives: a frozenset of the HA "no real
 value" states, a tolerant `{h,m,s}` duration reader, the matching save-time
-validator for that duration, a numeric-interval merge, and a bool-rejecting
-float coercion. Keeping one copy here avoids the set/tuple and
+validator for that duration, a numeric-interval merge, the two float
+coercions (bool-rejecting and state-string-tolerant) and the ordering-operator
+comparison. Keeping one copy here avoids the set/tuple and
 fix-it-in-one-place drift that crept in when each condition carried its own.
 """
 
@@ -362,3 +363,30 @@ def as_float(value: Any) -> float | None:
         return None
     result = float(value)
     return result if math.isfinite(result) else None
+
+
+def as_float_state(value: Any) -> float | None:
+    """Coerce an entity state (or any user-typed value) to a finite float, else
+    None. Accepts numeric strings, unlike `as_float`, because HA states are
+    strings. Non-finite values are unobservable: NaN fails every band
+    comparison (`nan < lo` and `nan >= hi` are both False), which would
+    otherwise make a NaN reading match every band."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def compare_numeric(actual: float, op: str, threshold: float) -> bool:
+    """`actual <op> threshold` for the four ordering operators; False for any
+    other op so an unknown operator never matches."""
+    if op == "<":
+        return actual < threshold
+    if op == "<=":
+        return actual <= threshold
+    if op == ">":
+        return actual > threshold
+    if op == ">=":
+        return actual >= threshold
+    return False

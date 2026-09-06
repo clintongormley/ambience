@@ -33,6 +33,7 @@ from ._common import (
     NormalisesPredicate,
     PredicateDefaults,
     as_float,
+    as_float_state,
     kleene_all,
     kleene_any,
     kleene_not,
@@ -300,19 +301,6 @@ class LuxCondition(NormalisesPredicate):
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 
         return sensor_quant_contains(_norm(outer), _norm(inner), _axis)
-
-
-def as_float_state(state: str) -> float | None:
-    """Coerce an entity state string to a finite lux float, else None.
-
-    Non-finite values are treated as unobservable: ``float('nan')`` succeeds but
-    NaN fails every band comparison (``nan < lo`` and ``nan >= hi`` are both
-    False), which would otherwise make a NaN reading match *every* band."""
-    try:
-        value = float(state)
-    except (TypeError, ValueError):
-        return None
-    return value if math.isfinite(value) else None
 
 
 def _band_within(

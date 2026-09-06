@@ -13,6 +13,8 @@ from custom_components.ambience.conditions._common import (
     RULE_TRUTHY,
     UNAVAILABLE,
     as_float,
+    as_float_state,
+    compare_numeric,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
@@ -297,3 +299,23 @@ def test_materialise_defaults_copies_when_a_value_is_not_the_canonical_type() ->
     out = materialise_defaults(pred, _DEFAULTS_TABLE)
     assert out is not pred
     assert out["negate"] is True
+
+
+def test_as_float_state_parses_strings_and_numbers_and_rejects_the_rest() -> None:
+    assert as_float_state("12.5") == 12.5
+    assert as_float_state(" 7 ") == 7.0
+    assert as_float_state(3) == 3.0
+    assert as_float_state(None) is None
+    assert as_float_state("unavailable") is None
+    assert as_float_state({"a": 1}) is None
+    assert as_float_state("nan") is None
+    assert as_float_state("inf") is None
+
+
+def test_compare_numeric_covers_the_four_operators_and_rejects_others() -> None:
+    assert compare_numeric(5.0, "<", 6.0)
+    assert compare_numeric(5.0, "<=", 5.0)
+    assert compare_numeric(6.0, ">", 5.0)
+    assert compare_numeric(5.0, ">=", 5.0)
+    assert not compare_numeric(5.0, "==", 5.0)
+    assert not compare_numeric(5.0, "is", 5.0)

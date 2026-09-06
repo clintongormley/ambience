@@ -327,17 +327,20 @@ def test_trigger_deps_entity_not_configured_returns_empty_entities() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Line 95: _op_satisfied fallthrough (unknown operator)
+# Unknown threshold operator (matching path is tolerant of stored junk)
 # ---------------------------------------------------------------------------
 
 
-def test_op_satisfied_unknown_operator_returns_false() -> None:
-    """_op_satisfied returns False for any op not in ('<', '<=', '>', '>=')."""
-    from custom_components.ambience.conditions.weather import _op_satisfied
-
-    assert _op_satisfied(5.0, "==", 5.0) is False
-    assert _op_satisfied(5.0, "!=", 3.0) is False
-    assert _op_satisfied(5.0, "", 5.0) is False
+def test_threshold_with_unknown_operator_never_matches() -> None:
+    """An op outside ('<', '<=', '>', '>=') must not match, whatever the value."""
+    snap = _snap("sunny", temperature=5.0)
+    for op in ("==", "!=", ""):
+        assert (
+            WeatherCondition._threshold_ok(
+                {"attribute": "temperature", "op": op, "value": 5.0}, snap
+            )
+            is False
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -572,3 +575,16 @@ def test_unconfigured_reason_skips_non_string_group_ids(hass: HomeAssistant) -> 
     m = WeatherCondition(hass=hass)
     # groups contains a non-string — must not raise and must not flag it
     assert m.unconfigured_reason({"groups": [None, 42]}, _snap()) is None
+
+
+async def test_snapshot_drops_non_finite_attributes(hass: HomeAssistant) -> None:
+    """NaN/inf readings are unobservable: NaN fails every threshold comparison,
+    so they must not reach the snapshot at all."""
+    _install_store_stub(hass, entity="weather.home")
+    hass.states.async_set(
+        "weather.home",
+        "sunny",
+        {"temperature": float("nan"), "humidity": 40, "wind_speed": float("inf")},
+    )
+    snap = await WeatherCondition().snapshot(hass)
+    assert snap.attributes == {"humidity": 40.0}

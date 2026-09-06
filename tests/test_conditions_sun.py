@@ -469,3 +469,9 @@ async def test_snapshot_treats_non_finite_angles_as_unobservable(hass: HomeAssis
     snap = await SunCondition().snapshot(hass)
     assert snap.elevation is None
     assert snap.azimuth is None
+
+
+def test_in_arc_rejects_bool_bounds() -> None:
+    """A bool bound is a mistyped predicate, not a 0/1 angle — never a match."""
+    assert _in_arc(1.0, True, 20) is False
+    assert _in_arc(1.0, 0, True) is False

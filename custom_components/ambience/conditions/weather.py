@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from ..const import DATA_STORE, DOMAIN, get_store
 from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, predicate_has_any
+from ._common import UNAVAILABLE, as_float, compare_numeric, predicate_has_any
 
 WEATHER_CONDITIONS = (
     "clear-night",
@@ -91,18 +91,6 @@ def weather_predicate_active(pred: Any) -> bool:
     return predicate_has_any(pred, "groups", "thresholds")
 
 
-def _op_satisfied(actual: float, op: str, value: float) -> bool:
-    if op == "<":
-        return actual < value
-    if op == "<=":
-        return actual <= value
-    if op == ">":
-        return actual > value
-    if op == ">=":
-        return actual >= value
-    return False
-
-
 class WeatherCondition:
     name = "weather"
     description = "Matches the current weather condition and attribute thresholds."
@@ -141,10 +129,9 @@ class WeatherCondition:
             return WeatherSnapshot(condition=None, attributes={})
         attributes: dict[str, float] = {}
         for key, val in state.attributes.items():
-            if isinstance(val, bool):
-                continue
-            if isinstance(val, (int, float)):
-                attributes[key] = float(val)
+            coerced = as_float(val)
+            if coerced is not None:
+                attributes[key] = coerced
         return WeatherSnapshot(condition=state.state, attributes=attributes)
 
     def matches(self, predicate: Any, snapshot: WeatherSnapshot) -> bool:
@@ -183,10 +170,10 @@ class WeatherCondition:
         attr = t.get("attribute")
         if attr not in snap.attributes:
             return False
-        value = t.get("value")
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
+        value = as_float(t.get("value"))
+        if value is None:
             return False
-        return _op_satisfied(snap.attributes[attr], t.get("op"), float(value))
+        return compare_numeric(snap.attributes[attr], t.get("op"), value)
 
     def unconfigured_reason(self, predicate: Any, snapshot: WeatherSnapshot) -> str | None:
         if not weather_predicate_active(predicate):
@@ -245,5 +232,5 @@ class WeatherCondition:
         if t.get("op") not in THRESHOLD_OPS:
             raise AmbienceError("weather_invalid_operator", op=t.get("op"))
         value = t.get("value")
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
+        if as_float(value) is None:
             raise AmbienceError("weather_threshold_not_number", value=value)

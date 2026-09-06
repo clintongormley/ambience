@@ -27,9 +27,11 @@ from ._common import (
     RULE_OR,
     RULE_TRUTHY,
     UNAVAILABLE,
+    Detail,
     NormalisesPredicate,
     PredicateDefaults,
     dur_seconds,
+    ent,
     fmt_duration,
     for_comparator_symbol,
     for_contains,
@@ -38,15 +40,17 @@ from ._common import (
     kleene_any,
     kleene_not,
     materialise_defaults,
+    phrase,
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
     tenure_held,
     tenure_within,
+    text,
     validate_entity_ids,
     validate_for,
     validate_for_mode,
-    wrap_quantified,
+    wrap_quantified_segs,
 )
 
 _QUANTS = ("any", "all")
@@ -243,7 +247,7 @@ class OccupancyCondition(NormalisesPredicate):
         anchor = max(changes) if changes else snapshot.now
         return {self._gate_key(pred): (result is True, anchor)}
 
-    def describe(self, snapshot: OccupancySnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: OccupancySnapshot, predicate: Any = None) -> Detail | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
         if predicate is None:
             return self._describe_snapshot(snapshot)
@@ -252,7 +256,7 @@ class OccupancyCondition(NormalisesPredicate):
         pred = _norm(predicate)
         sensors = pred.get("sensors") or []
         if not sensors:
-            return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
+            return [phrase("any_sensor")]  # wildcard — matches() is vacuously true
         want_on = pred["occupied"]
         quant = pred["quant"]
         seconds = dur_seconds(pred.get("for"))
@@ -262,12 +266,12 @@ class OccupancyCondition(NormalisesPredicate):
         tenure_mode = seconds > 0 and snapshot.tenure is not None
         per_sensor_seconds = 0.0 if tenure_mode else seconds
         # Preserve the predicate's sensor order so the line maps to the config.
-        parts: list[str] = []
+        cells: list[Detail] = []
         for eid in sensors:
             name = snapshot.names.get(eid, eid)
             cur = snapshot.sensors.get(eid)
             if cur is None:
-                parts.append(f"{name}: not found ✗")
+                cells.append([ent(eid, name), text(": "), phrase("not_found"), text(" ✗")])
                 continue
             state, changed = cur
             # In the legacy clock, show how long each sensor has held its state
@@ -280,27 +284,31 @@ class OccupancyCondition(NormalisesPredicate):
             held = self._holds(
                 eid, snapshot, want_on=want_on, seconds=per_sensor_seconds, mode=mode
             )
-            parts.append(f"{name}: {state}{elapsed} {'✓' if held else '✗'}")
-        body = wrap_quantified(parts, quant, pred["negate"])
+            cells.append([ent(eid, name), text(f": {state}{elapsed} {'✓' if held else '✗'}")])
+        body = wrap_quantified_segs(cells, quant, pred["negate"])
         if not seconds:
             return body
         # State the duration threshold once; the comparator follows `for_mode`
         # ("for <" for less_than, "for ≥" otherwise). In tenure mode also show
         # how long the gate has actually held (or that it hasn't).
         rel = for_comparator_symbol(mode)
+        for_hold = phrase("for_hold", rel=rel, dur=fmt_duration(seconds))
         if tenure_mode:
             since = snapshot.tenure.get(self._gate_key(pred))
-            held_str = (
-                f", held {fmt_duration((snapshot.now - since).total_seconds())}"
+            held_part = (
+                [
+                    text(", "),
+                    phrase("held", dur=fmt_duration((snapshot.now - since).total_seconds())),
+                ]
                 if since
-                else ", not held"
+                else [text(", "), phrase("not_held")]
             )
-            return f"{body} (for {rel}{fmt_duration(seconds)}{held_str})"
-        return f"{body} (for {rel}{fmt_duration(seconds)})"
+            return [*body, text(" ("), for_hold, *held_part, text(")")]
+        return [*body, text(" ("), for_hold, text(")")]
 
-    def _describe_snapshot(self, snapshot: OccupancySnapshot) -> str | None:
+    def _describe_snapshot(self, snapshot: OccupancySnapshot) -> Detail | None:
         if not snapshot.sensors:
-            return "no occupancy sensors"
+            return [phrase("no_occupancy_sensors")]
         total = len(snapshot.sensors)
         active = sorted(
             snapshot.names.get(eid, eid)
@@ -308,8 +316,15 @@ class OccupancyCondition(NormalisesPredicate):
             if state == "on"
         )
         if active:
-            return f"{len(active)} of {total} active ({', '.join(active)})"
-        return f"0 of {total} active"
+            return [
+                phrase(
+                    "summary_active",
+                    n=str(len(active)),
+                    total=str(total),
+                    names=", ".join(active),
+                )
+            ]
+        return [phrase("summary_active_zero", total=str(total))]
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

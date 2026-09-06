@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
@@ -22,6 +24,44 @@ async def installed(hass, mock_config_entry):
 
 async def test_house_switch_present_after_setup(hass, installed):
     assert ("house", None) in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_initial_platform_adds_do_not_request_an_engine_refresh(
+    hass, mock_config_entry
+) -> None:
+    """The platform's initial switch adds happen before the engine is built
+    (DATA_ENGINE absent), so they must not touch it — only a switch that
+    appears afterwards should."""
+    from custom_components.ambience.trigger_engine import AutoTriggerEngine
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch.object(AutoTriggerEngine, "note_config_changed") as noted,
+        patch.object(AutoTriggerEngine, "async_request_refresh", new=AsyncMock()) as refresh,
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    noted.assert_not_called()
+    refresh.assert_not_awaited()
+
+
+async def test_a_switch_added_at_runtime_requests_an_engine_refresh(hass, installed) -> None:
+    """The engine's switch watch is frozen at subscribe; a switch that appears
+    later must trigger a re-subscribe or its off->on is never seen."""
+    from homeassistant.helpers import area_registry as ar
+
+    from custom_components.ambience.trigger_engine import AutoTriggerEngine
+
+    with (
+        patch.object(AutoTriggerEngine, "note_config_changed") as noted,
+        patch.object(AutoTriggerEngine, "async_request_refresh", new=AsyncMock()) as refresh,
+    ):
+        area = ar.async_get(hass).async_create("Attic")
+        await hass.async_block_till_done()
+
+    noted.assert_called_with(("area", area.id))
+    refresh.assert_awaited()
 
 
 async def test_area_added_post_setup_gets_a_switch(hass, installed):

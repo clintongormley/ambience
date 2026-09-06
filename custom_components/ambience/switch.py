@@ -23,6 +23,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
+    DATA_ENGINE,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
@@ -364,6 +365,15 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             self._attr_is_on = False
             self._schedule_auto_on_from_store(turn_on_if_expired=True)
         async_apply_switch_exposure(self.hass, self.entity_id)
+        # The engine snapshots which switch entities to watch at subscribe;
+        # a switch that appears later (scope re-enabled, area created) must
+        # make it re-subscribe or its off->on transitions go unseen. Absent
+        # during the platform's initial adds: the engine is built afterwards
+        # and subscribes once, seeing every switch.
+        engine = self.hass.data[DOMAIN].get(DATA_ENGINE)
+        if engine is not None:
+            engine.note_config_changed(self.scope_key)
+            await engine.async_request_refresh()
 
     @callback
     def add_to_platform_abort(self) -> None:

@@ -66,6 +66,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     event; the check is retried a minute later.
 - Two quick switch-related saves during startup can no longer make Home
     Assistant log a duplicate Ambience switch entity.
+- Turning a scope's switch on shortly after re-enabling the scope, or after
+    creating its area or floor, now always re-applies the scope's scenes.
 
 ### Performance
 

@@ -27,6 +27,7 @@ from .const import (
     DATA_SWITCHES,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    get_switches,
 )
 from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
@@ -232,7 +233,7 @@ def reconcile_scope_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     desired = _desired_switch_scopes(hass, store)
     add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
-    live = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    live = get_switches(hass)
     missing = [s for s in desired if s not in live]
     if missing and add_entities is not None:
         ordered = sorted(missing, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
@@ -309,9 +310,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         - floor: area switches whose area is on this floor.
         - area:  none (leaf).
         """
-        switches: dict[tuple[str, str | None], AmbienceScopeSwitch] = self.hass.data[DOMAIN].get(
-            DATA_SWITCHES, {}
-        )
+        switches: dict[tuple[str, str | None], AmbienceScopeSwitch] = get_switches(self.hass)
         if self._scope_kind == "house":
             return [sw for key, sw in switches.items() if key != self.scope_key]
         if self._scope_kind == "floor":

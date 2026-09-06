@@ -27,10 +27,11 @@ from .const import (
     DATA_LAST_APPLIED_SCENE,
     DATA_LAST_MATCHED,
     DATA_STORE,
-    DATA_SWITCHES,
     DOMAIN,
     SIGNAL_UNIT_APPLIED,
     SIGNAL_UNIT_LIVE,
+    get_store,
+    get_switch,
 )
 from .engine import evaluate_explained, resolve
 from .errors import service_validation_error
@@ -121,7 +122,7 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     registered-but-disabled entry reads 'off'. 'unknown' therefore covers both
     an unregistered switch and a registered, enabled one that has not loaded yet.
     """
-    switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
+    switch = get_switch(hass, scope_kind, scope_id)
     if switch is not None:
         return "on" if switch.is_on else "off"
 
@@ -134,7 +135,7 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
 def _scope_enabled(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
     """Whether the scope is permanently enabled. Disabled scopes never apply,
     even on the manual force path."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is None:
         return True
     return store.get_scope_enabled(scope_kind, scope_id)

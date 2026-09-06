@@ -30,7 +30,7 @@ from homeassistant.util import dt as dt_util
 
 from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
-from .const import DATA_SWITCHES, DOMAIN
+from .const import get_switches
 from .service import (
     _scope_enabled,
     _switch_state,
@@ -151,7 +151,7 @@ class TriggerSubscriptionsMixin:
                 )
             )
         self._switch_scopes = {}
-        switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
+        switches = get_switches(self._hass)
         for scope_key in self._scope_cfgs:
             entity_id = getattr(switches.get(scope_key), "entity_id", None)
             if entity_id:

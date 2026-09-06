@@ -19,11 +19,11 @@ from ..const import (
     DATA_CONDITIONS,
     DATA_HISTORY,
     DATA_STORE,
-    DATA_SWITCHES,
     DOMAIN,
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    get_switches,
 )
 from ..redact import redact_plan
 from ..scope_triggers import scope_trigger_spec, trigger_descriptors
@@ -413,7 +413,7 @@ async def _ws_switches_list(
     after first registration, so user renames stick. Read it from the live
     switch entities tracked in DATA_SWITCHES.
     """
-    switches = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    switches = get_switches(hass)
     result = [
         {"scope_kind": kind, "scope_id": scope_id, "entity_id": sw.entity_id}
         for (kind, scope_id), sw in switches.items()

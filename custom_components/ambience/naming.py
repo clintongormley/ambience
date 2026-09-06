@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_STORE, DOMAIN
+from .const import get_store
 from .scopes import scope_spec
 
 
@@ -56,7 +56,7 @@ def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     stages (the trace sinks land before the store) and is dropped whole on
     unload, so a caller can arrive with nothing to read. Every id is then left
     unresolved rather than crashing the caller."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is None:
         return {}
     return {g.get("id"): g.get("name") for g in store.categories()}

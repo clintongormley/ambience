@@ -234,3 +234,16 @@ def get_store(hass: HomeAssistant) -> Any:
     need an import of ``.store``, which this leaf module must not have.
     """
     return hass.data.get(DOMAIN, {}).get(DATA_STORE)
+
+
+def get_switches(hass: HomeAssistant) -> dict[tuple[str, str | None], Any]:
+    """The live scope-switch entities keyed by (scope_kind, scope_id); empty
+    before the switch platform is up and after unload. A read-only view: the
+    writers (the entity's add/remove hooks, reconcile) use setdefault on
+    hass.data directly so the dict they mutate is the stored one."""
+    return hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+
+
+def get_switch(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> Any:
+    """One scope's live switch entity, or None when it is not (yet) live."""
+    return get_switches(hass).get((scope_kind, scope_id))

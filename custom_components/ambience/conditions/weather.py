@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from ..const import get_store
+from ..const import DATA_STORE, DOMAIN, get_store
 from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
 from ._common import UNAVAILABLE, predicate_has_any
@@ -132,8 +132,6 @@ class WeatherCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> WeatherSnapshot:
-        from ..const import DATA_STORE, DOMAIN
-
         store = hass.data[DOMAIN][DATA_STORE]
         entity_id = store.get_condition_config("weather").get("entity")
         if not entity_id:

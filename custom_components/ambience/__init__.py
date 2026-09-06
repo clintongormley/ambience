@@ -71,6 +71,7 @@ from .const import (
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
+    get_store,
 )
 from .errors import async_preload_translations
 from .exposed_actions import ExposedActionsStore
@@ -433,7 +434,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Flush any pending delayed store save before dropping our reference, so a
     # subsequent removal can't be resurrected by a late write from this instance
     # (see AmbienceStore.async_flush). Only runs on a clean unload.
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    store = get_store(hass)
     if store is not None:
         await store.async_flush()
     hass.data.pop(DOMAIN, None)

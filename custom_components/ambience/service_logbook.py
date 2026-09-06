@@ -16,7 +16,7 @@ from __future__ import annotations
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context, HomeAssistant
 
-from .const import DATA_SWITCHES, DOMAIN, EVENT_AMBIENCE_ACTIVITY
+from .const import EVENT_AMBIENCE_ACTIVITY, get_switches
 from .naming import category_names
 
 
@@ -55,7 +55,7 @@ def _switch_entity_id(hass: HomeAssistant, scope_kind: str, scope_id: str | None
     scope); returns None when not even the house switch exists, so the caller
     skips the logbook entry rather than crashing.
     """
-    switches = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+    switches = get_switches(hass)
     switch = switches.get((scope_kind, scope_id))
     if switch is None and scope_kind != "house":
         switch = switches.get(("house", None))

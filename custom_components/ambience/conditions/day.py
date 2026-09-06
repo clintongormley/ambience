@@ -11,7 +11,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..const import get_store
+from ..const import DATA_STORE, DOMAIN, get_store
 from ..errors import AmbienceError
 from ..triggers import TriggerSpec
 from ._common import predicate_has_any
@@ -115,8 +115,6 @@ class DayCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> DaySnapshot:
-        from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
-
         store = hass.data[DOMAIN][DATA_STORE]
         cfg = store.get_condition_config("day")
         today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()

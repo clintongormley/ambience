@@ -763,3 +763,45 @@ async def test_rename_away_from_referenced_entity_rescans(
         registry.async_update_entity(entry.entity_id, new_entity_id="light.renamed_away")
         await _settle_health(hass)
         assert spy.call_count == 1
+
+
+async def test_unreadable_storage_raises_a_repairs_issue_and_a_clean_load_clears_it(
+    hass: HomeAssistant,
+    hass_storage,
+) -> None:
+    """A malformed payload is left on disk for recovery, so Repairs is the only
+    user-visible signal; a later clean load must take the issue back down."""
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ambience.const import STORAGE_KEY, STORAGE_VERSION
+
+    bad = {"not": "a config"}
+    stored = {"version": STORAGE_VERSION, "key": STORAGE_KEY, "data": bad}
+    hass_storage[STORAGE_KEY] = dict(stored)
+    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={}, options={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable")
+    assert issue is not None
+    assert issue.severity == ir.IssueSeverity.ERROR
+    assert issue.is_fixable is False
+    assert issue.translation_placeholders == {"path": f".storage/{STORAGE_KEY}"}
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    # The damaged file must survive setup and unload untouched, and unload must
+    # not take the issue down — only a clean load may.
+    assert hass_storage[STORAGE_KEY] == stored
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable") is not None
+
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "key": STORAGE_KEY,
+        "data": {"areas": {}},
+    }
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable") is None

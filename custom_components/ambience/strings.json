@@ -66,6 +66,10 @@
     "unexposed_action": {
       "title": "Ambience: scenes use an action that is no longer exposed",
       "description": "The action `{ref}` is no longer exposed (Settings → Ambience → Actions), but is used by these Ambience scenes:\n{scenes}\n\nThe action will be skipped when the scene applies. Re-expose the action or remove it from the scenes. This message clears automatically once it's resolved."
+    },
+    "storage_unreadable": {
+      "title": "Ambience: the saved configuration could not be read",
+      "description": "The file `{path}` exists but is not a valid Ambience configuration, so Ambience started with an empty configuration and has left the file untouched. Restore it from a backup, or delete it and restart Home Assistant to start fresh. Saving from the Ambience panel replaces the file. This message clears automatically once the file loads."
     }
   },
   "exceptions": {

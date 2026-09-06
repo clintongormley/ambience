@@ -66,6 +66,10 @@
     "unexposed_action": {
       "title": "Ambience : des scènes utilisent une action qui n'est plus exposée",
       "description": "L'action `{ref}` n'est plus exposée (Paramètres → Ambience → Actions), mais elle est utilisée par ces scènes Ambience :\n{scenes}\n\nL'action sera ignorée lorsque la scène s'applique. Réexposez l'action ou retirez-la des scènes. Ce message disparaît automatiquement une fois le problème résolu."
+    },
+    "storage_unreadable": {
+      "title": "Ambience : la configuration enregistrée n'a pas pu être lue",
+      "description": "Le fichier `{path}` existe mais n'est pas une configuration Ambience valide ; Ambience a donc démarré avec une configuration vide et a laissé le fichier intact. Restaurez-le depuis une sauvegarde, ou supprimez-le et redémarrez Home Assistant pour repartir de zéro. Enregistrer depuis le panneau Ambience remplace le fichier. Ce message disparaît automatiquement dès que le fichier se charge."
     }
   },
   "exceptions": {

@@ -66,6 +66,10 @@
     "unexposed_action": {
       "title": "Ambience: las escenas usan una acción que ya no está expuesta",
       "description": "La acción `{ref}` ya no está expuesta (Ajustes → Ambience → Acciones), pero la utilizan estas escenas de Ambience:\n{scenes}\n\nLa acción se omitirá cuando se aplique la escena. Vuelve a exponer la acción o elimínala de las escenas. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "storage_unreadable": {
+      "title": "Ambience: no se pudo leer la configuración guardada",
+      "description": "El archivo `{path}` existe pero no es una configuración válida de Ambience, así que Ambience se inició con una configuración vacía y ha dejado el archivo intacto. Restáuralo desde una copia de seguridad, o bórralo y reinicia Home Assistant para empezar de cero. Guardar desde el panel de Ambience reemplaza el archivo. Este mensaje desaparece automáticamente cuando el archivo se carga."
     }
   },
   "exceptions": {

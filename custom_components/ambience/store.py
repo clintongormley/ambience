@@ -102,6 +102,12 @@ class AmbienceStore:
         # must not replace the file the user still needs for recovery.
         self._unreadable_payload = False
 
+    @property
+    def payload_unreadable(self) -> bool:
+        """True while the on-disk payload is present but unreadable, so the
+        in-memory config is a degraded empty one (see :meth:`async_load`)."""
+        return self._unreadable_payload
+
     def _notify_config_changed(self, affected: tuple[str, str | None] | None = None) -> None:
         """Tell the auto-trigger engine a config save happened, and narrow the
         follow-up re-apply: pass a (scope_kind, scope_id) for a scope-local

@@ -71,6 +71,7 @@ from .const import (
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
+    STORAGE_KEY,
     get_store,
 )
 from .errors import async_preload_translations
@@ -103,6 +104,11 @@ _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 # integration registering its entities) into one scan.
 _HEALTH_DEBOUNCE_SECONDS = 1.0
 
+# Repairs issue for an unreadable store payload; doubles as its `issues`
+# translation key. It carries no `kind:` prefix, so config_health_issues'
+# reconcile pass — which sweeps only prefixed ids — never deletes it.
+_STORAGE_UNREADABLE_ISSUE = "storage_unreadable"
+
 
 def _hash_bundle(bundle_path: Path) -> str:
     """Return a short content hash of *bundle_path*, or 'missing' if absent."""
@@ -132,6 +138,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     store = AmbienceStore(hass)
     await store.async_load()
+
+    # A damaged file is left in place for recovery (store.async_load), so the
+    # only other signal is one warning in the log — surface it in Repairs.
+    if store.payload_unreadable:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            _STORAGE_UNREADABLE_ISSUE,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=_STORAGE_UNREADABLE_ISSUE,
+            translation_placeholders={"path": f".storage/{STORAGE_KEY}"},
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, _STORAGE_UNREADABLE_ISSUE)
 
     # Reconcile against HA registries: drop stored configs whose registry
     # entry has gone away (e.g. while HA was down).

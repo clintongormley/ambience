@@ -30,7 +30,7 @@ from .const import (
     get_switches,
 )
 from .exposure import async_apply_switch_exposure
-from .naming import scope_device_name
+from .naming import scope_device_name, scope_display_name
 from .scopes import iter_scope_kinds, scope_spec
 
 _LOGGER = logging.getLogger(__name__)
@@ -186,13 +186,9 @@ def _remove_scope_device(
 def make_scope_switch(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None
 ) -> AmbienceScopeSwitch:
-    """Build a switch for a scope, resolving its display name from the registry.
-    Used by the platform setup and the runtime create-on-enable path."""
-    spec = scope_spec(scope_kind)
-    if spec.registry_lookup is None:
-        return AmbienceScopeSwitch("house", None, "house")
-    entry = spec.registry_lookup(hass, scope_id)
-    return AmbienceScopeSwitch(scope_kind, scope_id, entry.name if entry else str(scope_id))
+    """Build a switch for a scope, named from the registry like every other scope
+    label. Used by the platform setup and the runtime create-on-enable path."""
+    return AmbienceScopeSwitch(scope_kind, scope_id, scope_display_name(hass, scope_kind, scope_id))
 
 
 def _desired_switch_scopes(hass: HomeAssistant, store: Any) -> set[tuple[str, str | None]]:

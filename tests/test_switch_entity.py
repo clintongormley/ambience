@@ -61,6 +61,17 @@ def _only_floor_id(hass: HomeAssistant) -> str:
 # --- creation ---------------------------------------------------------------
 
 
+async def test_make_scope_switch_uses_the_registry_name_or_the_id(hass: HomeAssistant) -> None:
+    """The switch is labelled from the registry, falling back to the raw scope_id
+    when the area/floor is gone; the house entity_id is fixed regardless."""
+    from custom_components.ambience.switch import make_scope_switch
+
+    area = ar.async_get(hass).async_create("Kitchen")
+    assert make_scope_switch(hass, "area", area.id).entity_id == "switch.kitchen_ambience"
+    assert make_scope_switch(hass, "area", "gone").entity_id == "switch.gone_ambience"
+    assert make_scope_switch(hass, "house", None).entity_id == "switch.house_ambience"
+
+
 async def test_house_switch_always_exists(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
     ent = _switch(hass, "house", None)

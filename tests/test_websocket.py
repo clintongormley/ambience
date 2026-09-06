@@ -130,18 +130,35 @@ async def test_areas_list_returns_all_ha_areas(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
     """areas/list reflects every area in HA's registry, configured in Ambience or not."""
+    from homeassistant.helpers import floor_registry as fr
+
     reg = ar.async_get(hass)
+    upstairs = fr.async_get(hass).async_create("Upstairs")
     kitchen = reg.async_create("Kitchen")
     bedroom = reg.async_create("Bedroom")
+    reg.async_update(bedroom.id, floor_id=upstairs.floor_id)
     # Only one has Ambience config — both must still be listed, sorted by name.
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(kitchen.id, {"conditions": [], "scenes": []})
     resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
     assert resp["success"] is True
     assert resp["result"] == [
-        {"area_id": bedroom.id, "name": "Bedroom"},
-        {"area_id": kitchen.id, "name": "Kitchen"},
+        {"area_id": bedroom.id, "name": "Bedroom", "floor_id": upstairs.floor_id},
+        {"area_id": kitchen.id, "name": "Kitchen", "floor_id": None},
     ]
+
+
+async def test_areas_list_and_ai_bundle_share_one_area_shape(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """The panel and the AI bundle must never disagree about an area."""
+    from custom_components.ambience.ai_common import areas
+
+    reg = ar.async_get(hass)
+    reg.async_create("Kitchen")
+    resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
+    assert resp["success"] is True
+    assert resp["result"] == areas(hass)
 
 
 async def test_install_id_returns_entry_id(hass: HomeAssistant, installed, hass_ws_client) -> None:

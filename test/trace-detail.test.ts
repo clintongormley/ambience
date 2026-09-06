@@ -1542,6 +1542,26 @@ describe("trace-detail segments", () => {
     expect(text).not.toContain("LEGACY DETAIL");
   });
 
+  test("a missing phrase key renders its English fallback verbatim, not re-interpolated", () => {
+    // Regression: when the bundle key is absent, the fallback `t` is already the
+    // backend's rendered English, so the panel must NOT interpolate `p` into it
+    // again — a value that itself contains a brace token (a zone literally named
+    // "Office {zone}") would otherwise be doubled ("in Office Office {zone}").
+    const host = sceneEvalHost([
+      {
+        condition_key: "people",
+        passed: true,
+        detail: "in Office {zone}",
+        detail_segments: [
+          { k: "definitely_missing_key", t: "in Office {zone}", p: { zone: "Office {zone}" } },
+        ],
+      },
+    ]);
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("in Office {zone}");
+    expect(text).not.toContain("Office Office");
+  });
+
   test("detail_key still wins over detail_segments", () => {
     const host = sceneEvalHost(
       [

@@ -5,6 +5,7 @@ import {
   exposedActionLabel,
   humanizeId,
   localize,
+  localizeSeg,
   periodLabel,
   stateValueLabel,
   weatherConditionLabel,
@@ -500,7 +501,7 @@ function predicateDetail(
 // through renderDetailWithLinks (which link-injects the legacy string path).
 function renderSegments(hass: HassLike | undefined, segs: TraceSeg[]): TemplateResult {
   const parts = segs.map((s) => {
-    if (s.k) return localize(hass, `trace_detail.${s.k}`, s.t ?? "", s.p ?? {});
+    if (s.k) return localizeSeg(hass, `trace_detail.${s.k}`, s.t ?? "", s.p ?? {});
     if (s.e) return entityLink(hass, s.e, s.t ?? s.e);
     return s.t ?? "";
   });

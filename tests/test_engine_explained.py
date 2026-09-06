@@ -399,3 +399,47 @@ def test_entity_ids_lookup_is_skipped_when_not_describing() -> None:
         entity_ids_for=lookup,
     )
     assert explanation.scenes[0].predicates[0].entity_ids == ()
+
+
+def test_describe_returning_segments_sets_detail_and_segments() -> None:
+    """A `describe()` returning a `Detail` (segment list) fills `detail` from the
+    rendered English and `detail_segments` from the wire form."""
+    from custom_components.ambience.conditions._common import ent, text
+
+    class SegCondition:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> Any:
+            return [ent("light.x", "Lamp"), text(": on ✓")]
+
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(
+        scenes, {"mode": "day"}, {"mode": SegCondition()}, describe=True
+    )
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.detail == "Lamp: on ✓"
+    assert pred.detail_segments == [
+        {"e": "light.x", "t": "Lamp"},
+        {"t": ": on ✓"},
+    ]
+
+
+def test_describe_returning_str_sets_detail_only() -> None:
+    """A `describe()` returning a plain `str` (time_of_day/weather/legacy) keeps
+    `detail` and leaves `detail_segments` None."""
+
+    class StrCondition:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> Any:
+            return "dusk"
+
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(
+        scenes, {"mode": "day"}, {"mode": StrCondition()}, describe=True
+    )
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.detail == "dusk"
+    assert pred.detail_segments is None

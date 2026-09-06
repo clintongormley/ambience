@@ -552,6 +552,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
                 "detail": "evening",
                 "detail_key": None,
                 "detail_placeholders": None,
+                "detail_segments": None,
                 "entity_ids": [],
             }
         ],

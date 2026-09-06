@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .conditions._common import detail_to_wire, render_detail
 from .protocols import Condition
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +44,11 @@ class PredicateResult:
     render for logs, diagnostics and the MCP, while the pair lets the panel
     localise the same sentence. None for a `describe()` detail, which is
     per-house prose with no fixed translation.
+
+    `detail_segments` is set only when `describe()` returned a `Detail` (a
+    segment list): the panel localises each segment (entity link / phrase key),
+    with `detail` its rendered English fallback. None for a `str`-returning
+    describe (time_of_day/weather/legacy) and for the `unconfigured_reason` path.
     """
 
     condition_key: str
@@ -51,6 +57,7 @@ class PredicateResult:
     entity_ids: tuple[str, ...] = ()
     detail_key: str | None = None
     detail_placeholders: dict[str, str] | None = None
+    detail_segments: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -190,7 +197,14 @@ def _describe_predicate(
     May raise (the caller guards)."""
     # Pass the predicate so the trace detail is scoped to the sensors/
     # persons THIS scene references, not the whole shared snapshot.
-    detail = condition.describe(snap, predicate) if describe else None
+    raw = condition.describe(snap, predicate) if describe else None
+    detail: str | None
+    detail_segments: list[dict] | None = None
+    if isinstance(raw, list):
+        detail = render_detail(raw)
+        detail_segments = detail_to_wire(raw)
+    else:
+        detail = raw  # str | None (time_of_day/weather/legacy)
     detail_key: str | None = None
     detail_placeholders: dict[str, str] | None = None
     if describe and not passed:
@@ -215,7 +229,9 @@ def _describe_predicate(
     else:
         trigger_deps = getattr(condition, "trigger_deps", None)
         entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
-    return PredicateResult(key, passed, detail, entity_ids, detail_key, detail_placeholders)
+    return PredicateResult(
+        key, passed, detail, entity_ids, detail_key, detail_placeholders, detail_segments
+    )
 
 
 def resolve(

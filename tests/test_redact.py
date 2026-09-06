@@ -75,6 +75,23 @@ def test_redact_predicate_drops_the_localisation_hints_even_when_detail_survives
     assert pred["detail_key"] == "lux_range_missing"
 
 
+def test_redact_predicate_drops_detail_segments() -> None:
+    """`detail_segments` is a panel-only localisation aid whose segments repeat
+    the very names a blanked detail hides, so the external redacted view drops it
+    like the other panel hints — keeping the frozen MCP payload shape."""
+    pred = {
+        "condition_key": "state",
+        "detail": "Lamp: on ✓",
+        "detail_segments": [{"e": "light.x", "t": "Lamp"}, {"t": ": on ✓"}],
+        "entity_ids": ["light.x"],
+    }
+    out = redact_predicate(pred)
+    assert out["detail"] == "Lamp: on ✓"
+    assert "detail_segments" not in out
+    # The input is never mutated.
+    assert pred["detail_segments"] == [{"e": "light.x", "t": "Lamp"}, {"t": ": on ✓"}]
+
+
 def test_redact_predicate_keeps_detail_for_non_presence_state() -> None:
     pred = {"condition_key": "state", "detail": "Hall light: on", "entity_ids": ["light.hall"]}
     out = redact_predicate(pred)

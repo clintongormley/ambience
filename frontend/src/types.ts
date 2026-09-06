@@ -401,6 +401,17 @@ export type TraceAction = {
   // apply time, so the engine skipped it. The trace renders it as skipped.
   unexposed?: boolean;
 };
+// One segment of a structured trace detail: text (`t`), an entity reference
+// (`e` + display name `t`), or a localizable phrase (`k` bundle key + `p`
+// placeholders + English render `t`). The panel resolves each to renderable
+// content; the redacted external trace never carries these.
+export type TraceSeg = {
+  t?: string;
+  e?: string;
+  k?: string;
+  p?: Record<string, string>;
+};
+
 export type TracePredicate = {
   condition_key: string;
   passed: boolean;
@@ -416,6 +427,10 @@ export type TracePredicate = {
   // any trace captured before these fields existed.
   detail_key?: string | null;
   detail_placeholders?: Record<string, string> | null;
+  // Structured, localizable detail: a list of segments the panel renders and
+  // links directly. Panel-only — stripped from the redacted external trace, so
+  // absent for MCP callers, old traces, and legacy str-only conditions.
+  detail_segments?: TraceSeg[] | null;
 };
 export type TraceSceneEval = {
   index: number;

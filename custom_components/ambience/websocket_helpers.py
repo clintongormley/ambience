@@ -156,7 +156,7 @@ def canonicalise(
     out = {k: v for k, v in config.items() if k not in _LEGACY_SCOPE_CONFIG_KEYS}
     scenes = [
         {k: v for k, v in r.items() if k not in _TRANSIENT_SCENE_FIELDS}
-        for r in config.get("scenes", [])
+        for r in config.get("scenes") or []
     ]
     # Normalise each condition predicate into its stored form. A condition may
     # expose an optional `normalize_predicate` to strip redundant editor wrappers
@@ -188,7 +188,7 @@ def annotate_scenes(
     `fresh_overlap=True` recomputes the global overlap set instead of reading the
     cache; pass it on the save path so the save response reflects the new config."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    scenes = config.get("scenes", [])
+    scenes = config.get("scenes") or []
     shadows = shadowed_by(scenes, conditions_registry)
     annos = scene_annotations(hass, config, fresh_overlap=fresh_overlap)
     return {
@@ -214,7 +214,7 @@ def coerce_scene_categories(store, config: dict) -> bool:
         if GENERAL_CATEGORY_ID in known
         else next(iter(known), GENERAL_CATEGORY_ID)
     )
-    if not reassign_orphan_scenes(config.get("scenes", []), known, target):
+    if not reassign_orphan_scenes(config.get("scenes") or [], known, target):
         return False
     _LOGGER.warning(
         "ambience: scope save had uncategorised/unknown-category scene(s); set to General"

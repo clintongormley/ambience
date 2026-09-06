@@ -31,6 +31,7 @@ from custom_components.ambience.service import (
     async_resolve_with_snapshots,
     async_run_scene_actions,
     attach_tenure,
+    category_config,
     category_ids,
     clear_last_applied,
     get_last_matched,
@@ -49,6 +50,13 @@ def test_category_ids_returns_scene_order_deduplicated():
         "a",
     ]
     assert category_ids({"scenes": []}) == []
+
+
+def test_scope_config_consumers_tolerate_scenes_none():
+    """A hand-edited/seeded config with an explicit `"scenes": None` (the default
+    only applies when the key is absent) must not crash iterating consumers."""
+    assert category_ids({"scenes": None}) == []
+    assert category_config({"scenes": None}, "a") == {"scenes": []}
 
 
 class FixedCondition:

@@ -39,6 +39,16 @@ def test_collects_from_areas_floors_and_house() -> None:
     ]
 
 
+def test_tolerates_scenes_none() -> None:
+    """An explicit `"scenes": None` (hand-edited/seeded config) must not crash the
+    walk; the collector treats it like an empty scope."""
+    store = _StoreStub(
+        areas={"kitchen": {"scenes": None}},
+        house={"scenes": [{"when": {"k": "house-pred"}}]},
+    )
+    assert list(collect_scope_predicates(store, "k")) == ["house-pred"]
+
+
 def test_skips_scenes_without_the_key() -> None:
     store = _StoreStub(
         areas={

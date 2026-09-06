@@ -11,7 +11,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Changed
 
 - A people condition saved without an explicit "who"/"quant" now shows as
-    "Anyone" in the panel from its next save onwards; it always evaluated that
+    "Anybody" in the panel from its next save onwards; it always evaluated that
     way.
 
 ### Fixed
@@ -66,6 +66,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - Ambience no longer rescans its configuration for every entity registry change
     in Home Assistant.
+- Template and script conditions are re-evaluated only for the predicates a
+    change touches (plus any whose dependencies cannot be fully known), instead
+    of every predicate in the house.
 
 ## [1.2.0] - 2026-09-04
 

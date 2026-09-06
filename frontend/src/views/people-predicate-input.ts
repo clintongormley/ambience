@@ -137,6 +137,8 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     // An "X of:" mode (who key present) defaults a missing quant to "any";
     // a base mode (no who key) defaults a missing quant to "everyone", so a
     // fresh/`{}` value lands on Everybody rather than Anybody.
+    // Display-only, and only for a legacy predicate not yet re-saved (the save
+    // path materialises `quant`): the engine reads a missing `quant` as "any".
     if (this._hasWhoKey()) {
       switch (this._cur().quant ?? "any") {
         case "any":

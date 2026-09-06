@@ -1,6 +1,6 @@
 /**
  * Types mirroring the backend's Storage shape and WS responses.
- * Keep in sync with custom_components/ambience/store.py and websocket.py.
+ * Keep in sync with custom_components/ambience/store.py and websocket/.
  */
 
 // One dangling-config-reference problem on a scene (transient, response-only).

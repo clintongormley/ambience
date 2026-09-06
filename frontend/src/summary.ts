@@ -251,6 +251,8 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
     // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.
     // A missing quant defaults to "everyone" (Everybody) to match the widget,
     // so a bare `{}` reads as "Everybody is Home".
+    // Display-only, and only for a legacy predicate not yet re-saved (the save
+    // path materialises `quant`): the engine reads a missing `quant` as "any".
     const quant = pred.quant ?? "everyone";
     subject =
       quant === "nobody"

@@ -5,7 +5,9 @@ as: _"the lounge is dark"_, or _"the office is brighter than 300 lx"_.
 
 This is the natural condition for daylight-aware lighting: instead of guessing
 from the time of day or the weather, it reads what your light sensors actually
-measure. It is used with `sensor` entities whose device class is `illuminance`.
+measure. The entity picker offers sensors with the `illuminance` device class;
+any numeric `sensor` also works if you configure it through an import or the MCP
+server.
 
 When you add a Lux condition to a scene, the editor shows (top to bottom):
 

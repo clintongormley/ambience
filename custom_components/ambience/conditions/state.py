@@ -14,18 +14,24 @@ from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
+    Detail,
     as_float_state,
     compare_numeric,
     dur_seconds,
+    ent,
     fmt_duration,
     for_comparator_symbol,
     for_elapsed_satisfied,
+    join_segs,
     kleene_all,
     kleene_any,
     kleene_not,
+    phrase,
+    render_detail,
     state_sources,
     tenure_held,
     tenure_within,
+    text,
     validate_entity_ids,
     validate_for,
     validate_for_mode,
@@ -118,7 +124,7 @@ class StateCondition:
     # kinds ("is"/"is_not") render as words instead.
     _OP_SYMBOLS = {">=": "≥", "<=": "≤"}
 
-    def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> Detail | None:
         # predicate=None is the whole-snapshot summary (snapshots_described); a
         # summary over the entire HA state is meaningless for `state`, so stay
         # None. A non-dict predicate is malformed — nothing to describe.
@@ -126,40 +132,52 @@ class StateCondition:
             return None
         return self._describe_expr(predicate, snapshot)
 
-    def _describe_expr(self, expr: Any, snap: StateSnapshot) -> str:
+    def _describe_expr(self, expr: Any, snap: StateSnapshot) -> Detail:
         # Mirror occupancy's flat style: atoms render inline; groups wrap their
         # items with the quantifier; `not` wraps its single child.
         if not isinstance(expr, dict):
-            return "?"
+            return [text("?")]
         kind = expr.get("kind")
         if kind in self._ATOM_KINDS:
             return self._describe_atom(expr, snap)
         if kind in ("and", "or"):
-            body = ", ".join(self._describe_expr(it, snap) for it in (expr.get("items") or []))
-            return f"{'all' if kind == 'and' else 'any'} of: {body}"
+            cells = [self._describe_expr(it, snap) for it in (expr.get("items") or [])]
+            return [phrase("all_of" if kind == "and" else "any_of"), text(" "), *join_segs(cells)]
         if kind == "not":
-            return f"not({self._describe_expr(expr.get('item'), snap)})"
-        return "?"
+            return [
+                phrase("negate"),
+                text("("),
+                *self._describe_expr(expr.get("item"), snap),
+                text(")"),
+            ]
+        return [text("?")]
 
-    def _describe_atom(self, atom: dict, snap: StateSnapshot) -> str:
+    def _describe_atom(self, atom: dict, snap: StateSnapshot) -> Detail:
         entity_id = atom.get("entity_id")
         attribute = atom.get("attribute")
         attrs = snap.attributes.get(entity_id) if isinstance(entity_id, str) else None
         # Friendly name (falls back to the id); in attribute-mode append the
-        # attribute so "Thermostat temperature" reads unambiguously.
+        # attribute so "Thermostat temperature" reads unambiguously. The name is
+        # a linkable `ent` seg; a trailing attribute stays plain `text` so the
+        # link wraps only the entity.
         name = (attrs or {}).get("friendly_name") or entity_id or "?"
-        label = f"{name} {attribute}" if attribute else name
+        if isinstance(entity_id, str):
+            label: Detail = [ent(entity_id, name)]
+        else:
+            label = [text(name)]
+        if attribute:
+            label.append(text(f" {attribute}"))
         seconds = dur_seconds(atom.get("for"))
         cur = snap.states.get(entity_id) if isinstance(entity_id, str) else None
         if cur is None:
-            current = "not found"
+            current: Detail = [phrase("not_found")]
             elapsed = ""
         else:
             state, last_changed, last_updated = cur
             if attribute:
-                current = str(attrs[attribute]) if attrs and attribute in attrs else "—"
+                current = [text(str(attrs[attribute]) if attrs and attribute in attrs else "—")]
             else:
-                current = state
+                current = [text(state)]
             # With a `for` gate, show how long the value has held so a
             # recently-changed atom's ✗ is self-explanatory. In tenure mode the
             # elapsed is how long the *gate* has held (from the engine tenure
@@ -176,19 +194,29 @@ class StateCondition:
                 elapsed = ""
         mark = "✓" if self._eval_atom(atom, snap) is True else "✗"
         comparison = self._describe_comparison(atom)
-        # Comparator follows for_mode: ≥ for at_least (default), < for less_than.
-        for_cmp = for_comparator_symbol(atom.get("for_mode"))
-        for_clause = f", for {for_cmp}{fmt_duration(seconds)}" if seconds > 0 else ""
-        return f"{label}: {current}{elapsed} {mark} ({comparison}{for_clause})"
+        for_clause: Detail = []
+        if seconds > 0:
+            # Comparator follows for_mode: ≥ for at_least (default), < for less_than.
+            for_cmp = for_comparator_symbol(atom.get("for_mode"))
+            for_clause = [text(", "), phrase("for_hold", rel=for_cmp, dur=fmt_duration(seconds))]
+        return [
+            *label,
+            text(": "),
+            *current,
+            text(f"{elapsed} {mark} ("),
+            *comparison,
+            *for_clause,
+            text(")"),
+        ]
 
-    def _describe_comparison(self, atom: dict) -> str:
+    def _describe_comparison(self, atom: dict) -> Detail:
         kind = atom.get("kind")
         states = atom.get("states") or []
         if kind in self._NUMERIC_KINDS:
             rhs = states[0] if states else "?"
-            return f"{self._OP_SYMBOLS.get(kind, kind)} {rhs}"
+            return [text(f"{self._OP_SYMBOLS.get(kind, kind)} {rhs}")]
         joined = ", ".join(str(s) for s in states)
-        return f"is not {joined}" if kind == "is_not" else f"is {joined}"
+        return [phrase("is_not" if kind == "is_not" else "is", values=joined)]
 
     # --- evaluation -----------------------------------------------------
 
@@ -497,7 +525,7 @@ class StateCondition:
                         DurationGate(
                             key=self._atom_gate_key(expr),
                             seconds=seconds,
-                            label=f"{entity_id} {self._describe_comparison(expr)}",
+                            label=f"{entity_id} {render_detail(self._describe_comparison(expr))}",
                             entity_id=entity_id,
                         )
                     )

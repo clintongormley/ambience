@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import render_detail
 from custom_components.ambience.conditions.state import StateCondition, StateSnapshot
 from custom_components.ambience.errors import AmbienceError, render_en
 from custom_components.ambience.triggers import DurationGate
@@ -887,10 +888,12 @@ def test_describe_atom_shows_tenure_elapsed() -> None:
     key = m._atom_gate_key(atom)
     # Entity flipped 1m ago, but tenure says the gate has held 12m.
     states = {"media.x": ("B", now - timedelta(minutes=1), now - timedelta(minutes=1))}
-    line = m.describe(_snap(states, now, tenure={key: now - timedelta(minutes=12)}), atom)
+    line = render_detail(
+        m.describe(_snap(states, now, tenure={key: now - timedelta(minutes=12)}), atom)
+    )
     assert "12m" in line and "✓" in line
     # Absent tenure entry in tenure mode → no elapsed suffix, and a miss.
-    line2 = m.describe(_snap(states, now, tenure={}), atom)
+    line2 = render_detail(m.describe(_snap(states, now, tenure={}), atom))
     assert "✗" in line2
 
 
@@ -1032,11 +1035,19 @@ def test_describe_atom_is_pass_and_fail() -> None:
         attributes={"light.k": {"friendly_name": "Kitchen Light"}},
     )
     assert (
-        StateCondition().describe(snap, {"kind": "is", "entity_id": "light.k", "states": ["on"]})
+        render_detail(
+            StateCondition().describe(
+                snap, {"kind": "is", "entity_id": "light.k", "states": ["on"]}
+            )
+        )
         == "Kitchen Light: on ✓ (is on)"
     )
     assert (
-        StateCondition().describe(snap, {"kind": "is", "entity_id": "light.k", "states": ["off"]})
+        render_detail(
+            StateCondition().describe(
+                snap, {"kind": "is", "entity_id": "light.k", "states": ["off"]}
+            )
+        )
         == "Kitchen Light: on ✗ (is off)"
     )
 
@@ -1047,7 +1058,11 @@ def test_describe_atom_numeric_uses_symbol() -> None:
         attributes={"sensor.t": {"friendly_name": "Hallway Temp"}},
     )
     assert (
-        StateCondition().describe(snap, {"kind": ">=", "entity_id": "sensor.t", "states": ["20"]})
+        render_detail(
+            StateCondition().describe(
+                snap, {"kind": ">=", "entity_id": "sensor.t", "states": ["20"]}
+            )
+        )
         == "Hallway Temp: 19 ✗ (≥ 20)"
     )
 
@@ -1055,13 +1070,15 @@ def test_describe_atom_numeric_uses_symbol() -> None:
 def test_describe_atom_is_not() -> None:
     snap = _snap({"lock.f": ("locked", _DT)}, attributes={"lock.f": {"friendly_name": "Front"}})
     pred = {"kind": "is_not", "entity_id": "lock.f", "states": ["unlocked"]}
-    assert StateCondition().describe(snap, pred) == "Front: locked ✓ (is not unlocked)"
+    assert (
+        render_detail(StateCondition().describe(snap, pred)) == "Front: locked ✓ (is not unlocked)"
+    )
 
 
 def test_describe_atom_is_lists_multiple_states() -> None:
     snap = _snap({"person.a": ("home", _DT)}, attributes={"person.a": {"friendly_name": "Alice"}})
     pred = {"kind": "is", "entity_id": "person.a", "states": ["home", "work"]}
-    assert StateCondition().describe(snap, pred) == "Alice: home ✓ (is home, work)"
+    assert render_detail(StateCondition().describe(snap, pred)) == "Alice: home ✓ (is home, work)"
 
 
 def test_describe_atom_attribute_mode_labels_and_value() -> None:
@@ -1070,7 +1087,10 @@ def test_describe_atom_attribute_mode_labels_and_value() -> None:
         attributes={"climate.x": {"friendly_name": "Thermostat", "temperature": 19}},
     )
     pred = {"kind": ">=", "entity_id": "climate.x", "attribute": "temperature", "states": ["20"]}
-    assert StateCondition().describe(snap, pred) == "Thermostat temperature: 19 ✗ (≥ 20)"
+    assert (
+        render_detail(StateCondition().describe(snap, pred))
+        == "Thermostat temperature: 19 ✗ (≥ 20)"
+    )
 
 
 def test_describe_atom_missing_attribute_shows_dash() -> None:
@@ -1079,7 +1099,9 @@ def test_describe_atom_missing_attribute_shows_dash() -> None:
         attributes={"climate.x": {"friendly_name": "Thermostat"}},
     )
     pred = {"kind": ">=", "entity_id": "climate.x", "attribute": "temperature", "states": ["20"]}
-    assert StateCondition().describe(snap, pred) == "Thermostat temperature: — ✗ (≥ 20)"
+    assert (
+        render_detail(StateCondition().describe(snap, pred)) == "Thermostat temperature: — ✗ (≥ 20)"
+    )
 
 
 def test_describe_atom_for_shows_elapsed_and_threshold() -> None:
@@ -1091,7 +1113,10 @@ def test_describe_atom_for_shows_elapsed_and_threshold() -> None:
         attributes={"binary_sensor.door": {"friendly_name": "Front Door"}},
     )
     pred = {"kind": "is", "entity_id": "binary_sensor.door", "states": ["on"], "for": {"m": 5}}
-    assert StateCondition().describe(snap, pred) == "Front Door: on 2m ✗ (is on, for ≥5m)"
+    assert (
+        render_detail(StateCondition().describe(snap, pred))
+        == "Front Door: on 2m ✗ (is on, for ≥5m)"
+    )
 
 
 def test_describe_atom_unavailable() -> None:
@@ -1100,12 +1125,15 @@ def test_describe_atom_unavailable() -> None:
         attributes={"light.k": {"friendly_name": "Kitchen Light"}},
     )
     pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
-    assert StateCondition().describe(snap, pred) == "Kitchen Light: unavailable ✗ (is on)"
+    assert (
+        render_detail(StateCondition().describe(snap, pred))
+        == "Kitchen Light: unavailable ✗ (is on)"
+    )
 
 
 def test_describe_atom_missing_entity_not_found() -> None:
     pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
-    assert StateCondition().describe(_snap(), pred) == "light.k: not found ✗ (is on)"
+    assert render_detail(StateCondition().describe(_snap(), pred)) == "light.k: not found ✗ (is on)"
 
 
 def test_describe_and_group_lists_each() -> None:
@@ -1124,7 +1152,7 @@ def test_describe_and_group_lists_each() -> None:
         ],
     }
     assert (
-        StateCondition().describe(snap, pred)
+        render_detail(StateCondition().describe(snap, pred))
         == "all of: Kitchen Light: on ✓ (is on), Hallway Temp: 19 ✗ (≥ 20)"
     )
 
@@ -1145,7 +1173,7 @@ def test_describe_or_group_lists_each() -> None:
         ],
     }
     assert (
-        StateCondition().describe(snap, pred)
+        render_detail(StateCondition().describe(snap, pred))
         == "any of: Kitchen: off ✗ (is on), Lounge: on ✓ (is on)"
     )
 
@@ -1155,17 +1183,64 @@ def test_describe_not_wraps() -> None:
         {"light.k": ("on", _DT)}, attributes={"light.k": {"friendly_name": "Kitchen Light"}}
     )
     pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.k", "states": ["on"]}}
-    assert StateCondition().describe(snap, pred) == "not(Kitchen Light: on ✓ (is on))"
+    assert (
+        render_detail(StateCondition().describe(snap, pred)) == "not(Kitchen Light: on ✓ (is on))"
+    )
 
 
 def test_describe_expr_non_dict_child_is_placeholder() -> None:
     # A malformed (non-dict) item inside a group renders as "?" rather than crashing.
-    assert StateCondition().describe(_snap(), {"kind": "and", "items": ["garbage"]}) == "all of: ?"
+    assert (
+        render_detail(StateCondition().describe(_snap(), {"kind": "and", "items": ["garbage"]}))
+        == "all of: ?"
+    )
 
 
 def test_describe_expr_unknown_kind_is_placeholder() -> None:
     # An unrecognised expression kind renders as "?".
-    assert StateCondition().describe(_snap(), {"kind": "frobnicate"}) == "?"
+    assert render_detail(StateCondition().describe(_snap(), {"kind": "frobnicate"})) == "?"
+
+
+def test_describe_atom_segments_carry_ent_and_comparison_phrase() -> None:
+    # Shape: an equality atom carries a linkable `ent` seg for its entity and an
+    # `is`/`is_not` phrase for the comparison.
+    snap = _snap({"light.k": ("on", _DT)}, attributes={"light.k": {"friendly_name": "Kitchen"}})
+    is_segs = StateCondition().describe(
+        snap, {"kind": "is", "entity_id": "light.k", "states": ["on"]}
+    )
+    ent_segs = [s for s in is_segs if s.e is not None]
+    assert [s.e for s in ent_segs] == ["light.k"]
+    assert ent_segs[0].t == "Kitchen"
+    assert any(s.k == "is" for s in is_segs)
+    not_segs = StateCondition().describe(
+        snap, {"kind": "is_not", "entity_id": "light.k", "states": ["off"]}
+    )
+    assert any(s.k == "is_not" for s in not_segs)
+
+
+def test_describe_group_and_not_segments_carry_phrases() -> None:
+    # Shape: an `and` group renders an `all_of` phrase; a `not` wraps with a
+    # `negate` phrase.
+    snap = _snap(
+        {"light.k": ("on", _DT), "light.l": ("on", _DT)},
+        attributes={"light.k": {"friendly_name": "K"}, "light.l": {"friendly_name": "L"}},
+    )
+    and_pred = {
+        "kind": "and",
+        "items": [
+            {"kind": "is", "entity_id": "light.k", "states": ["on"]},
+            {"kind": "is", "entity_id": "light.l", "states": ["on"]},
+        ],
+    }
+    assert any(s.k == "all_of" for s in StateCondition().describe(snap, and_pred))
+    not_pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.k", "states": ["on"]}}
+    assert any(s.k == "negate" for s in StateCondition().describe(snap, not_pred))
+
+
+def test_describe_missing_entity_has_not_found_phrase() -> None:
+    # A missing entity's current value is a `not_found` phrase, not plain text.
+    pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
+    assert any(s.k == "not_found" for s in StateCondition().describe(_snap(), pred))
 
 
 async def test_snapshot_narrows_to_referenced_entities(hass: HomeAssistant) -> None:
@@ -1306,9 +1381,15 @@ def test_describe_atom_for_mode_renders_comparator() -> None:
         "for": {"m": 5},
         "for_mode": "less_than",
     }
-    assert StateCondition().describe(snap, less) == "Front Door: on 2m ✓ (is on, for <5m)"
+    assert (
+        render_detail(StateCondition().describe(snap, less))
+        == "Front Door: on 2m ✓ (is on, for <5m)"
+    )
     at_least = {**less, "for_mode": "at_least"}
-    assert StateCondition().describe(snap, at_least) == "Front Door: on 2m ✗ (is on, for ≥5m)"
+    assert (
+        render_detail(StateCondition().describe(snap, at_least))
+        == "Front Door: on 2m ✗ (is on, for ≥5m)"
+    )
 
 
 # --- normalize_predicate: save-time flattening of redundant nesting -----------

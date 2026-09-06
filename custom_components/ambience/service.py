@@ -17,7 +17,7 @@ from typing import Any
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .conditions._common import UNAVAILABLE
+from .conditions._common import UNAVAILABLE, render_detail
 from .conditions._opaque import OpaquePrecomputedCondition
 from .const import (
     DATA_APPLY_LOCKS,
@@ -161,6 +161,18 @@ def _candidate_entity_ids_for(
     return lambda candidate_index, key: entity_ids_for(to_full[candidate_index], key)
 
 
+def _describe_summary(condition: Any, snap: Any) -> str | None:
+    """The plain-English summary a condition's `describe(snap)` yields for
+    `snapshots_described`. Migrated conditions return translatable `Detail`
+    segments; render them to English here so every consumer (the no-match log,
+    `redact_plan`, and the dry-run websocket serialisation) keeps the pre-branch
+    `str` shape. The per-predicate panel path keeps the segments."""
+    if snap is None:
+        return None
+    described = condition.describe(snap)
+    return render_detail(described) if isinstance(described, list) else described
+
+
 async def async_resolve_with_snapshots(
     hass: HomeAssistant,
     scope_kind: str,
@@ -202,7 +214,7 @@ async def async_resolve_with_snapshots(
 
     described = (
         {
-            name: conditions_registry[name].describe(snap) if snap is not None else None
+            name: _describe_summary(conditions_registry[name], snap)
             for name, snap in snapshots.items()
             if name in conditions_registry
         }

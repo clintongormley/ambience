@@ -163,6 +163,7 @@ async def async_resolve_with_snapshots(
     describe: bool = True,
     explain: bool = False,
     entity_ids_for: Callable[[int, str], tuple[str, ...]] | None = None,
+    switch_state: str | None = None,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{condition_name: snapshot}` dict.
 
@@ -171,6 +172,9 @@ async def async_resolve_with_snapshots(
     actions, apply, snapshots_described, switch_state, explanation} (`apply` is
     the winner's per-scene re-apply mode, "once"/"always"/None; present only on a
     match).
+
+    `switch_state` lets a caller that already read it pass it through, so the
+    trace and the plan agree.
 
     `explanation` is an `Explanation` (scene list relative to the resolved
     category) when `explain=True`, else None.
@@ -228,7 +232,9 @@ async def async_resolve_with_snapshots(
     if match is not None and to_full is not None:
         match = (to_full[match[0]], match[1])
 
-    switch_state = _switch_state(hass, scope_kind, scope_id)
+    switch_state = (
+        switch_state if switch_state is not None else _switch_state(hass, scope_kind, scope_id)
+    )
     if match is None:
         return {
             "matched_scene_index": None,
@@ -447,9 +453,9 @@ async def async_resolve_and_apply_unit(
     cached_switch_state: str | None = None
 
     def switch_state() -> str:
-        """The scope's switch state, read at most once and only where it is
-        actually consumed — a registry lookup that a disabled scope, and an
-        untraced manual apply, both discard."""
+        """The scope's switch state, read at most once — the memoised value is
+        also handed to `async_resolve_with_snapshots` below so the plan and the
+        trace report the same read rather than the registry being hit twice."""
         nonlocal cached_switch_state
         if cached_switch_state is None:
             cached_switch_state = _switch_state(hass, scope_kind, scope_id)
@@ -485,6 +491,7 @@ async def async_resolve_and_apply_unit(
             describe=manual,
             explain=active,
             entity_ids_for=entity_ids_for,
+            switch_state=switch_state(),
         )
         index = plan["matched_scene_index"]
         explanation = plan.get("explanation")

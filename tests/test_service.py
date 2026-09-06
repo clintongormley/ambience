@@ -1870,3 +1870,41 @@ async def test_snapshot_conditions_unhinted_condition_is_a_full_refresh(
     hinted = _HintRecorder()
     await snapshot_conditions(hass, {"template": hinted}, {}, result_keys={"other": frozenset()})
     assert hinted.calls == [None]
+
+
+async def test_engine_apply_reads_the_switch_state_once(hass: HomeAssistant) -> None:
+    """The trace and the plan must report the same switch state, and the
+    registry fallback is not free — one read per apply."""
+    import custom_components.ambience.service as svc
+
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "r",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    async_mock_service(hass, "light", "turn_on")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")])),
+    }
+    with patch.object(svc, "_switch_state", wraps=svc._switch_state) as read:
+        await svc.async_resolve_and_apply_unit(
+            hass,
+            "area",
+            "a",
+            "lighting",
+            {"tod": "evening"},
+            active=True,
+        )
+    assert read.call_count == 1

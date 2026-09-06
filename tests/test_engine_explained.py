@@ -443,3 +443,31 @@ def test_describe_returning_str_sets_detail_only() -> None:
     pred = explanation.scenes[0].predicates[0]
     assert pred.detail == "dusk"
     assert pred.detail_segments is None
+
+
+def test_unconfigured_reason_clears_segments_from_a_failed_detail_describe() -> None:
+    """When a predicate FAILS and `unconfigured_reason` fires, the reason is the
+    authoritative detail: it sets `detail_key`/`detail_placeholders` and must
+    clear any `detail_segments` a `Detail`-returning `describe()` produced, so the
+    panel gets one localisation signal, not three conflicting ones."""
+    from custom_components.ambience.conditions._common import Reason, ent, text
+
+    class ReasonSegCondition:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return False
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> Any:
+            return [ent("light.x", "Lamp"), text(": off ✗")]
+
+        def unconfigured_reason(self, predicate: Any, snapshot: Any) -> Any:
+            return Reason("weather_entity_unconfigured")
+
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(
+        scenes, {"mode": "night"}, {"mode": ReasonSegCondition()}, describe=True
+    )
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.passed is False
+    assert pred.detail == "weather entity not configured"
+    assert pred.detail_key == "weather_entity_unconfigured"
+    assert pred.detail_segments is None

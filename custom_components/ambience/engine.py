@@ -214,6 +214,9 @@ def _describe_predicate(
             detail = reason.render()
             detail_key = reason.key
             detail_placeholders = dict(reason.placeholders)
+            # The reason is authoritative: drop any segments a describe() emitted
+            # so the panel gets one localisation signal, not three conflicting.
+            detail_segments = None
     # The entity_ids the trace UI links to. Only a predicate that renders a
     # detail string can have its names linked, so skip the lookup when there's
     # nothing to link (`detail is not None` already implies tracing). A caller

@@ -1,5 +1,6 @@
 """In-memory undo/redo history (ChangeHistory)."""
 
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from custom_components.ambience.const import HISTORY_LIMIT, SIGNAL_HISTORY_CHANGED
@@ -127,7 +128,15 @@ def test_notify_changed_fires_signal_with_op_scope_and_origin(hass):
     h = ChangeHistory(hass)
     h.record("area", "a", _cfg(), _cfg("A"), ADD)
     received: list = []
-    unsub = async_dispatcher_connect(hass, SIGNAL_HISTORY_CHANGED, lambda p: received.append(p))
+
+    # @callback so async_dispatcher_send runs the listener synchronously inline —
+    # a bare lambda is dispatched as an executor job and `received` may not be
+    # populated before the assert below (see the dispatcher-test-callback-flake lesson).
+    @callback
+    def _record(payload: object) -> None:
+        received.append(payload)
+
+    unsub = async_dispatcher_connect(hass, SIGNAL_HISTORY_CHANGED, _record)
     origin = object()  # stands in for the originating websocket connection
     h.notify_changed("record", "area", "a", origin)
     unsub()

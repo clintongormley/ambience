@@ -46,6 +46,19 @@ def test_wrap_quantified_segs_matches_string_helper() -> None:
     assert render_detail(wrap_quantified_segs([[text("A ✓")]], "any", False)) == "A ✓"
 
 
+def _static_phrase_keys(arg: ast.expr) -> set[str]:
+    """Every literal `trace_detail` key a `phrase()` first-argument expression can
+    statically resolve to: a bare string constant, or either branch of a ternary
+    (`phrase("where_home" if ... else "where_not_home")`). An f-string base
+    (`phrase(f"quant_{...}")`) resolves to no static key here — its family is
+    pinned separately below."""
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+        return {arg.value}
+    if isinstance(arg, ast.IfExp):
+        return _static_phrase_keys(arg.body) | _static_phrase_keys(arg.orelse)
+    return set()
+
+
 def test_every_phrase_key_is_defined() -> None:
     keys: set[str] = set()
     files = [_ROOT / "custom_components" / "ambience" / "conditions" / "_common.py"]
@@ -57,8 +70,15 @@ def test_every_phrase_key_is_defined() -> None:
                 and isinstance(node.func, ast.Name)
                 and node.func.id == "phrase"
                 and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)
             ):
-                keys.add(node.args[0].value)
+                keys |= _static_phrase_keys(node.args[0])
     assert keys <= set(DETAIL_EN), f"phrase keys missing from DETAIL_EN: {keys - set(DETAIL_EN)}"
+    # The f-string family `phrase(f"quant_{_quant_word(...)}")` can't be resolved
+    # from the AST; pin every word it can emit (see PeopleCondition._quant_word).
+    quant_family = {"quant_anyone", "quant_everyone", "quant_nobody"}
+    assert quant_family <= set(DETAIL_EN), (
+        f"quant_* phrase keys missing from DETAIL_EN: {quant_family - set(DETAIL_EN)}"
+    )
+    # The ternary branches must actually have been collected — a guard against a
+    # future refactor silently dropping the IfExp resolution above.
+    assert {"where_home", "where_not_home", "where_in", "where_not_in"} <= keys

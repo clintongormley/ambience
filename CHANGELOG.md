@@ -22,6 +22,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - The trace's explanation of why a condition cannot currently match (a missing
     period, lux range or weather group, an unconfigured workday sensor or
     weather entity, a sun anchor that does not occur today) is now translated.
+- A translated time-of-day reason in a trace is no longer sentence-cased as if
+    it were a period name, so a period name it quotes keeps its capitals.
 - Scene editor validation messages are now translated. Condition validators also
     reject entity ids that cannot name a real entity, such as a bare `sensor.`
     prefix or an id containing a space.

@@ -756,6 +756,26 @@ describe("trace-detail", () => {
     expect(host.querySelector(".pred")?.textContent).toContain("(foo) no informa un número");
   });
 
+  test("a keyed time_of_day reason is not sentence-cased as a period id", () => {
+    // A keyed reason is prose, not a period id: routing it through the period
+    // label lookup would humanise it (lower-casing the period name it quotes).
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "time_of_day",
+          passed: false,
+          detail: "time-of-day period Late Evening no longer exists",
+          detail_key: "period_missing",
+          detail_placeholders: { period: "Late Evening" },
+        },
+      ],
+      { language: "es" },
+    );
+    expect(host.querySelector(".pred")?.textContent).toContain(
+      "el periodo del día Late Evening ya no existe",
+    );
+  });
+
   test("a predicate with no entity_ids renders the detail as plain text", () => {
     const host = sceneEvalHost([
       { condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" },

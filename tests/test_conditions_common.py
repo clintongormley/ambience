@@ -8,6 +8,9 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.ambience.conditions._common import (
+    RULE_NOT_FALSE,
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
     as_float,
     dur_seconds,
@@ -17,6 +20,7 @@ from custom_components.ambience.conditions._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    materialise_defaults,
     merge_intervals,
     tenure_held,
     tenure_within,
@@ -241,3 +245,55 @@ def test_validate_entity_ids_rejects_wrong_domain() -> None:
         validate_entity_ids(["person.ann"], "sensor", key="lux_sensors_not_list")
     assert exc.value.translation_key == "entity_id_wrong_domain"
     assert exc.value.translation_placeholders == {"entity_id": "person.ann", "domain": "sensor"}
+
+
+# --- materialise_defaults -----------------------------------------------------
+
+_DEFAULTS_TABLE = {
+    "quant": (RULE_OR, "any"),
+    "negate": (RULE_TRUTHY, False),
+    "occupied": (RULE_NOT_FALSE, True),
+}
+
+
+def test_materialise_defaults_applies_each_rule() -> None:
+    assert materialise_defaults({}, _DEFAULTS_TABLE) == {
+        "quant": "any",
+        "negate": False,
+        "occupied": True,
+    }
+    # Explicit nulls take the same defaults as absent keys...
+    assert materialise_defaults(
+        {"quant": None, "negate": None, "occupied": None}, _DEFAULTS_TABLE
+    ) == {"quant": "any", "negate": False, "occupied": True}
+    # ...except an explicit False for a NOT_FALSE key, which is a real value.
+    assert materialise_defaults({"occupied": False}, _DEFAULTS_TABLE)["occupied"] is False
+
+
+def test_materialise_defaults_keeps_stated_values_and_key_order() -> None:
+    pred = {"sensors": ["binary_sensor.a"], "negate": True, "quant": "all"}
+    out = materialise_defaults(pred, _DEFAULTS_TABLE)
+    assert out == {**pred, "occupied": True}
+    # Stated keys keep their position; filled ones follow in table order.
+    assert list(out) == ["sensors", "negate", "quant", "occupied"]
+
+
+def test_materialise_defaults_passes_non_dicts_through() -> None:
+    assert materialise_defaults(None, _DEFAULTS_TABLE) is None
+    assert materialise_defaults("nonsense", _DEFAULTS_TABLE) == "nonsense"
+
+
+def test_materialise_defaults_returns_the_same_object_when_nothing_changes() -> None:
+    """The common case after save: the stored predicate already states every
+    default, so the fill must not allocate a copy per read."""
+    pred = {"sensors": ["binary_sensor.a"], "quant": "any", "negate": False, "occupied": True}
+    assert materialise_defaults(pred, _DEFAULTS_TABLE) is pred
+
+
+def test_materialise_defaults_copies_when_a_value_is_not_the_canonical_type() -> None:
+    """A hand-edited `1` for a bool key is not `True`; the fast path must not
+    wave it through into the stored form."""
+    pred = {"quant": "any", "negate": 1, "occupied": True}
+    out = materialise_defaults(pred, _DEFAULTS_TABLE)
+    assert out is not pred
+    assert out["negate"] is True

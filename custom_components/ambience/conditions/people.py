@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -13,12 +14,17 @@ from homeassistant.util import dt as dt_util
 from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
+    NormalisesPredicate,
+    PredicateDefaults,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
     for_contains,
     for_elapsed_satisfied,
+    materialise_defaults,
     tenure_held,
     tenure_within,
     validate_entity_ids,
@@ -30,26 +36,20 @@ _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
 
 
-def _norm(predicate: Any) -> Any:
-    """A predicate with its documented defaults materialised.
+# `who` is deliberately absent: a present-but-empty list means "specific mode,
+# nobody picked" and ``validate_predicate`` rejects it, so the all-persons
+# wildcard must keep the key off.
+_PREDICATE_DEFAULTS: PredicateDefaults = {
+    "quant": (RULE_OR, "any"),
+    "where": (RULE_OR, _HOME),
+    "negate": (RULE_TRUTHY, False),
+    "for_mode": (RULE_OR, "at_least"),
+}
 
-    ``normalize_predicate`` writes this form at save, but predicates stored
-    earlier omit the keys, so every read path funnels through here and both
-    forms read identically — ``_gate_key`` included, whose string keys the
-    engine's tenure clocks. Non-dict predicates (None, malformed) pass through
-    untouched. Pure and idempotent. `who` is deliberately left alone: a
-    present-but-empty list means "specific mode, nobody picked" and
-    ``validate_predicate`` rejects it, so the all-persons wildcard must keep the
-    key off."""
-    if not isinstance(predicate, dict):
-        return predicate
-    return {
-        **predicate,
-        "quant": predicate.get("quant") or "any",
-        "where": predicate.get("where") or _HOME,
-        "negate": bool(predicate.get("negate")),
-        "for_mode": predicate.get("for_mode") or "at_least",
-    }
+# Every read path funnels through here — ``_gate_key`` included, whose string
+# keys the engine's tenure clocks — so a predicate stored before the defaults
+# were materialised at save reads identically to one stored after.
+_norm = partial(materialise_defaults, defaults=_PREDICATE_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class PeopleSnapshot:
     tenure: Mapping[str, datetime] | None = None
 
 
-class PeopleCondition:
+class PeopleCondition(NormalisesPredicate):
     """Match on who is (not) at home / in a named zone.
 
     Predicate (scoped quantifier):
@@ -106,6 +106,7 @@ class PeopleCondition:
     input = "people_predicate"
     # Between state (950) and day (900): a moderately specific world-fact.
     priority = 925
+    _DEFAULTS = _PREDICATE_DEFAULTS
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
@@ -489,8 +490,6 @@ class PeopleCondition:
             raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         where = predicate.get("where")
         if where is not None and where != _HOME:
-            if not isinstance(where, str) or not where.startswith("zone."):
-                raise AmbienceError("people_where_invalid", value=where)
             validate_entity_ids([where], "zone", key="people_where_invalid")
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
@@ -558,13 +557,3 @@ class PeopleCondition:
         if a is None or b is None:
             return True
         return bool(a & b)
-
-    # --- normalisation (save-time) --------------------------------------
-
-    def normalize_predicate(self, predicate: Any) -> Any:
-        """Materialise the predicate's documented defaults for storage, so a
-        stored predicate says what it means instead of leaning on a reader's
-        `or`. Semantically a no-op: every read path applies the same defaults to
-        a predicate that omits them. Called once at save (``canonicalise``).
-        Pure: returns a new dict, never mutates the input."""
-        return _norm(predicate)

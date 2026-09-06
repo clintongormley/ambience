@@ -202,9 +202,10 @@ class TimeOfDayCondition:
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
-            if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
+            # Field by field, not `_valid_clock`: each carries its own key.
+            if not _valid_hour(hh):
                 raise AmbienceError("period_invalid_hh", value=hh)
-            if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
+            if not _valid_minute(mm):
                 raise AmbienceError("period_invalid_mm", value=mm)
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
@@ -406,16 +407,19 @@ class TimeOfDayCondition:
                 clock_times.add((clamp["hh"], clamp["mm"]))
 
 
+def _valid_hour(hh: Any) -> bool:
+    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
+    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
+
+
+def _valid_minute(mm: Any) -> bool:
+    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
+    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
+
+
 def _valid_clock(hh: Any, mm: Any) -> bool:
-    """True if hh/mm are in-range clock ints (rejecting bool, an int subclass)."""
-    return (
-        isinstance(hh, int)
-        and not isinstance(hh, bool)
-        and 0 <= hh <= 23
-        and isinstance(mm, int)
-        and not isinstance(mm, bool)
-        and 0 <= mm <= 59
-    )
+    """True if hh/mm together are an in-range clock time."""
+    return _valid_hour(hh) and _valid_minute(mm)
 
 
 def _strip_clamp(ep: Any) -> Any:

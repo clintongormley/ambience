@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.core import valid_entity_id
 
@@ -204,6 +204,74 @@ def validate_entity_ids(values: Any, domain: str | None = None, *, key: str) -> 
             raise AmbienceError("entity_id_invalid", entity_id=value)
         if domain is not None and value.split(".", 1)[0] != domain:
             raise AmbienceError("entity_id_wrong_domain", entity_id=value, domain=domain)
+
+
+# --- predicate defaults -------------------------------------------------------
+#
+# Conditions whose predicates have documented defaults declare them as a table
+# of `key -> (rule, default)` and let `materialise_defaults` apply it, so the
+# save path and every read path fill them by the same rule. The three rules are
+# named rather than inferred from the default's type so the table is plain data
+# the mcp-server's diff.py mirrors literally.
+RULE_OR = "or"  # falsy (including absent) -> default
+RULE_TRUTHY = "truthy"  # bool(value); absent -> False
+RULE_NOT_FALSE = "not_false"  # only an explicit False means False
+
+PredicateDefaults = Mapping[str, tuple[str, Any]]
+
+_MISSING = object()
+
+
+def _defaulted(predicate: Mapping[str, Any], key: str, rule: str, default: Any) -> Any:
+    """One key's materialised value, by the named rule."""
+    if rule == RULE_TRUTHY:
+        return bool(predicate.get(key))
+    if rule == RULE_NOT_FALSE:
+        return predicate.get(key, default) is not False
+    return predicate.get(key) or default
+
+
+def materialise_defaults(predicate: Any, defaults: PredicateDefaults) -> Any:
+    """A predicate with its ``defaults`` table materialised.
+
+    Non-dict predicates (None — the wildcard — and hand-edited junk) pass
+    through untouched. Pure and idempotent: the input is never mutated, and a
+    predicate that already states every default is returned AS IS, so the common
+    post-save case allocates nothing. Key order matches ``{**predicate,
+    **filled}``: stated keys keep their position, newly filled ones follow in
+    table order."""
+    if not isinstance(predicate, dict):
+        return predicate
+    filled: dict[str, Any] | None = None
+    for key, (rule, default) in defaults.items():
+        value = _defaulted(predicate, key, rule, default)
+        # Identity, not equality: every rule returns either the stored object
+        # itself or a bool/str singleton, so `is` is exact — it rejects a stored
+        # `1` standing in for `True`, which equality would wave through and
+        # leak into the stored form.
+        if predicate.get(key, _MISSING) is value:
+            continue
+        if filled is None:
+            filled = {}
+        filled[key] = value
+    if filled is None:
+        return predicate
+    return {**predicate, **filled}
+
+
+class NormalisesPredicate:
+    """Mixin giving a condition the save-time ``normalize_predicate`` hook,
+    driven by its ``_DEFAULTS`` table."""
+
+    _DEFAULTS: ClassVar[PredicateDefaults]
+
+    def normalize_predicate(self, predicate: Any) -> Any:
+        """Materialise the predicate's documented defaults for storage, so a
+        stored predicate says what it means instead of leaning on a reader's
+        `or`. Semantically a no-op: every read path applies the same defaults to
+        a predicate that omits them. Called once at save (``canonicalise``).
+        Pure: never mutates the input."""
+        return materialise_defaults(predicate, self._DEFAULTS)
 
 
 def predicate_has_any(predicate: Any, *keys: str) -> bool:

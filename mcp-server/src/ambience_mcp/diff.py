@@ -42,25 +42,39 @@ _ORDER_FIELDS = {"priority", "pinned"}
 # (which loads THIS module by path and calls `_normalise` directly), and
 # ::..._cover_every_normalising_condition, which fails if a fourth condition
 # grows a `_norm` the table doesn't know.
-_PREDICATE_DEFAULTS: dict[str, dict[str, Any]] = {
-    "occupancy": {"occupied": True, "quant": "any", "negate": False, "for_mode": "at_least"},
-    "lux": {"quant": "any", "negate": False},
-    "people": {"quant": "any", "where": "home", "negate": False, "for_mode": "at_least"},
+# Each entry is `key -> (rule, default)`, the same literal shape as the
+# backend's per-condition `_PREDICATE_DEFAULTS` tables, so the two can be read
+# side by side. The rule is named rather than inferred from the default's type.
+_RULE_OR = "or"  # falsy (including absent) -> default
+_RULE_TRUTHY = "truthy"  # bool(value); absent -> False
+_RULE_NOT_FALSE = "not_false"  # only an explicit False means False
+
+_PREDICATE_DEFAULTS: dict[str, dict[str, tuple[str, Any]]] = {
+    "occupancy": {
+        "occupied": (_RULE_NOT_FALSE, True),
+        "quant": (_RULE_OR, "any"),
+        "negate": (_RULE_TRUTHY, False),
+        "for_mode": (_RULE_OR, "at_least"),
+    },
+    "lux": {
+        "quant": (_RULE_OR, "any"),
+        "negate": (_RULE_TRUTHY, False),
+    },
+    "people": {
+        "quant": (_RULE_OR, "any"),
+        "where": (_RULE_OR, "home"),
+        "negate": (_RULE_TRUTHY, False),
+        "for_mode": (_RULE_OR, "at_least"),
+    },
 }
 
 
-def _fill(predicate: dict[str, Any], key: str, default: Any) -> Any:
-    """One key's default, by the same rule the backend's `_norm` applies.
-
-    The rule follows the default's own type, because the backend's three rules
-    do: a False default is `bool(...)` (any falsy value means off); a True
-    default means "on unless stated False", so a hand-edited null still reads as
-    on; a string default is an `or`, so an empty string falls back to it.
-    """
-    if default is True:
-        return predicate.get(key) is not False
-    if default is False:
+def _fill(predicate: dict[str, Any], key: str, rule: str, default: Any) -> Any:
+    """One key's default, by the named rule the backend applies for it."""
+    if rule == _RULE_TRUTHY:
         return bool(predicate.get(key))
+    if rule == _RULE_NOT_FALSE:
+        return predicate.get(key, default) is not False
     return predicate.get(key) or default
 
 
@@ -72,7 +86,7 @@ def _normalise(condition: str, predicate: Any) -> Any:
     defaults = _PREDICATE_DEFAULTS.get(condition)
     if defaults is None or not isinstance(predicate, dict):
         return predicate
-    return {**predicate, **{k: _fill(predicate, k, d) for k, d in defaults.items()}}
+    return {**predicate, **{k: _fill(predicate, k, r, d) for k, (r, d) in defaults.items()}}
 
 
 def _normalise_when(when: Any) -> Any:

@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -22,7 +23,12 @@ from homeassistant.util import dt as dt_util
 from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
+    RULE_NOT_FALSE,
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
+    NormalisesPredicate,
+    PredicateDefaults,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
@@ -31,6 +37,7 @@ from ._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    materialise_defaults,
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
@@ -45,25 +52,19 @@ from ._common import (
 _QUANTS = ("any", "all")
 
 
-def _norm(predicate: Any) -> Any:
-    """A predicate with its documented defaults materialised.
+# `sensors` is deliberately absent: present-but-empty and missing are the same
+# wildcard, so filling it would state nothing.
+_PREDICATE_DEFAULTS: PredicateDefaults = {
+    "occupied": (RULE_NOT_FALSE, True),
+    "quant": (RULE_OR, "any"),
+    "negate": (RULE_TRUTHY, False),
+    "for_mode": (RULE_OR, "at_least"),
+}
 
-    ``normalize_predicate`` writes this form at save, but predicates stored
-    earlier omit the keys, so every read path funnels through here and both
-    forms read identically — ``_gate_key`` included, whose string keys the
-    engine's tenure clocks. Non-dict predicates (None, malformed) pass through
-    untouched. Pure and idempotent. `sensors` is left alone: absent and empty
-    are the same wildcard, and `occupied` is not an `or` default — only an
-    explicit False means "vacant"."""
-    if not isinstance(predicate, dict):
-        return predicate
-    return {
-        **predicate,
-        "occupied": predicate.get("occupied", True) is not False,
-        "quant": predicate.get("quant") or "any",
-        "negate": bool(predicate.get("negate")),
-        "for_mode": predicate.get("for_mode") or "at_least",
-    }
+# Every read path funnels through here — ``_gate_key`` included, whose string
+# keys the engine's tenure clocks — so a predicate stored before the defaults
+# were materialised at save reads identically to one stored after.
+_norm = partial(materialise_defaults, defaults=_PREDICATE_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,7 @@ class OccupancySnapshot:
     tenure: Mapping[str, datetime] | None = None
 
 
-class OccupancyCondition:
+class OccupancyCondition(NormalisesPredicate):
     """Match whether the chosen presence/occupancy sensors are active.
 
     Mirrors PeopleCondition's shape (quantifier + `for` + a `contains` lattice),
@@ -103,6 +104,7 @@ class OccupancyCondition:
     # is more specific than ambient time/weather, but an explicit device/state
     # rule should still win.
     priority = 915
+    _DEFAULTS = _PREDICATE_DEFAULTS
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
@@ -378,13 +380,3 @@ class OccupancyCondition:
             return for_contains(o, i)
 
         return sensor_quant_contains(_norm(outer), _norm(inner), _axis)
-
-    # --- normalisation (save-time) --------------------------------------
-
-    def normalize_predicate(self, predicate: Any) -> Any:
-        """Materialise the predicate's documented defaults for storage, so a
-        stored predicate says what it means instead of leaning on a reader's
-        `or`. Semantically a no-op: every read path applies the same defaults to
-        a predicate that omits them. Called once at save (``canonicalise``).
-        Pure: returns a new dict, never mutates the input."""
-        return _norm(predicate)

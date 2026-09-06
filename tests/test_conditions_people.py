@@ -462,19 +462,21 @@ def test_validate_rejects_bad_quant() -> None:
     assert exc.value.translation_key == "quant_invalid"
 
 
-def test_validate_rejects_bad_where() -> None:
-    m = PeopleCondition()
-    for bad in ("office", 5, "away"):  # "away" is replaced by negate
-        with pytest.raises(AmbienceError) as exc:
-            m.validate_predicate({"where": bad})
-        assert exc.value.translation_key == "people_where_invalid"
-
-
-def test_validate_rejects_malformed_where_zone_id() -> None:
-    """`zone.` alone passes a prefix test but is not a valid entity id."""
+@pytest.mark.parametrize(
+    "bad,key",
+    [
+        ("office", "entity_id_invalid"),
+        (5, "entity_id_invalid"),
+        ("away", "entity_id_invalid"),  # "away" is replaced by negate
+        ("zone.", "entity_id_invalid"),  # domain prefix alone names no entity
+        ("zone.Bad Id", "entity_id_invalid"),
+        ("light.kitchen", "entity_id_wrong_domain"),
+    ],
+)
+def test_validate_rejects_bad_where(bad: object, key: str) -> None:
     with pytest.raises(AmbienceError) as exc:
-        PeopleCondition().validate_predicate({"where": "zone."})
-    assert exc.value.translation_key == "entity_id_invalid"
+        PeopleCondition().validate_predicate({"where": bad})
+    assert exc.value.translation_key == key
 
 
 def test_validate_rejects_non_bool_negate() -> None:

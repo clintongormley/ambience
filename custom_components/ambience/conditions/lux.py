@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -26,11 +27,16 @@ from ..errors import AmbienceError
 from ..lux_ranges import validate_int_bound
 from ..triggers import TriggerSpec
 from ._common import (
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
+    NormalisesPredicate,
+    PredicateDefaults,
     as_float,
     kleene_all,
     kleene_any,
     kleene_not,
+    materialise_defaults,
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
@@ -41,22 +47,16 @@ from ._common import (
 _QUANTS = ("any", "all")
 
 
-def _norm(predicate: Any) -> Any:
-    """A predicate with its documented defaults materialised.
+# The band keys are deliberately absent: ``_resolve_range`` branches on
+# ``"range" in predicate``, so inventing one would change the band.
+_PREDICATE_DEFAULTS: PredicateDefaults = {
+    "quant": (RULE_OR, "any"),
+    "negate": (RULE_TRUTHY, False),
+}
 
-    ``normalize_predicate`` writes this form at save, but predicates stored
-    earlier omit the keys, so every read path funnels through here and both
-    forms read identically. Non-dict predicates (None, malformed) pass through
-    untouched. Pure and idempotent. The band keys are deliberately untouched:
-    ``_resolve_range`` branches on ``"range" in predicate``, so inventing one
-    would change the band."""
-    if not isinstance(predicate, dict):
-        return predicate
-    return {
-        **predicate,
-        "quant": predicate.get("quant") or "any",
-        "negate": bool(predicate.get("negate")),
-    }
+# Every read path funnels through here so a predicate stored before the defaults
+# were materialised at save reads identically to one stored after.
+_norm = partial(materialise_defaults, defaults=_PREDICATE_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class LuxSnapshot:
     non_numeric: dict[str, str] = field(default_factory=dict)
 
 
-class LuxCondition:
+class LuxCondition(NormalisesPredicate):
     """Match whether the chosen illuminance sensors fall in a lux band."""
 
     name = "lux"
@@ -88,6 +88,7 @@ class LuxCondition:
     # (800) and far below state (950) so a lux rule never dominates the way a
     # numeric state condition would.
     priority = 775
+    _DEFAULTS = _PREDICATE_DEFAULTS
 
     def __init__(
         self,
@@ -299,16 +300,6 @@ class LuxCondition:
             return _band_within(i_lo, i_hi, o_lo, o_hi)
 
         return sensor_quant_contains(_norm(outer), _norm(inner), _axis)
-
-    # --- normalisation (save-time) --------------------------------------
-
-    def normalize_predicate(self, predicate: Any) -> Any:
-        """Materialise the predicate's documented defaults for storage, so a
-        stored predicate says what it means instead of leaning on a reader's
-        `or`. Semantically a no-op: every read path applies the same defaults to
-        a predicate that omits them. Called once at save (``canonicalise``).
-        Pure: returns a new dict, never mutates the input."""
-        return _norm(predicate)
 
 
 def as_float_state(state: str) -> float | None:

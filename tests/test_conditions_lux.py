@@ -605,6 +605,12 @@ def test_normalize_predicate_is_idempotent_and_pure() -> None:
     assert before == _LEGACY_LUX  # input untouched
 
 
+def test_normalize_predicate_returns_an_already_normalised_predicate_as_is() -> None:
+    """Stored predicates already carry the defaults, so the fill every read path
+    runs must not allocate a copy for them."""
+    assert _cond().normalize_predicate(_NORM_LUX) is _NORM_LUX
+
+
 def test_contains_agrees_across_legacy_and_normalised_forms() -> None:
     m = _cond()
     inner_legacy = {"sensors": ["sensor.a"], "range": "dark"}

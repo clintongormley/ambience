@@ -640,13 +640,20 @@ def test_mcp_diff_predicate_defaults_match_the_backends():
 
 
 def test_mcp_diff_predicate_defaults_cover_every_normalising_condition():
-    """Every backend condition module that defines a `_norm` — the convention for
-    "this condition materialises predicate defaults at save" — must have an entry
-    in diff.py's `_PREDICATE_DEFAULTS`. The test above only checks the three that
-    exist today; without this one, a FOURTH condition growing a `_norm` would
-    silently reintroduce the confirm-gate noise for its own predicates."""
+    """Every backend condition that materialises predicate defaults at save must
+    have an entry in diff.py's `_PREDICATE_DEFAULTS`. The test above only checks
+    the three that exist today; without this one, a FOURTH condition growing
+    defaults would silently reintroduce the confirm-gate noise for its own
+    predicates.
+
+    "Materialises defaults" is detected by the convention itself — subclassing
+    `NormalisesPredicate` with a `_DEFAULTS` table — with a module-level `_norm`
+    as a secondary signal, so a condition that declares defaults either way is
+    caught."""
     import importlib
     from pathlib import Path
+
+    from custom_components.ambience.conditions._common import NormalisesPredicate
 
     conditions_dir = Path(__file__).parents[1] / "custom_components" / "ambience" / "conditions"
     normalising = set()
@@ -654,16 +661,21 @@ def test_mcp_diff_predicate_defaults_cover_every_normalising_condition():
         if path.name.startswith("_"):
             continue  # shared helpers, not conditions
         module = importlib.import_module(f"custom_components.ambience.conditions.{path.stem}")
-        if not hasattr(module, "_norm"):
-            continue
-        condition = next(
-            obj
-            for obj in vars(module).values()
-            if isinstance(obj, type) and getattr(obj, "name", None) and hasattr(obj, "matches")
-        )
-        normalising.add(condition.name)
+        has_norm = hasattr(module, "_norm")
+        for obj in vars(module).values():
+            if not (
+                isinstance(obj, type)
+                and obj.__module__ == module.__name__
+                and getattr(obj, "name", None)
+                and hasattr(obj, "matches")
+            ):
+                continue
+            if issubclass(obj, NormalisesPredicate) or "_DEFAULTS" in vars(obj) or has_norm:
+                normalising.add(obj.name)
 
-    assert normalising, "found no condition module defining _norm — has the convention moved?"
+    assert normalising, (
+        "found no condition subclassing NormalisesPredicate — has the convention moved?"
+    )
     table = _load_mcp_diff()._PREDICATE_DEFAULTS
     assert normalising <= set(table), (
         "conditions materialising defaults but unknown to mcp-server diff.py: "

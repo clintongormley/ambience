@@ -1136,6 +1136,16 @@ def test_describe_atom_missing_entity_not_found() -> None:
     assert render_detail(StateCondition().describe(_snap(), pred)) == "light.k: not found ✗ (is on)"
 
 
+def test_describe_atom_non_string_entity_id_uses_plain_label() -> None:
+    # A malformed atom whose entity_id is not a string has no linkable entity:
+    # the label is a plain text seg ("?"), not an ent, and the value reads
+    # not found since a non-string id observes nothing.
+    pred = {"kind": "is", "entity_id": None, "states": ["on"]}
+    segs = StateCondition().describe(_snap(), pred)
+    assert render_detail(segs) == "?: not found ✗ (is on)"
+    assert all(s.e is None for s in segs)
+
+
 def test_describe_and_group_lists_each() -> None:
     snap = _snap(
         {"light.k": ("on", _DT), "sensor.t": ("19", _DT)},

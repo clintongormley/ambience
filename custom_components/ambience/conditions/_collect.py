@@ -29,7 +29,7 @@ def collect_scope_predicates(store: _StoreLike, key: str) -> Iterator[Any]:
     engine will never fire.
     """
     for _kind, _scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
+        for scene in scope_cfg.get("scenes") or []:
             if not scene_enabled(scene):
                 continue
             pred = scene.get("when", {}).get(key)

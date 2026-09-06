@@ -384,6 +384,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         for key, value in attach_tenure(conditions, self._tenure, fresh).items():
             # A refresh that started later has already published a newer view
             # of this condition; landing ours now would roll the cache back.
+            # Sequencing is per condition, not per opaque result key: a
+            # newly-added result key can read stale for one refresh cycle, then
+            # self-corrects on the next.
             if self._snapshot_written.get(key, -1) > seq:
                 continue
             self._snapshot_written[key] = seq
@@ -405,7 +408,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         cfg = self._scope_cfgs.get((scope_kind, scope_id)) or {}
         return {
             key
-            for scene in cfg.get("scenes", [])
+            for scene in cfg.get("scenes") or []
             if scene_enabled(scene)
             for key, predicate in scene.get("when", {}).items()
             if predicate is not None

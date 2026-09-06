@@ -81,7 +81,9 @@ def category_ids(cfg: dict[str, Any]) -> list[str]:
     apply/trace ordering differ run to run). Every scene is categorised, so
     these are always real ids. Empty when the scope has no scenes."""
     return list(
-        dict.fromkeys(r["category"] for r in cfg.get("scenes", []) if r.get("category") is not None)
+        dict.fromkeys(
+            r["category"] for r in cfg.get("scenes") or [] if r.get("category") is not None
+        )
     )
 
 
@@ -90,7 +92,7 @@ def category_config(cfg: dict[str, Any], category: str) -> dict[str, Any]:
 
     Pure. Shared by the simulator and the per-category Auto-triggers display so
     both filter scenes the same way the engine resolves a category."""
-    return {"scenes": [s for s in cfg.get("scenes", []) if s.get("category") == category]}
+    return {"scenes": [s for s in cfg.get("scenes") or [] if s.get("category") == category]}
 
 
 def apply_lock(
@@ -222,7 +224,7 @@ async def async_resolve_with_snapshots(
         else {}
     )
 
-    scenes = scope_cfg.get("scenes", [])
+    scenes = scope_cfg.get("scenes") or []
     if category is None:
         candidates = scenes
         to_full = None  # candidate index already is the full-scene index
@@ -720,7 +722,7 @@ async def async_run_scene_actions(
         raise service_validation_error("scope_disabled", scope_kind=scope_kind, scope_id=scope_id)
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
-    scenes = cfg.get("scenes", [])
+    scenes = cfg.get("scenes") or []
     if not 0 <= scene_index < len(scenes):
         raise service_validation_error("scene_index_out_of_range", scene_index=scene_index)
     scene = scenes[scene_index]

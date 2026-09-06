@@ -415,7 +415,7 @@ class AmbienceStore:
         in_use = {
             scene.get("category")
             for _kind, _id, cfg in self.all_scope_configs()
-            for scene in cfg.get("scenes", [])
+            for scene in cfg.get("scenes") or []
         }
         removed_in_use = sorted(cid for cid in in_use - new_ids if isinstance(cid, str))
         if removed_in_use:
@@ -436,7 +436,7 @@ class AmbienceStore:
         in_use = any(
             scene.get("category") == category_id
             for _kind, _id, cfg in self.all_scope_configs()
-            for scene in cfg.get("scenes", [])
+            for scene in cfg.get("scenes") or []
         )
         if in_use:
             raise CategoryInUseError("category_still_has_scenes", category_id=category_id)

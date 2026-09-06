@@ -77,7 +77,7 @@ def iter_predicate_specs(
     treated as opaque. ``scene_index`` stays aligned with each scene's position in
     ``cfg['scenes']`` so disabled scenes simply leave gaps.
     """
-    for scene_index, scene in enumerate(cfg.get("scenes", [])):
+    for scene_index, scene in enumerate(cfg.get("scenes") or []):
         if not scene_enabled(scene):
             continue
         for condition_key, predicate in scene.get("when", {}).items():

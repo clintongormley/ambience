@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from bin.check_ui_strings import bundle_keys, compare, used_keys
+from bin.check_ui_strings import bundle_keys, compare, used_keys, used_prefixes
 
 SAMPLE_BUNDLE = """
 export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, unknown> = {
@@ -56,3 +56,38 @@ def test_real_frontend_keys_are_all_bundled() -> None:
         used |= used_keys(ts.read_text())
     missing, _unused = compare(used, bundle)
     assert not missing, f"ui keys used but not bundled in i18n-data.ts: {sorted(missing)}"
+
+
+def test_used_keys_includes_static_backtick_literals() -> None:
+    assert used_keys('localize(h, `ui.close`, "x")') == {"ui.close"}
+
+
+def test_used_prefixes_extracts_the_static_head_of_a_template_literal() -> None:
+    src = 'localize(h, `ui.history_action_${a}`, a); localize(h, `ui.history_${op}_tooltip`, "")'
+    assert used_prefixes(src) == {"ui.history_action_", "ui.history_"}
+
+
+def test_used_prefixes_ignores_a_bare_ui_head() -> None:
+    """A bare `ui.` head would match every bundled key, silently disabling the
+    unreferenced-key check — it must not count as a prefix claim."""
+    assert used_prefixes('localize(h, `ui.${x}`, "")') == set()
+
+
+def test_compare_treats_a_prefix_claim_as_a_reference() -> None:
+    bundled = {"ui.history_action_add", "ui.history_undo_tooltip", "ui.orphan"}
+    missing, unused = compare(set(), bundled, prefixes={"ui.history_"})
+    assert missing == set()
+    assert unused == {"ui.orphan"}
+
+
+def test_real_frontend_has_no_unreferenced_ui_keys() -> None:
+    """Turns the script's warning into a repo invariant."""
+    src = Path(__file__).parents[1] / "frontend" / "src"
+    used, prefixes = set(), set()
+    for ts in src.rglob("*.ts"):
+        text = ts.read_text()
+        used |= used_keys(text)
+        prefixes |= used_prefixes(text)
+    bundled = bundle_keys((src / "i18n-data.ts").read_text())
+    _missing, unused = compare(used, bundled, prefixes=prefixes)
+    assert unused == set()

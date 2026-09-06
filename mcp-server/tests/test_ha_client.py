@@ -6,11 +6,13 @@ from conftest import FakeTransport
 
 from ambience_mcp import ha_client
 from ambience_mcp.ha_client import (
+    MUTATING_COMMANDS,
     HAAuthError,
     HAClient,
     HACommandError,
     HAConnectionError,
     ReconnectingClient,
+    _mutates,
 )
 
 
@@ -569,3 +571,33 @@ async def test_authentication_times_out_instead_of_hanging(monkeypatch):
     with pytest.raises(HAConnectionError):
         await client.authenticate("token")
     assert client.closed
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ambience/categories/delete",
+        "ambience/history/undo",
+        "ambience/history/redo",
+        "ambience/traces/clear",
+        "ambience/time_of_day_periods/reset",
+        "ambience/lux_ranges/reset",
+        "ambience/set_scope_enabled",
+        "ambience/apply",
+        "ambience/scene/run_actions",
+        "ambience/area/save",
+    ],
+)
+def test_every_write_is_classified_as_mutating(command: str) -> None:
+    """A write whose reply was lost must never be re-sent. Before the explicit
+    set, only `/save` counted — so a lost `delete`/`undo`/`apply` reply was
+    silently applied twice."""
+    assert _mutates(command)
+    assert command in MUTATING_COMMANDS
+
+
+@pytest.mark.parametrize(
+    "command", ["ambience/dry_run", "ambience/validate", "ambience/categories/list"]
+)
+def test_reads_are_not_mutating(command: str) -> None:
+    assert not _mutates(command)

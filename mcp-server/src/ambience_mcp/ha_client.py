@@ -273,15 +273,44 @@ class _WebsocketsTransport:
         await self._connection.close()
 
 
-def _mutates(command: str) -> bool:
-    """Whether a command changes state in Home Assistant.
+# Every backend command that persists, fires services or clears state. A command
+# in this set is never re-sent after a lost reply (it may already have been
+# applied); anything else is a read and is safe to retry. Classified by the
+# command itself — a fact about the protocol — rather than by a flag each tool has
+# to remember to set, and enumerated rather than matched on a `/save` suffix,
+# which silently classed delete/undo/redo/reset/clear/apply as retry-safe reads.
+# Kept identical to the backend's websocket.WRITE_COMMANDS by
+# tests/test_protocol_shape.py.
+MUTATING_COMMANDS: frozenset[str] = frozenset(
+    {
+        "ambience/apply",
+        "ambience/area/save",
+        "ambience/categories/delete",
+        "ambience/categories/save",
+        "ambience/conditions/day/config/save",
+        "ambience/conditions/weather/config/save",
+        "ambience/exposed_actions/save",
+        "ambience/exposed_assistants/save",
+        "ambience/floor/save",
+        "ambience/history/redo",
+        "ambience/history/undo",
+        "ambience/house/save",
+        "ambience/lux_ranges/reset",
+        "ambience/lux_ranges/save",
+        "ambience/reapply/save",
+        "ambience/scene/run_actions",
+        "ambience/set_scope_enabled",
+        "ambience/switch_defaults/save",
+        "ambience/time_of_day_periods/reset",
+        "ambience/time_of_day_periods/save",
+        "ambience/traces/clear",
+    }
+)
 
-    Classified by the command itself — a fact about the protocol — rather than by a
-    flag each tool has to remember to set. Every Ambience write is a `/save`
-    (`ambience/{area,floor,house}/save`, `ambience/categories/save`); everything else
-    reads.
-    """
-    return command.endswith("/save")
+
+def _mutates(command: str) -> bool:
+    """Whether a command changes state in Home Assistant."""
+    return command in MUTATING_COMMANDS
 
 
 class ReconnectingClient:

@@ -23,6 +23,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- A scope's Ambience switch that hit an error while finishing its setup (for
+    example while syncing its device name or restoring its saved state) could be
+    left stuck and unusable until a full Home Assistant restart. It now stays
+    available and recovers the remaining setup on its own.
+- A malformed stored configuration with an explicit empty `scenes` value no
+    longer risks an error while resolving or displaying a scope.
 - The trace's explanation of why a condition cannot currently match (a missing
     period, lux range or weather group, an unconfigured workday sensor or
     weather entity, a sun anchor that does not occur today) is now translated.

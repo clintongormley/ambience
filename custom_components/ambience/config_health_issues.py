@@ -15,7 +15,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from .config_health import Problem, referenced_entities_by_scene, scan
 from .const import DATA_CONDITIONS, DATA_OVERLAP_SET, DATA_STORE, DOMAIN
-from .naming import category_names, scope_display_name
+from .naming import category_names, scene_label, scope_display_name
 
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
 # with these prefixes, so it never deletes a Repairs issue some other part of the
@@ -79,7 +79,7 @@ def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) 
             (
                 _scope_phrase(hass, loc.scope_kind, loc.scope_id),
                 cats.get(loc.category_id) or "",
-                loc.scene_name or "(unnamed)",
+                scene_label(loc.scene_name),
             )
             for loc in problem.locations
         }
@@ -144,7 +144,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
             scope = _scope_phrase(hass, loc0.scope_kind, loc0.scope_id)
             bullets = sorted(
                 {
-                    (loc.scene_name or "(unnamed)", cats.get(loc.category_id) or "")
+                    (scene_label(loc.scene_name), cats.get(loc.category_id) or "")
                     for loc in problem.locations
                 }
             )

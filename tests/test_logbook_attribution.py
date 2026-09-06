@@ -94,6 +94,16 @@ def test_message_unnamed_scene_falls_back_to_index() -> None:
     assert msg == "'scene 3'"
 
 
+def test_message_whitespace_only_scene_name_falls_back_to_index() -> None:
+    msg = compose_apply_message(
+        scene_name="   ",
+        scene_index=1,
+        category_label=None,
+        category_count=1,
+    )
+    assert msg == "'scene 2'"
+
+
 def test_message_multiple_categories_but_no_label_omits_category() -> None:
     msg = compose_apply_message(
         scene_name="Evening",

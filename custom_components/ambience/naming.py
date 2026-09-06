@@ -1,8 +1,9 @@
-"""Canonical human-readable names for scopes and categories.
+"""Canonical human-readable names for scopes, categories and scenes.
 
-Shared by the logbook attribution (`service_logbook.log_apply`) and the evaluation
-trace (`trace`), so both render the same friendly area/floor/category names from a
-single source of truth instead of duplicating the lookups.
+Shared by the logbook attribution (`service_logbook.log_apply`), the evaluation
+trace (`trace`) and Repairs (`config_health_issues`), so all of them render the
+same friendly names from a single source of truth instead of duplicating the
+lookups and the fallbacks.
 """
 
 from __future__ import annotations
@@ -47,6 +48,20 @@ def scope_device_name(
     """
     prefix = scope_display_name(hass, scope_kind, scope_id, fallback=fallback)
     return f"{prefix} {default_name}"
+
+
+def scene_label(name: str | None, index: int | None = None) -> str:
+    """Display label for a scene: its name, else "scene N" (1-based) when the
+    index is known, else "(unnamed)".
+
+    Repairs and the logbook both name scenes through here, so an unnamed scene
+    reads the same in both. The trace log is not a caller: it renders its own
+    "scene #N" form from the winner index. A blank or whitespace-only name
+    counts as no name.
+    """
+    if name and name.strip():
+        return name
+    return f"scene {index + 1}" if index is not None else "(unnamed)"
 
 
 def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:

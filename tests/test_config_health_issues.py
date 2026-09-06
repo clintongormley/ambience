@@ -300,6 +300,31 @@ async def test_missing_entity_message_collapses_newline_in_scene_name(
     assert scenes == '\n- "two lines" — uncategorised'
 
 
+async def test_missing_entity_message_labels_a_nameless_scene_as_unnamed(
+    hass, installed, area_id
+) -> None:
+    # A scene with no name carries scene_name=None all the way to the bullet, so
+    # the "(unnamed)" placeholder has to be applied at render time.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
+    scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
+    assert scenes == '\n- "(unnamed)" — uncategorised'
+
+
 async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     a = ar.async_get(hass).async_create("Kitchen").id

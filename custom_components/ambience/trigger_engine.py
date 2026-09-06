@@ -193,28 +193,34 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         unknown/opaque condition, or a spec with no entities)."""
         return self._pred_entities.get((scope_kind, scope_id, scene_index, condition_key), ())
 
-    def _predicate_for(self, key: PredKey) -> Any:
-        """The stored predicate for a PredKey, or None if it no longer exists."""
-        scope_kind, scope_id, scene_index, condition_key = key
+    def _scene_at(
+        self, scope_kind: str, scope_id: str | None, scene_index: int | None
+    ) -> dict[str, Any] | None:
+        """The stored scene dict at a full-scene index (`matched_scene_index`,
+        aligned with `self._scope_cfgs`), or None when the scope or the scene no
+        longer exists — config drift between a rebuild and a resolve, which every
+        caller treats as "drop this unit"."""
+        if scene_index is None:
+            return None
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
         scenes = cfg.get("scenes", [])
         if not 0 <= scene_index < len(scenes):
             return None
-        return scenes[scene_index].get("when", {}).get(condition_key)
+        return scenes[scene_index]
+
+    def _predicate_for(self, key: PredKey) -> Any:
+        """The stored predicate for a PredKey, or None if it no longer exists."""
+        scene = self._scene_at(key[0], key[1], key[2])
+        return None if scene is None else scene.get("when", {}).get(key[3])
 
     def _category_for(self, scope_kind: str, scope_id: str | None, scene_index: int) -> str | None:
         """The category id a scene belongs to (always a real id for a live scene);
         None only when the scope/scene no longer exists, in which case the caller
         must drop the unit (a None category must never reach the apply path)."""
-        cfg = self._scope_cfgs.get((scope_kind, scope_id))
-        if cfg is None:
-            return None
-        scenes = cfg.get("scenes", [])
-        if 0 <= scene_index < len(scenes):
-            return scenes[scene_index].get("category")
-        return None
+        scene = self._scene_at(scope_kind, scope_id, scene_index)
+        return None if scene is None else scene.get("category")
 
     def _winner_has_unavailable(
         self, scope_kind: str, scope_id: str | None, scene_index: int | None
@@ -224,18 +230,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         Such a scene is an availability guard — the one scene allowed to act on an
         entity drop-out (a winner that won *because* an entity is unavailable). A
         winning `unavailable` predicate is necessarily non-None and matched true,
-        so its presence in the winner's `when` is sufficient. `scene_index` is the
-        full-scene index (`matched_scene_index`), aligned with `self._scope_cfgs`.
+        so its presence in the winner's `when` is sufficient.
         """
-        if scene_index is None:
-            return False
-        cfg = self._scope_cfgs.get((scope_kind, scope_id))
-        if cfg is None:
-            return False
-        scenes = cfg.get("scenes", [])
-        if not 0 <= scene_index < len(scenes):
-            return False
-        return scenes[scene_index].get("when", {}).get("unavailable") is not None
+        scene = self._scene_at(scope_kind, scope_id, scene_index)
+        return scene is not None and scene.get("when", {}).get("unavailable") is not None
 
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any], *, seed: bool = False

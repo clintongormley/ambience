@@ -9,6 +9,7 @@ from homeassistant.helpers import floor_registry as fr
 from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.naming import (
     category_names,
+    scene_label,
     scope_display_name,
 )
 
@@ -90,3 +91,11 @@ async def test_scope_device_name_composes_prefix_and_default(hass):
     assert scope_device_name(hass, "area", area.id, "Ambience") == "Living Room Ambience"
     # Falls back to the provided fallback when the registry entry is gone.
     assert scope_device_name(hass, "area", "missing", "Mood", fallback="Garage") == "Garage Mood"
+
+
+def test_scene_label_prefers_the_name_then_the_1_based_index_then_unnamed() -> None:
+    assert scene_label("Evening", 3) == "Evening"
+    assert scene_label("  ", 3) == "scene 4"
+    assert scene_label(None, 0) == "scene 1"
+    assert scene_label(None) == "(unnamed)"
+    assert scene_label("", None) == "(unnamed)"

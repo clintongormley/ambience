@@ -360,6 +360,14 @@ async def test_category_for_returns_scene_category(hass) -> None:
     assert engine._category_for("area", "a", 0) == "g"
 
 
+async def test_scene_at_returns_none_for_missing_scope_none_index_or_out_of_range(hass) -> None:
+    engine = _engine_with_state(hass)  # area a, one scene (index 0) in category "g"
+    assert engine._scene_at("area", "a", 0)["category"] == "g"
+    assert engine._scene_at("area", "nope", 0) is None
+    assert engine._scene_at("area", "a", None) is None
+    assert engine._scene_at("area", "a", 5) is None
+
+
 async def test_recompute_drops_units_for_missing_scene(hass) -> None:
     # A flipping predicate whose scene resolves to a None category (here: a scene
     # with no category, but the same holds for a stale/out-of-range scene) must be
@@ -1314,19 +1322,19 @@ async def test_state_change_emits_trace_event_to_sink(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Lines 159, 163 — _category_for: None-scope and out-of-range scene_index
+# _category_for: None-scope and out-of-range scene_index
 # ---------------------------------------------------------------------------
 
 
 async def test_category_for_returns_none_for_unknown_scope(hass) -> None:
-    """Line 159: _category_for returns None when the scope is not in _scope_cfgs."""
+    """_category_for returns None when the scope is not in _scope_cfgs."""
     engine = _engine_with_state(hass)  # only has ("area", "a")
     result = engine._category_for("area", "ghost", 0)
     assert result is None
 
 
 async def test_category_for_returns_none_for_out_of_range_scene(hass) -> None:
-    """Line 163: _category_for returns None when scene_index >= len(scenes)."""
+    """_category_for returns None when scene_index >= len(scenes)."""
     engine = _engine_with_state(hass)  # area "a" has exactly 1 scene (index 0)
     result = engine._category_for("area", "a", 99)
     assert result is None

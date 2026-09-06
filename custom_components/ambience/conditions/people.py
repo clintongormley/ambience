@@ -17,16 +17,22 @@ from ._common import (
     RULE_OR,
     RULE_TRUTHY,
     UNAVAILABLE,
+    Detail,
     NormalisesPredicate,
     PredicateDefaults,
+    Seg,
     dur_seconds,
+    ent,
     fmt_duration,
     for_comparator_symbol,
     for_contains,
     for_elapsed_satisfied,
+    join_segs,
     materialise_defaults,
+    phrase,
     tenure_held,
     tenure_within,
+    text,
     validate_entity_ids,
     validate_for,
     validate_for_mode,
@@ -238,7 +244,10 @@ class PeopleCondition(NormalisesPredicate):
         pred = _norm(predicate)
         where = pred["where"]
         place = "home" if where == _HOME else f"in {where}"
-        return f"{self._quant_word(pred['quant'])} {'not ' if pred['negate'] else ''}{place}"
+        quant_word = {"any": "anyone", "everyone": "everyone", "nobody": "nobody"}.get(
+            pred["quant"], "anyone"
+        )
+        return f"{quant_word} {'not ' if pred['negate'] else ''}{place}"
 
     def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
@@ -377,7 +386,7 @@ class PeopleCondition(NormalisesPredicate):
             return True
         return for_elapsed_satisfied((now - changed).total_seconds(), seconds, mode)
 
-    def describe(self, snapshot: PeopleSnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: PeopleSnapshot, predicate: Any = None) -> Detail | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
         if predicate is None:
             return self._describe_snapshot(snapshot)
@@ -394,23 +403,23 @@ class PeopleCondition(NormalisesPredicate):
         # empty `sensors` wildcard), so enumerate the snapshot's persons.
         person_ids = list(who) if who else list(snapshot.persons)
         if not person_ids:
-            return "no people tracked"
+            return [phrase("no_people_tracked")]
         want_at = quant != "nobody"
         # In tenure mode the per-person marks show the *instant* location test
         # (seconds=0); how long the predicate as a whole has held is summarised
         # once in the prefix, off the engine tenure map.
         tenure_mode = seconds > 0 and snapshot.tenure is not None
         per_person_seconds = 0.0 if tenure_mode else seconds
-        parts: list[str] = []
+        cells: list[Detail] = []
         for pid in person_ids:
             name = snapshot.names.get(pid, pid)
             cur = snapshot.persons.get(pid)
             if cur is None:  # person referenced but has no state → does not exist
-                parts.append(f"{name}: not found ✗")
+                cells.append([ent(pid, name), text(": "), phrase("not_found"), text(" ✗")])
                 continue
             at = self._loc_match(cur[0], snapshot.in_zones.get(pid), where, snapshot)
             if at is None:  # present but unavailable / unknown zone
-                parts.append(f"{name}: unavailable ✗")
+                cells.append([ent(pid, name), text(": "), phrase("unavailable"), text(" ✗")])
                 continue
             held = self._holds_at(
                 at,
@@ -421,7 +430,6 @@ class PeopleCondition(NormalisesPredicate):
                 seconds=per_person_seconds,
                 mode=mode,
             )
-            loc = self._loc_word(at, where, snapshot)
             # In the legacy clock, show how long each person has held this
             # location so a recently-arrived person's ✗ is self-explanatory.
             elapsed = (
@@ -429,39 +437,64 @@ class PeopleCondition(NormalisesPredicate):
                 if seconds and not tenure_mode
                 else ""
             )
-            parts.append(f"{name}: {loc}{elapsed} {'✓' if held else '✗'}")
-        prefix = f"want {self._quant_word(quant)} {self._where_word(where, negate, snapshot)}"
+            cells.append(
+                [
+                    ent(pid, name),
+                    text(": "),
+                    *self._loc_segs(at, where, snapshot),
+                    text(f"{elapsed} {'✓' if held else '✗'}"),
+                ]
+            )
+        prefix: Detail = [
+            phrase("want"),
+            text(" "),
+            self._quant_seg(quant),
+            text(" "),
+            *self._where_segs(where, negate, snapshot),
+        ]
         if seconds:
-            rel = for_comparator_symbol(mode)
-            prefix += f" for {rel}{fmt_duration(seconds)}"
+            prefix += [
+                text(" "),
+                phrase("for_hold", rel=for_comparator_symbol(mode), dur=fmt_duration(seconds)),
+            ]
         if tenure_mode:
             since = snapshot.tenure.get(self._gate_key(pred))
             prefix += (
-                f" (held {fmt_duration((snapshot.now - since).total_seconds())})"
+                [
+                    text(" ("),
+                    phrase("held", dur=fmt_duration((snapshot.now - since).total_seconds())),
+                    text(")"),
+                ]
                 if since
-                else " (not held)"
+                else [text(" ("), phrase("not_held"), text(")")]
             )
-        return f"{prefix}: {', '.join(parts)}"
+        return [*prefix, text(": "), *join_segs(cells)]
 
     @staticmethod
-    def _quant_word(quant: str) -> str:
-        return {"any": "anyone", "everyone": "everyone", "nobody": "nobody"}.get(quant, "anyone")
+    def _quant_seg(quant: str) -> Seg:
+        return phrase(
+            {"any": "quant_anyone", "everyone": "quant_everyone", "nobody": "quant_nobody"}.get(
+                quant, "quant_anyone"
+            )
+        )
 
     @staticmethod
-    def _where_word(where: str, negate: bool, snapshot: PeopleSnapshot) -> str:
-        base = "home" if where == _HOME else f"in {snapshot.zone_labels.get(where, where)}"
-        return f"not {base}" if negate else base
-
-    @staticmethod
-    def _loc_word(at: bool, where: str, snapshot: PeopleSnapshot) -> str:
+    def _where_segs(where: str, negate: bool, snapshot: PeopleSnapshot) -> Detail:
         if where == _HOME:
-            return "home" if at else "away"
-        label = snapshot.zone_labels.get(where, where)
-        return f"in {label}" if at else f"not in {label}"
+            return [phrase("where_not_home" if negate else "where_home")]
+        zone = snapshot.zone_labels.get(where, where)
+        return [phrase("where_not_in" if negate else "where_in", zone=zone)]
 
-    def _describe_snapshot(self, snapshot: PeopleSnapshot) -> str | None:
+    @staticmethod
+    def _loc_segs(at: bool, where: str, snapshot: PeopleSnapshot) -> Detail:
+        if where == _HOME:
+            return [phrase("loc_home" if at else "loc_away")]
+        zone = snapshot.zone_labels.get(where, where)
+        return [phrase("loc_in" if at else "loc_not_in", zone=zone)]
+
+    def _describe_snapshot(self, snapshot: PeopleSnapshot) -> Detail | None:
         if not snapshot.persons:
-            return "no people tracked"
+            return [phrase("no_people_tracked")]
         total = len(snapshot.persons)
         home = sorted(
             snapshot.names.get(pid, pid)
@@ -469,8 +502,10 @@ class PeopleCondition(NormalisesPredicate):
             if self._is_home(state, snapshot.in_zones.get(pid))
         )
         if home:
-            return f"{len(home)} of {total} home ({', '.join(home)})"
-        return f"0 of {total} home"
+            return [
+                phrase("summary_home", n=str(len(home)), total=str(total), names=", ".join(home))
+            ]
+        return [phrase("summary_home_zero", total=str(total))]
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

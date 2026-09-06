@@ -102,6 +102,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # Per predicate, one recheck timer per `for:` gate, keyed by
         # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
+        # Consecutive retries armed for a matured gate whose condition could not
+        # be snapshotted; reset the moment the condition reads cleanly again.
+        self._for_retries: dict[PredKey, int] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         # Per-unit idle-reapply one-shot timers, keyed by (scope_kind, scope_id,
         # category_id). The cancel callable from async_call_later is stored

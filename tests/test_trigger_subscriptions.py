@@ -528,6 +528,9 @@ class _ForCondition:
     tenure from the entity's last_changed; matches off engine tenure when
     attached, else the instant value."""
 
+    # Flipped by tests that need the snapshot to blow up mid-run.
+    fail = False
+
     def __init__(self, entity_id: str, seconds: float) -> None:
         self._entity_id = entity_id
         self._seconds = seconds
@@ -540,6 +543,8 @@ class _ForCondition:
         )
 
     async def snapshot(self, hass: Any, entities: Any = None) -> _ForSnap:
+        if self.fail:
+            raise RuntimeError("boom")
         state = hass.states.get(self._entity_id)
         return _ForSnap(
             value=state.state if state else None,
@@ -588,6 +593,25 @@ def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
     monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + age)
 
 
+def _movable_clock(hass, monkeypatch) -> dict[str, timedelta]:
+    """Set switch.radiator on and pin dt_util.utcnow() to its last_updated plus
+    a mutable offset the test can advance.
+
+    The `fixed_utcnow` fixture cannot be used for gate ageing: its autouse
+    companion pins time.time() near zero, so a state written under it is stamped
+    at the epoch while dt_util.utcnow() reads 2026 — every gate is born already
+    matured. Anchoring the clock on the state's own timestamp keeps the two in
+    step.
+    """
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    hass.states.async_set("switch.radiator", "on")
+    last_updated = hass.states.get("switch.radiator").last_updated
+    clock = {"offset": timedelta(0)}
+    monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + clock["offset"])
+    return clock
+
+
 async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatch) -> None:
     """A `for: 2h` whose switch is ALREADY on at startup gets a recheck armed for
     the REMAINING time (2h minus how long it has been on), not a fresh 2h."""
@@ -611,6 +635,97 @@ async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatc
     assert key in engine._for_handles
     # ...for the remaining 2h - 26m = 5640s, not the full 7200s.
     assert captured == [5640.0]
+    engine._teardown()
+
+
+async def test_matured_for_gate_with_failed_snapshot_rearms_a_retry(hass, monkeypatch) -> None:
+    """A recheck that fires while the condition's snapshot fails must not
+    consume the gate: no flip is recorded, the tenure has already matured, and
+    nothing else would re-arm it. The engine arms a short retry instead."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    captured: list[tuple[float, Any]] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine.async_initial_sync()
+        assert [s for s, _ in captured] == [60.0]
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        captured[0][1](None)  # the recheck fires with a broken snapshot
+        await hass.async_block_till_done()
+        # A retry is armed rather than the gate going silent.
+        assert [s for s, _ in captured] == [60.0, _ts_mod._FOR_RETRY_SECONDS]
+        cond.fail = False
+        captured[1][1](None)  # the retry fires with a healthy snapshot
+        await hass.async_block_till_done()
+    key = ("area", "a", 0, "rad")
+    assert engine._predicate_state[key] is True
+    engine._teardown()
+
+
+async def test_for_gate_retries_stop_after_the_limit(hass, monkeypatch) -> None:
+    """A condition that stays unreadable is not polled forever."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    captured: list[tuple[float, Any]] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine.async_initial_sync()
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        for _ in range(_ts_mod._FOR_RETRY_LIMIT + 1):
+            captured[-1][1](None)
+            await hass.async_block_till_done()
+    # initial recheck + exactly LIMIT retries, then silence
+    assert len(captured) == 1 + _ts_mod._FOR_RETRY_LIMIT
+    engine._teardown()
+
+
+async def test_for_gate_retry_budget_resets_after_a_healthy_read(hass, monkeypatch) -> None:
+    """An exhausted retry budget must not outlive the outage that spent it —
+    otherwise a much later one-off snapshot failure would silently get no retry
+    at all."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    key = ("area", "a", 0, "rad")
+    captured: list[tuple[float, Any]] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine.async_initial_sync()
+        clock["offset"] += timedelta(seconds=61)
+        cond.fail = True
+        for _ in range(_ts_mod._FOR_RETRY_LIMIT):
+            captured[-1][1](None)
+            await hass.async_block_till_done()
+        assert engine._for_retries[key] == _ts_mod._FOR_RETRY_LIMIT
+
+        # The gate restarts its window (switch cycled) and the condition reads
+        # cleanly again: the budget belongs to the outage, not to the gate.
+        engine._tenure["rad"] = {"gate:switch.radiator": _ts_mod.dt_util.utcnow()}
+        cond.fail = False
+        await engine.async_evaluate({key})
+    assert key not in engine._for_retries
     engine._teardown()
 
 
@@ -1308,6 +1423,9 @@ async def test_schedule_for_rechecks_skips_matured_and_untracked_gates(hass) -> 
     now = dt_util.utcnow()
     # matured gate's window has fully elapsed; untracked gate has no tenure.
     engine._tenure["state"] = {g_matured.key: now - timedelta(seconds=200)}
+    # The condition reads cleanly, so the matured gate was genuinely covered by
+    # the evaluation that armed this pass (a None snapshot would earn a retry).
+    engine._snapshots["state"] = _ForSnap(value="on")
 
     captured: list[float] = []
     with patch.object(

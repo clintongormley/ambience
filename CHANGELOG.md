@@ -61,6 +61,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Two script or template conditions re-evaluated at the same moment no longer
     discard one another's result, which could leave a scene matching on a stale
     verdict until the next full refresh.
+- A scene with a `for:` duration whose condition briefly could not be read at
+    the moment its timer fired no longer stays silent until the next unrelated
+    event; the check is retried a minute later.
 
 ### Performance
 

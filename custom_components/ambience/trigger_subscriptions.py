@@ -49,6 +49,15 @@ from .triggers import DurationGate
 # How often wall-clock-dependent (has_time) predicates are recomputed.
 _HAS_TIME_INTERVAL = timedelta(seconds=60)
 
+# Retry cadence for a matured `for:` gate whose condition could not be
+# snapshotted when its recheck fired. Without it the recheck (one-shot) is
+# consumed, no flip is recorded and the tenure is past due, so nothing would
+# ever wake that predicate again.
+_FOR_RETRY_SECONDS = 60.0
+# A condition still unreadable after this many retries is a configuration
+# problem (each failed snapshot logs a warning); stop polling it.
+_FOR_RETRY_LIMIT = 10
+
 
 class TriggerSubscriptionsMixin:
     """Subscription / timer plumbing for :class:`AutoTriggerEngine`."""
@@ -85,6 +94,7 @@ class TriggerSubscriptionsMixin:
             for cancel in handles.values():
                 cancel()
         self._for_handles.clear()
+        self._for_retries.clear()
         self._switch_scopes.clear()
 
     def async_subscribe(self) -> None:
@@ -306,8 +316,11 @@ class TriggerSubscriptionsMixin:
         Gates that are NOT in tenure (instant test currently false) need no
         timer: they re-arm event-driven via the flip that records their tenure.
         A gate already matured (delay <= 0) needs none either: the evaluation
-        that armed this pass already saw it true. Cancels and replaces any prior
-        handles per predicate, so calling this is idempotent.
+        that armed this pass already saw it true — unless that evaluation could
+        not read the condition at all (None snapshot), in which case it saw
+        nothing and a bounded retry stands in for the flip it could not record.
+        Cancels and replaces any prior handles per predicate, so calling this is
+        idempotent.
 
         Arms nothing once the engine is torn down: teardown is the only thing
         that cancels these handles, so a timer armed after it would outlive the
@@ -322,6 +335,11 @@ class TriggerSubscriptionsMixin:
             for cancel in self._for_handles.pop(key, {}).values():
                 cancel()
             tenure = self._tenure.get(key[3], {})
+            # Any evaluation that could read the condition clears the retry
+            # budget, so an exhausted one never outlives the outage that spent it.
+            readable = self._snapshots.get(key[3]) is not None
+            if readable:
+                self._for_retries.pop(key, None)
             handles: dict[tuple[str, float], Callable[[], None]] = {}
             for gate in gates:
                 since = tenure.get(gate.key)
@@ -329,7 +347,13 @@ class TriggerSubscriptionsMixin:
                     continue  # instant test not currently true → no pending flip
                 delay = gate.seconds - (now - since).total_seconds()
                 if delay <= 0:
-                    continue  # already matured; this evaluation covered it
+                    if readable:
+                        continue  # already matured; this evaluation covered it
+                    attempts = self._for_retries.get(key, 0)
+                    if attempts >= _FOR_RETRY_LIMIT:
+                        continue
+                    self._for_retries[key] = attempts + 1
+                    delay = _FOR_RETRY_SECONDS  # matured but unobservable — try again
                 handles[(gate.key, gate.seconds)] = async_call_later(
                     self._hass, delay, self._make_for_recheck(key, gate)
                 )

@@ -107,9 +107,20 @@ async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:
     return items
 
 
-async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, Any] | None:
-    """Return {fields, target} for one service, or None if unknown.
+def _catalog_name(name: Any) -> str | None:
+    """A catalog `name` value normalised to a label or None.
 
+    A service that documents no name is served as `""` by some HA cores and as
+    a missing key by others; both mean "no label", so callers see None either
+    way rather than having to know which core they are on.
+    """
+    return name if isinstance(name, str) and name.strip() else None
+
+
+async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, Any] | None:
+    """Return {name, fields, target} for one service, or None if unknown.
+
+    `name` is None whenever the catalog carries no label.
     Raises AmbienceError if `service_id` is not "domain.service".
     """
     if "." not in service_id:
@@ -120,7 +131,7 @@ async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, 
     if spec is None:
         return None
     return {
-        "name": spec.get("name") if isinstance(spec, dict) else None,
+        "name": _catalog_name(spec.get("name")) if isinstance(spec, dict) else None,
         "fields": _flatten_field_groups(spec.get("fields")) if isinstance(spec, dict) else {},
         "target": spec.get("target") if isinstance(spec, dict) else None,
     }

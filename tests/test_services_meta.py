@@ -165,6 +165,18 @@ async def test_get_service_schema_returns_none_name_when_absent(hass: HomeAssist
     assert schema["name"] is None
 
 
+async def test_get_service_schema_normalises_blank_name_to_none(hass: HomeAssistant) -> None:
+    """A blank/whitespace name is the same as no name: HA 2025.2 serves `""` for
+    an undocumented service where newer cores serve None, so the wrapper
+    normalises both to None and the contract holds on every supported core."""
+    _register(hass, "ambience", "blank", {"name": "  ", "fields": {}})
+
+    schema = await get_service_schema(hass, "ambience.blank")
+
+    assert schema is not None
+    assert schema["name"] is None
+
+
 async def test_get_service_schema_flattens_nested_field_groups(hass: HomeAssistant) -> None:
     """HA's `advanced_fields`-style nested groups are flattened into the
     top-level fields dict — the group entry itself disappears."""

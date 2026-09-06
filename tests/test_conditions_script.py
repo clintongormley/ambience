@@ -72,11 +72,12 @@ def test_validate_predicate_accepts_well_formed() -> None:
         (42, "script_predicate_not_object"),
         ("script.foo", "script_predicate_not_object"),
         ([], "script_predicate_not_object"),
-        ({}, "script_id_invalid"),  # missing script
-        ({"script": ""}, "script_id_invalid"),  # empty
-        ({"script": "foo"}, "script_id_invalid"),  # missing script. prefix
+        ({}, "entity_id_invalid"),  # missing script
+        ({"script": ""}, "entity_id_invalid"),  # empty
+        ({"script": "foo"}, "entity_id_invalid"),  # not an entity id at all
         ({"script": "script."}, "entity_id_invalid"),  # domain prefix alone
         ({"script": "script.Bad Id"}, "entity_id_invalid"),
+        ({"script": "light.foo"}, "entity_id_wrong_domain"),
         ({"script": "script.foo", "args": []}, "script_args_not_object"),
         ({"script": "script.foo", "args": "x=1"}, "script_args_not_object"),
     ],
@@ -637,9 +638,15 @@ async def test_concurrent_hinted_snapshots_keep_every_fresh_result(
     second = asyncio.create_task(cond.snapshot(hass, keys=frozenset({key_two})))
     await asyncio.wait_for(both_in_flight.wait(), timeout=5)
     gate.set()
-    await asyncio.gather(first, second)
+    snap_one, snap_two = await asyncio.gather(first, second)
 
     assert cond._previous.results == {key_one: True, key_two: True}
+    # Each pass returns its own fresh value to its caller, and the one that
+    # merged second returns both — a caller acting on the returned snapshot sees
+    # no less than the cache does.
+    assert snap_one.results[key_one] is True
+    assert snap_two.results[key_two] is True
+    assert {snap_one.results[key_two], snap_two.results[key_one]} == {False, True}
 
 
 # --- verdict plumbing: the simulator's two hooks on the opaque base -----------

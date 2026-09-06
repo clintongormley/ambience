@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import async_mock_service
 
+from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -1816,10 +1817,8 @@ async def test_resolve_with_snapshots_forwards_entity_ids_by_full_scene_index(
 # --- snapshot_conditions: the per-condition result-key hint ----------------
 
 
-class _HintRecorder:
-    """Opaque-style condition: declares the hint and records what it was given."""
-
-    supports_result_keys = True
+class _HintRecorder(OpaquePrecomputedCondition):
+    """Opaque-style condition: takes the hint and records what it was given."""
 
     def __init__(self) -> None:
         self.calls: list[frozenset[str] | None] = []

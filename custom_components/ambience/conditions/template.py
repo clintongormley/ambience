@@ -161,8 +161,8 @@ class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
 
     def _merge(self, fresh: TemplateSnapshot, previous: TemplateSnapshot) -> TemplateSnapshot:
         return TemplateSnapshot(
-            results=self._merge_over_previous(previous.results, fresh.results),
-            deps=self._merge_over_previous(previous.deps, fresh.deps),
+            results={**previous.results, **fresh.results},
+            deps={**previous.deps, **fresh.deps},
         )
 
     async def _compute(

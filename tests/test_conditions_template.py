@@ -378,6 +378,18 @@ async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
     assert snap.results == {a: True, b: False}
 
 
+async def test_snapshot_empty_keys_hint_returns_the_previous_snapshot(
+    hass: HomeAssistant,
+) -> None:
+    """A hint naming nothing recomputes nothing, so the baseline is already the
+    answer — no merge, no copy."""
+    tmpl = "{{ true }}"
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
+    cond = TemplateCondition(hass=hass)
+    first = await cond.snapshot(hass)
+    assert await cond.snapshot(hass, keys=frozenset()) is first
+
+
 async def test_full_refresh_drops_a_key_no_longer_referenced(hass: HomeAssistant) -> None:
     """The merge makes the snapshot stateful; a full refresh is where a template
     that no scene references any more finally disappears."""

@@ -85,10 +85,7 @@ class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
             return
         if not isinstance(predicate, dict):
             raise AmbienceError("script_predicate_not_object", predicate=predicate)
-        script = predicate.get("script")
-        if not isinstance(script, str) or not script.startswith("script."):
-            raise AmbienceError("script_id_invalid", script=script)
-        validate_entity_ids([script], "script", key="script_id_invalid")
+        validate_entity_ids([predicate.get("script")], "script", key="script_id_invalid")
         args = predicate.get("args")
         if args is not None and not isinstance(args, dict):
             raise AmbienceError("script_args_not_object", args=args)
@@ -162,7 +159,7 @@ class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
         return script, args_json
 
     def _merge(self, fresh: ScriptSnapshot, previous: ScriptSnapshot) -> ScriptSnapshot:
-        return ScriptSnapshot(results=self._merge_over_previous(previous.results, fresh.results))
+        return ScriptSnapshot(results={**previous.results, **fresh.results})
 
     async def _compute(
         self,

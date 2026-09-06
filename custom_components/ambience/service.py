@@ -14,10 +14,10 @@ from dataclasses import replace
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .conditions._common import UNAVAILABLE
+from .conditions._opaque import OpaquePrecomputedCondition
 from .const import (
     DATA_APPLY_LOCKS,
     DATA_CONDITIONS,
@@ -37,7 +37,7 @@ from .errors import service_validation_error
 from .scope_triggers import referenced_entities
 from .scopes import find_scope_spec, not_found_validation_error
 from .service_logbook import log_apply, log_run_actions
-from .switch import switch_unique_id
+from .switch import switch_registry_entry
 from .trace import (
     CauseKind,
     Outcome,
@@ -118,18 +118,14 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
 
     A switch the user disabled in the entity registry has no live entity, but
     disabling it is how a user pauses the scope from Settings -> Entities, so a
-    registered-but-disabled entry reads 'off'. Only a genuinely unregistered
-    switch is 'unknown'.
+    registered-but-disabled entry reads 'off'. 'unknown' therefore covers both
+    an unregistered switch and a registered, enabled one that has not loaded yet.
     """
     switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
     if switch is not None:
         return "on" if switch.is_on else "off"
 
-    ent_reg = er.async_get(hass)
-    entity_id = ent_reg.async_get_entity_id(
-        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
-    )
-    entry = ent_reg.async_get(entity_id) if entity_id is not None else None
+    entry = switch_registry_entry(hass, scope_kind, scope_id)
     if entry is None:
         return "unknown"
     return "off" if entry.disabled_by is not None else "unknown"
@@ -276,10 +272,10 @@ async def snapshot_conditions(
     `result_keys` narrows the work further for the opaque pre-computed
     conditions (`script`/`template`): {condition: the result keys of the
     predicates that fired}, so only those items are recomputed and the rest are
-    carried over from the condition's previous snapshot. It is passed only to
-    conditions declaring `supports_result_keys`, leaving every other
-    condition's snapshot signature untouched; a condition absent from the map
-    (or no map at all) gets a full refresh.
+    carried over from the condition's previous snapshot. Only an
+    `OpaquePrecomputedCondition` takes the `keys` kwarg, so every other
+    condition's snapshot signature stays untouched; a condition absent from the
+    map (or no map at all) gets a full refresh.
     """
     names = (
         list(conditions_registry) if keys is None else [k for k in keys if k in conditions_registry]
@@ -290,13 +286,11 @@ async def snapshot_conditions(
         # signature mismatch) inside the gather, where it becomes a None
         # snapshot like any other failure.
         condition = conditions_registry[name]
+        entities = referenced.get(name, frozenset())
         hint = result_keys.get(name) if result_keys is not None else None
-        extra = (
-            {"keys": hint}
-            if hint is not None and getattr(condition, "supports_result_keys", False)
-            else {}
-        )
-        return await condition.snapshot(hass, entities=referenced.get(name, frozenset()), **extra)
+        if hint is not None and isinstance(condition, OpaquePrecomputedCondition):
+            return await condition.snapshot(hass, entities=entities, keys=hint)
+        return await condition.snapshot(hass, entities=entities)
 
     results = await asyncio.gather(*(_one(name) for name in names), return_exceptions=True)
     snapshots: dict[str, Any] = {}
@@ -449,19 +443,28 @@ async def async_resolve_and_apply_unit(
     availability) may act. `entity_ids_for` supplies precomputed trace entity_ids
     (see `async_resolve_with_snapshots`).
     """
-    switch_state = _switch_state(hass, scope_kind, scope_id)
+    cached_switch_state: str | None = None
+
+    def switch_state() -> str:
+        """The scope's switch state, read at most once and only where it is
+        actually consumed — a registry lookup that a disabled scope, and an
+        untraced manual apply, both discard."""
+        nonlocal cached_switch_state
+        if cached_switch_state is None:
+            cached_switch_state = _switch_state(hass, scope_kind, scope_id)
+        return cached_switch_state
 
     def trace(outcome: Outcome, explanation: Any = None, **kw: Any) -> UnitTrace | None:
         """This unit's trace for `outcome`, or None when tracing is inactive."""
         if not active:
             return None
         return UnitTrace(
-            scope_kind, scope_id, category_id, switch_state, outcome, explanation, **kw
+            scope_kind, scope_id, category_id, switch_state(), outcome, explanation, **kw
         )
 
     if not _scope_enabled(hass, scope_kind, scope_id):
         return trace(Outcome.SKIPPED_SCOPE_DISABLED)
-    if not manual and switch_state == "off":
+    if not manual and switch_state() == "off":
         return trace(Outcome.SKIPPED_SWITCH_OFF)
     # Serialize resolve+apply per (scope, category): a burst of triggers on
     # one unit arrives as separate tasks. Without this, while one task is

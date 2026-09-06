@@ -36,11 +36,6 @@ class OpaquePrecomputedCondition[SnapshotT]:
     # Set by each subclass; used by `_distinct_keys` to pick the right predicates.
     name: str
 
-    # Declares the `keys` snapshot hint below: `snapshot_conditions` narrows the
-    # work only for conditions carrying this flag, so every other condition's
-    # snapshot signature stays untouched.
-    supports_result_keys = True
-
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
         # The last snapshot produced, so a hinted (partial) pass can merge its
@@ -106,7 +101,14 @@ class OpaquePrecomputedCondition[SnapshotT]:
         hinted = keys if self._previous is not None else None
         fresh = await self._compute(hass, hinted)
         baseline = self._previous
-        snap = fresh if hinted is None or baseline is None else self._merge(fresh, baseline)
+        if hinted is None or baseline is None:
+            snap = fresh
+        elif not fresh.results:
+            # A hint that named nothing recomputed nothing: the baseline already
+            # is the answer, so merging would only copy it.
+            snap = baseline
+        else:
+            snap = self._merge(fresh, baseline)
         self._previous = snap
         return snap
 
@@ -120,14 +122,6 @@ class OpaquePrecomputedCondition[SnapshotT]:
         """``fresh``'s partial maps laid over ``previous``'s, as a new snapshot
         of the subclass's own type."""
         raise NotImplementedError  # pragma: no cover
-
-    @staticmethod
-    def _merge_over_previous(
-        previous: Mapping[str, Any],
-        fresh: Mapping[str, Any],
-    ) -> dict[str, Any]:
-        """``fresh`` laid over the ``previous`` snapshot's matching map."""
-        return {**previous, **fresh}
 
     def _distinct_keys(self, key_of: Callable[[dict[str, Any]], Any]) -> list[Any]:
         """Distinct, insertion-ordered ``key_of(pred)`` values over every scope's

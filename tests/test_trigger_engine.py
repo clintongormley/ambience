@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held, tenure_within
+from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -2785,11 +2786,9 @@ async def test_trace_entity_ids_come_from_prebuilt_specs(hass) -> None:
 # --- async_evaluate: the per-condition result-key hint ---------------------
 
 
-class HintCondition:
-    """Opaque-style condition: declares the snapshot hint, records what it was
+class HintCondition(OpaquePrecomputedCondition):
+    """Opaque-style condition: takes the snapshot hint, records what it was
     given, and uses the predicate string itself as the result key."""
-
-    supports_result_keys = True
 
     def __init__(self) -> None:
         self.hints: list[frozenset[str] | None] = []
@@ -2898,21 +2897,80 @@ async def test_evaluate_hint_carries_an_unwatchable_opaque_predicate(hass) -> No
     assert engine._snapshots["template"].results[broad] is True
 
 
-async def test_evaluate_hint_leaves_a_watched_opaque_predicate_out(hass) -> None:
-    """Only UNWATCHABLE opaque predicates ride along: one the index can fire in
-    its own right (a `script` naming its `triggers`) keeps the narrow hint."""
-    cond = OpaqueHintCondition()
+async def test_evaluate_hint_carries_a_watched_over_broad_template(hass) -> None:
+    """An over-broad template still reports the entities it did see, so it sits
+    in `by_entity` and looks "watched" — but `opaque` means those deps are
+    incomplete. It must ride along with a narrowed refresh, or a change to
+    something it scans but never named leaves it stale."""
+    from custom_components.ambience.conditions.template import TemplateCondition
+
+    hass.states.async_set("input_boolean.a", "off")
+    hass.states.async_set("input_boolean.b", "off")
+    hass.states.async_set("light.l1", "off")
+    plain = "{{ is_state('input_boolean.a', 'on') }}"
+    broad = (
+        "{{ is_state('input_boolean.b', 'on') or "
+        "(states.light | selectattr('state', 'eq', 'on') | list | count) > 0 }}"
+    )
     engine = _hint_engine(
         hass,
         [
-            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
-            {"when": {"tmpl": "watched:b"}, "category": "g", "actions": []},
-            {"when": {"tmpl": "blind"}, "category": "g", "actions": []},
+            {"when": {"template": {"template": plain}}, "category": "g", "actions": []},
+            {"when": {"template": {"template": broad}}, "category": "g", "actions": []},
         ],
-        {"tmpl": cond},
+        {"template": TemplateCondition(hass)},
     )
+    broad_key = ("area", "a", 1, "template")
+    assert engine.index.opaque == frozenset({broad_key})
+    assert broad_key in engine.index.by_entity["input_boolean.b"]
+    await engine.async_initial_sync()
+    assert engine._snapshots["template"].results[broad] is False
+
+    hass.states.async_set("light.l1", "on")  # nothing in the index watches this
+    hass.states.async_set("input_boolean.a", "on")
+    await engine.async_evaluate({("area", "a", 0, "template")})
+    assert engine._snapshots["template"].results[broad] is True
+
+
+class MixedOpacityHintCondition(HintCondition):
+    """Predicates named "opaque:*" carry a watch of their own AND declare their
+    dependencies incomplete (the shape of an over-broad template); every other
+    predicate is fully watched."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        opaque = isinstance(predicate, str) and predicate.startswith("opaque:")
+        return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}), opaque=opaque)
+
+
+def _mixed_opacity_engine(hass) -> AutoTriggerEngine:
+    return _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "opaque:a"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "opaque:b"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "plain:c"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": MixedOpacityHintCondition()},
+    )
+
+
+async def test_evaluate_hint_carries_a_watched_opaque_predicate(hass) -> None:
+    """A watch of its own does not make an opaque predicate safe to leave out:
+    `opaque` says the deps are incomplete, so something it depends on but never
+    named may have changed. Every opaque predicate of a hinted condition rides
+    along."""
+    engine = _mixed_opacity_engine(hass)
+    assert engine._fired_result_keys({("area", "a", 2, "tmpl")}) == {
+        "tmpl": frozenset({"plain:c", "opaque:a", "opaque:b"})
+    }
+
+
+async def test_evaluate_hint_leaves_an_unfired_non_opaque_predicate_out(hass) -> None:
+    """A non-opaque predicate is carried only when it fires: its own watches
+    cover every dependency it has, so the hint stays narrow."""
+    engine = _mixed_opacity_engine(hass)
     assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
-        "tmpl": frozenset({"watched:a", "blind"})
+        "tmpl": frozenset({"opaque:a", "opaque:b"})
     }
 
 

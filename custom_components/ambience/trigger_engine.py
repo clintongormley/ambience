@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.util import dt as dt_util
 
+from .conditions._opaque import OpaquePrecomputedCondition
 from .const import (
     DATA_CONDITIONS,
     DATA_STORE,
@@ -86,6 +87,12 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # per predicate per fire (a wildcard people predicate would re-scan every
         # person entity). Sorted for deterministic trace output.
         self._pred_entities: dict[PredKey, tuple[str, ...]] = {}
+        # Every opaque predicate, from the last rebuild: `opaque` means the
+        # predicate's dependencies cannot be fully known, so no fire proves it
+        # unchanged and a narrowed snapshot has to carry all of them or they go
+        # stale until the next full refresh. Only the index decides this, so it
+        # is per-rebuild data, not per-fire.
+        self._opaque_ride_along: set[PredKey] = set()
         self._snapshots: dict[str, Any] = {}
         self._unsubs: list[Callable[[], None]] = []
         # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
@@ -144,6 +151,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         entries = self._build_entries()
         self._pred_entities = {key: tuple(sorted(spec.entities)) for key, spec in entries}
         self._index = build_index(entries)
+        self._opaque_ride_along = set(self._index.opaque)
         # Drop flip-state for predicates that no longer exist (scenes removed /
         # reordered), so it can't grow unbounded across config edits.
         live = self._index.all_predicates()
@@ -310,21 +318,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             elif gate_key not in tenure:
                 tenure[gate_key] = anchor if seed else now
 
-    def _unwatchable_opaque(self) -> set[PredKey]:
-        """Opaque predicates with no watch of their own — an all-states template,
-        a `script` declaring no `triggers`. Nothing in the index will ever fire
-        them, so a narrowed snapshot has to carry them or they go stale until the
-        next full refresh."""
-        idx = self._index
-        watched: set[PredKey] = set(idx.durations) | idx.midnight | idx.has_time
-        for bucket in (idx.by_entity, idx.by_clock, idx.by_sun, idx.by_domain):
-            for predicates in bucket.values():
-                watched |= predicates
-        return set(idx.opaque) - watched
-
     def _fired_result_keys(self, fired: set[PredKey]) -> dict[str, frozenset[str]]:
         """Per-condition snapshot hint: the result keys of the fired predicates
-        (plus the condition's unwatchable opaque ones, which no fire can reach),
+        (plus the condition's opaque ones, whose deps are never fully known),
         for the conditions that accept a hint. A condition is left out — falling
         back to a full recompute — as soon as one of its predicates has no
         derivable result key (a scene removed since the fire, or a malformed
@@ -342,9 +338,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
 
         for key in fired:
             condition = conditions.get(key[3])
-            if getattr(condition, "supports_result_keys", False):
+            if isinstance(condition, OpaquePrecomputedCondition):
                 _add(key, condition)
-        for key in self._unwatchable_opaque():
+        if not hints:
+            # No condition can be hinted, and the opaque ride-along only ever
+            # extends a condition already in `hints`.
+            return {}
+        for key in self._opaque_ride_along:
             if key[3] in hints:
                 _add(key, conditions[key[3]])
         return {k: frozenset(v) for k, v in hints.items() if k not in unhinted}

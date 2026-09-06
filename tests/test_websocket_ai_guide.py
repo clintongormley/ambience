@@ -89,3 +89,28 @@ async def test_ai_guide_reads_the_file_once_per_version(
     assert first["result"]["guide"] == "<!-- AUTO-GENERATED --> cached guide"
     assert second["result"]["guide"] == first["result"]["guide"]
     assert reads == ["utf-8"]
+
+
+async def test_ai_guide_cache_survives_a_config_entry_reload(
+    hass, installed, hass_ws_client, monkeypatch
+) -> None:
+    # The guide is immutable for a running version, so a reload (which pops
+    # hass.data[DOMAIN]) must not cost another read of the large file.
+    from custom_components.ambience import guide
+
+    reads: list[str] = []
+
+    class _CountingPath:
+        def read_text(self, encoding: str) -> str:
+            reads.append(encoding)
+            return "<!-- AUTO-GENERATED --> cached guide"
+
+    monkeypatch.setattr(guide, "GUIDE_PATH", _CountingPath())
+
+    await _ws_send(hass_ws_client, type="ambience/ai_guide")
+    assert await hass.config_entries.async_reload(installed.entry_id)
+    await hass.async_block_till_done()
+    second = await _ws_send(hass_ws_client, type="ambience/ai_guide", id=2)
+
+    assert second["result"]["guide"] == "<!-- AUTO-GENERATED --> cached guide"
+    assert reads == ["utf-8"]

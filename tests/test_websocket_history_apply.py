@@ -177,7 +177,7 @@ async def test_redo_skips_deleted_scope(hass, hass_ws_client, installed) -> None
 async def test_scope_exists_unknown_kind_returns_false(hass, installed) -> None:
     """_scope_exists returns True for the known 'house' kind and False (safe default)
     for any unrecognised scope_kind — documenting the defensive fall-through contract."""
-    from custom_components.ambience.websocket import _scope_exists
+    from custom_components.ambience.scopes import scope_exists as _scope_exists
 
     assert _scope_exists(hass, "house", None) is True
     assert _scope_exists(hass, "nonsense", None) is False

@@ -10,7 +10,6 @@ from homeassistant.helpers import floor_registry as fr
 
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.scopes import (
-    SCOPE_KINDS,
     find_scope_spec,
     iter_scope_kinds,
     not_found_error,
@@ -24,8 +23,7 @@ from custom_components.ambience.scopes import (
 
 
 def test_scope_kinds_are_house_floor_area() -> None:
-    assert SCOPE_KINDS == ("house", "floor", "area")
-    assert [spec.kind for spec in iter_scope_kinds()] == list(SCOPE_KINDS)
+    assert [spec.kind for spec in iter_scope_kinds()] == ["house", "floor", "area"]
 
 
 def test_house_is_the_only_id_less_kind() -> None:

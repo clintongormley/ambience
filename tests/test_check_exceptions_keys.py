@@ -46,8 +46,12 @@ def test_used_keys_extracts_delegated_key_kwarg():
     assert used_keys(src) == {"lux_sensors_not_list"}
 
 
-def test_used_keys_extracts_scope_table_not_found_keys():
-    """scopes.not_found_error raises on its caller's behalf, so the table's
-    `not_found_key=` literal is the key reference."""
-    src = 'ScopeKind(kind="area", not_found_key="unknown_area")\n'
-    assert used_keys(src) == {"unknown_area"}
+def test_used_keys_extracts_any_key_suffixed_kwarg():
+    """Every delegating carrier names its key in a `*_key=` keyword, so one rule
+    covers the scope table's `not_found_key=` and HA's `translation_key=` alike
+    — without it those keys read as unused."""
+    src = (
+        'ScopeKind(kind="area", not_found_key="unknown_area")\n'
+        'HomeAssistantError(translation_key="unexpected_error")\n'
+    )
+    assert used_keys(src) == {"unknown_area", "unexpected_error"}

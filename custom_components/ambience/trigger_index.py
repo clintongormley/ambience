@@ -27,7 +27,9 @@ class TriggerIndex:
     - ``by_domain``: domains whose *membership* predicates depend on (a wildcard
       "all persons" test), mapped to those predicates. The engine watches these
       for entities appearing/disappearing and rebuilds, which re-enumerates the
-      wildcard into fresh ``by_entity`` watches.
+      wildcard into fresh ``by_entity`` watches. It is the one field with a
+      default, so a direct construction (tests) can omit it; production always
+      goes through ``build_index``, which supplies it.
     - ``midnight`` / ``has_time`` / ``opaque``: predicate sets flagged by the
       corresponding ``TriggerSpec`` booleans.
     - ``durations``: per-predicate ``for:`` gates as a frozenset of

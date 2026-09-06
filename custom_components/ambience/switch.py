@@ -78,18 +78,26 @@ def _get_scope_device(
     return lookup_device_by_identifier(dev_reg, _device_identifier(scope_kind, scope_id), entry_id)
 
 
+def _parse_off_at(iso: str | None) -> datetime | None:
+    """A stored pause timestamp as a UTC-aware datetime, or None when absent or
+    unusable. Normalised to UTC so it can be compared and subtracted against
+    ``dt_util.utcnow()`` even if a naive timestamp ever reaches the store."""
+    if not iso:
+        return None
+    try:
+        return dt_util.as_utc(datetime.fromisoformat(iso))
+    except (ValueError, TypeError):
+        return None
+
+
 class _CancellableTimer:
-    """Wraps the unsubscribe callable from async_track_point_in_utc_time.
+    """Wraps the unsubscribe callable from async_track_point_in_utc_time behind
+    the `.cancel()` / `.cancelled()` interface of an asyncio.TimerHandle, so a
+    cancel is idempotent and an already-cancelled timer is recognisable."""
 
-    Provides a `.cancel()` / `.cancelled()` interface plus the `fire_at` due
-    time, so test code can inspect timer state the same way it would with
-    asyncio.TimerHandle.
-    """
-
-    def __init__(self, unsub_fn: Any, fire_at: datetime) -> None:
+    def __init__(self, unsub_fn: Any) -> None:
         self._unsub = unsub_fn
         self._cancelled = False
-        self.fire_at = fire_at
 
     def cancel(self) -> None:
         if not self._cancelled:
@@ -106,6 +114,20 @@ def switch_unique_id(scope_kind: str, scope_id: str | None) -> str:
     if not scope_spec(scope_kind).has_id:
         return "ambience_switch_house"
     return f"ambience_switch_{scope_kind}_{scope_id}"
+
+
+def switch_registry_entry(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None
+) -> er.RegistryEntry | None:
+    """The entity-registry entry for a scope's switch, or None when the switch
+    was never registered. A switch the user disabled still HAS an entry — only
+    its live entity is gone — so callers distinguish the two by the entry's
+    `disabled_by`."""
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id(
+        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
+    )
+    return ent_reg.async_get(entity_id) if entity_id is not None else None
 
 
 def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
@@ -391,18 +413,10 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     def _off_at(self) -> datetime | None:
         """This switch's persisted pause time, or None when it is not paused or
-        the stored value is unusable.
-
-        Normalised to UTC-aware so it can be compared and subtracted against
-        ``dt_util.utcnow()`` even if a naive timestamp ever reaches the store.
-        """
-        off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
-        if not off_at_iso:
-            return None
-        try:
-            return dt_util.as_utc(datetime.fromisoformat(off_at_iso))
-        except (ValueError, TypeError):
-            return None
+        the stored value is unusable."""
+        return _parse_off_at(
+            self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -481,7 +495,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return
         fire_at = dt_util.utcnow() + timedelta(seconds=seconds)
         unsub = async_track_point_in_utc_time(self.hass, self._fire_auto_on, fire_at)
-        self._timer = _CancellableTimer(unsub, fire_at)
+        self._timer = _CancellableTimer(unsub)
 
     def _schedule_auto_on_from_store(self, *, turn_on_if_expired: bool) -> None:
         delay = self._resolved_delay()
@@ -503,7 +517,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             )
             self._schedule_auto_on(seconds=delay)
             return
-        off_at = self._off_at()
+        off_at = _parse_off_at(off_at_iso)
         if off_at is None:
             _LOGGER.warning("ambience switch: invalid off_at %r — ignoring", off_at_iso)
             return

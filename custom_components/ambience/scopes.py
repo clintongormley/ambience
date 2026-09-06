@@ -95,8 +95,6 @@ _SPECS: tuple[ScopeKind, ...] = (
 
 _BY_KIND: dict[str, ScopeKind] = {spec.kind: spec for spec in _SPECS}
 
-SCOPE_KINDS: tuple[str, ...] = tuple(_BY_KIND)
-
 
 def iter_scope_kinds() -> Iterator[ScopeKind]:
     """Every scope kind, house first."""

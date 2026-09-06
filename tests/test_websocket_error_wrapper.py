@@ -12,7 +12,7 @@ routes its caught exceptions through. It must:
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.ambience.errors import AmbienceError
-from custom_components.ambience.websocket import send_ambience_error
+from custom_components.ambience.websocket.common import send_ambience_error
 
 
 class _Conn:

@@ -157,7 +157,7 @@ async def test_resolve_install_id_is_none_without_entry(hass: HomeAssistant) -> 
     """The helper returns None when no Ambience entry exists. The ws command
     can't reach this (it's unregistered without an entry), so it's covered here
     directly — a teardown-race guard against IndexError on an empty entry list."""
-    from custom_components.ambience.websocket import _resolve_install_id
+    from custom_components.ambience.websocket.ai import _resolve_install_id
 
     assert _resolve_install_id(hass) is None
 

@@ -116,9 +116,11 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    # Before anything that can raise a translatable error: the first render
-    # would otherwise read en.json on the event loop.
-    await async_preload_translations(hass)
+    # Warm the en.json read behind error rendering in the executor, alongside
+    # the rest of setup rather than ahead of it. Awaited before the websocket
+    # commands register: their error renderer is the only consumer, and it must
+    # never do that read on the event loop.
+    preload_translations = hass.async_create_task(async_preload_translations(hass))
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_SWITCHES] = {}
@@ -209,18 +211,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
-            from .switch import switch_unique_id
+            from .switch import switch_registry_entry
 
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
             clear_last_applied(hass, "area", area_id)
             clear_live_state(hass, "area", area_id)
-            ent_reg = er.async_get(hass)
-            ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, switch_unique_id("area", area_id)
-            )
-            if ent_id is not None:
-                ent_reg.async_remove(ent_id)
+            switch_entry = switch_registry_entry(hass, "area", area_id)
+            if switch_entry is not None:
+                er.async_get(hass).async_remove(switch_entry.entity_id)
             _remove_scope_device(hass, entry.entry_id, "area", area_id)
 
     entry.async_on_unload(
@@ -244,18 +243,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
-            from .switch import switch_unique_id
+            from .switch import switch_registry_entry
 
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
             clear_last_applied(hass, "floor", floor_id)
             clear_live_state(hass, "floor", floor_id)
-            ent_reg = er.async_get(hass)
-            ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, switch_unique_id("floor", floor_id)
-            )
-            if ent_id is not None:
-                ent_reg.async_remove(ent_id)
+            switch_entry = switch_registry_entry(hass, "floor", floor_id)
+            if switch_entry is not None:
+                er.async_get(hass).async_remove(switch_entry.entity_id)
             _remove_scope_device(hass, entry.entry_id, "floor", floor_id)
 
     entry.async_on_unload(
@@ -409,6 +405,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Last: the commands read hass.data[DOMAIN], so none may be servable before
     # every key (the engine included) is in place.
+    await preload_translations
     async_register_commands(hass)
 
     return True

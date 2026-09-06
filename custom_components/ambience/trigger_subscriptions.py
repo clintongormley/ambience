@@ -220,7 +220,7 @@ class TriggerSubscriptionsMixin:
         settings — cancel all, then re-arm applied units (a no-op when the feature
         is now disabled, since _arm_reapply_timer gates on enabled)."""
         self._cancel_all_reapply_timers()
-        self._rearm_all_reapply_timers()
+        self._sync_reapply_timers()
 
     @callback
     def _arm_reapply_timer(self, unit: tuple[str, str | None, str]) -> None:
@@ -279,17 +279,13 @@ class TriggerSubscriptionsMixin:
             cancel()
         self._reapply_timers.clear()
 
-    def _rearm_all_reapply_timers(self) -> None:
-        for unit in self._all_units():
-            if get_last_applied(self._hass, *unit) is not None:
-                self._arm_reapply_timer(unit)
-
     def _sync_reapply_timers(self) -> None:
-        """Reconcile the idle-reapply timers with the rebuilt unit set, without
+        """Reconcile the idle-reapply timers with the current unit set, without
         disturbing live ones — a config save anywhere must not reset every unit's
-        idle clock. Drop timers for units the rebuild removed, and arm applied
-        units that have no timer yet (first subscribe, or a unit whose timer fired
-        and was consumed while its scope was gated out)."""
+        idle clock. Drop timers for units that are gone, and arm applied units
+        that have no timer yet (first subscribe, a unit whose timer fired and was
+        consumed while its scope was gated out, or every applied unit after
+        `note_reapply_config_changed` has cancelled them all)."""
         live = self._all_units()
         live_set = set(live)
         for unit in [u for u in self._reapply_timers if u not in live_set]:

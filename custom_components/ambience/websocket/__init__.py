@@ -1,17 +1,15 @@
 """WebSocket API for the Ambience panel.
 
 The handlers live in per-family modules; this package is the single
-registration point and the one import path the rest of the integration —
-and the test suite — uses."""
+registration point and the one import path for registration and
+unregistration."""
 
 from __future__ import annotations
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from ..scopes import scope_exists as _scope_exists
 from .ai import (
-    _resolve_install_id,
     _ws_ai_bundle,
     _ws_ai_context,
     _ws_ai_guide,
@@ -25,7 +23,6 @@ from .ai import (
     _ws_services_list,
 )
 from .categories import _ws_categories_delete, _ws_categories_list, _ws_categories_save
-from .common import send_ambience_error
 from .conditions_config import (
     _ws_conditions_list,
     _ws_day_config_list,
@@ -73,24 +70,16 @@ from .scopes import (
     _ws_validate,
 )
 from .simulate import (
-    MAX_SIMULATE_ENTRIES,
     _ws_scope_diagnostics,
     _ws_simulate,
     _ws_simulate_inputs,
     _ws_simulate_sun_anchors,
 )
 
-# `custom_components.ambience.websocket` stays the one import path for the ws
-# API: the public entry points plus the private helpers the test suite reaches
-# for directly.
-__all__ = [
-    "MAX_SIMULATE_ENTRIES",
-    "_resolve_install_id",
-    "_scope_exists",
-    "async_register_commands",
-    "async_unregister_commands",
-    "send_ambience_error",
-]
+# `custom_components.ambience.websocket` is the one import path for the ws API:
+# registration and unregistration. Everything else lives in the module that
+# owns it.
+__all__ = ["async_register_commands", "async_unregister_commands"]
 
 
 def async_register_commands(hass: HomeAssistant) -> None:

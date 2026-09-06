@@ -76,5 +76,6 @@ class Condition(Protocol):
         ...
 
     def validate_predicate(self, predicate: Any) -> None:
-        """Raise ValueError if the predicate is malformed."""
+        """Raise ``AmbienceError`` (carrying a translatable key) if the
+        predicate is malformed."""
         ...

@@ -24,9 +24,9 @@
     `AmbienceError` / `service_validation_error` (translation_key in
     strings.json `exceptions`); frontend text via
     `localize(hass, "ui.<key>", …)` with the key added to
-    `frontend/src/i18n-data.ts` (both `en` and `es`). `make i18n` (run by the
-    pre-push hook and CI) enforces this — hardcoded user-facing strings fail the
-    build.
+    `frontend/src/i18n-data.ts` (all four shipped locales: `en`, `es`, `pt`,
+    `fr`). `make i18n` (run by the pre-push hook and CI) enforces this —
+    hardcoded user-facing strings fail the build.
 - Before creating a release, update docs, translations, and tests.
 - The `manifest.json` keys must be sorted: `domain`, `name` first, then all
     remaining keys in alphabetical order.

@@ -120,6 +120,8 @@ class WeatherCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> WeatherSnapshot:
+        # Strict index: snapshot() only runs after setup, so a missing store is a
+        # bug, not a state to tolerate.
         store = hass.data[DOMAIN][DATA_STORE]
         entity_id = store.get_condition_config("weather").get("entity")
         if not entity_id:

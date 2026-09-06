@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -15,14 +14,6 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.const import DATA_SWITCH_ADD_ENTITIES, DATA_SWITCHES, DOMAIN
 from tests import get_scope_device
-
-
-@pytest.fixture
-async def installed(hass, mock_config_entry):
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
 
 
 async def test_house_switch_present_after_setup(hass, installed):

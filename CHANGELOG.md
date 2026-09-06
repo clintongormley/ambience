@@ -44,7 +44,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     unavailable.
 - Scene ordering and shadowing for sun-anchored times with a clamp no longer
     depend on the Home Assistant time zone.
-- Time ranges that cross the daylight-saving switch hour now behave as
+- Time ranges that cross the daylight-saving switch hour now match as
     configured.
 - A malformed condition in one scene no longer prevents the other scenes in its
     category from being evaluated.
@@ -88,11 +88,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Running a scene's actions by hand while the engine is applying the same scope
     and category now waits for that apply to finish instead of interleaving with
     it.
-- The MCP server no longer re-sends a write whose reply was lost for commands
-    that do not end in "/save" (deleting a category, undo/redo, resetting
-    periods or lux ranges, clearing traces, applying a scope, running a scene's
-    actions, enabling or disabling a scope); a lost reply could previously apply
-    such a write twice.
+- The MCP server no longer re-sends a write whose reply was lost for writes
+    other than a scope or category save (deleting a category, undo/redo,
+    resetting periods or lux ranges, clearing traces, applying a scope, running
+    a scene's actions, enabling or disabling a scope); a lost reply could
+    previously apply such a write twice.
+- Sun elevation and azimuth bounds and weather thresholds that are not finite
+    numbers are now rejected when saving, and a numeric state comparison against
+    an infinite value no longer matches.
 
 ### Performance
 

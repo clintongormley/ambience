@@ -337,7 +337,7 @@ def test_threshold_with_unknown_operator_never_matches() -> None:
     snap = _snap("sunny", temperature=5.0)
     for op in ("==", "!=", ""):
         assert (
-            WeatherCondition._threshold_ok(
+            WeatherCondition._threshold_ok(  # noqa: SLF001
                 {"attribute": "temperature", "op": op, "value": 5.0}, snap
             )
             is False

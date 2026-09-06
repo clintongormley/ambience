@@ -182,7 +182,7 @@ export type LuxRangeStoreView = {
 /** Per-scene predicate. `null` = wildcard (no lux constraint). A predicate
  *  references a named `range` XOR an inline `min`/`max` band. */
 export interface LuxPredicate {
-  sensors: string[]; // sensor.* (illuminance) entity_ids; empty = match-anything
+  sensors: string[]; // sensor.* entity_ids (any numeric sensor); empty = match-anything
   range?: string; // a named lux range id
   min?: number; // inline band lower bound (inclusive)
   max?: number; // inline band upper bound (exclusive)

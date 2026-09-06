@@ -29,14 +29,6 @@ from tests import get_scope_device
 
 
 @pytest.fixture
-async def installed(hass, mock_config_entry):
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
-
-
-@pytest.fixture
 def area_id(hass):
     return ar.async_get(hass).async_create("Living Room").id
 

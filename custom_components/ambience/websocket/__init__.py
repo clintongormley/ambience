@@ -157,8 +157,10 @@ _WS_HANDLERS = (
     _ws_simulate_sun_anchors,
 )
 
-# Every registered command is in exactly one of these two sets: a write persists,
-# fires services or clears state; a read does none of those. The MCP client
+# Every registered command is in exactly one of these two sets: a write persists
+# configuration or clears state Ambience owns; a read does neither — though a read
+# may still evaluate a user script or template condition, which runs that script.
+# The MCP client
 # mirrors WRITE_COMMANDS as `ambience_mcp.ha_client.MUTATING_COMMANDS` to decide
 # which commands it may re-send after a lost reply, and
 # tests/test_protocol_shape.py gates both the partition and the mirroring.

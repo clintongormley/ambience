@@ -222,8 +222,8 @@ function _whereLabel(where: string, ctx: ConditionContext): string {
  * for the "X of:" modes — e.g. "Everybody is at Home", "None of: (Clinton) is
  * at Home", "Any of: (Alice) is not at Work".
  * Mode is keyed off the presence of the `who` key (matching the input widget):
- * absent → a base mode (everyone→Everybody, nobody→Nobody); present → an
- * "X of:" mode chosen by `quant`.
+ * absent → a base mode (everyone→Everybody, any→Anybody, nobody→Nobody);
+ * present → an "X of:" mode chosen by `quant`.
  */
 export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");

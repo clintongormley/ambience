@@ -356,7 +356,7 @@ check the AI bundle.
 
 ```jsonc
 {
-  "sensors": ["sensor.living_lux"],   // illuminance sensors; empty/absent = wildcard!
+  "sensors": ["sensor.living_lux"],   // numeric sensors; empty/absent = wildcard!
   "range": "dark",                    // a named lux range id  (XOR the inline band below)
   "min": 10, "max": 50,               // inline half-open band [min, max) — use range OR min/max
   "quant": "any" | "all",             // default "any"
@@ -364,8 +364,8 @@ check the AI bundle.
 }
 ```
 
-- **`sensors` empty = wildcard.** List at least one (illuminance) sensor to
-  constrain.
+- **`sensors` empty = wildcard.** List at least one numeric sensor to constrain
+  (illuminance sensors are the usual choice, but any numeric sensor works).
 - Use **either** a named `range` **or** an inline `min`/`max` band — not both.
 - Built-in range ids: `dark` (<10), `dim` (10–50), `normal` (50–300), `bright`
   (300–1000), `very_bright` (≥1000) lx. Users may add custom ranges; check the

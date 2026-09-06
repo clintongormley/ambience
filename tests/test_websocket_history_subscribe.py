@@ -1,16 +1,5 @@
 """ambience/history/subscribe websocket command."""
 
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-
-@pytest.fixture
-async def installed(hass, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
-
 
 async def test_subscribe_sends_snapshot_then_pushes_on_change(hass, hass_ws_client, installed):
     client = await hass_ws_client()

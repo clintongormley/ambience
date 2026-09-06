@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DOMAIN
 from custom_components.ambience.trace import (
     BufferSink,
@@ -16,14 +13,6 @@ from custom_components.ambience.trace import (
     UnitTrace,
 )
 from custom_components.ambience.websocket import async_register_commands
-
-
-@pytest.fixture
-async def installed(hass, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
 
 
 async def _ws_send(hass_ws_client, **payload: Any) -> dict:

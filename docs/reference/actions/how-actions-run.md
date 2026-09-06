@@ -6,7 +6,9 @@ something else shifts — it applies the new winner's actions immediately.
 
 If you want to test a scene's actions without waiting for its conditions to
 match, use the **Run actions** option in the scene's action menu. This runs that
-scene's actions once, independently of the normal evaluation cycle.
+scene's actions once, independently of the normal evaluation cycle. If the
+engine is applying the same scope and category at that moment, the manual run
+waits for it to finish rather than interleaving with it.
 
 ![Run actions.](images/how-actions-run/run.png "Run actions.")
 

@@ -115,6 +115,8 @@ class DayCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> DaySnapshot:
+        # Strict index: snapshot() only runs after setup, so a missing store is a
+        # bug, not a state to tolerate.
         store = hass.data[DOMAIN][DATA_STORE]
         cfg = store.get_condition_config("day")
         today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()

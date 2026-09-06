@@ -273,9 +273,11 @@ class _WebsocketsTransport:
         await self._connection.close()
 
 
-# Every backend command that persists, fires services or clears state. A command
-# in this set is never re-sent after a lost reply (it may already have been
-# applied); anything else is a read and is safe to retry. Classified by the
+# Every backend command that persists configuration or clears state Ambience owns.
+# A command in this set is never re-sent after a lost reply (it may already have
+# been applied); anything else is a read and is safe to retry — a read may still
+# evaluate a user script or template condition, which runs that script, but it
+# leaves nothing of Ambience's behind. Classified by the
 # command itself — a fact about the protocol — rather than by a flag each tool has
 # to remember to set. Enumerated rather than suffix-matched: several writes
 # (`delete`, `undo`, `redo`, `reset`, `clear`, `apply`, `run_actions`,

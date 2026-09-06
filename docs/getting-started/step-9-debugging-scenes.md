@@ -32,8 +32,9 @@ The **Auto-triggers** option will show a list of all of the triggers
 automatically derived from the various conditions that you have specified. They
 are specific to the scenes in the scope/category group. Whenever any of the
 triggers is fired, all of the scenes in the scope/category group are reassessed
-to determine the new winning scene (if any). A people condition that applies to
-everybody also watches the `person` list itself, shown as a **People list** row.
+to determine the new winning scene (if any). A people condition with no named
+people (Everybody, Anybody or Nobody) also watches the `person` list itself,
+shown as a **People list** row.
 
 ![Auto-triggers.](images/step-9/autotriggers.png "Auto-triggers.")
 

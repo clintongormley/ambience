@@ -3,8 +3,10 @@
 Several conditions need the same primitives: a frozenset of the HA "no real
 value" states, a tolerant `{h,m,s}` duration reader, the matching save-time
 validator for that duration, a numeric-interval merge, the two float
-coercions (bool-rejecting and state-string-tolerant) and the ordering-operator
-comparison. Keeping one copy here avoids the set/tuple and
+coercions (bool-rejecting and state-string-tolerant), the ordering-operator
+comparison, the clock-field validators (`valid_hour`, `valid_minute`,
+`valid_clock`) and the `Reason` / `REASON_EN` table behind a trace's
+"why this cannot match". Keeping one copy here avoids the set/tuple and
 fix-it-in-one-place drift that crept in when each condition carried its own.
 """
 

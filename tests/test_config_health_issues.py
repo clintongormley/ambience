@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
@@ -19,14 +17,6 @@ from custom_components.ambience.const import (
     DOMAIN,
     STORAGE_UNREADABLE_ISSUE,
 )
-
-
-@pytest.fixture
-async def installed(hass: HomeAssistant, mock_config_entry) -> Any:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
 
 
 @pytest.fixture

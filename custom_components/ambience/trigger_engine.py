@@ -449,6 +449,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         await self._refresh_snapshots(
             {key[3] for key in fired}, result_keys=self._fired_result_keys(fired)
         )
+        if not self._running:
+            # Torn down while the refresh was awaited: the rest of the pass would
+            # apply units and re-arm `for:` rechecks against a dead engine.
+            return
         traces = await self._apply_units(
             self._recompute(fired, self._snapshots), cause=resolved_cause
         )

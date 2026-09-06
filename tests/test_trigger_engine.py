@@ -1048,6 +1048,9 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     since_after = engine.tenure["people"][gate_key]
 
     assert since_after == since_before  # clock did NOT reset on the zone hop
+    # Drain the state-change evaluations the async_set calls queued, so shutdown
+    # cancels the timers they arm rather than racing them.
+    await hass.async_block_till_done()
     # async_shutdown, not _teardown: the wildcard `who` watches the person domain,
     # so creating person.bob armed the refresh debouncer, which only shutdown cancels.
     engine.async_shutdown()
@@ -3005,3 +3008,41 @@ async def test_evaluate_hint_ignores_opaque_predicates_of_unfired_conditions(has
     assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
         "tmpl": frozenset({"watched:a"})
     }
+
+
+async def test_schedule_for_rechecks_arms_nothing_after_teardown(hass) -> None:
+    """Nothing may arm a timer after teardown: a torn-down engine has no cancel
+    path left, so an armed `for:` recheck would outlive it (a lingering timer)."""
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    engine.tenure["x"] = {"gate:binary_sensor.x": dt_util.utcnow()}
+    engine._teardown()
+
+    with patch("custom_components.ambience.trigger_subscriptions.async_call_later") as call_later:
+        engine._schedule_for_rechecks({key})
+
+    assert call_later.call_count == 0
+    assert engine._for_handles == {}
+
+
+async def test_async_evaluate_arms_nothing_when_torn_down_mid_refresh(hass) -> None:
+    """A queued evaluation whose snapshot refresh is still awaited when the engine
+    is torn down must abandon the pass rather than re-arm timers into a dead
+    engine."""
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    engine.tenure["x"] = {"gate:binary_sensor.x": dt_util.utcnow()}
+
+    async def _refresh_then_teardown(*_args, **_kwargs):
+        engine._teardown()
+
+    with (
+        patch.object(engine, "_refresh_snapshots", _refresh_then_teardown),
+        patch("custom_components.ambience.trigger_subscriptions.async_call_later") as call_later,
+        patch.object(engine, "_apply_units") as apply_units,
+    ):
+        await engine.async_evaluate({key})
+
+    assert call_later.call_count == 0
+    assert engine._for_handles == {}
+    assert apply_units.call_count == 0

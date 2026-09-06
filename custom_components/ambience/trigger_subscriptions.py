@@ -307,7 +307,13 @@ class TriggerSubscriptionsMixin:
         timer: they re-arm event-driven via the flip that records their tenure.
         A gate already matured (delay <= 0) needs none either: the evaluation
         that armed this pass already saw it true. Cancels and replaces any prior
-        handles per predicate, so calling this is idempotent."""
+        handles per predicate, so calling this is idempotent.
+
+        Arms nothing once the engine is torn down: teardown is the only thing
+        that cancels these handles, so a timer armed after it would outlive the
+        engine with no cancel path left."""
+        if not self._running:
+            return
         now = dt_util.utcnow()
         for key in preds:
             gates = self._index.durations.get(key)

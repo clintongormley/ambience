@@ -3102,7 +3102,7 @@ async def test_an_earlier_slow_refresh_does_not_overwrite_a_later_fast_one(hass)
     assert engine._snapshots["x"] == "new"
 
     gate.set()
-    await first
+    await asyncio.gather(first)  # A lands only now, after B
     assert engine._snapshots["x"] == "new"
 
 

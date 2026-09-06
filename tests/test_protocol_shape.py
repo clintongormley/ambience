@@ -566,7 +566,7 @@ def _read_mcp_set_literal(module: str, name: str) -> set[Any]:
                 continue  # bare frozenset() — no literal to read
             value = value.args[0]
         return set(ast.literal_eval(value))
-    pytest.fail(f"no module-level {name} assignment in mcp-server {module}")
+    raise AssertionError(f"no module-level {name} assignment in mcp-server {module}")
 
 
 def _load_mcp_diff():

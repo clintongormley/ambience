@@ -438,6 +438,32 @@ def _resolve_wall_clock(reference: datetime, hh: int, mm: int) -> datetime:
     return candidate
 
 
+def next_wall_clock(now: datetime, hh: int, mm: int) -> datetime:
+    """The first instant strictly after `now` whose local wall clock reads hh:mm,
+    resolved the way matching resolves it (`_resolve_wall_clock`).
+
+    - A time the spring-forward gap skips fires at the jump instant, so a range
+      that starts in the gap still gets its entry trigger that day.
+    - A time the autumn fold repeats fires on its first pass only, so from
+      inside the second pass the next occurrence is tomorrow's — matching the
+      way such a range matches once across both passes.
+
+    The comparison is in absolute time: inside the fold two instants share one
+    wall clock, so a clock-face comparison would call a past instant future.
+    """
+    now_utc = dt_util.as_utc(now)
+    local = dt_util.as_local(now)
+    # Same-tzinfo arithmetic advances the calendar day, not 24 h of UTC. Loops
+    # rather than branches so a `now` in the fold's second pass — whose day
+    # already holds its only occurrence, in the past — rolls cleanly; two
+    # iterations at most.
+    candidate = _resolve_wall_clock(local, hh, mm)
+    while dt_util.as_utc(candidate) <= now_utc:
+        local = local + timedelta(days=1)
+        candidate = _resolve_wall_clock(local, hh, mm)
+    return candidate
+
+
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
     if end <= start:
         return now >= start or now < end

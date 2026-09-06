@@ -107,6 +107,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # separate from _unsubs because they re-arm on each fire — the slot is
         # replaced rather than appended, so dead handles never accumulate.
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
+        # Wall-clock point-in-time handles, one slot per (hour, minute), armed
+        # by Ambience rather than HA's clock tracker so a time inside the
+        # spring-forward gap still fires (see `_schedule_clock`).
+        self._clock_unsubs: dict[tuple[int, int], Callable[[], None]] = {}
         # Per predicate, one recheck timer per `for:` gate, keyed by
         # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}

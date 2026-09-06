@@ -8,12 +8,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
@@ -185,7 +186,7 @@ async def test_subscribe_skips_entity_subscription_when_no_entities(hass) -> Non
 
 
 async def test_subscribe_registers_clock_time_subscription(hass) -> None:
-    """A clock_times entry in the index creates an async_track_time_change subscription."""
+    """A clock_times entry in the index arms a wake-up for that wall-clock time."""
 
     class ClockCondition:
         def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -211,14 +212,14 @@ async def test_subscribe_registers_clock_time_subscription(hass) -> None:
     engine.async_rebuild()
     assert (9, 0) in engine._index.clock_times
     engine.async_subscribe()
-    # One subscription for the clock time was added.
-    assert len(engine._unsubs) == 1
+    # One wake-up for the clock time was armed.
+    assert (9, 0) in engine._clock_unsubs
     engine._teardown()
-    assert engine._unsubs == []
+    assert engine._clock_unsubs == {}
 
 
 async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> None:
-    """Midnight clock subscription is created when the index carries midnight preds."""
+    """Midnight preds in the index arm the (0, 0) wall-clock wake-up."""
 
     # Inject midnight directly into the built index via a spec with date_rollover=True
     class MidnightCondition:
@@ -245,10 +246,55 @@ async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> Non
     engine.async_rebuild()
     assert engine._index.midnight  # confirmed: midnight pred in index
     engine.async_subscribe()
-    # One subscription for midnight was added (only subscription — no entity dep).
-    assert len(engine._unsubs) == 1
+    # Midnight is armed as the (0, 0) wall-clock wake-up.
+    assert (0, 0) in engine._clock_unsubs
     engine._teardown()
-    assert engine._unsubs == []
+    assert engine._clock_unsubs == {}
+
+
+async def test_clock_trigger_fires_at_the_dst_jump_and_rearms_for_tomorrow(
+    hass, fixed_utcnow
+) -> None:
+    """HA's own clock tracker skips 02:30 for the whole spring-forward day;
+    Ambience fires at the instant the clock jumps to (03:00 local) instead."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    fixed_utcnow["now"] = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local
+
+    class ClockCondition:
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            return TriggerSpec(clock_times=frozenset({(2, 30)}))
+
+        async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+            return "v"
+
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
+            return None
+
+    scopes = [("area", "a", {"scenes": [{"when": {"clk": "x"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"clk": ClockCondition()},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    fired: list[Any] = []
+
+    async def _record(keys: Any, cause: Any = None) -> None:
+        fired.append(cause)
+
+    with patch.object(engine, "async_evaluate", new=AsyncMock(side_effect=_record)):
+        engine.async_subscribe()
+        fixed_utcnow["now"] = datetime(2026, 3, 29, 1, 0, tzinfo=UTC)  # 03:00 local, the jump
+        async_fire_time_changed(hass, fixed_utcnow["now"])
+        await hass.async_block_till_done()
+    assert [c.detail for c in fired] == ["02:30"]
+    assert (2, 30) in engine._clock_unsubs  # re-armed (for 02:30 tomorrow)
+    engine._teardown()
 
 
 # ---------------------------------------------------------------------------
@@ -1577,6 +1623,35 @@ async def test_schedule_sun_handler_noop_after_teardown(hass) -> None:
     with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
         captured[0](None)  # the already-queued handler runs after teardown
     assert engine._sun_unsubs == {}
+    assert len(captured) == 1  # no re-arm happened
+
+
+async def test_schedule_clock_handler_noop_after_teardown(hass) -> None:
+    """A clock handler in the loop's ready queue at teardown must not fire nor
+    insert a fresh live timer into the torn-down engine."""
+    engine = _minimal_engine(hass, [])
+    engine.async_subscribe()
+
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    captured: list = []
+
+    def fake_atpit(_hass, action, _point):
+        captured.append(action)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
+        engine._schedule_clock((9, 0), frozenset({("area", "a", 0, "state")}))
+    assert len(captured) == 1
+    engine._teardown()
+    fired: list = []
+    with (
+        patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit),
+        patch.object(engine, "_fire", side_effect=lambda *a, **k: fired.append(a)),
+    ):
+        captured[0](None)  # the already-queued handler runs after teardown
+    assert fired == []
+    assert engine._clock_unsubs == {}
     assert len(captured) == 1  # no re-arm happened
 
 

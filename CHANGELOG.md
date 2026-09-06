@@ -70,6 +70,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     creating its area or floor, now always re-applies the scope's scenes.
 - A slow template or script condition can no longer overwrite a fresher reading
     of a faster condition that was refreshed at the same time.
+- A time range that starts inside the hour skipped when clocks go forward now
+    triggers at the moment the clock jumps, instead of missing that day.
 
 ### Performance
 

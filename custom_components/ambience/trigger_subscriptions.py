@@ -23,13 +23,12 @@ from homeassistant.helpers.event import (
     async_track_state_added_domain,
     async_track_state_change_event,
     async_track_state_removed_domain,
-    async_track_time_change,
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
 
 from .conditions._common import fmt_duration
-from .conditions.time_of_day import ANCHOR_ATTR
+from .conditions.time_of_day import ANCHOR_ATTR, next_wall_clock
 from .const import get_switches
 from .service import (
     _scope_enabled,
@@ -90,6 +89,9 @@ class TriggerSubscriptionsMixin:
         for cancel in self._sun_unsubs.values():
             cancel()
         self._sun_unsubs.clear()
+        for cancel in self._clock_unsubs.values():
+            cancel()
+        self._clock_unsubs.clear()
         for handles in self._for_handles.values():
             for cancel in handles.values():
                 cancel()
@@ -121,32 +123,14 @@ class TriggerSubscriptionsMixin:
             self._unsubs.append(
                 async_track_state_removed_domain(self._hass, domains, self._on_domain_membership)
             )
-        for clock in index.clock_times:
-            self._unsubs.append(
-                async_track_time_change(
-                    self._hass,
-                    self._make_keys_handler(
-                        index.by_clock[clock],
-                        TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}"),
-                    ),
-                    hour=clock[0],
-                    minute=clock[1],
-                    second=0,
-                )
-            )
+        # Midnight preds share the 00:00 slot: one wake-up, one fire.
+        clocks: dict[tuple[int, int], frozenset[PredKey]] = {
+            clock: index.by_clock[clock] for clock in index.clock_times
+        }
         if index.midnight:
-            self._unsubs.append(
-                async_track_time_change(
-                    self._hass,
-                    self._make_keys_handler(
-                        index.midnight,
-                        TriggerCause(kind=CauseKind.CLOCK, detail="00:00"),
-                    ),
-                    hour=0,
-                    minute=0,
-                    second=0,
-                )
-            )
+            clocks[(0, 0)] = clocks.get((0, 0), frozenset()) | index.midnight
+        for clock, preds in clocks.items():
+            self._schedule_clock(clock, preds)
         for sun_event in index.sun_events:
             self._schedule_sun(sun_event)
         if index.has_time:
@@ -505,3 +489,27 @@ class TriggerSubscriptionsMixin:
         if old is not None:
             old()
         self._sun_unsubs[sun_event] = async_track_point_in_time(self._hass, _handler, fire_at)
+
+    def _schedule_clock(self, clock: tuple[int, int], preds: frozenset[PredKey]) -> None:
+        """Arm the next wake-up for a wall-clock time, re-arming on every fire.
+
+        Ambience's own scheduler rather than HA's `async_track_time_change`: HA
+        skips a clock time that falls in the spring-forward gap for the whole
+        day, whereas matching resolves it to the jump instant
+        (`next_wall_clock`), and HA fires a time inside the autumn fold twice.
+        The handle lives in `_clock_unsubs[clock]`; re-arming replaces the slot.
+        """
+        fire_at = next_wall_clock(dt_util.utcnow(), clock[0], clock[1])
+        cause = TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}")
+
+        @callback
+        def _handler(_now: Any) -> None:
+            if not self._running:
+                return  # fired after teardown — don't re-arm into a dead engine
+            self._fire(set(preds), cause)
+            self._schedule_clock(clock, preds)
+
+        old = self._clock_unsubs.pop(clock, None)
+        if old is not None:
+            old()
+        self._clock_unsubs[clock] = async_track_point_in_time(self._hass, _handler, fire_at)

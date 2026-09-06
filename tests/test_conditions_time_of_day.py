@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.ambience.conditions.time_of_day import (
     TimeOfDayCondition,
     TimeOfDaySnapshot,
+    next_wall_clock,
 )
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.periods import BUILTIN_PERIODS
@@ -1189,3 +1190,61 @@ def test_spring_forward_range_wholly_inside_skipped_hour_never_matches() -> None
         for step in range(96):
             moment = datetime(2026, 3, 29, tzinfo=UTC) + timedelta(minutes=15 * step)
             assert _matches_at(pred, moment) is False
+
+
+# ---------------------------------------------------------------------------
+# next_wall_clock — the scheduler's view of a wall-clock time
+# ---------------------------------------------------------------------------
+
+_MADRID = ZoneInfo("Europe/Madrid")
+
+
+async def test_next_wall_clock_in_the_spring_forward_gap_fires_at_the_jump(
+    hass: HomeAssistant,
+) -> None:
+    """02:30 does not exist on the jump day, so the wake-up lands on the instant
+    the clock jumps to — the same resolution matching uses."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local, an hour before the jump
+    assert next_wall_clock(now, 2, 30) == datetime(2026, 3, 29, 3, 0, tzinfo=_MADRID)
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 3, 29, 1, 0, tzinfo=UTC)
+
+
+async def test_next_wall_clock_rolls_to_tomorrow_when_today_has_passed(
+    hass: HomeAssistant,
+) -> None:
+    """A time at or before `now` belongs to the next calendar day."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 3, 29, 0, 0, tzinfo=UTC)  # 01:00 local
+    assert next_wall_clock(now, 1, 0) == datetime(2026, 3, 30, 1, 0, tzinfo=_MADRID)
+    assert next_wall_clock(now, 0, 59) == datetime(2026, 3, 30, 0, 59, tzinfo=_MADRID)
+
+
+async def test_next_wall_clock_in_the_autumn_fold_uses_the_first_pass(
+    hass: HomeAssistant,
+) -> None:
+    """02:30 strikes twice on the fold day; the wake-up takes the first pass, so
+    the predicate fires once."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 24, 23, 30, tzinfo=UTC)  # 01:30 local, before the fold
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+
+async def test_next_wall_clock_from_inside_the_fold_first_pass_stays_today(
+    hass: HomeAssistant,
+) -> None:
+    """Inside the first pass of the repeated hour, today's 02:30 is still ahead."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 25, 0, 15, tzinfo=UTC)  # 02:15 CEST, first pass
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+
+async def test_next_wall_clock_from_inside_the_fold_second_pass_rolls_to_tomorrow(
+    hass: HomeAssistant,
+) -> None:
+    """The second pass reads 02:15 on the clock face but is past today's 02:30,
+    which resolves to the first pass — so the next wake-up is tomorrow's."""
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    now = datetime(2026, 10, 25, 1, 15, tzinfo=UTC)  # 02:15 CET, second pass
+    assert next_wall_clock(now, 2, 30).astimezone(UTC) == datetime(2026, 10, 26, 1, 30, tzinfo=UTC)
+    assert next_wall_clock(now, 2, 30) > now

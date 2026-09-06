@@ -75,3 +75,20 @@ def test_yields_dict_predicates_unchanged() -> None:
     pred = {"script": "script.foo", "args": {"x": 1}}
     store = _StoreStub(areas={"a": {"scenes": [{"when": {"script": pred}}]}})
     assert list(collect_scope_predicates(store, "script")) == [pred]
+
+
+def test_skips_disabled_scenes() -> None:
+    """A disabled scene's predicate must never reach the collector's callers —
+    otherwise its `when.script` runs (side effects, timeouts) on every snapshot."""
+    store = _StoreStub(
+        areas={
+            "kitchen": {
+                "scenes": [
+                    {"enabled": False, "when": {"k": "disabled-pred"}},
+                    {"enabled": True, "when": {"k": "enabled-pred"}},
+                    {"when": {"k": "default-pred"}},
+                ]
+            }
+        },
+    )
+    assert list(collect_scope_predicates(store, "k")) == ["enabled-pred", "default-pred"]

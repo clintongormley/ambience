@@ -15,14 +15,15 @@ the dependency info — the trigger engine can later read it for free.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template, result_as_boolean
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
 from ._opaque import OpaquePrecomputedCondition
 
@@ -56,7 +57,7 @@ class TemplateSnapshot:
     deps: dict[str, TemplateDeps] = field(default_factory=dict)
 
 
-class TemplateCondition(OpaquePrecomputedCondition):
+class TemplateCondition(OpaquePrecomputedCondition[TemplateSnapshot]):
     """Matches by rendering a Jinja2 template against HA state to a boolean."""
 
     name = "template"
@@ -88,14 +89,14 @@ class TemplateCondition(OpaquePrecomputedCondition):
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"template predicate must be a dict or null: {predicate!r}")
+            raise AmbienceError("template_predicate_not_object", predicate=predicate)
         tmpl = predicate.get("template")
         if not isinstance(tmpl, str) or not tmpl.strip():
-            raise ValueError(f"template predicate `template` must be a non-empty string: {tmpl!r}")
+            raise AmbienceError("template_empty", template=tmpl)
         try:
             Template(tmpl, self._hass).ensure_valid()
         except TemplateError as exc:
-            raise ValueError(f"template predicate has invalid Jinja: {exc}") from exc
+            raise AmbienceError("template_invalid_jinja", error=exc) from exc
 
     # --- evaluation --------------------------------------------------------
 
@@ -107,6 +108,15 @@ class TemplateCondition(OpaquePrecomputedCondition):
             return ""
         tmpl = predicate.get("template")
         return tmpl if isinstance(tmpl, str) else ""
+
+    def snapshot_from_results(self, results: dict[str, bool]) -> TemplateSnapshot:
+        # No `deps`: a forced verdict is a leaf, watched by nothing.
+        return TemplateSnapshot(results=dict(results))
+
+    def verdict_label(self, predicate: Any, scene: Mapping[str, Any]) -> tuple[str | None, str]:
+        """A template names no entity, so the owning scene is the only handle a
+        user recognises."""
+        return None, scene.get("name") or "Template"
 
     # --- trigger dependencies ---------------------------------------------
 
@@ -149,16 +159,23 @@ class TemplateCondition(OpaquePrecomputedCondition):
         predicates across all scopes (areas, floors, house)."""
         return self._distinct_keys(self._template_key)
 
-    async def snapshot(
+    def _merge(self, fresh: TemplateSnapshot, previous: TemplateSnapshot) -> TemplateSnapshot:
+        return TemplateSnapshot(
+            results={**previous.results, **fresh.results},
+            deps={**previous.deps, **fresh.deps},
+        )
+
+    async def _compute(
         self,
         hass: HomeAssistant,
-        *,
-        now: datetime | None = None,
-        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
+        keys: frozenset[str] | None,
     ) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}
-        for tmpl in self._collect_templates():
+        # A result key IS the template string, so a hint is the work list itself
+        # — no store walk, and only the named templates render.
+        work = sorted(keys) if keys is not None else self._collect_templates()
+        for tmpl in work:
             info = Template(tmpl, hass).async_render_to_info()
             if info.exception is not None:
                 _LOGGER.warning("ambience: template %r render failed: %s", tmpl, info.exception)

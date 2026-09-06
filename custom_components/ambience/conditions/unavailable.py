@@ -19,8 +19,9 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, predicate_has_any, state_sources
+from ._common import UNAVAILABLE, predicate_has_any, state_sources, validate_entity_ids
 
 
 @dataclass(frozen=True)
@@ -121,12 +122,12 @@ class UnavailableCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("This unavailable condition is malformed.")
+            raise AmbienceError("unavailable_malformed")
         entities = predicate.get("entities")
         if not isinstance(entities, list) or not entities:
-            raise ValueError("Pick at least one entity for this unavailable condition.")
-        if not all(isinstance(e, str) and e.strip() for e in entities):
-            raise ValueError("Every entity must be a non-empty entity id.")
+            raise AmbienceError("unavailable_pick_entity")
+        # Any domain: an unavailable check is about liveness, not entity kind.
+        validate_entity_ids(entities, key="unavailable_pick_entity")
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         if not isinstance(predicate, dict):

@@ -20,6 +20,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
@@ -44,7 +45,7 @@ from .conditions.template import TemplateCondition
 from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.unavailable import UnavailableCondition
 from .conditions.weather import WeatherCondition
-from .config_health_issues import reconcile_issues
+from .config_health_issues import reconcile_issues, referenced_entity_ids
 from .const import (
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
@@ -57,6 +58,7 @@ from .const import (
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
     DATA_PERIODS,
+    DATA_STATIC_PATHS_REGISTERED,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
@@ -70,6 +72,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
 )
+from .errors import async_preload_translations
 from .exposed_actions import ExposedActionsStore
 from .exposure import async_reapply_all_switch_exposure
 from .history import ChangeHistory
@@ -95,6 +98,10 @@ _PANEL_STATIC_PATH = "/ambience-panel"
 _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
+# Coalesce a burst of config-health triggers (a multi-scope save, a device
+# integration registering its entities) into one scan.
+_HEALTH_DEBOUNCE_SECONDS = 1.0
+
 
 def _hash_bundle(bundle_path: Path) -> str:
     """Return a short content hash of *bundle_path*, or 'missing' if absent."""
@@ -109,6 +116,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # Warm the en.json read behind error rendering in the executor, alongside
+    # the rest of setup rather than ahead of it. Awaited before the websocket
+    # commands register: their error renderer is the only consumer, and it must
+    # never do that read on the event loop.
+    preload_translations = hass.async_create_task(async_preload_translations(hass))
+
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_SWITCHES] = {}
     domain_data[DATA_LAST_APPLIED] = {}
@@ -179,8 +192,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 builtin_labels[service_id] = label
         await store.async_apply_builtin_labels(builtin_labels)
 
-    async_register_commands(hass)
-
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
@@ -200,18 +211,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
-            from .switch import switch_unique_id
+            from .switch import switch_registry_entry
 
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
             clear_last_applied(hass, "area", area_id)
             clear_live_state(hass, "area", area_id)
-            ent_reg = er.async_get(hass)
-            ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, switch_unique_id("area", area_id)
-            )
-            if ent_id is not None:
-                ent_reg.async_remove(ent_id)
+            switch_entry = switch_registry_entry(hass, "area", area_id)
+            if switch_entry is not None:
+                er.async_get(hass).async_remove(switch_entry.entity_id)
             _remove_scope_device(hass, entry.entry_id, "area", area_id)
 
     entry.async_on_unload(
@@ -235,18 +243,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
-            from .switch import switch_unique_id
+            from .switch import switch_registry_entry
 
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
             clear_last_applied(hass, "floor", floor_id)
             clear_live_state(hass, "floor", floor_id)
-            ent_reg = er.async_get(hass)
-            ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, switch_unique_id("floor", floor_id)
-            )
-            if ent_id is not None:
-                ent_reg.async_remove(ent_id)
+            switch_entry = switch_registry_entry(hass, "floor", floor_id)
+            if switch_entry is not None:
+                er.async_get(hass).async_remove(switch_entry.entity_id)
             _remove_scope_device(hass, entry.entry_id, "floor", floor_id)
 
     entry.async_on_unload(
@@ -256,9 +261,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Serve the bundled JS from the integration's frontend/ directory.
     bundle_dir = Path(__file__).parent / "frontend"
     bundle_path = bundle_dir / "ambience-panel.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
-    )
+    if not hass.data.get(DATA_STATIC_PATHS_REGISTERED):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
+        )
+        hass.data[DATA_STATIC_PATHS_REGISTERED] = True
 
     # Content hashes for cache-busting. Each loader URL carries its own bundle
     # hash (`?hash=`) so an edited loader is re-fetched, plus the shared
@@ -345,17 +352,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(engine.async_shutdown)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    @callback
-    def _reconcile_health(*_args: object) -> None:
+    # The entity ids any scope references, kept current so the registry listener
+    # can reject the flood of events about entities Ambience never mentions.
+    health_refs = referenced_entity_ids(hass)
+
+    async def _reconcile_health() -> None:
         reconcile_issues(hass)
 
-    # Run once states have settled, then on every config change and whenever the
-    # entity registry changes (a fixed typo / a returned device clears its issue).
-    entry.async_on_unload(async_at_started(hass, _reconcile_health))
-    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _reconcile_health))
-    entry.async_on_unload(
-        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _reconcile_health)
+    health_debouncer = Debouncer(
+        hass,
+        _LOGGER,
+        cooldown=_HEALTH_DEBOUNCE_SECONDS,
+        immediate=False,
+        function=_reconcile_health,
     )
+    entry.async_on_unload(health_debouncer.async_shutdown)
+
+    @callback
+    def _health_on_started(_event: object) -> None:
+        reconcile_issues(hass)
+
+    @callback
+    def _health_on_config_changed(*_args: object) -> None:
+        nonlocal health_refs
+        health_refs = referenced_entity_ids(hass)
+        health_debouncer.async_schedule_call()
+
+    @callback
+    def _health_event_filter(data: er.EventEntityRegistryUpdatedData) -> bool:
+        # A rename fires under the new id, so the old one must match too —
+        # otherwise renaming a referenced entity away never clears its issue.
+        return data["entity_id"] in health_refs or data.get("old_entity_id") in health_refs
+
+    @callback
+    def _health_on_registry_updated(_event: Event) -> None:
+        health_debouncer.async_schedule_call()
+
+    # Run once states have settled, then on every config change and whenever a
+    # referenced entity's registry entry changes (a fixed typo / a returned
+    # device clears its issue).
+    entry.async_on_unload(async_at_started(hass, _health_on_started))
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _health_on_config_changed)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            er.EVENT_ENTITY_REGISTRY_UPDATED,
+            _health_on_registry_updated,
+            event_filter=_health_event_filter,
+        )
+    )
+
+    # Last: the commands read hass.data[DOMAIN], so none may be servable before
+    # every key (the engine included) is in place, and the en.json pre-warm must
+    # have finished — the ws error renderer must never do that read on the loop.
+    # (`asyncio.gather` and not a bare `await preload_translations`: CodeQL reads
+    # a lone `await <name>` statement as having no effect.)
+    await asyncio.gather(preload_translations)
+    async_register_commands(hass)
 
     return True
 

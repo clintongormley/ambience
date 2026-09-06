@@ -462,3 +462,17 @@ def test_period_def_missing_from_to_key() -> None:
             {"from": {"kind": "time", "hh": 8, "mm": 0}}
         )
     assert exc.value.translation_key == "period_def_missing_from_to"
+
+
+# ---------------------------------------------------------------------------
+# save(): a non-string hidden entry
+# ---------------------------------------------------------------------------
+
+
+async def test_save_rejects_non_string_hidden_entry() -> None:
+    """A non-string hidden entry is a validation error, not an unhashable-type crash."""
+    store = PeriodStore(_FakeStorage())
+    with pytest.raises(AmbienceError) as exc:
+        await store.save({}, [["daytime"]])  # type: ignore[list-item]
+    assert exc.value.translation_key == "named_def_hidden_not_string"
+    assert exc.value.translation_placeholders["kind"] == store.kind

@@ -11,7 +11,7 @@ A predicate is identified engine-wide by ``PredKey``:
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .triggers import DurationGate, TriggerSpec
 
@@ -24,6 +24,12 @@ class TriggerIndex:
 
     - ``by_entity`` / ``by_clock`` / ``by_sun``: each distinct watch maps to the
       set of predicates that depend on it (the fan-out).
+    - ``by_domain``: domains whose *membership* predicates depend on (a wildcard
+      "all persons" test), mapped to those predicates. The engine watches these
+      for entities appearing/disappearing and rebuilds, which re-enumerates the
+      wildcard into fresh ``by_entity`` watches. It is the one field with a
+      default, so a direct construction (tests) can omit it; production always
+      goes through ``build_index``, which supplies it.
     - ``midnight`` / ``has_time`` / ``opaque``: predicate sets flagged by the
       corresponding ``TriggerSpec`` booleans.
     - ``durations``: per-predicate ``for:`` gates as a frozenset of
@@ -40,10 +46,15 @@ class TriggerIndex:
     has_time: frozenset[PredKey]
     durations: dict[PredKey, frozenset[DurationGate]]
     opaque: frozenset[PredKey]
+    by_domain: dict[str, frozenset[PredKey]] = field(default_factory=dict)
 
     @property
     def entities(self) -> frozenset[str]:
         return frozenset(self.by_entity)
+
+    @property
+    def domains(self) -> frozenset[str]:
+        return frozenset(self.by_domain)
 
     @property
     def clock_times(self) -> frozenset[tuple[int, int]]:
@@ -62,6 +73,8 @@ class TriggerIndex:
             keys |= preds
         for preds in self.by_sun.values():
             keys |= preds
+        for preds in self.by_domain.values():
+            keys |= preds
         keys |= self.midnight | self.has_time | self.opaque | set(self.durations)
         return frozenset(keys)
 
@@ -75,6 +88,7 @@ def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
     by_entity: dict[str, set[PredKey]] = {}
     by_clock: dict[tuple[int, int], set[PredKey]] = {}
     by_sun: dict[tuple[str, int], set[PredKey]] = {}
+    by_domain: dict[str, set[PredKey]] = {}
     midnight: set[PredKey] = set()
     has_time: set[PredKey] = set()
     durations: dict[PredKey, frozenset[DurationGate]] = {}
@@ -87,6 +101,8 @@ def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
             by_clock.setdefault(clock, set()).add(key)
         for sun in spec.sun_events:
             by_sun.setdefault(sun, set()).add(key)
+        for domain in spec.domains:
+            by_domain.setdefault(domain, set()).add(key)
         if spec.date_rollover:
             midnight.add(key)
         if spec.has_time:
@@ -104,4 +120,5 @@ def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
         has_time=frozenset(has_time),
         durations=durations,
         opaque=frozenset(opaque),
+        by_domain={k: frozenset(v) for k, v in by_domain.items()},
     )

@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held, tenure_within
+from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -1028,6 +1029,9 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
         DATA_LAST_APPLIED: {},
     }
+    # Bob exists before the rebuild so the wildcard `who` enumerates him: with no
+    # persons at all the location test is unobservable and no tenure is recorded.
+    hass.states.async_set("person.bob", "ZoneA", {"in_zones": ["zone.a"]})
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
     engine.async_subscribe()
@@ -1035,7 +1039,6 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     gate_key = PeopleCondition._gate_key(pred)
 
     # Bob is in zone.a (away from home).
-    hass.states.async_set("person.bob", "ZoneA", {"in_zones": ["zone.a"]})
     await engine.async_evaluate({key})
     since_before = engine.tenure["people"][gate_key]
 
@@ -1045,7 +1048,12 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     since_after = engine.tenure["people"][gate_key]
 
     assert since_after == since_before  # clock did NOT reset on the zone hop
-    engine._teardown()
+    # Drain the state-change evaluations the async_set calls queued, so shutdown
+    # cancels the timers they arm rather than racing them.
+    await hass.async_block_till_done()
+    # async_shutdown, not _teardown: the wildcard `who` watches the person domain,
+    # so creating person.bob armed the refresh debouncer, which only shutdown cancels.
+    engine.async_shutdown()
 
 
 async def test_recompute_gated_key_with_none_snapshot_skips_tenure(hass) -> None:
@@ -1154,6 +1162,69 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     hass.states.async_set("switch.ambience_a", "on")  # off->on transition
     await hass.async_block_till_done()
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0  # force-resync ran
+    engine._teardown()
+
+
+class _BoxCondition:
+    """Opaque condition: its verdict comes from a mutable box, so it changes
+    only where the engine takes a fresh snapshot (no watch can fire for it)."""
+
+    def __init__(self, box: dict[str, str]) -> None:
+        self._box = box
+        self.snapshots = 0
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(opaque=True)
+
+    async def snapshot(self, hass: Any, **_: Any) -> Any:
+        self.snapshots += 1
+        return self._box["value"]
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate == snapshot
+
+    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+        return None
+
+
+async def test_switch_off_to_on_resync_refreshes_snapshots(hass) -> None:
+    """A verdict that changed while the switch was off (opaque condition: no
+    watch fires for it) must be re-read by the resync, not replayed from the
+    cache — otherwise the stale winner is re-applied."""
+    box = {"value": "a"}
+    cond = _BoxCondition(box)
+    act = _light_action(hass)
+    switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"box": "a"}, "category": "g", "actions": act},
+                    {"when": {"box": "b"}, "category": "g", "actions": act},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"box": cond},
+        DATA_SWITCHES: {("area", "a"): switch},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # box "a" -> scene 0 wins
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+    box["value"] = "b"  # changes while the switch is off; nothing notifies the engine
+    cond.snapshots = 0
+    hass.states.async_set("switch.ambience_a", "off")
+    hass.states.async_set("switch.ambience_a", "on")  # off->on transition
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 1
+    assert cond.snapshots >= 1  # the resync re-read the condition
     engine._teardown()
 
 
@@ -2143,6 +2214,120 @@ async def test_dropout_suppresses_a_non_guard_fall_through_winner(hass) -> None:
     assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
+async def test_dropout_clears_a_stale_last_applied_but_lets_a_guard_act(hass) -> None:
+    """The drop-out guard suppresses ACTIONS only. It must not preserve a
+    last-applied record for a winner that is no longer winning: on a no-match the
+    record is dropped (so the scene re-applies when it wins again), while a winner
+    that IS an `unavailable` guard still acts and records itself."""
+    from custom_components.ambience.conditions.unavailable import UnavailableCondition
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    calls: list[str] = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append("turn_on"))
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.states.async_set("binary_sensor.x", "on")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {
+                        "when": {"unavailable": {"entities": ["binary_sensor.x"]}},
+                        "category": "g",
+                        "actions": act,
+                    },
+                    {"when": {"tod": "morning"}, "category": "g", "actions": act},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"unavailable": UnavailableCondition(hass=hass), "tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "a", "g"): 1},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_all_snapshots()
+
+    # Drop-out with nothing matching (sensor available, tod=evening): scene 1's
+    # stale record must go, so a later re-win of scene 1 is a real apply.
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="person.alice", old="not_home", new=None)
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+        assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]
+        assert calls == []  # suppression still means no actions ran
+
+        # The guard scene wins on its own drop-out: it acts and records itself.
+        hass.states.async_set("binary_sensor.x", "unavailable")
+        await engine._refresh_all_snapshots()
+        guard_cause = TriggerCause(
+            kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="on", new="unavailable"
+        )
+        result = await engine._resolve_and_apply("area", "a", "g", cause=guard_cause)
+        assert result is not None
+        assert result.outcome == Outcome.ACTED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert calls == ["turn_on"]
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_dropout_keeps_last_applied_when_the_same_scene_still_wins(hass) -> None:
+    """A drop-out whose resolved winner is the scene already applied keeps that
+    record: the unit has not moved on, so the blip must not arm a redundant
+    re-fire when the entity recovers."""
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}  # scene 0 is still the winner
+    hass.data[DOMAIN][DATA_LAST_APPLIED] = {("area", "a", "g"): 0}
+
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_dropout_to_a_different_suppressed_winner_keeps_last_applied(hass) -> None:
+    """A drop-out that merely *resolves* to a different winner changed no devices,
+    so the record of what IS applied survives it: when the entity recovers and the
+    applied scene wins again, the re-fire is still debounced."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}
+    await engine._resolve_and_apply("area", "a", "g")  # scene 0 applied for real
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        # Drop-out resolving to scene 1: suppressed, so the devices still hold scene 0.
+        engine._snapshots = {"tod": "morning"}
+        cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+
+        # Recovery: scene 0 wins again and is already applied → no redundant re-fire.
+        engine._snapshots = {"tod": "evening"}
+        recovery = TriggerCause(
+            kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="unavailable", new="off"
+        )
+        result = await engine._resolve_and_apply("area", "a", "g", cause=recovery)
+        assert result is not None
+        assert result.outcome == Outcome.DEBOUNCED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
 def test_winner_has_unavailable_guard_detection(hass) -> None:
     """`_winner_has_unavailable` is True only for a winner whose `when` carries a
     non-wildcard `unavailable` predicate; False for no winner, an unknown scope,
@@ -2418,3 +2603,446 @@ async def test_dropout_to_unavailable_leaves_last_matched_unchanged(hass) -> Non
     # The blip dropped out before resolving a winner, so last_matched is left as-is
     # (it was NOT updated to the would-be winner 0).
     assert get_last_matched(hass, "area", "a", "g") == 1
+
+
+# ---------------------------------------------------------------------------
+# Wildcard (`who`-less) people predicates track persons added/removed at runtime
+# ---------------------------------------------------------------------------
+
+
+def _people_engine(hass, calls: list[str]) -> AutoTriggerEngine:
+    """Engine over area 'a' whose only scene ("nobody home", category 'g') runs a
+    counting `light.turn_on`. Uses the REAL PeopleCondition so `trigger_deps`
+    enumerates `person.*` out of `hass.states`."""
+    from custom_components.ambience.conditions.people import PeopleCondition
+
+    hass.services.async_register("light", "turn_on", lambda call: calls.append("turn_on"))
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"people": {"quant": "nobody"}}, "category": "g", "actions": act}
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"people": PeopleCondition(hass=hass)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    return AutoTriggerEngine(hass)
+
+
+async def _settle_debounce(hass) -> None:
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+
+
+async def test_person_added_after_startup_is_watched_and_counted(hass) -> None:
+    """A wildcard `nobody home` scene must notice persons added to (and removed
+    from) HA without a restart: the person-domain watch rebuilds the index, so
+    the newcomer is enumerated, snapshotted and watched."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    await engine.async_start()
+    assert engine.index.entities == frozenset({"person.alice"})
+    assert calls == ["turn_on"]  # nobody home → scene 0 applied
+
+    # Alice comes home first, so the win is released by a normal no-match. Removing
+    # her instead makes it a drop-out, covered by
+    # test_person_dropout_does_not_debounce_a_later_re_win.
+    hass.states.async_set("person.alice", "home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[("area", "a", 0, "people")] is False
+
+    # Alice goes; Bob arrives home. Neither entity is watched by the old index.
+    hass.states.async_remove("person.alice")
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+
+    key = ("area", "a", 0, "people")
+    assert engine.index.entities == frozenset({"person.bob"})
+    assert engine._predicate_state[key] is False  # someone IS home now
+
+    # Bob leaves: the rebuilt watch covers him, so "nobody home" wins again.
+    hass.states.async_set("person.bob", "not_home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[key] is True
+    assert calls == ["turn_on", "turn_on"]
+    engine.async_shutdown()
+
+
+async def test_person_dropout_does_not_debounce_a_later_re_win(hass) -> None:
+    """A drop-out (the sole tracked person removed from HA) suppresses actions but
+    must not leave the vanished winner recorded as last-applied: when the same
+    scene wins again it is a real apply, not a debounced repeat."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    await engine.async_start()
+    assert calls == ["turn_on"]  # nobody home → scene 0 applied
+
+    # Alice is removed outright (a drop-out, not a state change); Bob arrives home.
+    hass.states.async_remove("person.alice")
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+
+    key = ("area", "a", 0, "people")
+    assert engine.index.entities == frozenset({"person.bob"})
+    assert engine._predicate_state[key] is False  # someone IS home now
+
+    # Bob leaves: "nobody home" (scene 0 again) must re-apply.
+    hass.states.async_set("person.bob", "not_home")
+    await hass.async_block_till_done()
+    assert engine._predicate_state[key] is True
+    assert calls == ["turn_on", "turn_on"]
+    engine.async_shutdown()
+
+
+async def test_explicit_who_does_not_subscribe_to_the_person_domain(hass) -> None:
+    """An explicit `who` list is a fixed set — no domain watch, so an unrelated
+    person appearing must not churn the index."""
+    calls: list[str] = []
+    hass.states.async_set("person.alice", "not_home")
+    engine = _people_engine(hass, calls)
+    cfg = hass.data[DOMAIN][DATA_STORE].get_area("a")
+    cfg["scenes"][0]["when"]["people"] = {"quant": "nobody", "who": ["person.alice"]}
+    await engine.async_start()
+    assert engine.index.domains == frozenset()
+
+    hass.states.async_set("person.bob", "home")
+    await _settle_debounce(hass)
+    assert engine.index.entities == frozenset({"person.alice"})
+    engine.async_shutdown()
+
+
+async def test_trace_entity_ids_come_from_prebuilt_specs(hass) -> None:
+    """The engine already derives a TriggerSpec per predicate at rebuild, so the
+    always-on trace path must reuse those entity_ids rather than calling
+    `trigger_deps` again per predicate per fire — and it must key them by the FULL
+    scene index, not the category-filtered candidate index."""
+    from custom_components.ambience.trace import Outcome
+
+    class CountingDeps:
+        """One entity per predicate value, counting every trigger_deps call."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            self.calls += 1
+            return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}))
+
+        async def snapshot(self, hass: Any, **_: Any) -> Any:
+            return "evening"
+
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return predicate is None or predicate == snapshot
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> str:
+            return str(snapshot)
+
+    tod = CountingDeps()
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    # Full index 0 is in another category: the resolved unit's
+                    # candidate index 0 is full index 1.
+                    {"when": {"tod": "night"}, "category": "other", "actions": []},
+                    {"when": {"tod": "evening"}, "category": "g", "actions": []},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    tod.calls = 0  # only evaluation-time calls count
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert result is not None
+    assert result.outcome == Outcome.NO_OP
+    predicates = result.explanation.scenes[0].predicates
+    assert predicates[0].entity_ids == ("sensor.evening",)
+    assert tod.calls == 0
+
+
+# --- async_evaluate: the per-condition result-key hint ---------------------
+
+
+class HintCondition(OpaquePrecomputedCondition):
+    """Opaque-style condition: takes the snapshot hint, records what it was
+    given, and uses the predicate string itself as the result key."""
+
+    def __init__(self) -> None:
+        self.hints: list[frozenset[str] | None] = []
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(entities=frozenset({"sensor.x"}))
+
+    def result_key(self, predicate: Any) -> str:
+        return predicate if isinstance(predicate, str) else ""
+
+    async def snapshot(self, hass: Any, *, now=None, entities=None, keys=None) -> Any:
+        self.hints.append(keys)
+        return {}
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return False
+
+
+def _hint_engine(hass, scenes: list[dict], conditions: dict) -> AutoTriggerEngine:
+    scopes = [("area", "a", {"scenes": scenes})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: conditions,
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_evaluate_hints_the_fired_predicates_result_keys(hass) -> None:
+    cond = HintCondition()
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "t1"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "t2"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": cond},
+    )
+    await engine.async_evaluate({("area", "a", 0, "tmpl")})
+    assert cond.hints == [frozenset({"t1"})]
+
+
+async def test_evaluate_hint_omits_a_condition_with_an_underivable_result_key(hass) -> None:
+    """A fired predicate whose result key can't be derived (a removed scene)
+    forces its whole condition back to a full refresh."""
+    cond = HintCondition()
+    engine = _hint_engine(
+        hass, [{"when": {"tmpl": "t1"}, "category": "g", "actions": []}], {"tmpl": cond}
+    )
+    fired = {("area", "a", 0, "tmpl"), ("area", "a", 9, "tmpl")}
+    assert engine._fired_result_keys(fired) == {}
+    await engine.async_evaluate(fired)
+    assert cond.hints == [None]
+
+
+async def test_evaluate_does_not_hint_a_condition_without_support(hass) -> None:
+    cond = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    engine = _hint_engine(
+        hass, [{"when": {"tod": "evening"}, "category": "g", "actions": []}], {"tod": cond}
+    )
+    # CacheCondition.snapshot takes **_ — a `keys` kwarg would be silently
+    # swallowed, so assert on the map the engine builds instead.
+    assert engine._fired_result_keys({("area", "a", 0, "tod")}) == {}
+
+
+class OpaqueHintCondition(HintCondition):
+    """Predicates named "watched:*" carry an entity watch of their own; every
+    other predicate is opaque with nothing to subscribe to — the shape of an
+    all-states template, or a `script` that declares no `triggers`."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if isinstance(predicate, str) and predicate.startswith("watched:"):
+            return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}), opaque=True)
+        return TriggerSpec(opaque=True)
+
+
+async def test_evaluate_hint_carries_an_unwatchable_opaque_predicate(hass) -> None:
+    """An `all_states` template is in `index.opaque` and in no watch bucket, so
+    nothing ever fires it. A narrowed snapshot must re-render it alongside the
+    predicate that did fire, or it stays stale until the next full refresh."""
+    from custom_components.ambience.conditions.template import TemplateCondition
+
+    hass.states.async_set("binary_sensor.motion", "off")
+    hass.states.async_set("input_boolean.flag", "off")
+    watched = "{{ states('binary_sensor.motion') == 'on' }}"
+    broad = "{{ states | selectattr('state', 'eq', 'magic-on') | list | count > 0 }}"
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"template": {"template": watched}}, "category": "g", "actions": []},
+            {"when": {"template": {"template": broad}}, "category": "g", "actions": []},
+        ],
+        {"template": TemplateCondition(hass)},
+    )
+    assert engine.index.opaque == frozenset({("area", "a", 1, "template")})
+    await engine.async_initial_sync()  # full refresh: baseline for both
+    assert engine._snapshots["template"].results[broad] is False
+
+    hass.states.async_set("input_boolean.flag", "magic-on")  # only `broad` sees this
+    hass.states.async_set("binary_sensor.motion", "on")
+    await engine.async_evaluate({("area", "a", 0, "template")})
+    assert engine._snapshots["template"].results[broad] is True
+
+
+async def test_evaluate_hint_carries_a_watched_over_broad_template(hass) -> None:
+    """An over-broad template still reports the entities it did see, so it sits
+    in `by_entity` and looks "watched" — but `opaque` means those deps are
+    incomplete. It must ride along with a narrowed refresh, or a change to
+    something it scans but never named leaves it stale."""
+    from custom_components.ambience.conditions.template import TemplateCondition
+
+    hass.states.async_set("input_boolean.a", "off")
+    hass.states.async_set("input_boolean.b", "off")
+    hass.states.async_set("light.l1", "off")
+    plain = "{{ is_state('input_boolean.a', 'on') }}"
+    broad = (
+        "{{ is_state('input_boolean.b', 'on') or "
+        "(states.light | selectattr('state', 'eq', 'on') | list | count) > 0 }}"
+    )
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"template": {"template": plain}}, "category": "g", "actions": []},
+            {"when": {"template": {"template": broad}}, "category": "g", "actions": []},
+        ],
+        {"template": TemplateCondition(hass)},
+    )
+    broad_key = ("area", "a", 1, "template")
+    assert engine.index.opaque == frozenset({broad_key})
+    assert broad_key in engine.index.by_entity["input_boolean.b"]
+    await engine.async_initial_sync()
+    assert engine._snapshots["template"].results[broad] is False
+
+    hass.states.async_set("light.l1", "on")  # nothing in the index watches this
+    hass.states.async_set("input_boolean.a", "on")
+    await engine.async_evaluate({("area", "a", 0, "template")})
+    assert engine._snapshots["template"].results[broad] is True
+
+
+class MixedOpacityHintCondition(HintCondition):
+    """Predicates named "opaque:*" carry a watch of their own AND declare their
+    dependencies incomplete (the shape of an over-broad template); every other
+    predicate is fully watched."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        opaque = isinstance(predicate, str) and predicate.startswith("opaque:")
+        return TriggerSpec(entities=frozenset({f"sensor.{predicate}"}), opaque=opaque)
+
+
+def _mixed_opacity_engine(hass) -> AutoTriggerEngine:
+    return _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "opaque:a"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "opaque:b"}, "category": "g", "actions": []},
+            {"when": {"tmpl": "plain:c"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": MixedOpacityHintCondition()},
+    )
+
+
+async def test_evaluate_hint_carries_a_watched_opaque_predicate(hass) -> None:
+    """A watch of its own does not make an opaque predicate safe to leave out:
+    `opaque` says the deps are incomplete, so something it depends on but never
+    named may have changed. Every opaque predicate of a hinted condition rides
+    along."""
+    engine = _mixed_opacity_engine(hass)
+    assert engine._fired_result_keys({("area", "a", 2, "tmpl")}) == {
+        "tmpl": frozenset({"plain:c", "opaque:a", "opaque:b"})
+    }
+
+
+async def test_evaluate_hint_leaves_an_unfired_non_opaque_predicate_out(hass) -> None:
+    """A non-opaque predicate is carried only when it fires: its own watches
+    cover every dependency it has, so the hint stays narrow."""
+    engine = _mixed_opacity_engine(hass)
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
+        "tmpl": frozenset({"opaque:a", "opaque:b"})
+    }
+
+
+async def test_evaluate_hint_unwatchable_opaque_with_no_result_key_forces_full_refresh(
+    hass,
+) -> None:
+    """An unwatchable opaque predicate whose result key can't be derived drops
+    its condition back to a full refresh, exactly like a fired one."""
+    cond = OpaqueHintCondition()
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
+            {"when": {"tmpl": 42}, "category": "g", "actions": []},
+        ],
+        {"tmpl": cond},
+    )
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {}
+
+
+async def test_evaluate_hint_ignores_opaque_predicates_of_unfired_conditions(hass) -> None:
+    """An unwatchable opaque predicate belonging to a condition that didn't fire
+    stays out of the map — that condition isn't being re-snapshotted at all."""
+    engine = _hint_engine(
+        hass,
+        [
+            {"when": {"tmpl": "watched:a"}, "category": "g", "actions": []},
+            {"when": {"other": "blind"}, "category": "g", "actions": []},
+        ],
+        {"tmpl": OpaqueHintCondition(), "other": OpaqueHintCondition()},
+    )
+    assert engine._fired_result_keys({("area", "a", 0, "tmpl")}) == {
+        "tmpl": frozenset({"watched:a"})
+    }
+
+
+async def test_schedule_for_rechecks_arms_nothing_after_teardown(hass) -> None:
+    """Nothing may arm a timer after teardown: a torn-down engine has no cancel
+    path left, so an armed `for:` recheck would outlive it (a lingering timer)."""
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    engine.tenure["x"] = {"gate:binary_sensor.x": dt_util.utcnow()}
+    engine._teardown()
+
+    with patch("custom_components.ambience.trigger_subscriptions.async_call_later") as call_later:
+        engine._schedule_for_rechecks({key})
+
+    assert call_later.call_count == 0
+    assert engine._for_handles == {}
+
+
+async def test_async_evaluate_arms_nothing_when_torn_down_mid_refresh(hass) -> None:
+    """A queued evaluation whose snapshot refresh is still awaited when the engine
+    is torn down must abandon the pass rather than re-arm timers into a dead
+    engine."""
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    engine.tenure["x"] = {"gate:binary_sensor.x": dt_util.utcnow()}
+
+    async def _refresh_then_teardown(*_args, **_kwargs):
+        engine._teardown()
+
+    with (
+        patch.object(engine, "_refresh_snapshots", _refresh_then_teardown),
+        patch("custom_components.ambience.trigger_subscriptions.async_call_later") as call_later,
+        patch.object(engine, "_apply_units") as apply_units,
+    ):
+        await engine.async_evaluate({key})
+
+    assert call_later.call_count == 0
+    assert engine._for_handles == {}
+    assert apply_units.call_count == 0

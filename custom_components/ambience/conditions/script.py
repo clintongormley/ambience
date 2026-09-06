@@ -14,14 +14,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
 from time import monotonic as _monotonic
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..errors import AmbienceError
 from ..triggers import TriggerSpec
+from ._common import validate_entity_ids
 from ._opaque import OpaquePrecomputedCondition
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ class ScriptSnapshot:
     results: dict[str, bool] = field(default_factory=dict)
 
 
-class ScriptCondition(OpaquePrecomputedCondition):
+class ScriptCondition(OpaquePrecomputedCondition[ScriptSnapshot]):
     """Matches by calling a HA script and reading {match: bool} from its response."""
 
     name = "script"
@@ -82,20 +84,15 @@ class ScriptCondition(OpaquePrecomputedCondition):
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError(f"script predicate must be a dict or null: {predicate!r}")
-        script = predicate.get("script")
-        if not isinstance(script, str) or not script.startswith("script."):
-            raise ValueError(
-                f"script predicate `script` must be a 'script.<name>' string: {script!r}"
-            )
+            raise AmbienceError("script_predicate_not_object", predicate=predicate)
+        validate_entity_ids([predicate.get("script")], "script", key="script_id_invalid")
         args = predicate.get("args")
         if args is not None and not isinstance(args, dict):
-            raise ValueError(f"script predicate `args` must be a dict or absent: {args!r}")
+            raise AmbienceError("script_args_not_object", args=args)
         triggers = predicate.get("triggers")
-        if triggers is not None and (
-            not isinstance(triggers, list) or not all(isinstance(t, str) and t for t in triggers)
-        ):
-            raise ValueError("script predicate `triggers` must be a list of entity_id strings")
+        if triggers is not None:
+            # Any domain: a trigger is whatever entity should re-run the script.
+            validate_entity_ids(triggers, key="script_triggers_invalid")
 
     # --- evaluation --------------------------------------------------------
 
@@ -110,6 +107,17 @@ class ScriptCondition(OpaquePrecomputedCondition):
         if not isinstance(script, str) or not isinstance(args, dict):
             return ""
         return _cache_key(script, args)
+
+    def snapshot_from_results(self, results: dict[str, bool]) -> ScriptSnapshot:
+        return ScriptSnapshot(results=dict(results))
+
+    def verdict_label(self, predicate: Any, scene: Mapping[str, Any]) -> tuple[str | None, str]:
+        """The script's own entity_id names the knob and is what it links to;
+        a malformed predicate has neither, so the knob reads generically."""
+        script = predicate.get("script")
+        if not isinstance(script, str):
+            return None, self.name
+        return script, script
 
     # --- trigger dependencies ---------------------------------------------
 
@@ -142,19 +150,36 @@ class ScriptCondition(OpaquePrecomputedCondition):
     # Per-call timeout for script invocations. Tests may override.
     _timeout_seconds: float = 5.0
 
-    async def snapshot(
+    @staticmethod
+    def _pair_from_key(key: str) -> tuple[str, str]:
+        """A result key split back into its (script, args-json) pair. The key is
+        built as f"{script}|{args_json}" and a script entity_id can never contain
+        "|", so the first separator is the boundary."""
+        script, _, args_json = key.partition("|")
+        return script, args_json
+
+    def _merge(self, fresh: ScriptSnapshot, previous: ScriptSnapshot) -> ScriptSnapshot:
+        return ScriptSnapshot(results={**previous.results, **fresh.results})
+
+    async def _compute(
         self,
         hass: HomeAssistant,
-        *,
-        now: datetime | None = None,
-        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
+        keys: frozenset[str] | None,
     ) -> ScriptSnapshot:
-        pairs = self._collect_pairs()
+        # A result key round-trips to its work item, so a hint is the work list
+        # itself — no store walk, and only the named scripts are called.
+        pairs = (
+            [self._pair_from_key(k) for k in sorted(keys)]
+            if keys is not None
+            else self._collect_pairs()
+        )
         results: dict[str, bool] = {}
         misses: list[tuple[str, str, str]] = []  # (script, args_json, cache_key)
         now_mono = _monotonic()
         for script, args_json in pairs:
-            key = _cache_key(script, json.loads(args_json))
+            # `args_json` is already the sorted compact form `result_key` uses,
+            # so the key is a join — no re-parse, no re-dump.
+            key = f"{script}|{args_json}"
             cached = self._cache.get(key)
             if cached is not None and cached[1] > now_mono:
                 results[key] = cached[0]
@@ -170,9 +195,11 @@ class ScriptCondition(OpaquePrecomputedCondition):
                 results[key] = value
         # Evict keys whose (script, args) pair is no longer referenced by any
         # scene — the cache lives on a long-lived singleton and would otherwise
-        # grow with every pair ever configured. After the loops above,
-        # results ⊆ cache, so a size check spots the no-eviction common case.
-        if len(self._cache) > len(results):
+        # grow with every pair ever configured. Only a full refresh sees the
+        # whole work list; a hinted pass would prune every live entry it didn't
+        # recompute. After the loops above, results ⊆ cache, so a size check
+        # spots the no-eviction common case.
+        if keys is None and len(self._cache) > len(results):
             self._cache = {k: v for k, v in self._cache.items() if k in results}
         return ScriptSnapshot(results=results)
 

@@ -14,6 +14,7 @@ from custom_components.ambience.conditions.weather import (
     WeatherSnapshot,
 )
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import EMPTY
 
 
@@ -170,8 +171,9 @@ def test_validate_accepts_null_and_empty(m_no_entity: WeatherCondition) -> None:
 
 
 def test_validate_rejects_non_dict(m_no_entity: WeatherCondition) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         m_no_entity.validate_predicate(42)
+    assert exc.value.translation_key == "weather_predicate_not_object"
 
 
 def test_validate_skips_group_existence_when_no_hass() -> None:
@@ -181,18 +183,21 @@ def test_validate_skips_group_existence_when_no_hass() -> None:
 
 
 @pytest.mark.parametrize(
-    "threshold",
+    "threshold,key",
     [
-        {"attribute": "nope", "op": "<", "value": 5},
-        {"attribute": "temperature", "op": "==", "value": 5},
-        {"attribute": "temperature", "op": "<", "value": "5"},
-        {"attribute": "temperature", "op": "<", "value": True},
-        {"attribute": "temperature", "op": "<"},
+        ({"attribute": "nope", "op": "<", "value": 5}, "weather_unknown_attribute"),
+        ({"attribute": "temperature", "op": "==", "value": 5}, "weather_invalid_operator"),
+        ({"attribute": "temperature", "op": "<", "value": "5"}, "weather_threshold_not_number"),
+        ({"attribute": "temperature", "op": "<", "value": True}, "weather_threshold_not_number"),
+        ({"attribute": "temperature", "op": "<"}, "weather_threshold_not_number"),
     ],
 )
-def test_validate_rejects_bad_threshold(m_with_entity: WeatherCondition, threshold) -> None:
-    with pytest.raises(ValueError):
+def test_validate_rejects_bad_threshold(
+    m_with_entity: WeatherCondition, threshold, key: str
+) -> None:
+    with pytest.raises(AmbienceError) as exc:
         m_with_entity.validate_predicate({"groups": [], "thresholds": [threshold]})
+    assert exc.value.translation_key == key
 
 
 def test_validate_accepts_well_formed(hass: HomeAssistant) -> None:
@@ -445,11 +450,11 @@ def test_describe_returns_condition() -> None:
 
 
 def test_validate_rejects_groups_not_a_list(m_no_entity: WeatherCondition) -> None:
-    """validate_predicate raises ValueError when groups is a non-list."""
-    with pytest.raises(ValueError, match="groups"):
-        m_no_entity.validate_predicate({"groups": "sunny", "thresholds": []})
-    with pytest.raises(ValueError, match="groups"):
-        m_no_entity.validate_predicate({"groups": {"sunny"}, "thresholds": []})
+    """validate_predicate rejects a non-list `groups`."""
+    for bad in ("sunny", {"sunny"}):
+        with pytest.raises(AmbienceError) as exc:
+            m_no_entity.validate_predicate({"groups": bad, "thresholds": []})
+        assert exc.value.translation_key == "weather_groups_not_list"
 
 
 # ---------------------------------------------------------------------------
@@ -458,11 +463,11 @@ def test_validate_rejects_groups_not_a_list(m_no_entity: WeatherCondition) -> No
 
 
 def test_validate_rejects_thresholds_not_a_list(m_no_entity: WeatherCondition) -> None:
-    """validate_predicate raises ValueError when thresholds is not a list."""
-    with pytest.raises(ValueError, match="thresholds"):
-        m_no_entity.validate_predicate({"groups": [], "thresholds": "bad"})
-    with pytest.raises(ValueError, match="thresholds"):
-        m_no_entity.validate_predicate({"groups": [], "thresholds": {}})
+    """validate_predicate rejects a non-list `thresholds`."""
+    for bad in ("bad", {}):
+        with pytest.raises(AmbienceError) as exc:
+            m_no_entity.validate_predicate({"groups": [], "thresholds": bad})
+        assert exc.value.translation_key == "weather_thresholds_not_list"
 
 
 # ---------------------------------------------------------------------------
@@ -471,13 +476,11 @@ def test_validate_rejects_thresholds_not_a_list(m_no_entity: WeatherCondition) -
 
 
 def test_validate_rejects_empty_and_non_string_group_ids(m_no_entity: WeatherCondition) -> None:
-    """validate_predicate raises ValueError for blank or non-string group ids."""
-    with pytest.raises(ValueError, match="non-empty string"):
-        m_no_entity.validate_predicate({"groups": [""], "thresholds": []})
-    with pytest.raises(ValueError, match="non-empty string"):
-        m_no_entity.validate_predicate({"groups": [42], "thresholds": []})
-    with pytest.raises(ValueError, match="non-empty string"):
-        m_no_entity.validate_predicate({"groups": [None], "thresholds": []})
+    """validate_predicate rejects blank or non-string group ids."""
+    for bad in ("", 42, None):
+        with pytest.raises(AmbienceError) as exc:
+            m_no_entity.validate_predicate({"groups": [bad], "thresholds": []})
+        assert exc.value.translation_key == "weather_group_id_empty"
 
 
 # ---------------------------------------------------------------------------
@@ -486,11 +489,11 @@ def test_validate_rejects_empty_and_non_string_group_ids(m_no_entity: WeatherCon
 
 
 def test_validate_threshold_rejects_non_dict(m_no_entity: WeatherCondition) -> None:
-    """validate_predicate raises ValueError when a threshold entry is not a dict."""
-    with pytest.raises(ValueError, match="threshold must be an object"):
-        m_no_entity.validate_predicate({"groups": [], "thresholds": ["temp < 5"]})
-    with pytest.raises(ValueError, match="threshold must be an object"):
-        m_no_entity.validate_predicate({"groups": [], "thresholds": [42]})
+    """validate_predicate rejects a threshold entry that is not an object."""
+    for bad in ("temp < 5", 42):
+        with pytest.raises(AmbienceError) as exc:
+            m_no_entity.validate_predicate({"groups": [], "thresholds": [bad]})
+        assert exc.value.translation_key == "weather_threshold_not_object"
 
 
 def test_weather_validate_predicate_allows_unknown_group_and_unset_entity(

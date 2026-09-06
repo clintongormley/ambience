@@ -13,10 +13,16 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 
 from custom_components.ambience.const import DATA_STORE, DATA_SWITCHES, DOMAIN
-from custom_components.ambience.service import async_apply_scene, async_resolve_only
+from custom_components.ambience.service import (
+    _switch_state,
+    async_apply_scene,
+    async_resolve_only,
+)
+from custom_components.ambience.switch import switch_unique_id
 
 
 async def _setup_with_one_scene_per_scope(hass, mock_config_entry):
@@ -241,3 +247,43 @@ async def test_global_off_then_area_on_unblocks_area_apply(hass, mock_config_ent
     caplog.set_level("INFO", logger="custom_components.ambience.service")
     await async_apply_scene(hass, "area", area_id)
     assert "switch is off" not in caplog.text.lower()
+
+
+# --- entity-registry disable pauses the scope ------------------------------
+
+
+async def test_registry_disabled_switch_pauses_scope(hass, mock_config_entry, caplog):
+    """Disabling a scope's switch entity in the entity registry pauses the
+    scope: the entity is unloaded (gone from DATA_SWITCHES) but still
+    registered, so the gate must read "off", not "unknown"."""
+    area_id, _ = await _setup_with_one_scene_per_scope(hass, mock_config_entry)
+
+    ent_reg = er.async_get(hass)
+    ent_id = ent_reg.async_get_entity_id("switch", DOMAIN, switch_unique_id("area", area_id))
+    assert ent_id is not None
+    ent_reg.async_update_entity(ent_id, disabled_by=er.RegistryEntryDisabler.USER)
+    await hass.async_block_till_done()
+    # HA removes a disabled entity from the platform, which clears DATA_SWITCHES.
+    assert ("area", area_id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+    assert _switch_state(hass, "area", area_id) == "off"
+
+    caplog.set_level("INFO", logger="custom_components.ambience.service")
+    await async_apply_scene(hass, "area", area_id)
+    assert "switch is off" in caplog.text.lower()
+
+
+async def test_unregistered_switch_stays_unknown(hass, mock_config_entry):
+    """A switch that is neither loaded nor registered (startup race) keeps
+    "unknown" — it must not be treated as a user pause."""
+    area_id, _ = await _setup_with_one_scene_per_scope(hass, mock_config_entry)
+
+    ent_reg = er.async_get(hass)
+    ent_id = ent_reg.async_get_entity_id("switch", DOMAIN, switch_unique_id("area", area_id))
+    assert ent_id is not None
+    ent_reg.async_remove(ent_id)
+    await hass.async_block_till_done()
+    # Removing the registry entry unloads the entity, clearing DATA_SWITCHES.
+    assert ("area", area_id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+    assert _switch_state(hass, "area", area_id) == "unknown"

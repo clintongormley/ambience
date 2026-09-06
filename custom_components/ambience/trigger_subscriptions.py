@@ -20,7 +20,9 @@ from homeassistant.core import Event, callback
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_point_in_time,
+    async_track_state_added_domain,
     async_track_state_change_event,
+    async_track_state_removed_domain,
     async_track_time_change,
     async_track_time_interval,
 )
@@ -62,7 +64,17 @@ class TriggerSubscriptionsMixin:
             self._hass.async_create_task(self.async_evaluate(fired, cause))
 
     def _teardown(self) -> None:
-        """Cancel all subscriptions and pending timers."""
+        """Cancel all subscriptions and pending timers (engine shutdown)."""
+        self._teardown_subscriptions()
+        self._cancel_all_reapply_timers()
+
+    def _teardown_subscriptions(self) -> None:
+        """Cancel the index-derived subscriptions and `for:` timers.
+
+        Idle-reapply timers are deliberately left alone: they track wall-clock
+        idleness per unit, not the index, and a resubscribe (any config save)
+        must not restart them.
+        """
         self._running = False
         while self._unsubs:
             self._unsubs.pop()()
@@ -74,11 +86,10 @@ class TriggerSubscriptionsMixin:
                 cancel()
         self._for_handles.clear()
         self._switch_scopes.clear()
-        self._cancel_all_reapply_timers()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
-        self._teardown()
+        self._teardown_subscriptions()
         self._running = True
         index = self._index
         if index.entities:
@@ -86,6 +97,19 @@ class TriggerSubscriptionsMixin:
                 async_track_state_change_event(
                     self._hass, list(index.entities), self._on_state_event
                 )
+            )
+        if index.domains:
+            # A wildcard predicate ("all persons") enumerated its entities at
+            # build time, so the watch-set above is only as current as the last
+            # rebuild. Watching the domain's membership closes that gap: an
+            # entity appearing or disappearing schedules a rebuild, which
+            # re-enumerates and re-subscribes.
+            domains = sorted(index.domains)
+            self._unsubs.append(
+                async_track_state_added_domain(self._hass, domains, self._on_domain_membership)
+            )
+            self._unsubs.append(
+                async_track_state_removed_domain(self._hass, domains, self._on_domain_membership)
             )
         for clock in index.clock_times:
             self._unsubs.append(
@@ -138,7 +162,7 @@ class TriggerSubscriptionsMixin:
                     self._hass, list(self._switch_scopes), self._on_switch_event
                 )
             )
-        self._rearm_all_reapply_timers()
+        self._sync_reapply_timers()
 
     @callback
     def _on_state_event(self, event: Event) -> None:
@@ -158,6 +182,16 @@ class TriggerSubscriptionsMixin:
         # timers off that tenure. Arming here (pre-evaluation) would use stale
         # tenure and double-arm.
         self._fire(set(preds), cause)
+
+    @callback
+    def _on_domain_membership(self, _event: Event) -> None:
+        """A watched domain gained or lost an entity: rebuild the index so
+        wildcard predicates re-enumerate. Debounced, so a bulk add (integration
+        setup) costs one rebuild, and the rebuild's own resync re-evaluates
+        every predicate — no fan-out needed here."""
+        if not self._running:
+            return  # queued before teardown; hass.data[DOMAIN] may be gone
+        self._hass.async_create_task(self.async_request_refresh())
 
     def _make_keys_handler(
         self, preds: frozenset[PredKey], cause: TriggerCause | None = None
@@ -186,7 +220,7 @@ class TriggerSubscriptionsMixin:
         settings — cancel all, then re-arm applied units (a no-op when the feature
         is now disabled, since _arm_reapply_timer gates on enabled)."""
         self._cancel_all_reapply_timers()
-        self._rearm_all_reapply_timers()
+        self._sync_reapply_timers()
 
     @callback
     def _arm_reapply_timer(self, unit: tuple[str, str | None, str]) -> None:
@@ -216,18 +250,20 @@ class TriggerSubscriptionsMixin:
         was armed with, used only to label the trace. Skip cheaply — before the
         snapshot refresh — when the scope is disabled or its switch is off: those
         units are gated out by `_resolve_and_apply` anyway, and returning early
-        avoids a wasted full-snapshot refresh (notably the burst when the feature is
-        enabled while many scopes are off). A successful dispatch re-emits
+        avoids a wasted snapshot refresh (notably the burst when the feature is
+        enabled while many scopes are off). Only this scope's own conditions are
+        re-snapshotted: re-applying one unit must not cost a full refresh, or N
+        idle units cost N full refreshes per interval. A successful dispatch re-emits
         SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip dispatches nothing, so
-        the timer stays dead until the next real apply re-arms it. The `_running`
-        guard lives in `_make_reapply_due` (before the task is created) and timers
-        are cancelled on disable/teardown."""
+        the timer stays dead until the next real apply or the next resubscribe
+        re-arms it. The `_running` guard lives in `_make_reapply_due` (before the
+        task is created) and timers are cancelled on disable/teardown."""
         scope_kind, scope_id, _category = unit
         if not _scope_enabled(self._hass, scope_kind, scope_id) or (
             _switch_state(self._hass, scope_kind, scope_id) == "off"
         ):
             return
-        await self._refresh_all_snapshots()
+        await self._refresh_snapshots(self._condition_keys_for(scope_kind, scope_id))
         trace = await self._resolve_and_apply(*unit, force=True)
         if trace is not None:
             emit_trace(
@@ -243,9 +279,19 @@ class TriggerSubscriptionsMixin:
             cancel()
         self._reapply_timers.clear()
 
-    def _rearm_all_reapply_timers(self) -> None:
-        for unit in self._all_units():
-            if get_last_applied(self._hass, *unit) is not None:
+    def _sync_reapply_timers(self) -> None:
+        """Reconcile the idle-reapply timers with the current unit set, without
+        disturbing live ones — a config save anywhere must not reset every unit's
+        idle clock. Drop timers for units that are gone, and arm applied units
+        that have no timer yet (first subscribe, a unit whose timer fired and was
+        consumed while its scope was gated out, or every applied unit after
+        `note_reapply_config_changed` has cancelled them all)."""
+        live = self._all_units()
+        live_set = set(live)
+        for unit in [u for u in self._reapply_timers if u not in live_set]:
+            self._reapply_timers.pop(unit)()
+        for unit in live:
+            if unit not in self._reapply_timers and get_last_applied(self._hass, *unit) is not None:
                 self._arm_reapply_timer(unit)
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
@@ -261,7 +307,13 @@ class TriggerSubscriptionsMixin:
         timer: they re-arm event-driven via the flip that records their tenure.
         A gate already matured (delay <= 0) needs none either: the evaluation
         that armed this pass already saw it true. Cancels and replaces any prior
-        handles per predicate, so calling this is idempotent."""
+        handles per predicate, so calling this is idempotent.
+
+        Arms nothing once the engine is torn down: teardown is the only thing
+        that cancels these handles, so a timer armed after it would outlive the
+        engine with no cancel path left."""
+        if not self._running:
+            return
         now = dt_util.utcnow()
         for key in preds:
             gates = self._index.durations.get(key)
@@ -285,12 +337,12 @@ class TriggerSubscriptionsMixin:
                 self._for_handles[key] = handles
 
     def rearm_scope_rechecks(self, scope_kind: str, scope_id: str | None) -> None:
-        """(Re)arm just this scope's pending `for:` rechecks. Used by paths that
-        resume a scope without the full teardown/rebuild of a reload — a switch
-        off->on resync, and scope re-enable. A duration timer is a one-shot: if
-        it matured while the scope was inactive it fired as a no-op and was
-        consumed, so without this a still-pending gate whose timer elapsed during
-        the inactive window would never re-arm. `_schedule_for_rechecks` reads the
+        """(Re)arm just this scope's pending `for:` rechecks. Used by the switch
+        off->on resync, which resumes a scope without the full teardown/rebuild
+        of a reload. A duration timer is a one-shot: if it matured while the
+        scope was inactive it fired as a no-op and was consumed, so without this
+        a still-pending gate whose timer elapsed during the inactive window would
+        never re-arm. `_schedule_for_rechecks` reads the
         live tenure and cancels/replaces any still-live handles, so calling this
         is idempotent."""
         self._schedule_for_rechecks(
@@ -350,9 +402,15 @@ class TriggerSubscriptionsMixin:
     async def _force_resync_scope(
         self, scope: tuple[str, str | None], switch_entity_id: str | None = None
     ) -> None:
-        """Force-apply every category of a scope (used on a switch off->on)."""
+        """Force-apply every category of a scope (used on a switch off->on).
+
+        Re-snapshot this scope's own conditions first: while the switch was off,
+        verdicts can have moved without any watch firing (opaque conditions, or
+        watches whose flips were gated out), so the cache would replay a stale
+        winner."""
         scope_kind, scope_id = scope
         self.rearm_scope_rechecks(scope_kind, scope_id)
+        await self._refresh_snapshots(self._condition_keys_for(scope_kind, scope_id))
         cfg = self._scope_cfgs.get(scope)
         traces = await self._apply_units(
             [(scope_kind, scope_id, cid) for cid in category_ids(cfg or {})], force=True
@@ -366,37 +424,44 @@ class TriggerSubscriptionsMixin:
                 ),
             )
 
-    def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
-        """Next fire time for a sun anchor (+offset), from sun.sun, or None.
+    def _next_sun_slot(self, anchor: str, offset_min: int) -> tuple[Any, bool]:
+        """Next wake-up for a sun anchor (+offset) as `(when, is_fire)`.
 
-        sun.sun's `next_*` attribute only rolls over when the un-offset event
-        fires, so with a negative offset the computed time is already in the
-        past once the handler has fired — arming it would fire again on the
-        next loop iteration and spin until the anchor advances. Fall forward
-        to just after the un-offset anchor instead; once that passes, `next_*`
-        has rolled over and the real next occurrence is computable. If even
-        the anchor is stale (attribute-update race), poll again shortly.
+        `when` is None (with `is_fire` False) when sun.sun cannot supply the
+        anchor. `is_fire` marks the genuine `anchor+offset` instant, the only
+        one that may re-evaluate: sun.sun's `next_*` attribute only rolls over
+        when the un-offset event fires, so with a negative offset the computed
+        time is already in the past once the handler has fired — arming it
+        would fire again on the next loop iteration and spin until the anchor
+        advances. Fall forward to just after the un-offset anchor instead; once
+        that passes, `next_*` has rolled over and the real next occurrence is
+        computable. If even the anchor is stale (attribute-update race), poll
+        again shortly. Both fall-forwards exist only to re-arm.
         """
         state = self._hass.states.get("sun.sun")
         attr = ANCHOR_ATTR.get(anchor)
         raw = state.attributes.get(attr) if (state and attr) else None
         parsed = dt_util.parse_datetime(raw) if raw else None
         if parsed is None:
-            return None
+            return None, False
         fire_at = parsed + timedelta(minutes=offset_min)
         now = dt_util.utcnow()
         if fire_at > now:
-            return fire_at
+            return fire_at, True
         retry_at = parsed + timedelta(seconds=1)
-        return retry_at if retry_at > now else now + timedelta(seconds=60)
+        if retry_at > now:
+            return retry_at, False
+        return now + timedelta(seconds=60), False
 
     def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
-        """Schedule the next firing of a sun event, rescheduling on fire.
+        """Schedule the next sun wake-up, re-arming on every wake-up.
 
-        The handle lives in `_sun_unsubs[sun_event]`; re-arming cancels and
-        replaces the slot so fired (dead) handles never accumulate.
+        Only a wake-up at the genuine `anchor+offset` instant re-evaluates; the
+        rollover fall-forwards just re-arm. The handle lives in
+        `_sun_unsubs[sun_event]`; re-arming cancels and replaces the slot so
+        fired (dead) handles never accumulate.
         """
-        fire_at = self._next_sun_fire(sun_event[0], sun_event[1])
+        fire_at, is_fire = self._next_sun_slot(sun_event[0], sun_event[1])
         if fire_at is None:
             return
 
@@ -404,7 +469,7 @@ class TriggerSubscriptionsMixin:
         def _handler(_now: Any) -> None:
             if not self._running:
                 return  # fired after teardown — don't re-arm into a dead engine
-            preds = self._index.by_sun.get(sun_event)
+            preds = self._index.by_sun.get(sun_event) if is_fire else None
             if preds:
                 self._fire(
                     set(preds),

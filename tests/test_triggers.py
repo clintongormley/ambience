@@ -10,6 +10,7 @@ def test_empty_has_all_empty_fields() -> None:
     assert EMPTY.duration_gates == frozenset()
     assert EMPTY.clock_times == frozenset()
     assert EMPTY.sun_events == frozenset()
+    assert EMPTY.domains == frozenset()
     assert EMPTY.date_rollover is False
     assert EMPTY.has_time is False
     assert EMPTY.opaque is False
@@ -35,6 +36,7 @@ def test_merge_unions_sets_and_ors_bools() -> None:
         sun_events=frozenset({("sunset", 0)}),
         date_rollover=True,
         opaque=False,
+        domains=frozenset({"person"}),
     )
     b = TriggerSpec(
         entities=frozenset({"light.b"}),
@@ -50,6 +52,20 @@ def test_merge_unions_sets_and_ors_bools() -> None:
     assert out.date_rollover is True
     assert out.has_time is True
     assert out.opaque is True
+    assert out.domains == frozenset({"person"})
+
+
+def test_merge_unions_domains() -> None:
+    """A wildcard predicate watches a whole domain (e.g. every `person.*`) so it
+    notices entities added/removed after startup; merge must union those."""
+    out = merge(
+        [
+            TriggerSpec(domains=frozenset({"person"})),
+            TriggerSpec(entities=frozenset({"light.a"}), domains=frozenset({"zone"})),
+        ]
+    )
+    assert out.domains == frozenset({"person", "zone"})
+    assert out.entities == frozenset({"light.a"})
 
 
 def test_merge_unions_gates_across_specs() -> None:

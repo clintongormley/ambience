@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
@@ -23,6 +24,7 @@ from ._common import (
     state_sources,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
@@ -40,9 +42,12 @@ class StateSnapshot:
     # off `last_updated` (any change, including an attribute-only refresh,
     # resets the clock — correct when the atom's LHS *is* an attribute).
     states: dict[str, tuple[str, datetime, datetime]]
-    # entity_id -> attribute dict. Populated alongside states for atoms that
-    # compare an attribute instead of the state itself.
-    attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # entity_id -> attribute mapping. Populated alongside states for atoms that
+    # compare an attribute instead of the state itself. Held by reference: HA's
+    # `State.attributes` is an immutable ReadOnlyDict and a state change
+    # replaces the whole State, so the snapshot stays a frozen view without
+    # copying every entity's attributes on every tick.
+    attributes: dict[str, Mapping[str, Any]] = field(default_factory=dict)
     # Engine-injected per-gate tenure: gate fingerprint -> the time its instant
     # test last became true. When present, `for:` atoms gate off predicate
     # tenure (surviving in-set flips); when None (the simulator and direct
@@ -87,7 +92,7 @@ class StateCondition:
         entities: frozenset[str] | None = None,
     ) -> StateSnapshot:
         states: dict[str, tuple[str, datetime, datetime]] = {}
-        attributes: dict[str, dict[str, Any]] = {}
+        attributes: dict[str, Mapping[str, Any]] = {}
         # `entities` (the entities atoms actually reference) lets us read just
         # those; None (the simulator path) means a full scan. This runs on the
         # hottest path in the system — every motion/door event — so copying
@@ -96,9 +101,7 @@ class StateCondition:
             if s is None:
                 continue  # referenced entity that doesn't exist
             states[s.entity_id] = (s.state, s.last_changed, s.last_updated)
-            # `s.attributes` is a Mapping; copy into a plain dict so the
-            # snapshot stays detached from HA's live state object.
-            attributes[s.entity_id] = dict(s.attributes)
+            attributes[s.entity_id] = s.attributes
         return StateSnapshot(now=now or dt_util.utcnow(), states=states, attributes=attributes)
 
     def matches(self, predicate: Any, snapshot: StateSnapshot) -> bool:
@@ -394,55 +397,57 @@ class StateCondition:
         return expr  # atom — nothing to flatten
 
     def _validate_expr(self, expr: Any) -> None:
-        # Messages here surface verbatim to the user in the scene editor, so they
+        # These keys surface to the user in the scene editor, so their messages
         # read as plain guidance rather than internal jargon (no "atom"/"list").
         if not isinstance(expr, dict):
-            raise ValueError("This state condition is malformed.")
+            raise AmbienceError("state_malformed")
         kind = expr.get("kind")
         if kind not in self._VALID_KINDS:
-            raise ValueError(f"Unknown state condition kind: {kind!r}.")
+            raise AmbienceError("state_unknown_kind", kind=kind)
         if kind in self._ATOM_KINDS:
             self._validate_atom(expr)
         elif kind in ("and", "or"):
             items = expr.get("items")
             if not isinstance(items, list) or not items:
-                raise ValueError(f"An ‘{kind}’ group needs at least one condition.")
+                raise AmbienceError("state_group_empty", kind=kind)
             for it in items:
                 self._validate_expr(it)
         else:  # "not"
             item = expr.get("item")
             if item is None:
-                raise ValueError("A ‘not’ group needs a condition to negate.")
+                raise AmbienceError("state_not_empty")
             self._validate_expr(item)
 
     def _validate_atom(self, atom: dict) -> None:
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str) or not entity_id.strip():
-            raise ValueError("Pick an entity for this state condition.")
+            raise AmbienceError("state_pick_entity")
+        # Any domain: a state test reads whatever entity the user picked.
+        validate_entity_ids([entity_id], key="state_pick_entity")
         kind = atom.get("kind")
         states = atom.get("states")
         if not isinstance(states, list):
-            raise ValueError("This state condition is malformed.")
+            raise AmbienceError("state_malformed")
         # Numeric ops have stricter shape: exactly one numeric string.
         if kind in self._NUMERIC_KINDS:
             if len(states) != 1:
-                raise ValueError(f"The ‘{kind}’ comparison needs exactly one value.")
+                raise AmbienceError("state_compare_one_value", kind=kind)
             if not isinstance(states[0], str) or not states[0]:
-                raise ValueError(f"Enter a number for the ‘{kind}’ comparison.")
+                raise AmbienceError("state_compare_needs_number", kind=kind)
             try:
                 float(states[0])
             except ValueError:
-                raise ValueError(
-                    f"The ‘{kind}’ comparison needs a number, but got {states[0]!r}."
+                raise AmbienceError(
+                    "state_compare_not_number", kind=kind, value=states[0]
                 ) from None
         else:
             if not states:
-                raise ValueError("Pick at least one state to match.")
+                raise AmbienceError("state_pick_state")
             if not all(isinstance(s, str) and s for s in states):
-                raise ValueError("Every state to match must be a non-empty value.")
+                raise AmbienceError("state_states_invalid")
         attribute = atom.get("attribute")
         if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
-            raise ValueError("The attribute name must not be blank.")
+            raise AmbienceError("state_attribute_blank")
         validate_for(atom.get("for"))
         validate_for_mode(atom.get("for_mode"))
 

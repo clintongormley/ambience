@@ -40,5 +40,24 @@ def test_i18n_ignore_exempts():
     assert not violations('raise HomeAssistantError("ok")  # i18n-ignore')
 
 
+def test_flags_value_error_message_in_a_condition():
+    """Condition validators reach the scene editor, so their rejections must be
+    translatable — a bare ValueError message would surface untranslated."""
+    assert violations('raise ValueError("x")', "ambience/conditions/lux.py")
+    assert violations('raise ValueError(f"bad {x}")', "ambience/conditions/lux.py")
+
+
+def test_allows_value_error_message_outside_conditions():
+    assert not violations('raise ValueError("x")', "ambience/store.py")
+
+
+def test_value_error_in_a_condition_respects_i18n_ignore():
+    assert not violations('raise ValueError("x")  # i18n-ignore', "ambience/conditions/lux.py")
+
+
+def test_allows_value_error_without_a_literal_message_in_a_condition():
+    assert not violations("raise ValueError(str(exc))", "ambience/conditions/lux.py")
+
+
 def test_real_tree_is_clean():
     assert main() == 0

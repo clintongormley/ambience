@@ -1,7 +1,7 @@
 """Pure helpers for the Ambience websocket API.
 
-Validation, canonicalisation and scene-annotation helpers, factored out
-of websocket.py so that file holds just the command handlers + registration.
+Validation, canonicalisation and scene-annotation helpers, kept out of the
+`websocket` package so it holds just the command handlers + registration.
 None of these touch the connection; they take plain data (and `hass` for store
 lookups) and return values or raise AmbienceError.
 """
@@ -30,9 +30,23 @@ _LOGGER = logging.getLogger(__name__)
 # --- scope-save pipeline ----------------------------------------------------
 
 
+# `scenes` is the only key a scope save persists. The legacy keys below are
+# tolerated so an older client's payload still saves, but canonicalise strips
+# them; anything else is a client bug (or a typo in a hand-written import) and is
+# rejected rather than merged into storage. Stripping `enabled` is what keeps
+# `ambience/set_scope_enabled` the only writer of the scope-level flag, so a save
+# from a stale tab cannot revert a scope someone enabled elsewhere; `conditions`
+# is dead input nothing reads.
+_LEGACY_SCOPE_CONFIG_KEYS = ("enabled", "conditions")
+_SCOPE_CONFIG_KEYS = ("scenes", *_LEGACY_SCOPE_CONFIG_KEYS)
+
+
 def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise AmbienceError("scene_config_not_object")
+    for key in config:
+        if key not in _SCOPE_CONFIG_KEYS:
+            raise AmbienceError("scene_config_unknown_key", key=key)
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     # Shape guards: the ws schema only requires `config` to be a dict, so the
     # nested shapes must be checked here — an AttributeError on hand-edited /
@@ -130,22 +144,25 @@ def canonicalise(
 ) -> dict[str, Any]:
     """Resolve scene order + numbers for storage. Strips the transient per-scene
     frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`,
-    `config_issues`) so they aren't persisted.
+    `config_issues`) so they aren't persisted, and the tolerated legacy top-level
+    keys (`enabled`, `conditions`) — the store merges what it is given, and only
+    `ambience/set_scope_enabled` may write the scope-level `enabled` flag.
 
     When ``minimise_pins`` is set (the import path), a scene carrying an explicit
     ``priority`` is treated as pinned and then unpinned where the containment
     order already reproduces it — so an import can set order while storage keeps
     pins only where they truly override the natural order."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    out = dict(config)
+    out = {k: v for k, v in config.items() if k not in _LEGACY_SCOPE_CONFIG_KEYS}
     scenes = [
         {k: v for k, v in r.items() if k not in _TRANSIENT_SCENE_FIELDS}
         for r in config.get("scenes", [])
     ]
     # Normalise each condition predicate into its stored form. A condition may
-    # expose an optional `normalize_predicate` (only `state` does today) to strip
-    # redundant editor wrappers (e.g. the group "( )" wrap's single-child / same-op
-    # nesting). Runs once here at save, so live editing keeps the wrappers visible.
+    # expose an optional `normalize_predicate` to strip redundant editor wrappers
+    # (`state`'s group "( )" single-child / same-op nesting) and to materialise
+    # its documented defaults (occupancy/lux/people). Runs once here at save, so
+    # live editing keeps the wrappers visible.
     for scene in scenes:
         when = scene.get("when")
         if not isinstance(when, dict):
@@ -183,20 +200,26 @@ def annotate_scenes(
     }
 
 
-def coerce_scene_categories(store, config: dict) -> None:
+def coerce_scene_categories(store, config: dict) -> bool:
     """Point any scene with no category / an unknown category at General (or, if General
     was deleted, the first existing category), logging once. Mutates `config`. This is
-    the single place that enforces the every-scene-has-a-real-category invariant."""
+    the single place that enforces the every-scene-has-a-real-category invariant.
+
+    Returns True when a scene was moved, so a caller that skips canonicalisation
+    can tell that the category buckets changed and must be re-resolved (priorities
+    are only canonical within a category)."""
     known = {c["id"] for c in store.categories()}
     target = (
         GENERAL_CATEGORY_ID
         if GENERAL_CATEGORY_ID in known
         else next(iter(known), GENERAL_CATEGORY_ID)
     )
-    if reassign_orphan_scenes(config.get("scenes", []), known, target):
-        _LOGGER.warning(
-            "ambience: scope save had uncategorised/unknown-category scene(s); set to General"
-        )
+    if not reassign_orphan_scenes(config.get("scenes", []), known, target):
+        return False
+    _LOGGER.warning(
+        "ambience: scope save had uncategorised/unknown-category scene(s); set to General"
+    )
+    return True
 
 
 def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:

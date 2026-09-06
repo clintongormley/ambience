@@ -33,6 +33,69 @@ _TRANSIENT_FIELDS = {"shadowed_by", "missing_entities", "overlap_entities", "con
 # (the same bug commit a8ed6aaf fixed for _TRANSIENT_FIELDS).
 _ORDER_FIELDS = {"priority", "pinned"}
 
+# Predicate defaults the BACKEND materialises at save (each condition's
+# `normalize_predicate` / `_norm`), so a stored scene states them while the AI
+# guide teaches the compact form. Filling them here too keeps a faithful
+# re-submission out of `updated`, instead of burying a real change in noise the
+# human learns to click through. Pinned against the backend by
+# tests/test_protocol_shape.py::test_mcp_diff_predicate_defaults_match_the_backends
+# (which loads THIS module by path and calls `_normalise` directly), and
+# ::..._cover_every_normalising_condition, which fails if a fourth condition
+# grows a `_norm` the table doesn't know.
+# Each entry is `key -> (rule, default)`, the same literal shape as the
+# backend's per-condition `_PREDICATE_DEFAULTS` tables, so the two can be read
+# side by side. The rule is named rather than inferred from the default's type.
+_RULE_OR = "or"  # falsy (including absent) -> default
+_RULE_TRUTHY = "truthy"  # bool(value); absent -> False
+_RULE_NOT_FALSE = "not_false"  # only an explicit False means False
+
+_PREDICATE_DEFAULTS: dict[str, dict[str, tuple[str, Any]]] = {
+    "occupancy": {
+        "occupied": (_RULE_NOT_FALSE, True),
+        "quant": (_RULE_OR, "any"),
+        "negate": (_RULE_TRUTHY, False),
+        "for_mode": (_RULE_OR, "at_least"),
+    },
+    "lux": {
+        "quant": (_RULE_OR, "any"),
+        "negate": (_RULE_TRUTHY, False),
+    },
+    "people": {
+        "quant": (_RULE_OR, "any"),
+        "where": (_RULE_OR, "home"),
+        "negate": (_RULE_TRUTHY, False),
+        "for_mode": (_RULE_OR, "at_least"),
+    },
+}
+
+
+def _fill(predicate: dict[str, Any], key: str, rule: str, default: Any) -> Any:
+    """One key's default, by the named rule the backend applies for it."""
+    if rule == _RULE_TRUTHY:
+        return bool(predicate.get(key))
+    if rule == _RULE_NOT_FALSE:
+        return predicate.get(key, default) is not False
+    return predicate.get(key) or default
+
+
+def _normalise(condition: str, predicate: Any) -> Any:
+    """A predicate with the defaults the backend would materialise for it.
+
+    A condition with no entry in the table, and any non-dict predicate (`None` is
+    the wildcard form; junk survives a hand-edited store), passes through."""
+    defaults = _PREDICATE_DEFAULTS.get(condition)
+    if defaults is None or not isinstance(predicate, dict):
+        return predicate
+    return {**predicate, **{k: _fill(predicate, k, r, d) for k, (r, d) in defaults.items()}}
+
+
+def _normalise_when(when: Any) -> Any:
+    """Every predicate in a scene's `when`, normalised. A non-dict `when` is
+    invalid — validate() reports it — but the diff still runs on the payload."""
+    if not isinstance(when, dict):
+        return when
+    return {k: _normalise(k, v) for k, v in when.items()}
+
 
 def _key(scene: dict[str, Any], index: int) -> tuple[Any, ...]:
     name = scene.get("name")
@@ -57,7 +120,10 @@ def _authored_order_keys(scene: dict[str, Any]) -> frozenset[str]:
 
 def _comparable(scene: dict[str, Any], order_keys: frozenset[str] = frozenset()) -> dict[str, Any]:
     ignored = (_TRANSIENT_FIELDS | _ORDER_FIELDS) - order_keys
-    return {k: v for k, v in scene.items() if k not in ignored}
+    out = {k: v for k, v in scene.items() if k not in ignored}
+    if "when" in out:
+        out["when"] = _normalise_when(out["when"])
+    return out
 
 
 def diff_scopes(current: list[dict[str, Any]], proposed: list[dict[str, Any]]) -> dict[str, Any]:

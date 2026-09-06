@@ -4,8 +4,11 @@ User-facing errors must be translatable: raised via a translation carrier
 (AmbienceError / service_validation_error / LastCategoryError /
 CategoryInUseError) whose first arg is the translation_key STRING LITERAL,
 never a raw HomeAssistantError/ServiceValidationError with an English message,
-and never connection.send_error(..., "English"). _LOGGER and vol.Invalid
-(schema layer) are out of scope. A node line carrying `# i18n-ignore` is skipped.
+and never connection.send_error(..., "English"). Under `conditions/` a
+`raise ValueError("prose")` counts too: those validators run on the scene-editor
+save path, where the message reaches the panel untranslated. _LOGGER and
+vol.Invalid (schema layer) are out of scope. A node line carrying `# i18n-ignore`
+is skipped.
 
 Usage: python -m bin.check_no_hardcoded_py [--component PATH]
 Exits non-zero (listing sites) on any violation. Stdlib-only.
@@ -24,6 +27,9 @@ from bin._i18n_carriers import CARRIERS as _ALL_CARRIERS
 # "must have a string-literal key" check.
 _CARRIERS = {c for c in _ALL_CARRIERS if c != "render_en"}
 _RAW_EXC = {"HomeAssistantError", "ServiceValidationError"}
+# Path fragment marking the condition validators, whose ValueErrors reach the
+# scene editor verbatim.
+_CONDITIONS_DIR = "/conditions/"
 
 
 def _func_name(call: ast.Call) -> str | None:
@@ -51,6 +57,8 @@ def violations(source: str, filename: str = "<src>") -> list[str]:
     except SyntaxError as e:  # pragma: no cover - defensive
         return [f"{filename}: syntax error: {e}"]
     lines = source.splitlines()
+    in_conditions = _CONDITIONS_DIR in filename.replace("\\", "/")
+    raw_exc = _RAW_EXC | {"ValueError"} if in_conditions else _RAW_EXC
 
     def ignored(node: ast.AST) -> bool:
         lo = getattr(node, "lineno", None)
@@ -82,7 +90,7 @@ def violations(source: str, filename: str = "<src>") -> list[str]:
         if (
             isinstance(node, ast.Raise)
             and isinstance(node.exc, ast.Call)
-            and _func_name(node.exc) in _RAW_EXC
+            and _func_name(node.exc) in raw_exc
             and not ignored(node)
             and any(_is_str_literal_or_fstring(a) for a in node.exc.args)
         ):

@@ -103,3 +103,18 @@ async def test_find_redacts_presence_state(hass, installed, hass_ws_client) -> N
     assert msg["success"]
     row = next(e for e in msg["result"]["entities"] if e["entity_id"] == person.entity_id)
     assert row["state"] == REDACTED
+
+
+async def test_find_rejects_boolean_cursor(hass, installed, catalog, hass_ws_client) -> None:
+    # `True` is an int in Python; a bool must not page as cursor 1.
+    msg = await _ws_send(hass_ws_client, type="ambience/entities/find", cursor=True)
+
+    assert msg["success"] is False
+    assert msg["error"]["code"] == "invalid_format"
+
+
+async def test_find_rejects_boolean_limit(hass, installed, catalog, hass_ws_client) -> None:
+    msg = await _ws_send(hass_ws_client, type="ambience/entities/find", limit=True)
+
+    assert msg["success"] is False
+    assert msg["error"]["code"] == "invalid_format"

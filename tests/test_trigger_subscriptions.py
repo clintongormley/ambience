@@ -693,7 +693,7 @@ async def test_switch_resync_rearms_for_rechecks(hass, monkeypatch) -> None:
 
 
 async def test_rearm_scope_rechecks_only_touches_its_own_scope(hass, monkeypatch) -> None:
-    """rearm_scope_rechecks (used by switch-on resync and scope re-enable) must
+    """rearm_scope_rechecks (used by the switch-on resync) must
     re-arm only the named scope's pending duration predicates, leaving other
     scopes' live timers untouched."""
     import custom_components.ambience.trigger_subscriptions as _ts_mod
@@ -941,37 +941,34 @@ async def test_force_resync_scope_emits_trace_when_scenes_applied(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _next_sun_fire: sun.sun state missing (line 303)
+# _next_sun_slot: sun.sun state missing
 # ---------------------------------------------------------------------------
 
 
-async def test_next_sun_fire_returns_none_when_sun_state_missing(hass) -> None:
-    """_next_sun_fire must return None when sun.sun entity is absent."""
+async def test_next_sun_slot_returns_none_when_sun_state_missing(hass) -> None:
+    """_next_sun_slot must return None when sun.sun entity is absent."""
     engine = _minimal_engine(hass, [])
     # Ensure sun.sun is not set.
     assert hass.states.get("sun.sun") is None
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is None
+    assert engine._next_sun_slot("sunset", 0) == (None, False)
 
 
-async def test_next_sun_fire_returns_none_when_attr_missing(hass) -> None:
-    """_next_sun_fire returns None when the sun state exists but the attribute is absent."""
+async def test_next_sun_slot_returns_none_when_attr_missing(hass) -> None:
+    """_next_sun_slot returns None when the sun state exists but the attribute is absent."""
     hass.states.async_set("sun.sun", "above_horizon", {})  # no next_setting attribute
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is None
+    assert engine._next_sun_slot("sunset", 0) == (None, False)
 
 
-async def test_next_sun_fire_returns_none_when_anchor_unknown(hass) -> None:
-    """_next_sun_fire returns None for an anchor not in ANCHOR_ATTR."""
+async def test_next_sun_slot_returns_none_when_anchor_unknown(hass) -> None:
+    """_next_sun_slot returns None for an anchor not in ANCHOR_ATTR."""
     hass.states.async_set(
         "sun.sun",
         "above_horizon",
         {"next_setting": (dt_util.utcnow() + timedelta(hours=1)).isoformat()},
     )
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("totally_unknown_anchor", 0)
-    assert result is None
+    assert engine._next_sun_slot("totally_unknown_anchor", 0) == (None, False)
 
 
 # ---------------------------------------------------------------------------
@@ -980,9 +977,9 @@ async def test_next_sun_fire_returns_none_when_anchor_unknown(hass) -> None:
 
 
 async def test_schedule_sun_does_nothing_when_fire_at_is_none(hass) -> None:
-    """_schedule_sun must not register a handle when _next_sun_fire returns None."""
+    """_schedule_sun must not register a handle when _next_sun_slot returns None."""
     engine = _minimal_engine(hass, [])
-    # sun.sun absent → _next_sun_fire returns None → no handle registered.
+    # sun.sun absent → _next_sun_slot returns None → no handle registered.
     assert hass.states.get("sun.sun") is None
     engine._schedule_sun(("sunset", 0))
     assert engine._sun_unsubs == {}
@@ -1148,11 +1145,11 @@ async def test_schedule_sun_cancels_existing_handle_on_rearm(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _next_sun_fire: negative offsets must not arm a past time (busy-spin)
+# _next_sun_slot: negative offsets must not arm a past time (busy-spin)
 # ---------------------------------------------------------------------------
 
 
-async def test_next_sun_fire_negative_offset_past_falls_forward_to_anchor(hass) -> None:
+async def test_next_sun_slot_negative_offset_past_falls_forward_to_anchor(hass) -> None:
     """With a negative offset, once the offset moment has fired, sun.sun's
     next_* attribute hasn't rolled over yet — re-arming at the (past) offset
     time would fire on the next loop iteration and spin until the anchor
@@ -1161,19 +1158,88 @@ async def test_next_sun_fire_negative_offset_past_falls_forward_to_anchor(hass) 
     anchor = dt_util.utcnow() + timedelta(minutes=10)
     hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", -30)  # offset moment is 20m in the past
-    assert result == anchor + timedelta(seconds=1)
+    when, is_fire = engine._next_sun_slot("sunset", -30)  # offset moment is 20m in the past
+    assert when == anchor + timedelta(seconds=1)
+    assert is_fire is False  # a re-arm slot, not a moment the user configured
 
 
-async def test_next_sun_fire_stale_anchor_polls_instead_of_past(hass) -> None:
+async def test_next_sun_slot_stale_anchor_polls_instead_of_past(hass) -> None:
     """If even the anchor itself is in the past (attribute-update race), poll
     again shortly rather than arming a past time."""
     anchor = dt_util.utcnow() - timedelta(minutes=5)
     hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
     engine = _minimal_engine(hass, [])
-    result = engine._next_sun_fire("sunset", 0)
-    assert result is not None
-    assert result > dt_util.utcnow()
+    when, is_fire = engine._next_sun_slot("sunset", 0)
+    assert when is not None
+    assert when > dt_util.utcnow()
+    assert is_fire is False
+
+
+async def test_schedule_sun_negative_offset_fires_once_per_day(hass) -> None:
+    """A negative offset must re-evaluate only at the real anchor+offset instant.
+
+    The wake-ups that exist purely to re-arm — anchor+1s, and the 60s poll while
+    `next_*` is still stale — must reschedule without firing the predicates.
+    """
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    t0 = dt_util.utcnow().replace(microsecond=0)
+    anchor = t0 + timedelta(minutes=40)  # next_setting, fixed for the whole test
+    sun_event = ("sunset", -30)  # fire 30 minutes before it
+    hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
+
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "sun")
+    engine._index = TriggerIndex(
+        by_entity={},
+        by_clock={},
+        by_sun={sun_event: frozenset({key})},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={},
+        opaque=frozenset(),
+    )
+
+    fired: list = []
+    engine._fire = lambda preds, cause=None: fired.append((set(preds), cause))  # type: ignore[method-assign]
+
+    scheduled: list = []
+
+    def fake_atpit(_hass, action, point_in_time):
+        scheduled.append((action, point_in_time))
+        return MagicMock()
+
+    clock = [t0]
+
+    with (
+        patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit),
+        patch.object(_ts_mod.dt_util, "utcnow", side_effect=lambda: clock[0]),
+    ):
+        engine._schedule_sun(sun_event)
+        handler, when = scheduled[-1]
+        assert when == anchor - timedelta(minutes=30)
+
+        # 1. the genuine anchor+offset instant — this is the one that fires.
+        clock[0] = when
+        handler(when)
+        handler, when = scheduled[-1]
+        assert when == anchor + timedelta(seconds=1)  # rollover fallback
+
+        # 2. the anchor+1s fallback: `next_setting` has not rolled over yet.
+        clock[0] = when
+        handler(when)
+        handler, when = scheduled[-1]
+        assert when == clock[0] + timedelta(seconds=60)  # stale-anchor poll
+
+        # 3. one 60s poll tick.
+        clock[0] = when
+        handler(when)
+
+    assert len(fired) == 1
+    assert fired[0][0] == {key}
+    assert fired[0][1].kind == CauseKind.SUN
+    engine._teardown()
 
 
 # ---------------------------------------------------------------------------
@@ -1312,6 +1378,27 @@ async def test_recheck_callback_noop_after_teardown(hass) -> None:
     assert fired == []  # short-circuited on not self._running
 
 
+async def test_domain_membership_requests_a_debounced_rebuild(hass) -> None:
+    """An entity added to/removed from a watched domain schedules the debounced
+    rebuild — that is what re-enumerates a wildcard predicate."""
+    engine = _minimal_engine(hass, [])
+    with patch.object(engine, "async_request_refresh") as refresh:
+        engine._on_domain_membership(None)
+        await hass.async_block_till_done()
+    assert refresh.call_count == 1
+
+
+async def test_domain_membership_noop_after_teardown(hass) -> None:
+    """A membership event queued before teardown must not schedule a rebuild —
+    after unload there is no hass.data[DOMAIN] left to rebuild from."""
+    engine = _minimal_engine(hass, [])
+    engine._running = False
+    with patch.object(engine, "async_request_refresh") as refresh:
+        engine._on_domain_membership(None)
+        await hass.async_block_till_done()
+    assert refresh.call_count == 0
+
+
 async def test_recheck_cause_names_label_for_multi_entity_gate(hass) -> None:
     """A multi-entity gate (entity_id None) names the gate's label in the
     DURATION cause instead of a single entity/state."""
@@ -1373,3 +1460,244 @@ async def test_schedule_sun_handler_noop_after_teardown(hass) -> None:
         captured[0](None)  # the already-queued handler runs after teardown
     assert engine._sun_unsubs == {}
     assert len(captured) == 1  # no re-arm happened
+
+
+# ---------------------------------------------------------------------------
+# Idle-reapply timers survive a resubscribe (config save)
+# ---------------------------------------------------------------------------
+
+
+def _reapply_engine(hass, scopes, *, last_applied, interval=3600):
+    """Engine whose store has idle-reapply enabled, with seeded last-applied units."""
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes, reapply={"enabled": True, "interval_seconds": interval}),
+        DATA_CONDITIONS: {},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: dict.fromkeys(last_applied, 0),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+def _scope_with_category(category_id: str) -> dict:
+    return {"scenes": [{"when": {}, "category": category_id, "name": "S", "actions": []}]}
+
+
+def _call_later_spy():
+    """Patch context for async_call_later that records delays and wraps each
+    returned cancel callable so cancellation is observable."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    calls: list[float] = []
+    cancels: list[MagicMock] = []
+    real = _ts_mod.async_call_later
+
+    def _spy(hass_, delay, action):
+        calls.append(delay)
+        cancel = MagicMock(side_effect=real(hass_, delay, action))
+        cancels.append(cancel)
+        return cancel
+
+    return patch.object(_ts_mod, "async_call_later", side_effect=_spy), calls, cancels
+
+
+async def test_resubscribe_leaves_live_reapply_timer_untouched(hass) -> None:
+    """A config save (rebuild + resubscribe) must not reset a unit's idle clock:
+    the armed handle is the same object and no new timer is scheduled for it."""
+    engine = _reapply_engine(
+        hass, [("area", "k", _scope_with_category("g"))], last_applied=[("area", "k", "g")]
+    )
+    engine.async_subscribe()
+    unit = ("area", "k", "g")
+    armed = engine._reapply_timers[unit]
+
+    spy, calls, _cancels = _call_later_spy()
+    with spy:
+        engine.async_rebuild()
+        engine.async_subscribe()
+    assert calls == []  # nothing re-armed
+    assert engine._reapply_timers[unit] is armed
+    engine._teardown()
+
+
+async def test_resubscribe_cancels_timer_for_removed_unit(hass) -> None:
+    """A unit deleted from the config loses its idle-reapply timer on resubscribe."""
+    store_scopes = [
+        ("area", "k", _scope_with_category("g")),
+        ("area", "z", _scope_with_category("g")),
+    ]
+    engine = _reapply_engine(
+        hass, store_scopes, last_applied=[("area", "k", "g"), ("area", "z", "g")]
+    )
+    spy, _calls, cancels = _call_later_spy()
+    with spy:
+        engine.async_subscribe()
+    assert set(engine._reapply_timers) == {("area", "k", "g"), ("area", "z", "g")}
+    gone = engine._reapply_timers[("area", "z", "g")]
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    store._scopes = store_scopes[:1]
+    store._by_key = {(kind, sid): cfg for kind, sid, cfg in store._scopes}
+    engine.async_rebuild()
+    engine.async_subscribe()
+
+    assert set(engine._reapply_timers) == {("area", "k", "g")}
+    assert gone in cancels and gone.called  # the dead unit's timer was cancelled
+    engine._teardown()
+
+
+async def test_note_reapply_config_changed_rearms_every_timer(hass) -> None:
+    """Changed reapply settings still cancel and re-arm every applied unit, so the
+    new interval takes effect immediately."""
+    engine = _reapply_engine(
+        hass,
+        [("area", "k", _scope_with_category("g")), ("area", "z", _scope_with_category("g"))],
+        last_applied=[("area", "k", "g"), ("area", "z", "g")],
+    )
+    spy, _calls, cancels = _call_later_spy()
+    with spy:
+        engine.async_subscribe()
+    before = dict(engine._reapply_timers)
+    assert len(before) == 2
+
+    engine._store()._reapply = {"enabled": True, "interval_seconds": 120}
+    spy2, calls2, _c2 = _call_later_spy()
+    with spy2:
+        engine.note_reapply_config_changed(None)
+    assert calls2 == [120, 120]  # both re-armed at the new interval
+    assert all(cancel.called for cancel in cancels)  # old handles cancelled
+    assert all(engine._reapply_timers[unit] is not handle for unit, handle in before.items())
+    engine._teardown()
+
+
+# ---------------------------------------------------------------------------
+# Per-unit snapshot refresh: a re-apply / resync touches only its own scope's
+# conditions
+# ---------------------------------------------------------------------------
+
+
+class _CountingCondition:
+    """Entity condition that counts how often it is snapshotted."""
+
+    def __init__(self, entity_id: str, spec: TriggerSpec | None = None) -> None:
+        self._entity_id = entity_id
+        self._spec = spec
+        self.snapshots = 0
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if self._spec is not None:
+            return self._spec
+        return TriggerSpec(entities=frozenset({self._entity_id}))
+
+    async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+        self.snapshots += 1
+        state = hass.states.get(self._entity_id)
+        return state.state if state else None
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate == snapshot
+
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
+        return snapshot
+
+
+def _disjoint_scope_engine(hass, conditions: dict[str, Any], *, when_a: dict | None = None):
+    """Two scopes whose scenes use disjoint conditions ('ca' in area a, 'cb' in
+    area b), with idle re-apply enabled and both units already applied."""
+    scopes = [
+        (
+            "area",
+            "a",
+            {"scenes": [{"when": when_a or {"ca": "on"}, "category": "g", "actions": []}]},
+        ),
+        ("area", "b", {"scenes": [{"when": {"cb": "on"}, "category": "g", "actions": []}]}),
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes, reapply={"enabled": True, "interval_seconds": 3600}),
+        DATA_CONDITIONS: conditions,
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with(),
+        DATA_LAST_APPLIED: dict.fromkeys([("area", "a", "g"), ("area", "b", "g")], 0),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_reapply_due_refreshes_only_its_own_scopes_conditions(hass) -> None:
+    """An idle re-apply of one unit re-snapshots only the conditions that unit's
+    scenes read — an unrelated scope's conditions are left alone (N units must
+    not cost N full refreshes per interval)."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": cond_a, "cb": cond_b})
+
+    cond_a.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._reapply_due(("area", "a", "g"), 3600)
+
+    assert cond_a.snapshots == 1  # the re-applied unit's own condition
+    assert cond_b.snapshots == 0  # the unrelated scope's condition
+    engine._teardown()
+
+
+async def test_force_resync_scope_refreshes_only_its_own_scopes_conditions(hass) -> None:
+    """The switch off->on resync re-snapshots only the resumed scope's conditions."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": cond_a, "cb": cond_b})
+
+    cond_a.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._force_resync_scope(("area", "a"), "switch.ambience_a")
+
+    assert cond_a.snapshots == 1
+    assert cond_b.snapshots == 0
+    engine._teardown()
+
+
+async def test_reapply_due_refreshes_conditions_absent_from_the_index(hass) -> None:
+    """A predicate whose spec is EMPTY (nothing watchable) never enters the
+    index, but the resolve still reads its snapshot — so the per-unit refresh
+    must cover it, or the re-apply would resolve against a stale verdict."""
+    hass.states.async_set("binary_sensor.a", "on")
+    hass.states.async_set("binary_sensor.b", "on")
+    unwatched = _CountingCondition("binary_sensor.a", spec=TriggerSpec())
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(hass, {"ca": unwatched, "cb": cond_b}, when_a={"ca": "on"})
+    assert engine._index.all_predicates() == frozenset({("area", "b", 0, "cb")})
+
+    unwatched.snapshots = 0
+    cond_b.snapshots = 0
+    await engine._reapply_due(("area", "a", "g"), 3600)
+
+    assert unwatched.snapshots == 1
+    assert cond_b.snapshots == 0
+    engine._teardown()
+
+
+async def test_condition_keys_for_skips_disabled_scenes_and_unknown_scopes(hass) -> None:
+    """A disabled scene is never evaluated, so its conditions are not part of the
+    scope's refresh set; a scope that no longer exists contributes nothing."""
+    cond_a = _CountingCondition("binary_sensor.a")
+    cond_b = _CountingCondition("binary_sensor.b")
+    engine = _disjoint_scope_engine(
+        hass,
+        {"ca": cond_a, "cb": cond_b},
+        when_a={"ca": "on"},
+    )
+    store = hass.data[DOMAIN][DATA_STORE]
+    store._scopes[0][2]["scenes"].append(
+        {"when": {"cb": "on"}, "category": "g", "actions": [], "enabled": False}
+    )
+    engine.async_rebuild()
+
+    assert engine._condition_keys_for("area", "a") == {"ca"}
+    assert engine._condition_keys_for("area", "nope") == set()
+    engine._teardown()

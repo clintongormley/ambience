@@ -1,8 +1,8 @@
 """Evaluation tracing: cause/unit/event types, log formatting, and sinks.
 
 `emit_trace` is the fan-out seam: a LogSink writes to the HA log, and a
-BufferSink (Increment B) retains recent evaluations in memory for the websocket
-read API. New sinks plug in here without re-instrumenting the engine.
+BufferSink retains recent evaluations in memory for the websocket read API. New
+sinks plug in here without re-instrumenting the engine.
 """
 
 from __future__ import annotations
@@ -368,26 +368,17 @@ def tracing_active(hass: HomeAssistant) -> bool:
     return _LOGGER.isEnabledFor(logging.DEBUG) or _NOOP_LOGGER.isEnabledFor(logging.DEBUG)
 
 
-def _safe_scope_display_name(hass: HomeAssistant, unit: UnitTrace) -> str | None:
-    """Best-effort friendly scope name; None when the registry isn't available
-    (e.g. a bare test-double hass), so the label falls back to the raw id."""
-    try:
-        return scope_display_name(hass, unit.scope_kind, unit.scope_id)
-    except Exception:  # noqa: BLE001 — a stub hass without registries must not crash tracing
-        return None
-
-
 def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
     """Fill each unit's `category_name` (store id -> name) and `scope_name`
     (area/floor friendly name, 'House' for house) so logs show human names
-    rather than opaque ids. Best-effort: leaves a name unresolved when the
-    store/registry isn't available (e.g. test doubles)."""
+    rather than opaque ids. An id whose registry/store entry is gone stays
+    unresolved and renders as the raw id."""
     names = category_names(hass)
     units = [
         replace(
             u,
             category_name=names.get(u.category) or u.category_name,
-            scope_name=_safe_scope_display_name(hass, u),
+            scope_name=scope_display_name(hass, u.scope_kind, u.scope_id),
         )
         for u in event.units
     ]

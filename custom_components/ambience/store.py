@@ -19,12 +19,10 @@ from .const import (
     STORAGE_VERSION,
 )
 from .errors import AmbienceError
+from .scopes import iter_scope_kinds, scope_bucket, scope_spec
 
-# Switch / idle re-apply defaults. Defined here (store is their only consumer)
-# rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
-# positive: const has a TYPE_CHECKING-only import of store for get_store's
-# annotation, and CodeQL flags const-level constants imported by store as
-# "defined after the cyclic import".
+# Switch / idle re-apply defaults. Defined here rather than in const.py: store is
+# their only consumer.
 # auto_on_delay: how long a paused scope stays off before auto-resuming; 0 = never.
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
@@ -34,9 +32,8 @@ DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60
 
 # Voice-assistant exposure default: switches exposed to local Assist only.
-# Defined here (store owns the persisted map) rather than const.py to avoid the
-# CodeQL py/unsafe-cyclic-import false positive (see the note above). Keys must
-# stay aligned with const.KNOWN_ASSISTANTS / const.ASSISTANT_FIELDS — guarded by
+# Defined here because store owns the persisted map. Keys must stay aligned with
+# const.KNOWN_ASSISTANTS / const.ASSISTANT_FIELDS — guarded by
 # test_known_assistants_match_default_map_and_fields.
 DEFAULT_EXPOSED_ASSISTANTS = {
     "conversation": True,
@@ -44,8 +41,8 @@ DEFAULT_EXPOSED_ASSISTANTS = {
     "cloud.alexa": False,
 }
 
-# Built-in exposed actions seeded on first load. Defined here (not const.py)
-# to avoid the const<->store cyclic-import CodeQL false positive.
+# Built-in exposed actions seeded on first load. Defined here because store owns
+# the persisted list.
 DEFAULT_SEEDED_BUILTINS: list[dict[str, Any]] = [
     {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
     {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},
@@ -100,6 +97,10 @@ class AmbienceStore:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
+        # Set when the on-disk payload was present but unreadable. While set,
+        # no automatic writer may persist: the degraded empty in-memory config
+        # must not replace the file the user still needs for recovery.
+        self._unreadable_payload = False
 
     def _notify_config_changed(self, affected: tuple[str, str | None] | None = None) -> None:
         """Tell the auto-trigger engine a config save happened, and narrow the
@@ -107,70 +108,93 @@ class AmbienceStore:
         change, or None for a global change (reapply everything)."""
         async_dispatcher_send(self._hass, SIGNAL_CONFIG_CHANGED, affected)
 
+    async def _persist(self, *, user_save: bool = False) -> None:
+        """Write the payload to disk — the one chokepoint every writer goes
+        through.
+
+        While `_unreadable_payload` is set, `_data` is a degraded empty config,
+        so only an explicit user save may replace the file the user still needs
+        for recovery; every automatic writer is silently dropped. The flag
+        clears on the next successful load and nowhere else, so one overriding
+        user save does not unblock the rest.
+        """
+        if self._unreadable_payload and not user_save:
+            return
+        await self._store.async_save(self._data)
+
+    def _persist_delayed(self) -> None:
+        """Schedule a coalesced write ~1s out, under the same rule as
+        :meth:`_persist`: no automatic writer may replace an unreadable
+        payload."""
+        if self._unreadable_payload:
+            return
+        self._store.async_delay_save(lambda: self._data, 1.0)
+
     @staticmethod
     def _empty() -> dict[str, Any]:
-        return {
-            "version": STORAGE_VERSION,
-            "categories": [dict(GENERAL_CATEGORY)],
-            "areas": {},
-            "floors": {},
-            "house": {"scenes": []},
-            "conditions": {
-                "time_of_day": {"custom": {}, "hidden": []},
-                "day": {"workday_sensor": None, "workday_calendar": None},
-                "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
-                "lux": {"custom": {}, "hidden": []},
-            },
-            "switch_defaults": {
-                "name": DEFAULT_SWITCH_NAME,
-                "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
-            },
-            "reapply": {
-                "enabled": DEFAULT_REAPPLY_ENABLED,
-                "interval_seconds": DEFAULT_REAPPLY_INTERVAL_SECONDS,
-            },
-            "exposed_assistants": dict(DEFAULT_EXPOSED_ASSISTANTS),
-            "exposed_actions": [],
-        }
+        """A fresh, fully-defaulted payload — the single definition of every
+        store default, for a new install and for filling the gaps in a loaded
+        one alike (see :meth:`_apply_defaults`).
 
-    def _ensure_conditions_namespace(self) -> None:
-        """Make sure `conditions.day` (and any future per-condition key) has a default."""
-        namespace = self._data.setdefault("conditions", {})
-        namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
-        namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
-        weather = namespace.setdefault("weather", {})
-        weather.setdefault("entity", None)
-        weather.setdefault("groups", list(DEFAULT_WEATHER_GROUPS))
-        namespace.setdefault("lux", {"custom": {}, "hidden": []})
+        Every nested value is a private copy: the module constants are named
+        bare below and the whole literal is deep-copied on the way out, so no
+        part of `_data` can alias a shared template that a user's later edit
+        would rewrite for every install seeded from it.
+        """
+        return copy.deepcopy(
+            {
+                "version": STORAGE_VERSION,
+                "categories": [GENERAL_CATEGORY],
+                "areas": {},
+                "floors": {},
+                "house": {"scenes": []},
+                "conditions": {
+                    "time_of_day": {"custom": {}, "hidden": []},
+                    "day": {"workday_sensor": None, "workday_calendar": None},
+                    "weather": {"entity": None, "groups": DEFAULT_WEATHER_GROUPS},
+                    "lux": {"custom": {}, "hidden": []},
+                },
+                "switch_defaults": {
+                    "name": DEFAULT_SWITCH_NAME,
+                    "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
+                },
+                "reapply": {
+                    "enabled": DEFAULT_REAPPLY_ENABLED,
+                    "interval_seconds": DEFAULT_REAPPLY_INTERVAL_SECONDS,
+                },
+                "exposed_assistants": DEFAULT_EXPOSED_ASSISTANTS,
+                "exposed_actions": [],
+            }
+        )
 
-    def _ensure_scope_buckets(self) -> None:
-        """Floors and house keys are additive — make sure they exist."""
-        self._data.setdefault("floors", {})
-        self._data.setdefault("house", {"scenes": []})
+    @classmethod
+    def _fill_defaults(cls, data: dict[str, Any], defaults: dict[str, Any]) -> None:
+        """Recursively fill keys missing from `data` with those in `defaults`.
 
-    def _ensure_categories(self) -> None:
-        """Seed the General category when no categories exist. Categories are
-        required: a store must always have at least one."""
-        if not self._data.get("categories"):
-            self._data["categories"] = [dict(GENERAL_CATEGORY)]
+        A key that is present keeps its stored value — including an explicit
+        `None` or an empty list, which are user state, not gaps. Two dicts are
+        merged key by key; any other pair is left alone. `defaults` must be a
+        private copy, since its values are grafted straight onto `data`.
+        """
+        for key, default in defaults.items():
+            if key not in data:
+                data[key] = default
+            elif isinstance(data[key], dict) and isinstance(default, dict):
+                cls._fill_defaults(data[key], default)
 
-    def _ensure_switch_defaults(self) -> None:
-        sd = self._data.setdefault("switch_defaults", {})
-        sd.setdefault("name", DEFAULT_SWITCH_NAME)
-        sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
+    def _apply_defaults(self) -> None:
+        """Bring a loaded payload up to the current default shape."""
+        defaults = self._empty()
+        self._fill_defaults(self._data, defaults)
+        # Categories are required: a scene always points at one, so an empty
+        # list is a gap rather than user intent (unlike every other list).
+        # `defaults` is untouched here — the merge above only grafts on a
+        # value whose key was absent, and this branch needs a present one.
+        if not self._data["categories"]:
+            self._data["categories"] = defaults["categories"]
         # Drop the removed create_switches flag from upgraded installs — a
         # permanent idempotent cleanup, not a version-gated migration.
-        sd.pop("create_switches", None)
-
-    def _ensure_reapply_settings(self) -> None:
-        r = self._data.setdefault("reapply", {})
-        r.setdefault("enabled", DEFAULT_REAPPLY_ENABLED)
-        r.setdefault("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS)
-
-    def _ensure_exposed_assistants(self) -> None:
-        ea = self._data.setdefault("exposed_assistants", {})
-        for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items():
-            ea.setdefault(assistant, default)
+        self._data["switch_defaults"].pop("create_switches", None)
 
     async def _ensure_builtin_actions(self) -> None:
         """Seed the built-in on/off exposed actions exactly once.
@@ -194,7 +218,7 @@ class AmbienceStore:
                 # copy would alias those lists back to the module constant.
                 existing.append(copy.deepcopy(entry))
         self._data["builtins_seeded"] = True
-        await self._store.async_save(self._data)
+        await self._persist()
 
     def builtins_labeled(self) -> bool:
         """True once the seeded built-ins' labels have been backfilled — lets
@@ -215,6 +239,11 @@ class AmbienceStore:
         descriptions unavailable this load), it no-ops *without* setting the
         flag, so a later load retries.
         """
+        if self._unreadable_payload:
+            # Ahead of `_persist`'s own block, because the flag below must not
+            # be set for a backfill that never reached disk — a later load
+            # retries it.
+            return
         if self._data.get("builtins_labeled"):
             return
         if not labels:
@@ -231,10 +260,11 @@ class AmbienceStore:
             if name and not str(entry.get("label") or "").strip():
                 entry["label"] = name
         self._data["builtins_labeled"] = True
-        await self._store.async_save(self._data)
+        await self._persist()
 
     async def async_load(self) -> None:
         raw = await self._store.async_load()
+        self._unreadable_payload = False
         if raw is None:
             self._data = self._empty()
         elif not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
@@ -242,16 +272,15 @@ class AmbienceStore:
             self._data = self._empty()
             # Do NOT seed-and-save here: _ensure_builtin_actions persists, which
             # would overwrite the unreadable on-disk payload and destroy any
-            # chance of manual recovery / restore-from-backup.
+            # chance of manual recovery / restore-from-backup. The flag keeps
+            # every other automatic writer (label backfill, unload flush,
+            # switch off_at) off the file too; only an explicit user save may
+            # replace it.
+            self._unreadable_payload = True
             return
         else:
             self._data = raw
-            self._ensure_conditions_namespace()
-            self._ensure_scope_buckets()
-            self._ensure_categories()
-            self._ensure_switch_defaults()
-            self._ensure_reapply_settings()
-            self._ensure_exposed_assistants()
+            self._apply_defaults()
         await self._ensure_builtin_actions()
 
     async def async_remove(self) -> None:
@@ -275,8 +304,11 @@ class AmbienceStore:
         writes immediately and cancels the pending delay/final-write listeners,
         so nothing survives the unload to recreate the file. On a reload it just
         persists the latest in-memory state, which is harmless.
+
+        Skipped when the loaded payload was unreadable: the in-memory state is
+        a degraded empty config and must not replace the file on disk.
         """
-        await self._store.async_save(self._data)
+        await self._persist()
 
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""
@@ -291,13 +323,13 @@ class AmbienceStore:
     async def async_save_area(self, area_id: str, config: dict[str, Any]) -> None:
         existing = self._data["areas"].get(area_id, {})
         self._data["areas"][area_id] = {**existing, **config}
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed(("area", area_id))
 
     async def async_delete_area(self, area_id: str) -> None:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
-            await self._store.async_save(self._data)
+            await self._persist(user_save=True)
             self._notify_config_changed(("area", area_id))
 
     def floors(self) -> dict[str, dict[str, Any]]:
@@ -309,13 +341,13 @@ class AmbienceStore:
     async def async_save_floor(self, floor_id: str, config: dict[str, Any]) -> None:
         existing = self._data["floors"].get(floor_id, {})
         self._data["floors"][floor_id] = {**existing, **config}
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed(("floor", floor_id))
 
     async def async_delete_floor(self, floor_id: str) -> None:
         if floor_id in self._data["floors"]:
             del self._data["floors"][floor_id]
-            await self._store.async_save(self._data)
+            await self._persist(user_save=True)
             self._notify_config_changed(("floor", floor_id))
 
     def get_house(self) -> dict[str, Any]:
@@ -324,7 +356,7 @@ class AmbienceStore:
     async def async_save_house(self, config: dict[str, Any]) -> None:
         existing = self._data.get("house", {})
         self._data["house"] = {**existing, **config}
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed(("house", None))
 
     async def async_save_scope(
@@ -333,21 +365,17 @@ class AmbienceStore:
         """Persist a scope's config, dispatching to the per-kind saver — the
         unified writer mirroring `scope_config()`'s unified reader, behind the
         websocket scope-save handlers and the undo/redo restore."""
-        if scope_kind == "house":
+        spec = scope_spec(scope_kind)
+        if not spec.has_id:
             await self.async_save_house(config)
             return
-        if scope_kind not in ("area", "floor"):
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         if scope_id is None:
             # area/floor always carry an id (only house is id-less); the websocket
             # schema requires it, so a None here is a caller bug, not user input —
             # an internal contract error, not a translatable AmbienceError. This
             # also narrows scope_id to `str` for the per-kind savers below.
             raise ValueError(f"{scope_kind} scope requires a scope_id")
-        if scope_kind == "area":
-            await self.async_save_area(scope_id, config)
-        else:
-            await self.async_save_floor(scope_id, config)
+        await getattr(self, spec.store_saver)(scope_id, config)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.
@@ -356,11 +384,14 @@ class AmbienceStore:
         walks every scene list to detect dangling references.
         """
         triples: list[tuple[str, str | None, dict[str, Any]]] = []
-        for area_id, cfg in self._data.get("areas", {}).items():
-            triples.append(("area", area_id, cfg))
-        for floor_id, cfg in self._data.get("floors", {}).items():
-            triples.append(("floor", floor_id, cfg))
-        triples.append(("house", None, self._data.get("house", {"scenes": []})))
+        # Reversed: `iter_scope_kinds()` is house-first, and consumers read this
+        # list most-specific-first (areas, then floors, then the house).
+        for spec in reversed(list(iter_scope_kinds())):
+            if spec.has_id:
+                bucket: dict[str, Any] = self._data.get(spec.bucket, {})
+                triples.extend((spec.kind, scope_id, cfg) for scope_id, cfg in bucket.items())
+            else:
+                triples.append((spec.kind, None, self._data.get(spec.bucket, {"scenes": []})))
         return triples
 
     def categories(self) -> list[dict[str, Any]]:
@@ -386,7 +417,7 @@ class AmbienceStore:
                 "categories_still_have_scenes", categories=", ".join(removed_in_use)
             )
         self._data["categories"] = [dict(c) for c in categories]
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed()
 
     async def async_delete_category(self, category_id: str) -> None:
@@ -404,7 +435,7 @@ class AmbienceStore:
         if in_use:
             raise CategoryInUseError("category_still_has_scenes", category_id=category_id)
         self._data["categories"] = [c for c in categories if c.get("id") != category_id]
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed()
 
     def get_conditions(self) -> dict[str, Any]:
@@ -434,7 +465,7 @@ class AmbienceStore:
 
     async def async_save_condition_config(self, name: str, config: dict[str, Any]) -> None:
         self._data.setdefault("conditions", {})[name] = config
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed()
 
     def get_periods(self) -> dict[str, Any]:
@@ -453,22 +484,13 @@ class AmbienceStore:
     # Switch defaults + per-scope off-at state
     # -------------------------------------------------------------------------
 
-    _SCOPE_KINDS = ("house", "floor", "area")
-
     def _scope_container(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Return the per-scope config dict (creating a bare shell if needed).
 
         Used internally by switch helpers so they can read/write the `switch`
         sub-dict regardless of whether scenes have been saved for the scope.
         """
-        if scope_kind == "house":
-            self._data.setdefault("house", {"scenes": []})
-            return self._data["house"]
-        if scope_kind == "floor":
-            return self._data["floors"].setdefault(scope_id, {"scenes": []})
-        if scope_kind == "area":
-            return self._data["areas"].setdefault(scope_id, {"scenes": []})
-        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+        return scope_bucket(self._data, scope_kind, scope_id, create=True)
 
     @staticmethod
     def _validate_switch_defaults(payload: dict[str, Any]) -> None:
@@ -494,7 +516,7 @@ class AmbienceStore:
             "name": payload["name"],
             "auto_on_delay_seconds": payload["auto_on_delay_seconds"],
         }
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
 
     @staticmethod
     def _validate_reapply_settings(payload: dict[str, Any]) -> None:
@@ -526,7 +548,7 @@ class AmbienceStore:
             "enabled": payload["enabled"],
             "interval_seconds": payload["interval_seconds"],
         }
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
 
     def get_exposed_assistants(self) -> dict[str, bool]:
         # Fall back to the default for any missing or non-bool stored value —
@@ -556,30 +578,26 @@ class AmbienceStore:
         self._data["exposed_assistants"] = {
             assistant: payload[assistant] for assistant in DEFAULT_EXPOSED_ASSISTANTS
         }
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
 
     def get_scope_switch_off_at(self, scope_kind: str, scope_id: str | None) -> str | None:
         """The persisted off-at timestamp for a scope's switch (``None`` if on or
         never set). ``off_at`` is runtime state owned by the switch entity, not
         user configuration — switch name and auto-on delay always come from the
         global defaults (:meth:`get_switch_defaults`)."""
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         sw = self.scope_config(scope_kind, scope_id).get("switch", {})
         return sw.get("off_at") if isinstance(sw, dict) else None
 
     async def async_set_scope_switch_off_at(
         self, scope_kind: str, scope_id: str | None, off_at: str | None
     ) -> None:
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
-        # off_at is loss-tolerant runtime state, and a house toggle writes it
-        # once per descendant switch — delay_save coalesces those N+1 writes
-        # into one instead of serialising full-store saves.
-        self._store.async_delay_save(lambda: self._data, 1.0)
+        # off_at is loss-tolerant runtime state read from memory, and a house
+        # toggle writes it once per descendant switch — delay_save coalesces
+        # those N+1 writes into one instead of serialising full-store saves.
+        self._persist_delayed()
 
     def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         """Whether a scope is permanently enabled (default ``True``).
@@ -587,29 +605,19 @@ class AmbienceStore:
         Independent of the switch's temporary on/off (``off_at``): a scope
         applies scenes only when it is enabled AND its switch is not paused.
         """
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         return bool(self.scope_config(scope_kind, scope_id).get("enabled", True))
 
     async def async_set_scope_enabled(
         self, scope_kind: str, scope_id: str | None, enabled: bool
     ) -> None:
-        if scope_kind not in self._SCOPE_KINDS:
-            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         container["enabled"] = bool(enabled)
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         self._notify_config_changed((scope_kind, scope_id))
 
     def scope_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Read-only per-scope config dict ({} if absent). Does not create."""
-        if scope_kind == "house":
-            return self._data.get("house", {})
-        if scope_kind == "floor":
-            return self._data.get("floors", {}).get(scope_id, {})
-        if scope_kind == "area":
-            return self._data.get("areas", {}).get(scope_id, {})
-        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
+        return scope_bucket(self._data, scope_kind, scope_id, create=False)
 
     def get_exposed_actions(self) -> list[dict[str, Any]]:
         """Persisted list of ExposedAction entries (may be empty)."""
@@ -618,7 +626,7 @@ class AmbienceStore:
 
     async def async_save_exposed_actions(self, actions: list[dict[str, Any]]) -> None:
         self._data["exposed_actions"] = list(actions)
-        await self._store.async_save(self._data)
+        await self._persist(user_save=True)
         # Exposed-action defaults affect scene execution, so a change here must
         # rebuild the watch-set like any other config save.
         self._notify_config_changed()

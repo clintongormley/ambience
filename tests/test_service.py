@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import async_mock_service
 
+from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -31,6 +33,9 @@ from custom_components.ambience.service import (
     attach_tenure,
     category_ids,
     clear_last_applied,
+    get_last_matched,
+    set_last_matched,
+    snapshot_conditions,
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
@@ -844,6 +849,68 @@ async def test_apply_scene_records_last_applied_scene(hass: HomeAssistant) -> No
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 0
 
 
+async def test_apply_scene_records_last_matched(hass: HomeAssistant) -> None:
+    """A manual apply records the winner as the unit's matched scene, so the live
+    'matched' dot agrees with what the manual apply just resolved."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                },
+                {
+                    "name": "evening",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.b"], "params": {}}
+                    ],
+                },
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert get_last_matched(hass, "area", "a", "lighting") == 1
+
+
+async def test_apply_scene_no_match_clears_last_matched(hass: HomeAssistant) -> None:
+    """A manual apply that resolves to nothing clears the unit's matched scene."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    set_last_matched(hass, "area", "a", "lighting", 0)
+
+    await async_apply_scene(hass, "area", "a")
+
+    assert get_last_matched(hass, "area", "a", "lighting") is None
+
+
 async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:
     areas = {"a": {"scenes": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
     hass.data[DOMAIN] = {
@@ -1443,16 +1510,16 @@ async def test_apply_scene_category_exception_logged_not_raised(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
     """An exception inside _apply_category is caught by asyncio.gather and warned,
-    not re-raised. The remaining categories are unaffected (line 297)."""
+    not re-raised. The remaining categories are unaffected."""
 
-    class BoomCondition:
+    class OkCondition:
         name = "boom"
 
         async def snapshot(self, hass, **_):
             return "x"
 
         def matches(self, predicate, snapshot):
-            raise RuntimeError("boom in matches")
+            return True
 
         def describe(self, snapshot, predicate=None):
             return None
@@ -1474,14 +1541,18 @@ async def test_apply_scene_category_exception_logged_not_raised(
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
-        DATA_CONDITIONS: {"boom": BoomCondition()},
+        DATA_CONDITIONS: {"boom": OkCondition()},
         DATA_SWITCHES: {("area", "a"): _switch(True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
 
     caplog.set_level(logging.WARNING)
     # Must not raise even though _apply_category raises internally.
-    await async_apply_scene(hass, "area", "a")
+    with patch(
+        "custom_components.ambience.service.async_resolve_with_snapshots",
+        side_effect=RuntimeError("boom in resolve"),
+    ):
+        await async_apply_scene(hass, "area", "a")
     assert "category apply failed" in caplog.text
 
 
@@ -1705,3 +1776,97 @@ async def test_execute_plan_no_signal_for_pure_blocker(hass):
     await async_execute_plan(hass, "area", "k", plan, "g")
     await hass.async_block_till_done()  # ensure no late signal sneaks in
     assert seen == []
+
+
+async def test_resolve_with_snapshots_forwards_entity_ids_by_full_scene_index(
+    hass: HomeAssistant,
+) -> None:
+    """`entity_ids_for` is keyed by the FULL scene index, so a category-filtered
+    resolve must translate its candidate index before the lookup — otherwise the
+    trace would link the entities of an unrelated scene."""
+    areas = {
+        "lr": {
+            "scenes": [
+                {"name": "lighting", "category": "lighting", "when": {"tod": "evening"}},
+                {"name": "blinds", "category": "blinds", "when": {"tod": "evening"}},
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {},
+    }
+    lookup = {(0, "tod"): ("sensor.lighting",), (1, "tod"): ("sensor.blinds",)}
+
+    plan = await async_resolve_with_snapshots(
+        hass,
+        "area",
+        "lr",
+        {"tod": "evening"},
+        category="blinds",
+        describe=False,
+        explain=True,
+        entity_ids_for=lambda scene_index, key: lookup.get((scene_index, key), ()),
+    )
+    assert plan["matched_scene_index"] == 1
+    predicates = plan["explanation"].scenes[0].predicates
+    assert predicates[0].entity_ids == ("sensor.blinds",)
+
+
+# --- snapshot_conditions: the per-condition result-key hint ----------------
+
+
+class _HintRecorder(OpaquePrecomputedCondition):
+    """Opaque-style condition: takes the hint and records what it was given."""
+
+    def __init__(self) -> None:
+        self.calls: list[frozenset[str] | None] = []
+
+    async def snapshot(self, hass, *, now=None, entities=None, keys=None):
+        self.calls.append(keys)
+        return "snap"
+
+
+class _PlainRecorder:
+    """A condition with the untouched signature — it must never see `keys`."""
+
+    def __init__(self) -> None:
+        self.calls: list[frozenset[str] | None] = []
+
+    async def snapshot(self, hass, *, now=None, entities=None):
+        self.calls.append(entities)
+        return "snap"
+
+
+async def test_snapshot_conditions_hints_only_conditions_that_declare_support(
+    hass: HomeAssistant,
+) -> None:
+    hinted, plain = _HintRecorder(), _PlainRecorder()
+    snaps = await snapshot_conditions(
+        hass,
+        {"template": hinted, "state": plain},
+        {},
+        result_keys={"template": frozenset({"{{ x }}"}), "state": frozenset({"ignored"})},
+    )
+    assert hinted.calls == [frozenset({"{{ x }}"})]
+    assert plain.calls == [frozenset()]  # entities hint only; no `keys` kwarg
+    assert snaps == {"template": "snap", "state": "snap"}
+
+
+async def test_snapshot_conditions_without_result_keys_is_a_full_refresh(
+    hass: HomeAssistant,
+) -> None:
+    hinted = _HintRecorder()
+    await snapshot_conditions(hass, {"template": hinted}, {})
+    assert hinted.calls == [None]
+
+
+async def test_snapshot_conditions_unhinted_condition_is_a_full_refresh(
+    hass: HomeAssistant,
+) -> None:
+    """A condition absent from the map recomputes everything — that is how the
+    engine asks for a full refresh of one condition among several."""
+    hinted = _HintRecorder()
+    await snapshot_conditions(hass, {"template": hinted}, {}, result_keys={"other": frozenset()})
+    assert hinted.calls == [None]

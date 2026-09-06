@@ -37,3 +37,21 @@ def test_main_fails_on_missing(tmp_path):
 
 def test_real_tree_keys_all_defined():
     assert main() == 0  # run from repo root; every carrier key resolves
+
+
+def test_used_keys_extracts_delegated_key_kwarg():
+    """validate_entity_ids raises on its caller's behalf, so its `key=` literal
+    is a key reference too — otherwise those keys read as unused."""
+    src = 'validate_entity_ids(sensors, "sensor", key="lux_sensors_not_list")\n'
+    assert used_keys(src) == {"lux_sensors_not_list"}
+
+
+def test_used_keys_extracts_any_key_suffixed_kwarg():
+    """Every delegating carrier names its key in a `*_key=` keyword, so one rule
+    covers the scope table's `not_found_key=` and HA's `translation_key=` alike
+    — without it those keys read as unused."""
+    src = (
+        'ScopeKind(kind="area", not_found_key="unknown_area")\n'
+        'HomeAssistantError(translation_key="unexpected_error")\n'
+    )
+    assert used_keys(src) == {"unknown_area", "unexpected_error"}

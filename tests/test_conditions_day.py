@@ -15,6 +15,7 @@ from custom_components.ambience.conditions.day import (
     _fetch_calendar_events,
 )
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
 
 
 def _snap(today: date, **overrides) -> DaySnapshot:
@@ -144,6 +145,15 @@ def test_matches_weekday() -> None:
     assert m.matches(pred, fri) is True
     sat = _snap(date(2026, 5, 23))  # Saturday
     assert m.matches(pred, sat) is False
+
+
+def test_matches_weekday_null_days_does_not_match_or_raise() -> None:
+    """A malformed `days: null` weekday item is simply unsatisfied, not fatal."""
+    m = DayCondition()
+    mon = _snap(date(2026, 5, 18))  # Monday
+    assert m.matches({"include": [{"kind": "weekday", "days": None}]}, mon) is False
+    # In `exclude` it excludes nothing, so the (wildcard) include still matches.
+    assert m.matches({"exclude": [{"kind": "weekday", "days": None}]}, mon) is True
 
 
 def test_matches_day_of_month() -> None:
@@ -293,23 +303,34 @@ def test_validate_accepts_null(m_no_entities: DayCondition) -> None:
 
 
 def test_validate_rejects_non_dict(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         m_no_entities.validate_predicate(42)
+    assert exc.value.translation_key == "day_predicate_not_object"
+
+
+@pytest.mark.parametrize("item", [None, "weekday", 42, [{"kind": "weekday"}], {"days": [0]}])
+def test_validate_rejects_item_without_kind(m_no_entities: DayCondition, item) -> None:
+    """An include/exclude entry that is not an object carrying a `kind` is
+    malformed — matching tolerates it, saving must not."""
+    with pytest.raises(AmbienceError) as exc:
+        m_no_entities.validate_predicate({"include": [item], "exclude": []})
+    assert exc.value.translation_key == "day_item_malformed"
 
 
 def test_validate_rejects_unknown_kind(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError, match="unknown day item kind"):
+    with pytest.raises(AmbienceError) as exc:
         m_no_entities.validate_predicate(
             {
                 "include": [{"kind": "wat"}],
                 "exclude": [],
             }
         )
+    assert exc.value.translation_key == "day_unknown_kind"
 
 
 @pytest.mark.parametrize("days", [[], [-1], [7], "abc", 5])
 def test_validate_rejects_bad_weekday_days(m_no_entities: DayCondition, days) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         m_no_entities.validate_predicate(
             {
                 "include": [{"kind": "weekday", "days": days}],
@@ -320,7 +341,7 @@ def test_validate_rejects_bad_weekday_days(m_no_entities: DayCondition, days) ->
 
 @pytest.mark.parametrize("days", ["", "0", "32", "abc", "5-", "-5", "10-2", ",,,", 5, [1, 2]])
 def test_validate_rejects_bad_day_of_month(m_no_entities: DayCondition, days) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         m_no_entities.validate_predicate(
             {
                 "include": [{"kind": "day_of_month", "days": days}],
@@ -341,7 +362,7 @@ def test_validate_accepts_day_of_month_specs(m_no_entities: DayCondition, days) 
 
 @pytest.mark.parametrize("month,day", [(0, 1), (13, 1), (1, 0), (1, 32), (None, 1)])
 def test_validate_rejects_bad_date(m_no_entities: DayCondition, month, day) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         m_no_entities.validate_predicate(
             {
                 "include": [{"kind": "date", "month": month, "day": day}],
@@ -351,7 +372,7 @@ def test_validate_rejects_bad_date(m_no_entities: DayCondition, month, day) -> N
 
 
 def test_validate_rejects_bad_date_range(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         m_no_entities.validate_predicate(
             {
                 "include": [{"kind": "date_range", "from": {"month": 1, "day": 1}}],
@@ -567,17 +588,21 @@ def test_describe_returns_none() -> None:
 
 
 def test_validate_rejects_non_list_include() -> None:
-    """include/exclude must be lists; a non-list value raises ValueError (line 227)."""
+    """include/exclude must be lists; a non-list value is rejected."""
     m = DayCondition()
-    with pytest.raises(ValueError, match="must be a list"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"include": {"kind": "weekday", "days": [0]}, "exclude": []})
+    assert exc.value.translation_key == "day_list_not_list"
+    assert exc.value.translation_placeholders == {"key": "include"}
 
 
 def test_validate_rejects_non_list_exclude() -> None:
-    """Validates both include and exclude keys (line 227 via exclude)."""
+    """Validates both include and exclude keys."""
     m = DayCondition()
-    with pytest.raises(ValueError, match="must be a list"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"include": [], "exclude": "weekend"})
+    assert exc.value.translation_key == "day_list_not_list"
+    assert exc.value.translation_placeholders == {"key": "exclude"}
 
 
 # ---------------------------------------------------------------------------

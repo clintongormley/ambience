@@ -14,14 +14,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
+    RULE_NOT_FALSE,
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
+    NormalisesPredicate,
+    PredicateDefaults,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
@@ -30,17 +37,34 @@ from ._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    materialise_defaults,
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
     wrap_quantified,
 )
 
 _QUANTS = ("any", "all")
+
+
+# `sensors` is deliberately absent: present-but-empty and missing are the same
+# wildcard, so filling it would state nothing.
+_PREDICATE_DEFAULTS: PredicateDefaults = {
+    "occupied": (RULE_NOT_FALSE, True),
+    "quant": (RULE_OR, "any"),
+    "negate": (RULE_TRUTHY, False),
+    "for_mode": (RULE_OR, "at_least"),
+}
+
+# Every read path funnels through here — ``_gate_key`` included, whose string
+# keys the engine's tenure clocks — so a predicate stored before the defaults
+# were materialised at save reads identically to one stored after.
+_norm = partial(materialise_defaults, defaults=_PREDICATE_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -60,7 +84,7 @@ class OccupancySnapshot:
     tenure: Mapping[str, datetime] | None = None
 
 
-class OccupancyCondition:
+class OccupancyCondition(NormalisesPredicate):
     """Match whether the chosen presence/occupancy sensors are active.
 
     Mirrors PeopleCondition's shape (quantifier + `for` + a `contains` lattice),
@@ -80,6 +104,7 @@ class OccupancyCondition:
     # is more specific than ambient time/weather, but an explicit device/state
     # rule should still win.
     priority = 915
+    _DEFAULTS = _PREDICATE_DEFAULTS
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
@@ -139,13 +164,14 @@ class OccupancyCondition:
         sensors = predicate.get("sensors") or []
         if not sensors:
             return True  # no constraint — nothing to negate either
-        want_on = predicate.get("occupied", True) is not False
-        quant = predicate.get("quant") or "any"
-        seconds = dur_seconds(predicate.get("for"))
-        # "at_least" (or absent) gates the `for:` clock as "held >= for"; with
-        # "less_than" the same clock means "held LESS than for" (boundary
-        # exclusive: at exactly `for`, at_least holds and less_than does not).
-        mode = predicate.get("for_mode")
+        pred = _norm(predicate)
+        want_on = pred["occupied"]
+        quant = pred["quant"]
+        seconds = dur_seconds(pred.get("for"))
+        # "at_least" gates the `for:` clock as "held >= for"; with "less_than"
+        # the same clock means "held LESS than for" (boundary exclusive: at
+        # exactly `for`, at_least holds and less_than does not).
+        mode = pred["for_mode"]
 
         # In tenure mode the per-sensor verdicts test only the instant polarity
         # (seconds=0); the `for:` gate is applied once to the combined verdict
@@ -168,11 +194,11 @@ class OccupancyCondition:
             # result is left untouched so it stays a miss through negate. The
             # comparator follows `for_mode`: held >= for, or (less_than) < for.
             gate = tenure_within if mode == "less_than" else tenure_held
-            result = gate(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+            result = gate(snapshot.tenure, self._gate_key(pred), snapshot.now, seconds)
         # `negate` wraps the whole match (polarity + quant + `for`): "NOT
         # (vacant for >=20m)" is a different match-set from "occupied for >=20m".
         # An unobservable result (None) stays a miss even under negate.
-        if predicate.get("negate"):
+        if pred["negate"]:
             result = kleene_not(result)
         return result is True
 
@@ -183,21 +209,19 @@ class OccupancyCondition:
         `negate` is deliberately EXCLUDED: it wraps *outside* the gate (the gate
         clocks the inner polarity+quant+sensors verdict), so "vacant for 20m"
         and "NOT(vacant for 20m)" share one tenure clock."""
-        want_on = predicate.get("occupied", True) is not False
-        quant = predicate.get("quant") or "any"
-        sensors = "|".join(sorted(predicate.get("sensors") or []))
-        return f"{'on' if want_on else 'off'}:{quant}:{sensors}"
+        pred = _norm(predicate)
+        sensors = "|".join(sorted(pred.get("sensors") or []))
+        return f"{'on' if pred['occupied'] else 'off'}:{pred['quant']}:{sensors}"
 
     def _gate_label(self, predicate: dict) -> str:
         """Human-readable instant description, for a multi-sensor DURATION trace
         cause (e.g. "any of 2 sensors vacant")."""
-        sensors = predicate.get("sensors") or []
-        want_on = predicate.get("occupied", True) is not False
-        state_word = "occupied" if want_on else "vacant"
+        pred = _norm(predicate)
+        sensors = pred.get("sensors") or []
+        state_word = "occupied" if pred["occupied"] else "vacant"
         if len(sensors) == 1:
             return f"{sensors[0]} {state_word}"
-        quant = predicate.get("quant") or "any"
-        return f"{quant} of {len(sensors)} sensors {state_word}"
+        return f"{pred['quant']} of {len(sensors)} sensors {state_word}"
 
     def gate_states(self, predicate: Any, snapshot: OccupancySnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a constraining `for:`
@@ -211,13 +235,13 @@ class OccupancyCondition:
         seconds = dur_seconds(predicate.get("for"))
         if not sensors or seconds <= 0:
             return {}
-        want_on = predicate.get("occupied", True) is not False
-        quant = predicate.get("quant") or "any"
+        pred = _norm(predicate)
+        want_on = pred["occupied"]
         verdicts = (self._holds(e, snapshot, want_on=want_on, seconds=0.0) for e in sensors)
-        result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
+        result = kleene_all(verdicts) if pred["quant"] == "all" else kleene_any(verdicts)
         changes = [cur[1] for e in sensors if (cur := snapshot.sensors.get(e)) is not None]
         anchor = max(changes) if changes else snapshot.now
-        return {self._gate_key(predicate): (result is True, anchor)}
+        return {self._gate_key(pred): (result is True, anchor)}
 
     def describe(self, snapshot: OccupancySnapshot, predicate: Any = None) -> str | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
@@ -225,13 +249,14 @@ class OccupancyCondition:
             return self._describe_snapshot(snapshot)
         if not isinstance(predicate, dict):
             return None
-        sensors = predicate.get("sensors") or []
+        pred = _norm(predicate)
+        sensors = pred.get("sensors") or []
         if not sensors:
             return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
-        want_on = predicate.get("occupied", True) is not False
-        quant = predicate.get("quant") or "any"
-        seconds = dur_seconds(predicate.get("for"))
-        mode = predicate.get("for_mode")
+        want_on = pred["occupied"]
+        quant = pred["quant"]
+        seconds = dur_seconds(pred.get("for"))
+        mode = pred["for_mode"]
         # In tenure mode the per-sensor marks show only the instant polarity
         # (seconds=0); how long the combined verdict has held is summarised once.
         tenure_mode = seconds > 0 and snapshot.tenure is not None
@@ -256,7 +281,7 @@ class OccupancyCondition:
                 eid, snapshot, want_on=want_on, seconds=per_sensor_seconds, mode=mode
             )
             parts.append(f"{name}: {state}{elapsed} {'✓' if held else '✗'}")
-        body = wrap_quantified(parts, quant, bool(predicate.get("negate")))
+        body = wrap_quantified(parts, quant, pred["negate"])
         if not seconds:
             return body
         # State the duration threshold once; the comparator follows `for_mode`
@@ -264,7 +289,7 @@ class OccupancyCondition:
         # how long the gate has actually held (or that it hasn't).
         rel = for_comparator_symbol(mode)
         if tenure_mode:
-            since = snapshot.tenure.get(self._gate_key(predicate))
+            since = snapshot.tenure.get(self._gate_key(pred))
             held_str = (
                 f", held {fmt_duration((snapshot.now - since).total_seconds())}"
                 if since
@@ -290,23 +315,19 @@ class OccupancyCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("occupancy predicate must be a dict")
+            raise AmbienceError("occupancy_predicate_not_object")
         sensors = predicate.get("sensors")
         if sensors is not None:
-            if not isinstance(sensors, list):
-                raise ValueError("`sensors` must be a list of binary_sensor.* ids")
-            for e in sensors:
-                if not isinstance(e, str) or not e.startswith("binary_sensor."):
-                    raise ValueError(f"`sensors` entries must be binary_sensor.* ids, got {e!r}")
+            validate_entity_ids(sensors, "binary_sensor", key="occupancy_sensors_not_list")
         occupied = predicate.get("occupied")
         if occupied is not None and not isinstance(occupied, bool):
-            raise ValueError(f"`occupied` must be a bool, got {occupied!r}")
+            raise AmbienceError("occupancy_occupied_invalid", value=occupied)
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
-            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+            raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
-            raise ValueError(f"`negate` must be a bool, got {negate!r}")
+            raise AmbienceError("negate_invalid", value=negate)
         validate_for(predicate.get("for"))
         validate_for_mode(predicate.get("for_mode"))
 
@@ -354,8 +375,8 @@ class OccupancyCondition:
             # different match-sets); then the `for`/`for_mode` duration axis must
             # permit inner ⊆ outer (at_least: longer is stricter; less_than:
             # shorter is stricter).
-            if (o.get("occupied", True) is not False) != (i.get("occupied", True) is not False):
+            if o["occupied"] != i["occupied"]:
                 return False
             return for_contains(o, i)
 
-        return sensor_quant_contains(outer, inner, _axis)
+        return sensor_quant_contains(_norm(outer), _norm(inner), _axis)

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
 from ._common import merge_intervals
@@ -29,15 +30,22 @@ _HALF_DAY = timedelta(hours=12)
 
 @dataclass(frozen=True)
 class TimeOfDaySnapshot:
-    """Today's anchor times plus 'now', all tz-aware."""
+    """Today's anchor times plus 'now', all tz-aware.
+
+    An anchor is None when it is undefined here today (polar day/night: above
+    ~60.5°N there is no civil dawn or dusk around midsummer) or when the sun
+    integration is absent. Only the endpoints referencing that anchor become
+    unobservable — clock endpoints, and ranges built solely from defined
+    anchors, keep evaluating."""
 
     now: datetime
-    sunrise: datetime
-    sunset: datetime
-    noon: datetime
-    midnight: datetime
-    dawn: datetime
-    dusk: datetime
+    sunrise: datetime | None
+    sunset: datetime | None
+    noon: datetime | None
+    midnight: datetime | None
+    dawn: datetime | None
+    dusk: datetime | None
+    sun_configured: bool = True
 
 
 class TimeOfDayCondition:
@@ -68,9 +76,9 @@ class TimeOfDayCondition:
     ) -> TimeOfDaySnapshot:
         # Presence check only — sun.sun being available means the sun integration
         # is configured. The anchors themselves come from astral below, not from
-        # this state's attributes.
-        if hass.states.get("sun.sun") is None:
-            raise RuntimeError("sun.sun unavailable")
+        # this state's attributes; without the integration there are no anchors
+        # and only sun-anchored endpoints go unobservable.
+        sun_configured = hass.states.get("sun.sun") is not None
         moment = now or dt_util.utcnow()
         # Resolve each anchor to its occurrence on `moment`'s local date rather
         # than reading sun.sun's `next_*` attributes: the moment an event fires,
@@ -78,20 +86,20 @@ class TimeOfDayCondition:
         # normalisation in `_resolve_endpoint`) drifts a day's solar movement past
         # `now`, flipping a just-crossed boundary back (e.g. blinds reopening the
         # instant after dusk). Today's-date anchors stay put once crossed.
-        try:
-            anchors = anchor_datetimes(hass, moment)
-        except ValueError as err:
-            # Anchor undefined at this location/date (polar day/night) — fail the
-            # snapshot so the condition resolves to None, same as a missing anchor.
-            raise RuntimeError(f"sun anchor undefined: {err}") from err
+        # Anchors undefined at this location/date are simply absent from the map:
+        # a partial snapshot disables only the endpoints that need the missing
+        # anchor, where an all-or-nothing failure would make every time_of_day
+        # scene — clock ranges included — unavailable for the whole day.
+        anchors = anchor_datetimes(hass, moment) if sun_configured else {}
         return TimeOfDaySnapshot(
             now=moment,
-            sunrise=anchors["sunrise"],
-            sunset=anchors["sunset"],
-            noon=anchors["noon"],
-            midnight=anchors["midnight"],
-            dawn=anchors["dawn"],
-            dusk=anchors["dusk"],
+            sunrise=anchors.get("sunrise"),
+            sunset=anchors.get("sunset"),
+            noon=anchors.get("noon"),
+            midnight=anchors.get("midnight"),
+            dawn=anchors.get("dawn"),
+            dusk=anchors.get("dusk"),
+            sun_configured=sun_configured,
         )
 
     def matches(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> bool:
@@ -105,12 +113,21 @@ class TimeOfDayCondition:
         Save-time validation still raises via _match_one."""
         try:
             return self._match_one(item, snapshot)
-        except ValueError:
+        except AmbienceError:
             return False
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
-        if start >= end and self._clamp_emptied(item, snapshot):
+        # Compare wrap detection and matching in one domain. Two aware datetimes
+        # sharing a tzinfo compare by wall clock, so without this a DST switch —
+        # where two clock times an hour apart can name the same instant — decides
+        # the wrap on the clock but the match on the instant, and the range can
+        # never fire.
+        start, end = dt_util.as_utc(start), dt_util.as_utc(end)
+        now = dt_util.as_utc(snapshot.now)
+        if start >= end and (
+            self._clamp_emptied(item, snapshot) or (start == end and self._gap_swallowed(item))
+        ):
             return False
         # `from` and `to` resolve independently (sun → within ±12h of now,
         # time → on now's local date), so they can land more than a day apart:
@@ -121,7 +138,21 @@ class TimeOfDayCondition:
             end -= _DAY
         while start - end >= _DAY:
             end += _DAY
-        return _in_range(snapshot.now, start, end)
+        return _in_range(now, start, end)
+
+    def _gap_swallowed(self, item: Any) -> bool:
+        """True if a spring-forward gap swallowed the whole range.
+
+        Only consulted once the endpoints resolved to the same instant: two
+        different clock times can land on one instant only when both sit inside
+        the hour the clock skips. The window never happens today, so the range
+        is empty rather than the all-day range that from == to means."""
+        clocks = [
+            (ep.get("hh"), ep.get("mm"))
+            for ep in self._dep_endpoints(item)
+            if isinstance(ep, dict) and ep.get("kind") == "time"
+        ]
+        return len(clocks) == 2 and clocks[0] != clocks[1]
 
     def _clamp_emptied(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         """True if a clamp turned an otherwise-forward range into an empty one.
@@ -145,14 +176,14 @@ class TimeOfDayCondition:
         self, predicate: Any, snapshot: TimeOfDaySnapshot
     ) -> tuple[datetime, datetime]:
         if not isinstance(predicate, dict):
-            raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+            raise AmbienceError("time_of_day_invalid", predicate=predicate)
         if "period" in predicate:
             pid = predicate["period"]
             if not isinstance(pid, str):
-                raise ValueError(f"period id must be a string: {pid!r}")
+                raise AmbienceError("time_of_day_period_not_string", value=pid)
             periods = self._period_lookup()
             if pid not in periods:
-                raise ValueError(f"unknown time_of_day period: {pid!r}")
+                raise AmbienceError("time_of_day_unknown_period", period=pid)
             defn = periods[pid]
             return (
                 self._resolve_endpoint(defn["from"], snapshot),
@@ -163,30 +194,34 @@ class TimeOfDayCondition:
                 self._resolve_endpoint(predicate["from"], snapshot),
                 self._resolve_endpoint(predicate["to"], snapshot),
             )
-        raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+        raise AmbienceError("time_of_day_invalid", predicate=predicate)
 
     def _resolve_endpoint(self, ep: Any, snapshot: TimeOfDaySnapshot) -> datetime:
         if not isinstance(ep, dict):
-            raise ValueError(f"invalid endpoint: {ep!r}")
+            raise AmbienceError("period_endpoint_not_object")
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
-            if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
-                raise ValueError(f"invalid hh: {hh!r}")
-            if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
-                raise ValueError(f"invalid mm: {mm!r}")
+            # Field by field, not `_valid_clock`: each carries its own key.
+            if not _valid_hour(hh):
+                raise AmbienceError("period_invalid_hh", value=hh)
+            if not _valid_minute(mm):
+                raise AmbienceError("period_invalid_mm", value=mm)
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
-            local_now = dt_util.as_local(snapshot.now)
-            return local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            return _resolve_wall_clock(dt_util.as_local(snapshot.now), hh, mm)
         if kind == "sun":
             anchor = ep.get("anchor")
             if anchor not in ANCHOR_ATTR:
-                raise ValueError(f"invalid anchor: {anchor!r}")
+                raise AmbienceError("period_invalid_anchor", value=anchor)
             offset = ep.get("offset_min", 0)
             if not isinstance(offset, int) or isinstance(offset, bool):
-                raise ValueError(f"offset_min must be int: {offset!r}")
-            anchor_dt: datetime = getattr(snapshot, anchor)
+                raise AmbienceError("period_offset_not_int", value=offset)
+            anchor_dt: datetime | None = getattr(snapshot, anchor)
+            if anchor_dt is None:
+                # Unobservable endpoint: the same signal a dangling period
+                # gives, so _match_tolerant fails just this predicate.
+                raise AmbienceError("time_of_day_anchor_unavailable", anchor=anchor)
             if snapshot.now - anchor_dt > _HALF_DAY:
                 anchor_dt += _DAY
             elif anchor_dt - snapshot.now > _HALF_DAY:
@@ -196,7 +231,7 @@ class TimeOfDayCondition:
             if clamp is not None:
                 anchor_dt = self._apply_clamp(anchor_dt, clamp)
             return anchor_dt
-        raise ValueError(f"invalid endpoint kind: {kind!r}")
+        raise AmbienceError("period_invalid_endpoint_kind", value=kind)
 
     def _apply_clamp(self, anchor_dt: datetime, clamp: Any) -> datetime:
         """Clamp a resolved sun datetime by a local clock time.
@@ -205,29 +240,29 @@ class TimeOfDayCondition:
         clock time is interpreted as HA-local on the anchor's local date, so a
         clamp commutes with DST the same way a `time` endpoint does."""
         if not isinstance(clamp, dict):
-            raise ValueError(f"clamp must be an object: {clamp!r}")
+            raise AmbienceError("period_clamp_not_object")
         direction = clamp.get("dir")
         if direction not in ("not_before", "not_after"):
-            raise ValueError(f"invalid clamp dir: {direction!r}")
+            raise AmbienceError("period_invalid_clamp_dir", value=direction)
         hh, mm = clamp.get("hh"), clamp.get("mm")
         if not _valid_clock(hh, mm):
-            raise ValueError(f"invalid clamp time: {hh!r}:{mm!r}")
-        clamp_dt = dt_util.as_local(anchor_dt).replace(hour=hh, minute=mm, second=0, microsecond=0)
+            raise AmbienceError("period_invalid_clamp_time", hh=hh, mm=mm)
+        clamp_dt = _resolve_wall_clock(dt_util.as_local(anchor_dt), hh, mm)
         if direction == "not_before":
             return max(anchor_dt, clamp_dt)
         return min(anchor_dt, clamp_dt)
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:
-            raise ValueError("predicate cannot be None")
+            raise AmbienceError("time_of_day_required")
         if isinstance(predicate, list):
             if not predicate:
-                raise ValueError("time_of_day predicate list must not be empty")
+                raise AmbienceError("time_of_day_list_empty")
             items = predicate
         elif isinstance(predicate, dict):
             items = [predicate]
         else:
-            raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+            raise AmbienceError("time_of_day_invalid", predicate=predicate)
         # Note: from == to is left valid — it matches all day at runtime (the
         # `end <= start` wrap in _in_range), harmless, and rejecting it here
         # would block saving any scope holding such a previously-valid config.
@@ -249,6 +284,17 @@ class TimeOfDayCondition:
                 and item["period"] not in known
             ):
                 return f"time-of-day period {item['period']!r} no longer exists"
+        if not isinstance(snapshot, TimeOfDaySnapshot):
+            return None
+        for item in items:
+            for endpoint in self._dep_endpoints(item):
+                if not isinstance(endpoint, dict) or endpoint.get("kind") != "sun":
+                    continue
+                anchor = endpoint.get("anchor")
+                if anchor in ANCHOR_ATTR and getattr(snapshot, anchor) is None:
+                    if not snapshot.sun_configured:
+                        return "the sun integration is not set up"
+                    return f"{anchor} is undefined at this location today"
         return None
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
@@ -257,7 +303,7 @@ class TimeOfDayCondition:
             try:
                 if self._match_one({"period": pid}, snapshot):
                     return pid
-            except ValueError:
+            except AmbienceError:
                 continue
         return None
 
@@ -282,7 +328,7 @@ class TimeOfDayCondition:
         try:
             outer_intervals = merge_intervals(self._intervals(outer))
             inner_intervals = self._intervals(inner)
-        except ValueError:
+        except AmbienceError:
             return False  # dangling period — containment can't be proven
         return all(
             any(o_start <= i_start and i_end <= o_end for o_start, o_end in outer_intervals)
@@ -296,7 +342,7 @@ class TimeOfDayCondition:
         for item in items:
             try:
                 keys.append(_minute_of_day(self._resolve_range(item, snapshot)[0]))
-            except ValueError:
+            except AmbienceError:
                 continue  # dangling period / malformed item — no ordering signal
         return min(keys) if keys else float("inf")
 
@@ -361,16 +407,19 @@ class TimeOfDayCondition:
                 clock_times.add((clamp["hh"], clamp["mm"]))
 
 
+def _valid_hour(hh: Any) -> bool:
+    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
+    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
+
+
+def _valid_minute(mm: Any) -> bool:
+    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
+    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
+
+
 def _valid_clock(hh: Any, mm: Any) -> bool:
-    """True if hh/mm are in-range clock ints (rejecting bool, an int subclass)."""
-    return (
-        isinstance(hh, int)
-        and not isinstance(hh, bool)
-        and 0 <= hh <= 23
-        and isinstance(mm, int)
-        and not isinstance(mm, bool)
-        and 0 <= mm <= 59
-    )
+    """True if hh/mm together are an in-range clock time."""
+    return _valid_hour(hh) and _valid_minute(mm)
 
 
 def _strip_clamp(ep: Any) -> Any:
@@ -386,6 +435,32 @@ def _endpoint_has_clamp(ep: Any) -> bool:
     return isinstance(ep, dict) and ep.get("clamp") is not None
 
 
+def _wall_clock_exists(value: datetime) -> bool:
+    """False for a wall-clock time the spring-forward gap skips — such a time
+    does not survive a round trip through UTC."""
+    return value == value.astimezone(dt_util.UTC).astimezone(value.tzinfo)
+
+
+def _resolve_wall_clock(reference: datetime, hh: int, mm: int) -> datetime:
+    """Resolve a wall-clock time on `reference`'s local date to one instant.
+
+    A range's endpoints and its overnight-wrap test all read this single rule,
+    so a DST switch cannot make them disagree. The rule is the first instant
+    whose local clock reads at or after the requested time:
+
+    - a time the spring-forward gap skips resolves to the instant the clock
+      jumps to — with a 02:00 → 03:00 jump, 02:30 means 03:00 local;
+    - a time the autumn fold repeats resolves to its first occurrence, so the
+      range matches once, running across both passes of the repeated hour.
+    """
+    candidate = reference.replace(hour=hh, minute=mm, second=0, microsecond=0, fold=0)
+    # Wall-clock arithmetic (same tzinfo), so this walks the clock face forward
+    # a minute at a time until it reaches a time the day actually contains.
+    while not _wall_clock_exists(candidate):
+        candidate += timedelta(minutes=1)
+    return candidate
+
+
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
     if end <= start:
         return now >= start or now < end
@@ -397,7 +472,15 @@ def _minute_of_day(value: datetime) -> float:
 
 
 def _synthetic_snapshot() -> TimeOfDaySnapshot:
-    base = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    """A fixed stand-in day for the paths that reason about a range's shape
+    rather than about the current instant."""
+    # The sorting/containment paths (_intervals, _clamp_emptied, order_key,
+    # contains) reduce these datetimes to a minute of day, so every endpoint
+    # must resolve in one domain: `time` endpoints and clock clamps land on
+    # HA-local wall time, so the sun anchors are nominal local wall times too.
+    # Anchoring them in UTC instead would compare instants across the offset and
+    # make ordering and shadowing depend on the Home Assistant time zone.
+    base = datetime(2026, 1, 1, 12, 0, tzinfo=dt_util.DEFAULT_TIME_ZONE)
     return TimeOfDaySnapshot(
         now=base,
         sunrise=base.replace(hour=6),

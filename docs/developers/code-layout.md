@@ -22,7 +22,7 @@ Where things live in the repository.
 | --------------- | --------------------------------------------- |
 | `engine.py`     | The pure resolution engine (no HA imports).   |
 | `switch.py`     | Scope switch entities and the on/off cascade. |
-| `websocket.py`  | The WebSocket API the panel talks to.         |
+| `websocket/`    | The WebSocket API the panel talks to.         |
 | `conditions/`   | One module per condition type.                |
 | `store.py`      | Persisted configuration and defaults.         |
 | `manifest.json` | Integration metadata (keys kept sorted).      |

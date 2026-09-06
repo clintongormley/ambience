@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.service import async_set_service_schema
 
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.exposed_actions import ExposedActionsStore
@@ -132,15 +134,25 @@ async def test_save_rejects_malformed_id() -> None:
     assert storage.saved == []
 
 
-def _hass_with_services(services: dict) -> MagicMock:
-    hass = MagicMock()
-    hass.services.async_services.return_value = services
-    return hass
+def _register_services(hass: HomeAssistant, catalog: dict[str, dict[str, dict]]) -> None:
+    """Register real services carrying real field schemas.
+
+    `async_set_service_schema` seeds HA's description cache, so
+    `async_get_all_descriptions` serves these without reaching for the
+    integrations' services.yaml on disk.
+    """
+    for domain, services in catalog.items():
+        for name, schema in services.items():
+            hass.services.async_register(domain, name, lambda _call: None)
+            async_set_service_schema(hass, domain, name, schema)
 
 
-async def test_validate_against_catalog_passes_for_known_service_and_fields() -> None:
-    hass = _hass_with_services(
-        {"light": {"turn_on": {"fields": {"brightness_pct": {}, "transition": {}}}}}
+async def test_validate_against_catalog_passes_for_known_service_and_fields(
+    hass: HomeAssistant,
+) -> None:
+    _register_services(
+        hass,
+        {"light": {"turn_on": {"fields": {"brightness_pct": {}, "transition": {}}}}},
     )
     store = ExposedActionsStore(_FakeStorage())
     await store.validate_against_catalog(
@@ -156,8 +168,8 @@ async def test_validate_against_catalog_passes_for_known_service_and_fields() ->
     )  # no exception
 
 
-async def test_validate_against_catalog_rejects_unknown_service() -> None:
-    hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
+async def test_validate_against_catalog_rejects_unknown_service(hass: HomeAssistant) -> None:
+    _register_services(hass, {"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
@@ -169,8 +181,10 @@ async def test_validate_against_catalog_rejects_unknown_service() -> None:
     assert exc.value.translation_key == "exposed_unknown_service"
 
 
-async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> None:
-    hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
+async def test_validate_against_catalog_rejects_unknown_field_in_visible(
+    hass: HomeAssistant,
+) -> None:
+    _register_services(hass, {"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
@@ -187,8 +201,10 @@ async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> No
     assert exc.value.translation_key == "exposed_unknown_visible_field"
 
 
-async def test_validate_against_catalog_rejects_unknown_field_in_defaults() -> None:
-    hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
+async def test_validate_against_catalog_rejects_unknown_field_in_defaults(
+    hass: HomeAssistant,
+) -> None:
+    _register_services(hass, {"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
@@ -205,8 +221,8 @@ async def test_validate_against_catalog_rejects_unknown_field_in_defaults() -> N
     assert exc.value.translation_key == "exposed_unknown_default_field"
 
 
-async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
-    hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
+async def test_validate_against_catalog_stops_at_first_bad_entry(hass: HomeAssistant) -> None:
+    _register_services(hass, {"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
@@ -220,8 +236,8 @@ async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
     assert exc.value.translation_placeholders["sid"] == "light.nope"
 
 
-async def test_validate_against_catalog_accepts_service_with_no_fields() -> None:
-    hass = _hass_with_services({"notify": {"send_message": {"fields": {}}}})
+async def test_validate_against_catalog_accepts_service_with_no_fields(hass: HomeAssistant) -> None:
+    _register_services(hass, {"notify": {"send_message": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
     await store.validate_against_catalog(
         hass,
@@ -333,7 +349,7 @@ def test_validate_shape_rejects_defaults_with_non_string_key() -> None:
     assert exc.value.translation_key == "exposed_defaults_not_object"
 
 
-async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
+async def test_validate_against_catalog_degraded_skips_field_checks(hass: HomeAssistant) -> None:
     """When async_get_all_descriptions raises, field validation is skipped.
 
     The catalog is degraded — service-existence can still be checked (the
@@ -341,13 +357,7 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
     cannot be reliably checked. We must accept valid entries whose
     visible_fields are non-empty, and only reject entries for unknown services.
     """
-    hass = MagicMock()
-    # Non-stubbed registry: async_services returns Service objects (use MagicMock so
-    # _registry_is_dict_stubbed returns False, falling through to the real loader path).
-    mock_service = MagicMock()  # not a dict → _registry_is_dict_stubbed returns False
-    hass.services.async_services.return_value = {
-        "light": {"turn_on": mock_service},
-    }
+    _register_services(hass, {"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
 
     store = ExposedActionsStore(_FakeStorage())
 

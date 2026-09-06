@@ -8,6 +8,68 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- A people condition saved without an explicit "who"/"quant" now shows as
+    "Anybody" in the panel from its next save onwards; it always evaluated that
+    way.
+
+### Fixed
+
+- Scene editor validation messages are now translated. Condition validators also
+    reject entity ids that cannot name a real entity, such as a bare `sensor.`
+    prefix or an id containing a space.
+- Reloading Ambience no longer registers a duplicate panel resource each time.
+- A damaged Ambience storage file is no longer overwritten with an empty
+    configuration on startup; it is left in place for recovery.
+- Turning a scope's Ambience switch back on now re-reads every condition before
+    re-applying, so scenes reflect the current state rather than the state
+    cached while the switch was off.
+- Re-enabling a scope no longer runs its winning scene's actions twice.
+- Undo/redo can no longer restore a scene into a category that has since been
+    deleted; such scenes move to General.
+- Saving a scene no longer resets the idle re-apply timer of every other scope.
+- People conditions that apply to everyone now notice persons added to or
+    removed from Home Assistant without a restart.
+- Time-of-day conditions keep working at high latitudes on days when dawn or
+    dusk does not occur; only the endpoints that need the missing anchor are
+    unavailable.
+- Scene ordering and shadowing for sun-anchored times with a clamp no longer
+    depend on the Home Assistant time zone.
+- Time ranges that cross the daylight-saving switch hour now behave as
+    configured.
+- A malformed condition in one scene no longer prevents the other scenes in its
+    category from being evaluated.
+- Editing scenes in a stale browser tab can no longer silently disable a scope
+    that was enabled elsewhere.
+- A scope paused after its floor or house was paused keeps its own resume time
+    when the parent resumes.
+- A scope that was paused when Home Assistant stopped abruptly now still resumes
+    automatically.
+- Scenes anchored to a time before sunrise or sunset no longer re-evaluate a
+    second time at the sunrise/sunset itself.
+- Disabled scenes no longer run their script or template conditions.
+- A 'nobody home' condition no longer matches when Home Assistant has no persons
+    at all.
+- A scene whose trigger entity vanished and later reappears is applied again
+    instead of being treated as already applied.
+- Lux conditions no longer ignore a configured sensor that declares no
+    illuminance device class.
+- Disabling a scope's Ambience switch entity in Home Assistant now pauses that
+    scope instead of leaving it always on.
+- The live 'matched' indicator updates after a manual Apply.
+- Two script or template conditions re-evaluated at the same moment no longer
+    discard one another's result, which could leave a scene matching on a stale
+    verdict until the next full refresh.
+
+### Performance
+
+- Ambience no longer rescans its configuration for every entity registry change
+    in Home Assistant.
+- Template and script conditions are re-evaluated only for the predicates a
+    change touches (plus any whose dependencies cannot be fully known), instead
+    of every predicate in the house.
+
 ## [1.2.0] - 2026-09-04
 
 ### Added

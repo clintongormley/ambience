@@ -77,7 +77,9 @@ and an area share the same name.
 application for its own scope only. While a scope's switch is off, the engine
 stops applying scenes there (an explicit apply from the panel forces past the
 switch); same for floor and house. Each scope is checked independently — there
-is no inherited-off propagation during resolution.
+is no inherited-off propagation during resolution. Disabling the switch entity
+in Settings → Entities also pauses the scope: a registered-but-disabled switch
+reads as off.
 
 **Cascade on turn-on/turn-off.** Turning a switch *off* (or *on*) via the UI or
 a service call does cascade to descendants: turning the house switch off also
@@ -85,7 +87,8 @@ turns off all floor and area switches; turning it back on restores them. Turning
 a floor switch off brings down its areas. This cascade is one-directional
 (parent → descendants) and fires on any switch turn-on/turn-off — whether an
 explicit user action or the auto-on timer firing — never during scene
-resolution.
+resolution. A descendant paused *after* its parent keeps its own auto-on resume
+time when the parent is turned back on.
 
 **Auto-on timer.** When a switch is turned off it can schedule an automatic
 turn-on after a configurable delay. The default delay is **0, which disables the
@@ -139,11 +142,12 @@ ______________________________________________________________________
 All commands require admin privileges. The frontend communicates exclusively
 over this API; there are no REST endpoints.
 
-The authoritative command list lives in
-`custom_components/ambience/websocket.py` (`_WS_HANDLERS` at the bottom of the
-file — registration and unregistration both derive from it, and each handler's
-`@websocket_command` schema documents its payload). The ~50 commands fall into
-these families:
+The authoritative command list lives in the
+`custom_components/ambience/websocket/` package (`_WS_HANDLERS` at the bottom of
+`__init__.py` — registration and unregistration both derive from it, and each
+handler's `@websocket_command` schema documents its payload; the handlers
+themselves live in per-family submodules). The 58 commands fall into these
+families:
 
 | Family         | Commands (representative)                                                                                                                                         | Purpose                                                                                 |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |

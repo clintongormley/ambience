@@ -14,6 +14,7 @@ from custom_components.ambience.conditions.script import (
     _cache_key,
 )
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.errors import AmbienceError
 
 
 class _StoreStub:
@@ -66,21 +67,25 @@ def test_validate_predicate_accepts_well_formed() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        42,
-        "script.foo",
-        [],
-        {},  # missing script
-        {"script": ""},  # empty
-        {"script": "foo"},  # missing script. prefix
-        {"script": "script.foo", "args": []},  # args not a dict
-        {"script": "script.foo", "args": "x=1"},
+        (42, "script_predicate_not_object"),
+        ("script.foo", "script_predicate_not_object"),
+        ([], "script_predicate_not_object"),
+        ({}, "entity_id_invalid"),  # missing script
+        ({"script": ""}, "entity_id_invalid"),  # empty
+        ({"script": "foo"}, "entity_id_invalid"),  # not an entity id at all
+        ({"script": "script."}, "entity_id_invalid"),  # domain prefix alone
+        ({"script": "script.Bad Id"}, "entity_id_invalid"),
+        ({"script": "light.foo"}, "entity_id_wrong_domain"),
+        ({"script": "script.foo", "args": []}, "script_args_not_object"),
+        ({"script": "script.foo", "args": "x=1"}, "script_args_not_object"),
     ],
 )
-def test_validate_predicate_rejects_bad(bad: object) -> None:
-    with pytest.raises(ValueError):
+def test_validate_predicate_rejects_bad(bad: object, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_order_key_uses_script_id() -> None:
@@ -391,20 +396,23 @@ def test_validate_predicate_accepts_valid_triggers() -> None:
 
 
 def test_validate_predicate_rejects_non_list_triggers() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate({"script": "script.foo", "triggers": "person.john"})
+    assert exc.value.translation_key == "script_triggers_invalid"
 
 
 def test_validate_predicate_rejects_non_string_trigger_items() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate(
             {"script": "script.foo", "triggers": ["person.john", 5]}
         )
+    assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_predicate_rejects_empty_string_trigger() -> None:
-    with pytest.raises(ValueError, match="triggers"):
+    with pytest.raises(AmbienceError) as exc:
         ScriptCondition().validate_predicate({"script": "script.foo", "triggers": [""]})
+    assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_predicate_accepts_empty_triggers_list() -> None:
@@ -470,3 +478,197 @@ async def test_snapshot_evicts_cache_keys_no_longer_referenced(hass: HomeAssista
     await cond.snapshot(hass)
     assert "stale-key" not in cond._cache
     assert _cache_key("script.live", {}) in cond._cache
+
+
+# --- cache key shape ------------------------------------------------------
+
+
+def test_cache_key_is_script_pipe_sorted_compact_args_json() -> None:
+    """The key format is load-bearing: `snapshot` builds it straight from the
+    already-serialised args, so it must equal what `_cache_key` produces."""
+    assert _cache_key("script.x", {"b": 2, "a": 1}) == 'script.x|{"a":1,"b":2}'
+    assert _cache_key("script.x", {}) == "script.x|{}"
+    assert _cache_key("script.x", None) == "script.x|{}"
+
+
+async def test_snapshot_keys_the_results_the_same_way_result_key_does(
+    hass: HomeAssistant,
+) -> None:
+    pred = {"script": "script.k", "args": {"b": 2, "a": 1}}
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": pred}}]}})
+    _install_service(hass, "script", "k", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    snap = await cond.snapshot(hass)
+    assert snap.results == {'script.k|{"a":1,"b":2}': True}
+    assert cond.result_key(pred) == 'script.k|{"a":1,"b":2}'
+
+
+# --- snapshot: the `keys` result-key hint ---------------------------------
+
+
+async def test_snapshot_keys_hint_calls_only_the_named_script(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    one = _install_service(hass, "script", "one", response={"match": True})
+    two = _install_service(hass, "script", "two", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0  # never served from the TTL cache
+    await cond.snapshot(hass)
+    assert (one.call_count, two.call_count) == (1, 1)
+
+    snap = await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert one.call_count == 2  # recomputed
+    assert two.call_count == 1  # not called again
+    assert snap.results[_cache_key("script.two", {})] is True  # previous result survives
+
+
+async def test_snapshot_keys_hint_skips_the_store_walk(hass: HomeAssistant) -> None:
+    """The hint IS the work list — a hinted snapshot never touches the store."""
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.one"}}}]}})
+    _install_service(hass, "script", "one", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0
+    await cond.snapshot(hass)
+    hass.data[DOMAIN].pop(DATA_STORE)  # a walk would now find nothing
+    snap = await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert snap.results[_cache_key("script.one", {})] is True
+
+
+async def test_snapshot_keys_hint_does_not_evict_unreferenced_cache_entries(
+    hass: HomeAssistant,
+) -> None:
+    """Eviction is a full-refresh job: a hinted pass sees only part of the work
+    list, so pruning against it would throw away every live entry."""
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": True})
+    _install_service(hass, "script", "two", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 60.0
+    await cond.snapshot(hass)
+    await cond.snapshot(hass, keys=frozenset({_cache_key("script.one", {})}))
+    assert set(cond._cache) == {
+        _cache_key("script.one", {}),
+        _cache_key("script.two", {}),
+    }
+
+
+async def test_snapshot_keys_hint_ignored_without_a_previous_snapshot(
+    hass: HomeAssistant,
+) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": True})
+    _install_service(hass, "script", "two", response={"match": False})
+    snap = await ScriptCondition(hass=hass).snapshot(
+        hass, keys=frozenset({_cache_key("script.one", {})})
+    )
+    assert snap.results == {
+        _cache_key("script.one", {}): True,
+        _cache_key("script.two", {}): False,
+    }
+
+
+async def test_concurrent_hinted_snapshots_keep_every_fresh_result(
+    hass: HomeAssistant,
+) -> None:
+    """Two hinted passes in flight at once each contribute their fresh key: the
+    merge happens over the live baseline, not over the one read before awaiting."""
+    _install_store(
+        hass,
+        {
+            "a": {
+                "scenes": [
+                    {"when": {"script": {"script": "script.one"}}},
+                    {"when": {"script": {"script": "script.two"}}},
+                ]
+            }
+        },
+    )
+    _install_service(hass, "script", "one", response={"match": False})
+    _install_service(hass, "script", "two", response={"match": False})
+    key_one = _cache_key("script.one", {})
+    key_two = _cache_key("script.two", {})
+    cond = ScriptCondition(hass=hass)
+    cond._ttl_seconds = 0.0  # never served from the TTL cache
+    baseline = await cond.snapshot(hass)
+    assert baseline.results == {key_one: False, key_two: False}
+
+    gate = asyncio.Event()
+    both_in_flight = asyncio.Event()
+    started = 0
+
+    async def _blocked_call(_hass, _script, _args_json):
+        nonlocal started
+        started += 1
+        if started == 2:
+            both_in_flight.set()
+        await gate.wait()
+        return True
+
+    cond._call_one = _blocked_call
+    first = asyncio.create_task(cond.snapshot(hass, keys=frozenset({key_one})))
+    second = asyncio.create_task(cond.snapshot(hass, keys=frozenset({key_two})))
+    await asyncio.wait_for(both_in_flight.wait(), timeout=5)
+    gate.set()
+    snap_one, snap_two = await asyncio.gather(first, second)
+
+    assert cond._previous.results == {key_one: True, key_two: True}
+    # Each pass returns its own fresh value to its caller, and the one that
+    # merged second returns both — a caller acting on the returned snapshot sees
+    # no less than the cache does.
+    assert snap_one.results[key_one] is True
+    assert snap_two.results[key_two] is True
+    assert {snap_one.results[key_two], snap_two.results[key_one]} == {False, True}
+
+
+# --- verdict plumbing: the simulator's two hooks on the opaque base -----------
+
+
+def test_snapshot_from_results_builds_a_script_snapshot() -> None:
+    """Forced verdicts become a complete ScriptSnapshot (results is a copy)."""
+    results = {_cache_key("script.holiday", {}): True}
+    snap = ScriptCondition().snapshot_from_results(results)
+    assert isinstance(snap, ScriptSnapshot)
+    assert snap.results == results
+    assert snap.results is not results
+
+
+def test_verdict_label_names_the_script_entity() -> None:
+    """A script predicate's knob is labelled by — and links to — the script."""
+    entity_id, label = ScriptCondition().verdict_label(
+        {"script": "script.holiday"}, {"name": "Holiday"}
+    )
+    assert (entity_id, label) == ("script.holiday", "script.holiday")
+
+
+def test_verdict_label_falls_back_when_the_script_is_missing() -> None:
+    """A malformed predicate has no entity to link, so the knob is generic."""
+    assert ScriptCondition().verdict_label({}, {"name": "Holiday"}) == (None, "script")

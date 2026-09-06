@@ -27,6 +27,7 @@ import {
   saveHouse,
   saveScopeConfig,
   saveWeatherConfig,
+  validateScopeConfig,
 } from "../frontend/src/api";
 import type { AreaConfig, WeatherGroup } from "../frontend/src/types";
 
@@ -100,6 +101,28 @@ describe("API: saveArea", () => {
       config,
     });
     expect(res.ok).toBe(true);
+  });
+});
+
+describe("API: scope saves never send `enabled`", () => {
+  // Only ambience/set_scope_enabled writes the scope-level flag; a scene save
+  // carrying a stale one could otherwise disable a scope enabled in another tab.
+  test.each([
+    ["area", async (hass: any, cfg: any) => saveArea(hass, "living_room", cfg)],
+    ["floor", async (hass: any, cfg: any) => saveFloor(hass, "ground", cfg)],
+    ["house", async (hass: any, cfg: any) => saveHouse(hass, cfg)],
+  ])("%s save strips the scope-level enabled flag", async (_kind, save) => {
+    const { callWS, sent } = makeFakeHass();
+    await save({ callWS } as any, { scenes: [], enabled: false });
+    expect(sent[0].config).toEqual({ scenes: [] });
+  });
+
+  // ambience/validate pre-flights a save (the import path), so it must be given
+  // exactly the payload the save will send.
+  test("validateScopeConfig strips it too", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await validateScopeConfig({ callWS } as any, { scenes: [], enabled: false });
+    expect(sent[0].config).toEqual({ scenes: [] });
   });
 });
 

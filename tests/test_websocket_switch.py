@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -9,13 +10,21 @@ from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    async_fire_time_changed,
+    async_mock_service,
+)
 
 from custom_components.ambience.const import (
+    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DATA_SWITCHES,
+    DATA_TRACE_BUFFER,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from custom_components.ambience.trace import Outcome
 from tests import get_scope_device
 
 
@@ -295,3 +304,126 @@ async def test_set_scope_enabled_rejects_unregistered_floor_id(hass, installed, 
     )
     assert not resp["success"]
     assert resp["error"]["code"] == "validation_error"
+
+
+# --- set_scope_enabled: re-apply on re-enable -------------------------------
+
+
+async def _expose_light_turn_on(hass) -> None:
+    await hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+
+
+def _acted_traces(hass) -> list[Any]:
+    return [
+        record
+        for record in hass.data[DOMAIN][DATA_TRACE_BUFFER].records()
+        if record.unit.outcome == Outcome.ACTED
+    ]
+
+
+async def _settle_config_refresh(hass) -> None:
+    """Flush the engine's debounced config refresh (0.3s cooldown)."""
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+
+
+async def test_set_scope_enabled_reenable_applies_winner_exactly_once(
+    hass, installed, hass_ws_client
+):
+    # Re-enabling a scope re-applies its winner through the engine's forced
+    # config refresh — and only that. A second, synchronous apply in the handler
+    # would run non-idempotent actions twice.
+    await _expose_light_turn_on(hass)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {},  # wildcard ⇒ always the winner
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    )
+    await _settle_config_refresh(hass)
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=False
+    )
+    assert resp["success"]
+    await _settle_config_refresh(hass)
+
+    # Register the mock and clear traces after the disable settles, so only the
+    # re-enable is counted.
+    calls = async_mock_service(hass, "light", "turn_on")
+    hass.data[DOMAIN][DATA_TRACE_BUFFER].clear()
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+    )
+    assert resp["success"]
+    await _settle_config_refresh(hass)
+
+    assert len(calls) == 1
+    assert len(_acted_traces(hass)) == 1
+
+
+async def test_set_scope_enabled_reenable_fires_for_gate_matured_while_disabled(
+    hass, installed, hass_ws_client, freezer
+):
+    # A `for:` gate whose duration elapsed while the scope was disabled must
+    # still win once the scope comes back: the forced refresh re-snapshots and
+    # re-seeds every predicate's tenure, so the matured gate is applied.
+    await _expose_light_turn_on(hass)
+    store = hass.data[DOMAIN][DATA_STORE]
+    hass.states.async_set("binary_sensor.motion", "off")
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.motion",
+                            "states": ["on"],
+                            "for": {"h": 0, "m": 0, "s": 10},
+                        }
+                    },
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    )
+    await _settle_config_refresh(hass)
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=False
+    )
+    assert resp["success"]
+    await _settle_config_refresh(hass)
+
+    # The gate starts holding and then matures, all while the scope is disabled.
+    calls = async_mock_service(hass, "light", "turn_on")
+    hass.states.async_set("binary_sensor.motion", "on")
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=11))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert calls == []  # a disabled scope applies nothing
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+    )
+    assert resp["success"]
+    await _settle_config_refresh(hass)
+
+    assert len(calls) == 1

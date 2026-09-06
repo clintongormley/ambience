@@ -272,3 +272,127 @@ def test_trace_records_unconfigured_reason() -> None:
     assert p0.passed is False
     assert "workday sensor" in (p0.detail or "")
     assert explanation.winner_index == 1
+
+
+class RaisingCondition:
+    """A condition whose `matches` blows up — a malformed predicate in the wild."""
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        raise TypeError("malformed predicate")
+
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
+        return "never reached"
+
+
+def test_raising_condition_fails_only_its_own_scene(
+    conditions: dict[str, FakeCondition],
+) -> None:
+    scenes = [
+        {"name": "bad", "when": {"boom": {"anything": True}}},
+        {"name": "good", "when": {"mode": "day"}},
+    ]
+    conds: dict[str, Any] = {**conditions, "boom": RaisingCondition()}
+    snaps = {"boom": object(), "mode": "day"}
+    explanation = evaluate_explained(scenes, snaps, conds, describe=True)
+    bad = explanation.scenes[0]
+    assert bad.evaluated is True
+    assert bad.matched is False
+    assert [(p.condition_key, p.passed, p.detail) for p in bad.predicates] == [
+        ("boom", False, "error: TypeError")
+    ]
+    assert explanation.scenes[1].matched is True
+    assert explanation.winner_index == 1
+
+
+def test_raising_condition_warns_once_per_evaluation(
+    conditions: dict[str, FakeCondition], caplog: pytest.LogCaptureFixture
+) -> None:
+    scenes = [
+        {"name": "bad1", "when": {"boom": 1}},
+        {"name": "bad2", "when": {"boom": 2}},
+    ]
+    conds: dict[str, Any] = {**conditions, "boom": RaisingCondition()}
+    with caplog.at_level("WARNING"):
+        explanation = evaluate_explained(scenes, {"boom": object()}, conds)
+    assert explanation.winner_index is None
+    assert all(not s.matched for s in explanation.scenes)
+    assert caplog.text.count("malformed predicate") == 1
+
+
+def test_describe_failure_does_not_change_the_verdict(
+    conditions: dict[str, FakeCondition],
+) -> None:
+    """Trace decoration is cosmetic: a broken `describe` must not flip a passing
+    predicate, or a traced apply would resolve a different winner than an
+    untraced one."""
+
+    class BadDescribe:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
+            raise ValueError("bad describe")
+
+    scenes = [{"name": "a", "when": {"bad": 1}}]
+    conds: dict[str, Any] = {**conditions, "bad": BadDescribe()}
+    explanation = evaluate_explained(scenes, {"bad": object()}, conds, describe=True)
+    predicate = explanation.scenes[0].predicates[0]
+    assert predicate.passed is True
+    assert predicate.detail == "error: ValueError"
+    assert explanation.winner_index == 0
+
+
+def test_entity_ids_lookup_replaces_trigger_deps() -> None:
+    """A caller with prebuilt per-predicate entity_ids (the trigger engine) passes
+    `entity_ids_for`; the engine must read that instead of re-deriving them, so the
+    always-on trace path never pays for a `trigger_deps` per predicate per fire."""
+
+    class ExplodingDeps:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return predicate == snapshot
+
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
+            return f"value={snapshot}"
+
+        def trigger_deps(self, predicate: Any):
+            raise AssertionError("trigger_deps must not be called when entity_ids_for is given")
+
+    scenes = [
+        {"name": "a", "when": {"mode": "night"}},
+        {"name": "b", "when": {"mode": "day"}},
+    ]
+    seen: list[tuple[int, str]] = []
+
+    def lookup(scene_index: int, condition_key: str) -> tuple[str, ...]:
+        seen.append((scene_index, condition_key))
+        return (f"sensor.scene_{scene_index}",)
+
+    explanation = evaluate_explained(
+        scenes,
+        {"mode": "day"},
+        {"mode": ExplodingDeps()},
+        describe=True,
+        entity_ids_for=lookup,
+    )
+    # The lookup is keyed by the index within the scene list handed to the engine.
+    assert seen == [(0, "mode"), (1, "mode")]
+    assert explanation.scenes[0].predicates[0].detail == "value=day"
+    assert explanation.scenes[0].predicates[0].entity_ids == ("sensor.scene_0",)
+    assert explanation.scenes[1].predicates[0].entity_ids == ("sensor.scene_1",)
+
+
+def test_entity_ids_lookup_is_skipped_when_not_describing() -> None:
+    """entity_ids stays trace-only: the hot path (describe=False) has nothing to
+    link, so the lookup is not consulted."""
+
+    def lookup(scene_index: int, condition_key: str) -> tuple[str, ...]:
+        raise AssertionError("lookup must not be called without a detail to link")
+
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(
+        scenes,
+        {"mode": "day"},
+        {"mode": FakeCondition("mode")},
+        entity_ids_for=lookup,
+    )
+    assert explanation.scenes[0].predicates[0].entity_ids == ()

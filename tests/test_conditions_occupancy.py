@@ -11,6 +11,7 @@ from custom_components.ambience.conditions.occupancy import (
     OccupancyCondition,
     OccupancySnapshot,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import EMPTY, DurationGate
 
 
@@ -183,8 +184,9 @@ def test_validate_accepts_negate() -> None:
 
 
 def test_validate_rejects_non_bool_negate() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate({"sensors": ["binary_sensor.a"], "negate": "yes"})
+    assert exc.value.translation_key == "negate_invalid"
 
 
 def test_contains_conservative_when_either_side_negates() -> None:
@@ -361,18 +363,21 @@ def test_validate_accepts_valid_and_none() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad",
+    "bad,key",
     [
-        {"sensors": ["light.x"]},
-        {"sensors": "binary_sensor.a"},
-        {"quant": "some"},
-        {"occupied": "yes"},
-        {"for": {"h": -1}},
+        ({"sensors": ["light.x"]}, "entity_id_wrong_domain"),
+        ({"sensors": ["binary_sensor."]}, "entity_id_invalid"),  # domain prefix alone
+        ({"sensors": ["binary_sensor.Bad Id"]}, "entity_id_invalid"),
+        ({"sensors": "binary_sensor.a"}, "occupancy_sensors_not_list"),
+        ({"quant": "some"}, "quant_invalid"),
+        ({"occupied": "yes"}, "occupancy_occupied_invalid"),
+        ({"for": {"h": -1}}, "for_component_invalid"),
     ],
 )
-def test_validate_rejects(bad) -> None:
-    with pytest.raises(ValueError):
+def test_validate_rejects(bad, key) -> None:
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate(bad)
+    assert exc.value.translation_key == key
 
 
 def test_trigger_deps_watches_sensors_and_durations() -> None:
@@ -460,8 +465,9 @@ def test_describe_snapshot_zero_active() -> None:
 
 
 def test_validate_non_dict_predicate_raises() -> None:
-    with pytest.raises(ValueError, match="occupancy predicate must be a dict"):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate("not-a-dict")
+    assert exc.value.translation_key == "occupancy_predicate_not_object"
 
 
 def test_trigger_deps_non_dict_is_empty() -> None:
@@ -836,10 +842,11 @@ def test_validate_accepts_for_mode() -> None:
 
 
 def test_validate_rejects_bad_for_mode() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         OccupancyCondition().validate_predicate(
             {"sensors": ["binary_sensor.a"], "for_mode": "sometimes"}
         )
+    assert exc.value.translation_key == "for_mode_invalid"
 
 
 def test_describe_for_mode_less_than_renders_for_lt() -> None:
@@ -879,3 +886,82 @@ def test_describe_for_mode_less_than_tenure_mode() -> None:
     line = m.describe(snap, pred)
     assert "for <20m" in line
     assert "held 5m" in line
+
+
+# --- normalize_predicate: save-time default materialisation -------------------
+#
+# `quant`, `occupied`, `negate` and `for_mode` all have documented defaults that
+# every read used to re-derive inline. They are filled once at save; predicates
+# stored before that still omit them, so every read path must agree between the
+# two forms — including the duration-gate fingerprint, which keys engine tenure.
+
+_LEGACY_OCC = {"sensors": ["binary_sensor.a", "binary_sensor.b"]}
+_NORM_OCC = {
+    "sensors": ["binary_sensor.a", "binary_sensor.b"],
+    "occupied": True,
+    "quant": "any",
+    "negate": False,
+    "for_mode": "at_least",
+}
+
+
+def test_normalize_predicate_fills_defaults() -> None:
+    assert OccupancyCondition().normalize_predicate(_LEGACY_OCC) == _NORM_OCC
+
+
+def test_normalize_predicate_keeps_explicit_values() -> None:
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": False,
+        "quant": "all",
+        "negate": True,
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    assert OccupancyCondition().normalize_predicate(pred) == pred
+
+
+def test_normalize_predicate_passes_through_non_dicts() -> None:
+    m = OccupancyCondition()
+    assert m.normalize_predicate(None) is None
+    assert m.normalize_predicate("nonsense") == "nonsense"
+
+
+def test_normalize_predicate_is_idempotent_and_pure() -> None:
+    m = OccupancyCondition()
+    before = dict(_LEGACY_OCC)
+    once = m.normalize_predicate(_LEGACY_OCC)
+    assert m.normalize_predicate(once) == once
+    assert before == _LEGACY_OCC  # input untouched
+
+
+def test_gate_key_identical_for_legacy_and_normalised() -> None:
+    """Engine tenure is keyed by the gate fingerprint; if materialising the
+    defaults changed the string, every running `for:` clock would reset on
+    upgrade."""
+    m = OccupancyCondition()
+    assert m._gate_key(_LEGACY_OCC) == m._gate_key(_NORM_OCC)
+    explicit = {"sensors": ["binary_sensor.a"], "occupied": False, "quant": "all"}
+    assert m._gate_key(explicit) == m._gate_key(m.normalize_predicate(explicit))
+
+
+def test_contains_agrees_across_legacy_and_normalised_forms() -> None:
+    m = OccupancyCondition()
+    inner_legacy = {"sensors": ["binary_sensor.a"]}
+    inner_norm = m.normalize_predicate(inner_legacy)
+    baseline = m.contains(_LEGACY_OCC, inner_legacy)
+    assert baseline is True
+    assert m.contains(_NORM_OCC, inner_legacy) is baseline
+    assert m.contains(_LEGACY_OCC, inner_norm) is baseline
+    assert m.contains(_NORM_OCC, inner_norm) is baseline
+    # And the reverse direction (any over more sensors ⊄ any over fewer).
+    assert m.contains(inner_norm, _LEGACY_OCC) is m.contains(inner_legacy, _LEGACY_OCC)
+
+
+def test_matches_describe_and_deps_agree_across_forms() -> None:
+    m = OccupancyCondition()
+    snap = _snap({"binary_sensor.a": _s("on"), "binary_sensor.b": _s("off")})
+    assert m.matches(_NORM_OCC, snap) == m.matches(_LEGACY_OCC, snap)
+    assert m.describe(snap, _NORM_OCC) == m.describe(snap, _LEGACY_OCC)
+    assert m.trigger_deps(_NORM_OCC) == m.trigger_deps(_LEGACY_OCC)
+    assert m.gate_states(_NORM_OCC, snap) == m.gate_states(_LEGACY_OCC, snap)

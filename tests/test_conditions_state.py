@@ -9,6 +9,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.state import StateCondition, StateSnapshot
+from custom_components.ambience.errors import AmbienceError, render_en
 from custom_components.ambience.triggers import DurationGate
 
 
@@ -279,78 +280,95 @@ def test_validate_accepts_none() -> None:
 
 
 def test_validate_rejects_non_dict() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         StateCondition().validate_predicate(42)
+    assert exc.value.translation_key == "state_malformed"
 
 
 def test_validate_atom_requires_entity_id() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="entity"):
-        m.validate_predicate({"kind": "is", "states": ["on"]})
-    with pytest.raises(ValueError, match="entity"):
-        m.validate_predicate({"kind": "is", "entity_id": "", "states": ["on"]})
+    for atom in (
+        {"kind": "is", "states": ["on"]},
+        {"kind": "is", "entity_id": "", "states": ["on"]},
+    ):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate(atom)
+        assert exc.value.translation_key == "state_pick_entity"
+
+
+def test_validate_atom_rejects_malformed_entity_id() -> None:
+    """A non-blank string is not enough: it must parse as an entity id, so a
+    bare domain prefix or a spaced/capitalised object id is rejected."""
+    m = StateCondition()
+    for bad in ("light", "light.", "light.Bad Id"):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"kind": "is", "entity_id": bad, "states": ["on"]})
+        assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_atom_requires_non_empty_states() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="state"):
-        m.validate_predicate({"kind": "is", "entity_id": "x", "states": []})
-    with pytest.raises(ValueError, match="state"):
-        m.validate_predicate({"kind": "is", "entity_id": "x", "states": "on"})
-    with pytest.raises(ValueError, match="state"):
-        m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on", 42]})
+    for states, key in (
+        ([], "state_pick_state"),
+        ("on", "state_malformed"),
+        (["on", 42], "state_states_invalid"),
+    ):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"kind": "is", "entity_id": "light.x", "states": states})
+        assert exc.value.translation_key == key
 
 
 def test_validate_messages_are_human_readable() -> None:
-    """Validation errors surface verbatim in the scene editor, so they must read
-    as plain guidance — no internal jargon like "atom" or "states list"."""
+    """Validation errors surface in the scene editor, so the English rendering of
+    the key must read as plain guidance — no internal jargon like "atom"."""
     m = StateCondition()
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"kind": "is", "entity_id": "light.kitchen", "states": []})
-    msg = str(exc.value)
+    assert exc.value.translation_key == "state_pick_state"
+    msg = render_en("state_pick_state", {})
     assert "atom" not in msg
     assert "Pick at least one state" in msg
 
 
 def test_validate_atom_for_is_optional() -> None:
     m = StateCondition()
-    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
-    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"], "for": None})
+    m.validate_predicate({"kind": "is", "entity_id": "light.x", "states": ["on"]})
+    m.validate_predicate({"kind": "is", "entity_id": "light.x", "states": ["on"], "for": None})
     m.validate_predicate(
-        {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": 0, "m": 5, "s": 0}}
+        {"kind": "is", "entity_id": "light.x", "states": ["on"], "for": {"h": 0, "m": 5, "s": 0}}
     )
 
 
 def test_validate_atom_for_rejects_negative_or_non_int() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate(
-            {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": -1, "m": 0, "s": 0}}
-        )
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate(
-            {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": 0, "m": "five", "s": 0}}
-        )
+    for bad in ({"h": -1, "m": 0, "s": 0}, {"h": 0, "m": "five", "s": 0}):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate(
+                {"kind": "is", "entity_id": "light.x", "states": ["on"], "for": bad}
+            )
+        assert exc.value.translation_key == "for_component_invalid"
 
 
 def test_validate_group_requires_non_empty_items() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="group"):
-        m.validate_predicate({"kind": "and", "items": []})
-    with pytest.raises(ValueError, match="group"):
-        m.validate_predicate({"kind": "or"})
+    for pred in ({"kind": "and", "items": []}, {"kind": "or"}):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate(pred)
+        assert exc.value.translation_key == "state_group_empty"
 
 
 def test_validate_not_requires_item() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="negate"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"kind": "not"})
+    assert exc.value.translation_key == "state_not_empty"
 
 
 def test_validate_unknown_kind() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="kind"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"kind": "xor", "items": []})
+    assert exc.value.translation_key == "state_unknown_kind"
 
 
 def test_validate_recurses_into_groups_and_not() -> None:
@@ -358,11 +376,12 @@ def test_validate_recurses_into_groups_and_not() -> None:
     bad = {
         "kind": "and",
         "items": [
-            {"kind": "is", "entity_id": "x", "states": []},
+            {"kind": "is", "entity_id": "light.x", "states": []},
         ],
     }
-    with pytest.raises(ValueError, match="state"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate(bad)
+    assert exc.value.translation_key == "state_pick_state"
 
 
 def test_validate_accepts_realistic_nested() -> None:
@@ -393,7 +412,7 @@ def test_validate_accepts_realistic_nested() -> None:
 
 def test_order_key_uses_first_atom_entity_id() -> None:
     m = StateCondition()
-    assert m.order_key({"kind": "is", "entity_id": "x", "states": ["on"]}) == "x"
+    assert m.order_key({"kind": "is", "entity_id": "light.x", "states": ["on"]}) == "light.x"
     nested = {
         "kind": "or",
         "items": [
@@ -541,6 +560,14 @@ async def test_snapshot_captures_entity_attributes(hass) -> None:
     assert snap.attributes["media_player.x"]["volume_level"] == 0.5
 
 
+async def test_snapshot_stores_the_state_attributes_mapping_by_reference(hass) -> None:
+    """HA's `State.attributes` is an immutable ReadOnlyDict, so the snapshot
+    holds it directly instead of copying it per entity per fire."""
+    hass.states.async_set("media_player.x", "playing", {"source": "Spotify"})
+    snap = await StateCondition().snapshot(hass)
+    assert snap.attributes["media_player.x"] is hass.states.get("media_player.x").attributes
+
+
 async def test_snapshot_captures_both_last_changed_and_last_updated(hass) -> None:
     """last_updated bumps on any change (state OR attribute), while
     last_changed only bumps on state change. The snapshot captures both as
@@ -566,21 +593,25 @@ async def test_snapshot_captures_both_last_changed_and_last_updated(hass) -> Non
 def test_validate_atom_attribute_is_optional() -> None:
     m = StateCondition()
     # Without attribute (existing behavior)
-    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
+    m.validate_predicate({"kind": "is", "entity_id": "light.x", "states": ["on"]})
     # With attribute = None (explicit)
-    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"], "attribute": None})
+    m.validate_predicate(
+        {"kind": "is", "entity_id": "light.x", "states": ["on"], "attribute": None}
+    )
     # With a string attribute
     m.validate_predicate(
-        {"kind": "is", "entity_id": "x", "attribute": "source", "states": ["Spotify"]}
+        {"kind": "is", "entity_id": "light.x", "attribute": "source", "states": ["Spotify"]}
     )
 
 
 def test_validate_atom_attribute_rejects_non_string() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="attribute"):
-        m.validate_predicate({"kind": "is", "entity_id": "x", "attribute": 42, "states": ["on"]})
-    with pytest.raises(ValueError, match="attribute"):
-        m.validate_predicate({"kind": "is", "entity_id": "x", "attribute": "", "states": ["on"]})
+    for bad in (42, ""):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate(
+                {"kind": "is", "entity_id": "light.x", "attribute": bad, "states": ["on"]}
+            )
+        assert exc.value.translation_key == "state_attribute_blank"
 
 
 # --- numeric comparison kinds ------------------------------------------
@@ -640,27 +671,28 @@ def test_matches_numeric_op_missing_threshold_is_false() -> None:
 def test_validate_numeric_op_requires_one_numeric_value() -> None:
     m = StateCondition()
     # Happy path
-    m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["10"]})
-    m.validate_predicate({"kind": "<=", "entity_id": "x", "states": ["3.14"]})
+    m.validate_predicate({"kind": ">", "entity_id": "light.x", "states": ["10"]})
+    m.validate_predicate({"kind": "<=", "entity_id": "light.x", "states": ["3.14"]})
     # Wrong shape: zero or multiple values
-    with pytest.raises(ValueError, match="exactly one"):
-        m.validate_predicate({"kind": ">", "entity_id": "x", "states": []})
-    with pytest.raises(ValueError, match="exactly one"):
-        m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["1", "2"]})
+    for states in ([], ["1", "2"]):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"kind": ">", "entity_id": "light.x", "states": states})
+        assert exc.value.translation_key == "state_compare_one_value"
     # Non-numeric value
-    with pytest.raises(ValueError, match="number"):
-        m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["foo"]})
+    with pytest.raises(AmbienceError) as exc:
+        m.validate_predicate({"kind": ">", "entity_id": "light.x", "states": ["foo"]})
+    assert exc.value.translation_key == "state_compare_not_number"
 
 
 def test_validate_numeric_op_accepts_negative_and_decimals() -> None:
     m = StateCondition()
-    m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["-3.5"]})
-    m.validate_predicate({"kind": ">=", "entity_id": "x", "states": ["0"]})
+    m.validate_predicate({"kind": ">", "entity_id": "light.x", "states": ["-3.5"]})
+    m.validate_predicate({"kind": ">=", "entity_id": "light.x", "states": ["0"]})
 
 
 def test_order_key_supports_numeric_kinds() -> None:
     m = StateCondition()
-    assert m.order_key({"kind": ">", "entity_id": "x", "states": ["5"]}) == "x"
+    assert m.order_key({"kind": ">", "entity_id": "light.x", "states": ["5"]}) == "light.x"
 
 
 # --- trigger_deps ------------------------------------------------------
@@ -904,8 +936,9 @@ def test_numeric_op_fallthrough_unknown_kind_returns_false() -> None:
 def test_validate_numeric_threshold_empty_string_rejected() -> None:
     """validate_atom raises when the numeric threshold is an empty string."""
     m = StateCondition()
-    with pytest.raises(ValueError, match="number"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"kind": ">", "entity_id": "sensor.x", "states": [""]})
+    assert exc.value.translation_key == "state_compare_needs_number"
 
 
 def test_first_atom_skips_none_result_items_in_and() -> None:
@@ -1245,15 +1278,16 @@ def test_validate_atom_for_mode_optional_and_rejects_bad_value() -> None:
     """`for_mode` accepts None/absent, "at_least", "less_than"; a bad value
     raises at save time."""
     m = StateCondition()
-    base = {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"m": 5}}
+    base = {"kind": "is", "entity_id": "light.x", "states": ["on"], "for": {"m": 5}}
     # Absent / None / valid modes all accepted.
     m.validate_predicate(base)
     m.validate_predicate({**base, "for_mode": None})
     m.validate_predicate({**base, "for_mode": "at_least"})
     m.validate_predicate({**base, "for_mode": "less_than"})
     # A bogus mode is rejected.
-    with pytest.raises(ValueError, match="for_mode"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({**base, "for_mode": "at_most"})
+    assert exc.value.translation_key == "for_mode_invalid"
 
 
 def test_describe_atom_for_mode_renders_comparator() -> None:

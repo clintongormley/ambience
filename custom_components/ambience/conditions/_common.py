@@ -12,7 +12,11 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
+
+from homeassistant.core import valid_entity_id
+
+from ..errors import AmbienceError
 
 # States that mean "no real value" — treated as a miss by every condition that
 # reads an entity's state.
@@ -127,9 +131,13 @@ def for_contains(outer: Any, inner: Any) -> bool:
     inner_for = dur_seconds(inner.get("for"))
     if inner_for <= 0:
         return False
-    if (outer.get("for_mode") or "at_least") != (inner.get("for_mode") or "at_least"):
+    # Read the default here rather than trusting the caller: the conditions
+    # materialise `for_mode` at save, but this helper also runs against
+    # predicates stored before that, which omit it.
+    mode = outer.get("for_mode") or "at_least"
+    if mode != (inner.get("for_mode") or "at_least"):
         return False
-    if (outer.get("for_mode") or "at_least") == "less_than":
+    if mode == "less_than":
         return inner_for <= outer_for
     return inner_for >= outer_for
 
@@ -156,15 +164,15 @@ def validate_for(dur: Any) -> None:
     if dur is None:
         return
     if not isinstance(dur, dict):
-        raise ValueError("`for` must be a dict {h,m,s} or null")
+        raise AmbienceError("for_not_object")
     unknown = set(dur) - {"h", "m", "s"}
     if unknown:
         # e.g. {"hours": 1} — dur_seconds would silently read it as 0 seconds.
-        raise ValueError(f"`for` keys must be h/m/s, got {sorted(unknown)!r}")
+        raise AmbienceError("for_keys_invalid", keys=sorted(unknown))
     for k in ("h", "m", "s"):
         v = dur.get(k, 0)
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-            raise ValueError(f"`for.{k}` must be a non-negative int")
+            raise AmbienceError("for_component_invalid", key=k)
 
 
 def validate_for_mode(mode: Any) -> None:
@@ -174,7 +182,96 @@ def validate_for_mode(mode: Any) -> None:
     if mode is None:
         return
     if mode not in ("at_least", "less_than"):
-        raise ValueError('`for_mode` must be "at_least", "less_than" or null')
+        raise AmbienceError("for_mode_invalid")
+
+
+def validate_entity_ids(values: Any, domain: str | None = None, *, key: str) -> None:
+    """Validate a save-time list of entity ids, optionally all in one ``domain``.
+
+    ``key`` is the caller's translation key for "this field must be a list of
+    entity ids" — raised when ``values`` is not a list at all; the per-entry
+    rejections carry the shared ``entity_id_invalid`` / ``entity_id_wrong_domain``
+    keys. Each entry is checked against HA's own entity-id grammar, so a bare
+    domain prefix (``sensor.``) and an id carrying a space or capital
+    (``person.Bad Id``) are both rejected — a ``startswith`` prefix test admits
+    them, and they can never name a real entity."""
+    if not isinstance(values, list):
+        # The key is the caller's string literal; check_exceptions_keys reads it
+        # off the `key=` argument at each call site.
+        raise AmbienceError(key)  # i18n-ignore
+    for value in values:
+        if not isinstance(value, str) or not valid_entity_id(value):
+            raise AmbienceError("entity_id_invalid", entity_id=value)
+        if domain is not None and value.split(".", 1)[0] != domain:
+            raise AmbienceError("entity_id_wrong_domain", entity_id=value, domain=domain)
+
+
+# --- predicate defaults -------------------------------------------------------
+#
+# Conditions whose predicates have documented defaults declare them as a table
+# of `key -> (rule, default)` and let `materialise_defaults` apply it, so the
+# save path and every read path fill them by the same rule. The three rules are
+# named rather than inferred from the default's type so the table is plain data
+# the mcp-server's diff.py mirrors literally.
+RULE_OR = "or"  # falsy (including absent) -> default
+RULE_TRUTHY = "truthy"  # bool(value); absent -> False
+RULE_NOT_FALSE = "not_false"  # only an explicit False means False
+
+PredicateDefaults = Mapping[str, tuple[str, Any]]
+
+_MISSING = object()
+
+
+def _defaulted(predicate: Mapping[str, Any], key: str, rule: str, default: Any) -> Any:
+    """One key's materialised value, by the named rule."""
+    if rule == RULE_TRUTHY:
+        return bool(predicate.get(key))
+    if rule == RULE_NOT_FALSE:
+        return predicate.get(key, default) is not False
+    return predicate.get(key) or default
+
+
+def materialise_defaults(predicate: Any, defaults: PredicateDefaults) -> Any:
+    """A predicate with its ``defaults`` table materialised.
+
+    Non-dict predicates (None — the wildcard — and hand-edited junk) pass
+    through untouched. Pure and idempotent: the input is never mutated, and a
+    predicate that already states every default is returned AS IS, so the common
+    post-save case allocates nothing. Key order matches ``{**predicate,
+    **filled}``: stated keys keep their position, newly filled ones follow in
+    table order."""
+    if not isinstance(predicate, dict):
+        return predicate
+    filled: dict[str, Any] | None = None
+    for key, (rule, default) in defaults.items():
+        value = _defaulted(predicate, key, rule, default)
+        # Identity, not equality: every rule returns either the stored object
+        # itself or a bool/str singleton, so `is` is exact — it rejects a stored
+        # `1` standing in for `True`, which equality would wave through and
+        # leak into the stored form.
+        if predicate.get(key, _MISSING) is value:
+            continue
+        if filled is None:
+            filled = {}
+        filled[key] = value
+    if filled is None:
+        return predicate
+    return {**predicate, **filled}
+
+
+class NormalisesPredicate:
+    """Mixin giving a condition the save-time ``normalize_predicate`` hook,
+    driven by its ``_DEFAULTS`` table."""
+
+    _DEFAULTS: ClassVar[PredicateDefaults]
+
+    def normalize_predicate(self, predicate: Any) -> Any:
+        """Materialise the predicate's documented defaults for storage, so a
+        stored predicate says what it means instead of leaning on a reader's
+        `or`. Semantically a no-op: every read path applies the same defaults to
+        a predicate that omits them. Called once at save (``canonicalise``).
+        Pure: never mutates the input."""
+        return materialise_defaults(predicate, self._DEFAULTS)
 
 
 def predicate_has_any(predicate: Any, *keys: str) -> bool:

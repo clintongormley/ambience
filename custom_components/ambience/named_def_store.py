@@ -91,6 +91,8 @@ class NamedDefStore(ABC):
                 raise AmbienceError("named_def_invalid_id", kind=self.kind, id=id_)
             self.validate_definition(custom[id_])
         for id_ in hidden:
+            if not isinstance(id_, str):
+                raise AmbienceError("named_def_hidden_not_string", kind=self.kind)
             if id_ not in self.builtins:
                 raise AmbienceError("named_def_only_builtin_hideable", id=id_)
         await self._write({"custom": custom, "hidden": hidden})

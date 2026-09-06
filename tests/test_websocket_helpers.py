@@ -366,6 +366,20 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         assert exc.value.translation_key == "scene_apply_invalid"
 
+    def test_rejects_unknown_top_level_key(self) -> None:
+        """A scope save carries `scenes` plus the tolerated-but-stripped legacy
+        keys (`enabled`, `conditions`); anything else is rejected."""
+        hass = _make_hass()
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, {"scenes": [], "foo": 1})
+        assert exc.value.translation_key == "scene_config_unknown_key"
+        assert exc.value.translation_placeholders["key"] == "foo"
+
+    def test_accepts_legacy_enabled_key(self) -> None:
+        # Accepted for backward compatibility with older clients; canonicalise
+        # strips it, so it never reaches the store.
+        validate_scope_config(_make_hass(), {"scenes": [], "enabled": False})
+
 
 # ---------------------------------------------------------------------------
 # validate_weather_groups
@@ -565,6 +579,20 @@ class TestCanonicalise:
         assert "overlap_entities" not in result["scenes"][0]
         assert "config_issues" not in result["scenes"][0]
 
+    def test_strips_scope_enabled_flag(self) -> None:
+        """`enabled` is written only by ambience/set_scope_enabled, so the
+        storage form of a scene save never carries it."""
+        hass = _make_hass(conditions={})
+        result = canonicalise(hass, {"scenes": [], "enabled": False})
+        assert "enabled" not in result
+
+    def test_strips_legacy_conditions_field(self) -> None:
+        """The dead top-level `conditions` field is tolerated on the wire but
+        never reaches storage."""
+        hass = _make_hass(conditions={})
+        result = canonicalise(hass, {"scenes": [], "conditions": ["time_of_day"]})
+        assert "conditions" not in result
+
     def test_canonicalise_preserves_description(self) -> None:
         hass = _make_hass(conditions={})
         config = {
@@ -612,6 +640,59 @@ class TestCanonicalise:
         }
         # The original config is left untouched (canonicalise is pure).
         assert config["scenes"][0]["when"]["state"]["items"][0]["kind"] == "or"
+
+    def test_materialises_predicate_defaults_at_save(self) -> None:
+        # occupancy/lux/people materialise their documented defaults through the
+        # same hook, so a stored predicate states them instead of leaning on each
+        # reader's `or`. Semantically a no-op — every read path applies the same
+        # defaults to a predicate saved before this.
+        from custom_components.ambience.conditions.lux import LuxCondition
+        from custom_components.ambience.conditions.occupancy import OccupancyCondition
+        from custom_components.ambience.conditions.people import PeopleCondition
+
+        hass = _make_hass(
+            conditions={
+                "occupancy": OccupancyCondition(),
+                "lux": LuxCondition(),
+                "people": PeopleCondition(),
+            }
+        )
+        config = {
+            "scenes": [
+                {
+                    "name": "r1",
+                    "when": {
+                        "occupancy": {"sensors": ["binary_sensor.hall"]},
+                        "lux": {"sensors": ["sensor.lounge"], "range": "dark"},
+                        "people": {"who": ["person.alice"]},
+                    },
+                    "actions": [],
+                }
+            ]
+        }
+        when = canonicalise(hass, config)["scenes"][0]["when"]
+        assert when["occupancy"] == {
+            "sensors": ["binary_sensor.hall"],
+            "occupied": True,
+            "quant": "any",
+            "negate": False,
+            "for_mode": "at_least",
+        }
+        assert when["lux"] == {
+            "sensors": ["sensor.lounge"],
+            "range": "dark",
+            "quant": "any",
+            "negate": False,
+        }
+        assert when["people"] == {
+            "who": ["person.alice"],
+            "quant": "any",
+            "where": "home",
+            "negate": False,
+            "for_mode": "at_least",
+        }
+        # canonicalise is pure: the caller's config keeps the compact form.
+        assert config["scenes"][0]["when"]["people"] == {"who": ["person.alice"]}
 
     def test_leaves_predicate_without_normaliser_unchanged(self) -> None:
         # A condition with no normalize_predicate method: the predicate passes

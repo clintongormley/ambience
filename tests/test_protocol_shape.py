@@ -557,6 +557,132 @@ def _read_mcp_diff_set_literal(name: str) -> set[Any]:
     pytest.fail(f"no module-level {name} assignment in mcp-server diff.py")
 
 
+def _load_mcp_diff():
+    """mcp-server's `diff` module, loaded BY PATH rather than imported.
+
+    The two packages live in separate venvs, so `import ambience_mcp` fails from
+    the backend test env (see `_read_mcp_diff_set_literal`). `diff.py` imports
+    nothing but the stdlib, though, so loading it from its file gives a backend
+    test the real functions to call — a stronger gate than comparing literals,
+    because it pins BEHAVIOUR rather than a copied value."""
+    import importlib.util
+    from pathlib import Path
+
+    diff_py = Path(__file__).parents[1] / "mcp-server" / "src" / "ambience_mcp" / "diff.py"
+    spec = importlib.util.spec_from_file_location("_mcp_diff_under_test", diff_py)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_mcp_diff_predicate_defaults_match_the_backends():
+    """diff.py must fill the SAME predicate defaults the backend materialises at
+    save (`normalize_predicate` / each condition's `_norm`).
+
+    The backend stores the filled form while the AI guide teaches the compact
+    one, so an author re-submitting an unchanged scene sends a predicate that
+    differs only by those defaults. If diff.py's rules drift from the backend's,
+    that re-submission previews as "N updated" and the human confirm gate fills
+    with noise — the same class of bug the transient-fields gate below guards.
+
+    Pins the RULES, not just the default values: the cases below include the
+    falsy and explicit-null forms where an `or` fill, a `bool()` fill and
+    `occupied`'s "only an explicit False means vacant" rule all differ.
+    """
+    from custom_components.ambience.conditions.lux import _norm as lux_norm
+    from custom_components.ambience.conditions.occupancy import _norm as occupancy_norm
+    from custom_components.ambience.conditions.people import _norm as people_norm
+
+    diff = _load_mcp_diff()
+    cases: list[tuple[str, Any, list[Any]]] = [
+        (
+            "occupancy",
+            occupancy_norm,
+            [
+                {"sensors": ["binary_sensor.hall"]},  # the guide's compact form
+                {},
+                {"sensors": ["binary_sensor.a"], "occupied": False, "quant": "all"},
+                {"occupied": None, "quant": None, "negate": None, "for_mode": None},
+                {"occupied": True, "negate": True, "for_mode": "less_than", "for": {"m": 5}},
+                None,  # the wildcard form
+                "nonsense",  # hand-edited junk must not crash either side
+            ],
+        ),
+        (
+            "lux",
+            lux_norm,
+            [
+                {"sensors": ["sensor.a"], "range": "dark"},
+                {"sensors": ["sensor.a"], "min": 5},
+                {"quant": None, "negate": None},
+                {"quant": "all", "negate": True},
+                None,
+            ],
+        ),
+        (
+            "people",
+            people_norm,
+            [
+                {"who": ["person.alice"]},
+                {},
+                {"quant": None, "where": None, "negate": None, "for_mode": None},
+                {"quant": "nobody", "where": "zone.work", "negate": True},
+                {"for": {"m": 10}, "for_mode": "less_than"},
+                None,
+            ],
+        ),
+    ]
+    for condition, backend_norm, predicates in cases:
+        for predicate in predicates:
+            assert diff._normalise(condition, predicate) == backend_norm(predicate), (
+                f"{condition} predicate {predicate!r} normalises differently in mcp-server"
+            )
+
+
+def test_mcp_diff_predicate_defaults_cover_every_normalising_condition():
+    """Every backend condition that materialises predicate defaults at save must
+    have an entry in diff.py's `_PREDICATE_DEFAULTS`. The test above only checks
+    the three that exist today; without this one, a FOURTH condition growing
+    defaults would silently reintroduce the confirm-gate noise for its own
+    predicates.
+
+    "Materialises defaults" is detected by the convention itself — subclassing
+    `NormalisesPredicate` with a `_DEFAULTS` table — with a module-level `_norm`
+    as a secondary signal, so a condition that declares defaults either way is
+    caught."""
+    import importlib
+    from pathlib import Path
+
+    from custom_components.ambience.conditions._common import NormalisesPredicate
+
+    conditions_dir = Path(__file__).parents[1] / "custom_components" / "ambience" / "conditions"
+    normalising = set()
+    for path in sorted(conditions_dir.glob("*.py")):
+        if path.name.startswith("_"):
+            continue  # shared helpers, not conditions
+        module = importlib.import_module(f"custom_components.ambience.conditions.{path.stem}")
+        has_norm = hasattr(module, "_norm")
+        for obj in vars(module).values():
+            if not (
+                isinstance(obj, type)
+                and obj.__module__ == module.__name__
+                and getattr(obj, "name", None)
+                and hasattr(obj, "matches")
+            ):
+                continue
+            if issubclass(obj, NormalisesPredicate) or "_DEFAULTS" in vars(obj) or has_norm:
+                normalising.add(obj.name)
+
+    assert normalising, (
+        "found no condition subclassing NormalisesPredicate — has the convention moved?"
+    )
+    table = _load_mcp_diff()._PREDICATE_DEFAULTS
+    assert normalising <= set(table), (
+        "conditions materialising defaults but unknown to mcp-server diff.py: "
+        f"{sorted(normalising - set(table))}"
+    )
+
+
 def test_mcp_diff_transient_fields_match_the_backends():
     """diff.py must ignore exactly the per-scene hints the backend injects
     (websocket_helpers._TRANSIENT_SCENE_FIELDS) — a new backend annotation

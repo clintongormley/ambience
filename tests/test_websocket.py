@@ -157,7 +157,7 @@ async def test_resolve_install_id_is_none_without_entry(hass: HomeAssistant) -> 
     """The helper returns None when no Ambience entry exists. The ws command
     can't reach this (it's unregistered without an entry), so it's covered here
     directly — a teardown-race guard against IndexError on an empty entry list."""
-    from custom_components.ambience.websocket import _resolve_install_id
+    from custom_components.ambience.websocket.ai import _resolve_install_id
 
     assert _resolve_install_id(hass) is None
 
@@ -621,7 +621,6 @@ async def test_scope_save_coerces_unknown_category_to_general(
     from custom_components.ambience.const import GENERAL_CATEGORY_ID
 
     config = {
-        "auto_sort": False,
         "scenes": [
             {
                 "name": "ghost scene",
@@ -661,6 +660,39 @@ async def test_scope_save_coerces_unknown_category_to_general(
     scenes = get["result"]["scenes"]
     assert scenes[0]["category"] == GENERAL_CATEGORY_ID
     assert scenes[1]["category"] == GENERAL_CATEGORY_ID
+
+
+async def test_area_save_cannot_disable_a_scope(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """A scene save carrying a stale `enabled: false` must not disable the scope:
+    only ambience/set_scope_enabled writes that flag, and the save response
+    reports the store's value so the client sees the truth."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", area_id, True)
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={"scenes": [], "enabled": False},
+    )
+    assert resp["success"] is True, resp
+    assert store.get_scope_enabled("area", area_id) is True
+    assert resp["result"]["config"]["enabled"] is True
+
+
+async def test_area_save_rejects_unknown_top_level_key(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={"scenes": [], "foo": 1},
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "foo" in resp["error"]["message"]
 
 
 async def test_area_save_rejects_area_id_not_in_registry(
@@ -1298,6 +1330,17 @@ async def test_day_config_save_round_trips(hass, installed, hass_ws_client) -> N
     }
 
 
+async def test_day_config_save_rejects_non_entity_ids(hass, installed, hass_ws_client) -> None:
+    for field in ("workday_sensor", "workday_calendar"):
+        resp = await _ws_send(
+            hass_ws_client,
+            type="ambience/conditions/day/config/save",
+            **{field: "not an entity id"},
+        )
+        assert resp["success"] is False, field
+        assert resp["error"]["code"] == "invalid_format", field
+
+
 # ---------------------------------------------------------------------------
 # C2: scene + config validation
 # ---------------------------------------------------------------------------
@@ -1316,6 +1359,8 @@ async def test_area_save_ignores_legacy_conditions_field(
         },
     )
     assert resp["success"] is True
+    # Tolerated on the wire, never merged into storage.
+    assert "conditions" not in hass.data[DOMAIN][DATA_STORE].scope_config("area", area_id)
 
 
 async def test_conditions_list_includes_weather(
@@ -1364,6 +1409,16 @@ async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) 
     assert "warnings" not in resp["result"]
     resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/weather/config/list")
     assert resp2["result"] == {"entity": "weather.home", "groups": custom}
+
+
+async def test_weather_config_save_rejects_non_entity_id(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/conditions/weather/config/save",
+        entity="not an entity id",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_format"
 
 
 async def test_weather_config_save_rejects_malformed_groups(
@@ -2351,7 +2406,7 @@ async def test_categories_save_rejects_empty_list(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
     """An empty list would wipe every category (the at-least-one invariant is
-    only restored by _ensure_categories on the next restart) — mirror the
+    only restored by the store's load-time defaults on the next restart) — mirror the
     delete path's last-category guard."""
     resp = await _ws_send(hass_ws_client, type="ambience/categories/save", categories=[])
     assert not resp["success"]
@@ -2620,7 +2675,15 @@ async def test_exposed_actions_save_reconciles_repairs_live(
         actions=[{"id": "light.turn_off", "label": "", "visible_fields": [], "defaults": {}}],
     )
     assert resp["success"] is True
-    # The save reconciled Repairs live — the issue now exists without a reload.
+    # The save reconciled Repairs live (debounced, so let the cooldown lapse) —
+    # the issue now exists without a reload.
+    from datetime import UTC, datetime, timedelta
+
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=5))
+    await hass.async_block_till_done()
     assert reg.async_get_issue(DOMAIN, "unexposed_action:light.turn_on") is not None
 
 

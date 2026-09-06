@@ -210,3 +210,11 @@ async def test_ws_scope_diagnostics_returns_bundle(hass, installed, hass_ws_clie
     assert resp["success"] is True
     assert resp["result"]["scope"]["scope_id"] == "a"
     assert len(resp["result"]["traces"]) == 1
+
+
+async def test_traces_list_rejects_boolean_limit(hass, installed, hass_ws_client) -> None:
+    # `True` is an int in Python; a bool must not slip through as limit 1.
+    resp = await _ws_send(hass_ws_client, type="ambience/traces/list", limit=True)
+
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_format"

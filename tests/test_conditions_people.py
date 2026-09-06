@@ -8,6 +8,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.people import PeopleCondition, PeopleSnapshot
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import DurationGate
 
 
@@ -372,7 +373,9 @@ def test_matches_empty_household() -> None:
     snap = _snap({})
     assert m.matches({"quant": "any", "where": "home"}, snap) is False
     assert m.matches({"quant": "everyone", "where": "home"}, snap) is False
-    assert m.matches({"quant": "nobody", "where": "home"}, snap) is True
+    # `nobody` is not vacuously true over an empty household: with no persons
+    # the location test is unobservable (see the ruling in _quantified).
+    assert m.matches({"quant": "nobody", "where": "home"}, snap) is False
 
 
 def test_matches_for_duration_met_any() -> None:
@@ -416,16 +419,29 @@ def test_validate_accepts_none_and_valid() -> None:
 
 
 def test_validate_rejects_non_dict() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeopleCondition().validate_predicate(42)
+    assert exc.value.translation_key == "people_predicate_not_object"
 
 
 def test_validate_rejects_bad_who() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="who"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": "person.a"})
-    with pytest.raises(ValueError, match="person"):
+    assert exc.value.translation_key == "people_who_not_list"
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": ["light.x"]})
+    assert exc.value.translation_key == "entity_id_wrong_domain"
+
+
+def test_validate_rejects_malformed_who_entity_id() -> None:
+    """A bare domain prefix or a spaced/capitalised object id is not a person
+    entity id — the prefix test this replaced accepted both."""
+    m = PeopleCondition()
+    for bad in ("person.", "person.Bad Id"):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"who": [bad]})
+        assert exc.value.translation_key == "entity_id_invalid"
 
 
 def test_validate_rejects_present_but_empty_who() -> None:
@@ -434,41 +450,49 @@ def test_validate_rejects_present_but_empty_who() -> None:
     # smuggle it past validation and silently run as "all persons". Omitting
     # `who` entirely (base mode = all persons) stays valid.
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="who"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"who": [], "quant": "any"})
+    assert exc.value.translation_key == "people_who_empty"
     m.validate_predicate({"quant": "any"})  # absent who is still fine
 
 
 def test_validate_rejects_bad_quant() -> None:
-    with pytest.raises(ValueError, match="quant"):
+    with pytest.raises(AmbienceError) as exc:
         PeopleCondition().validate_predicate({"quant": "some"})
+    assert exc.value.translation_key == "quant_invalid"
 
 
-def test_validate_rejects_bad_where() -> None:
-    m = PeopleCondition()
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": "office"})
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": 5})
-    # "away" is no longer a valid where (replaced by negate).
-    with pytest.raises(ValueError, match="where"):
-        m.validate_predicate({"where": "away"})
+@pytest.mark.parametrize(
+    "bad,key",
+    [
+        ("office", "entity_id_invalid"),
+        (5, "entity_id_invalid"),
+        ("away", "entity_id_invalid"),  # "away" is replaced by negate
+        ("zone.", "entity_id_invalid"),  # domain prefix alone names no entity
+        ("zone.Bad Id", "entity_id_invalid"),
+        ("light.kitchen", "entity_id_wrong_domain"),
+    ],
+)
+def test_validate_rejects_bad_where(bad: object, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
+        PeopleCondition().validate_predicate({"where": bad})
+    assert exc.value.translation_key == key
 
 
 def test_validate_rejects_non_bool_negate() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="negate"):
-        m.validate_predicate({"where": "home", "negate": "yes"})
-    with pytest.raises(ValueError, match="negate"):
-        m.validate_predicate({"where": "home", "negate": 1})
+    for bad in ("yes", 1):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"where": "home", "negate": bad})
+        assert exc.value.translation_key == "negate_invalid"
 
 
 def test_validate_rejects_bad_for() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate({"for": {"h": -1, "m": 0, "s": 0}})
-    with pytest.raises(ValueError, match="for"):
-        m.validate_predicate({"for": {"h": 0, "m": "five", "s": 0}})
+    for bad in ({"h": -1, "m": 0, "s": 0}, {"h": 0, "m": "five", "s": 0}):
+        with pytest.raises(AmbienceError) as exc:
+            m.validate_predicate({"for": bad})
+        assert exc.value.translation_key == "for_component_invalid"
 
 
 def test_describe_summarises_home_count() -> None:
@@ -768,6 +792,33 @@ async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -
     spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.duration_gates == frozenset()
+    assert spec.domains == frozenset({"person"})
+
+
+def test_trigger_deps_wildcard_who_watches_the_person_domain() -> None:
+    """A `who`-less predicate means "all persons", a set that changes while HA
+    runs — so it names the whole `person` domain, not just today's members."""
+    spec = PeopleCondition().trigger_deps({"quant": "nobody"})
+    assert spec.domains == frozenset({"person"})
+
+
+def test_trigger_deps_explicit_who_has_no_domain_watch() -> None:
+    """An explicit `who` list is a fixed set: no domain watch, so adding an
+    unrelated person doesn't churn the index."""
+    spec = PeopleCondition().trigger_deps({"who": ["person.alice"], "quant": "nobody"})
+    assert spec.domains == frozenset()
+
+
+async def test_trigger_deps_wildcard_with_no_persons_is_not_empty(hass: HomeAssistant) -> None:
+    """With no `person.*` entities yet the wildcard enumerates nothing, but the
+    spec must still be non-EMPTY (the domain watch) or the engine drops the
+    predicate and the first person added is never noticed."""
+    from custom_components.ambience.triggers import EMPTY
+
+    spec = PeopleCondition(hass=hass).trigger_deps({"quant": "nobody"})
+    assert spec.entities == frozenset()
+    assert spec.domains == frozenset({"person"})
+    assert spec != EMPTY
 
 
 def test_all_person_ids_returns_empty_without_hass() -> None:
@@ -874,8 +925,9 @@ def test_people_gate_states_empty_persons_anchor_is_now() -> None:
     pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
     key = m._gate_key(pred)
     gs = m.gate_states(pred, _snap(persons={}, now=now))
-    # 'nobody home' over zero tracked persons is vacuously true; anchor = now.
-    assert gs == {key: (True, now)}
+    # 'nobody home' over zero tracked persons is unobservable -> instant False;
+    # with no person changes to read, the anchor falls back to now.
+    assert gs == {key: (False, now)}
 
 
 def test_people_gate_states_empty_without_for() -> None:
@@ -1066,8 +1118,9 @@ def test_less_than_legacy_fallback_long_does_not_match() -> None:
 
 def test_validate_rejects_bad_for_mode() -> None:
     m = PeopleCondition()
-    with pytest.raises(ValueError, match="for_mode"):
+    with pytest.raises(AmbienceError) as exc:
         m.validate_predicate({"for_mode": "sometimes"})
+    assert exc.value.translation_key == "for_mode_invalid"
 
 
 def test_validate_accepts_valid_and_absent_for_mode() -> None:
@@ -1128,3 +1181,109 @@ def test_describe_no_people_tracked() -> None:
     # Empty `who` means "all persons"; with an empty snapshot there are none, so
     # describe reports that rather than an empty body.
     assert PeopleCondition().describe(_snap(), {"who": []}) == "no people tracked"
+
+
+def test_matches_no_persons_at_all_is_false_for_every_quantifier() -> None:
+    """With zero persons in the universe the location test is unobservable, so
+    every quantifier — `nobody` included — reports False rather than vacuous
+    truth. A 'nobody home' scene must not fire on a household HA knows nothing
+    about."""
+    m = PeopleCondition()
+    snap = _snap(persons={})
+    assert m.matches({"quant": "nobody", "where": "home"}, snap) is False
+    assert m.matches({"quant": "everyone", "where": "home"}, snap) is False
+    assert m.matches({"quant": "any", "where": "home"}, snap) is False
+    assert m.matches({"quant": "nobody", "where": "zone.work", "negate": True}, snap) is False
+
+
+# --- normalize_predicate: save-time default materialisation -------------------
+#
+# `quant`, `where`, `negate` and `for_mode` all have documented defaults that
+# every read used to re-derive inline. They are filled once at save; predicates
+# stored before that still omit them, so every read path must agree between the
+# two forms — including the duration-gate fingerprint, which keys engine tenure.
+
+_LEGACY_PEOPLE = {"who": ["person.a", "person.b"]}
+_NORM_PEOPLE = {
+    "who": ["person.a", "person.b"],
+    "quant": "any",
+    "where": "home",
+    "negate": False,
+    "for_mode": "at_least",
+}
+
+
+def test_normalize_predicate_fills_defaults() -> None:
+    assert PeopleCondition().normalize_predicate(_LEGACY_PEOPLE) == _NORM_PEOPLE
+
+
+def test_normalize_predicate_keeps_explicit_values() -> None:
+    pred = {
+        "who": ["person.a"],
+        "quant": "everyone",
+        "where": "zone.work",
+        "negate": True,
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    assert PeopleCondition().normalize_predicate(pred) == pred
+
+
+def test_normalize_predicate_never_invents_an_empty_who() -> None:
+    """A present-but-empty `who` is rejected by `validate_predicate` (it means
+    "specific mode, nobody picked"), so the wildcard form must keep the key
+    absent."""
+    assert "who" not in PeopleCondition().normalize_predicate({"where": "zone.work"})
+
+
+def test_normalize_predicate_passes_through_non_dicts() -> None:
+    m = PeopleCondition()
+    assert m.normalize_predicate(None) is None
+    assert m.normalize_predicate("nonsense") == "nonsense"
+
+
+def test_normalize_predicate_is_idempotent_and_pure() -> None:
+    m = PeopleCondition()
+    before = dict(_LEGACY_PEOPLE)
+    once = m.normalize_predicate(_LEGACY_PEOPLE)
+    assert m.normalize_predicate(once) == once
+    assert before == _LEGACY_PEOPLE  # input untouched
+
+
+def test_gate_key_identical_for_legacy_and_normalised() -> None:
+    """Engine tenure is keyed by the gate fingerprint; if materialising the
+    defaults changed the string, every running `for:` clock would reset on
+    upgrade."""
+    m = PeopleCondition()
+    assert m._gate_key(_LEGACY_PEOPLE) == m._gate_key(_NORM_PEOPLE)
+    explicit = {"quant": "nobody", "where": "zone.work", "negate": True}
+    assert m._gate_key(explicit) == m._gate_key(m.normalize_predicate(explicit))
+    wildcard = {"where": "home"}
+    assert m._gate_key(wildcard) == m._gate_key(m.normalize_predicate(wildcard))
+
+
+def test_contains_agrees_across_legacy_and_normalised_forms() -> None:
+    m = PeopleCondition()
+    inner_legacy = {"who": ["person.a"]}
+    inner_norm = m.normalize_predicate(inner_legacy)
+    baseline = m.contains(_LEGACY_PEOPLE, inner_legacy)
+    assert baseline is True
+    assert m.contains(_NORM_PEOPLE, inner_legacy) is baseline
+    assert m.contains(_LEGACY_PEOPLE, inner_norm) is baseline
+    assert m.contains(_NORM_PEOPLE, inner_norm) is baseline
+    assert m.contains(inner_norm, _LEGACY_PEOPLE) is m.contains(inner_legacy, _LEGACY_PEOPLE)
+
+
+def test_matches_describe_and_deps_agree_across_forms() -> None:
+    m = PeopleCondition()
+    snap = _snap(
+        persons={
+            "person.a": ("home", datetime(2026, 5, 25, 11, 0, tzinfo=UTC)),
+            "person.b": ("away", datetime(2026, 5, 25, 11, 0, tzinfo=UTC)),
+        },
+        names={"person.a": "A", "person.b": "B"},
+    )
+    assert m.matches(_NORM_PEOPLE, snap) == m.matches(_LEGACY_PEOPLE, snap)
+    assert m.describe(snap, _NORM_PEOPLE) == m.describe(snap, _LEGACY_PEOPLE)
+    assert m.trigger_deps(_NORM_PEOPLE) == m.trigger_deps(_LEGACY_PEOPLE)
+    assert m.gate_states(_NORM_PEOPLE, snap) == m.gate_states(_LEGACY_PEOPLE, snap)

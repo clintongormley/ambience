@@ -8,6 +8,9 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.ambience.conditions._common import (
+    RULE_NOT_FALSE,
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
     as_float,
     dur_seconds,
@@ -17,12 +20,15 @@ from custom_components.ambience.conditions._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    materialise_defaults,
     merge_intervals,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
+from custom_components.ambience.errors import AmbienceError
 
 
 def test_tenure_held_requires_recorded_since_at_or_past_window() -> None:
@@ -138,15 +144,16 @@ def test_validate_for_allows_none_and_valid() -> None:
     ],
 )
 def test_validate_for_rejects_bad_shapes(bad: object) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         validate_for(bad)
 
 
 def test_validate_for_rejects_unknown_keys() -> None:
     """`{"hours": 1}` (a plausible hand-edit) must not validate — dur_seconds
     would silently evaluate it to a 0-second gate."""
-    with pytest.raises(ValueError, match="h/m/s"):
+    with pytest.raises(AmbienceError) as exc:
         validate_for({"hours": 1})
+    assert exc.value.translation_key == "for_keys_invalid"
 
 
 def test_validate_for_mode_allows_none_and_valid() -> None:
@@ -166,7 +173,7 @@ def test_validate_for_mode_allows_none_and_valid() -> None:
     ],
 )
 def test_validate_for_mode_rejects_unknown_values(bad: object) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         validate_for_mode(bad)
 
 
@@ -190,3 +197,103 @@ def test_as_float_rejects_non_finite() -> None:
     assert as_float(float("nan")) is None
     assert as_float(float("inf")) is None
     assert as_float(float("-inf")) is None
+
+
+# ── validate_entity_ids / translatable validator errors ───────────────────────
+
+
+def test_validate_for_raises_translatable_keys() -> None:
+    """Every `for`/`for_mode` rejection carries a translation key, not prose."""
+    with pytest.raises(AmbienceError) as exc:
+        validate_for("not-a-dict")
+    assert exc.value.translation_key == "for_not_object"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for({"hours": 1})
+    assert exc.value.translation_key == "for_keys_invalid"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for({"h": -1})
+    assert exc.value.translation_key == "for_component_invalid"
+    with pytest.raises(AmbienceError) as exc:
+        validate_for_mode("at_most")
+    assert exc.value.translation_key == "for_mode_invalid"
+
+
+def test_validate_entity_ids_accepts_well_formed_ids() -> None:
+    validate_entity_ids(["sensor.hall_lux", "sensor.x2"], "sensor", key="lux_sensors_not_list")
+    validate_entity_ids([], "sensor", key="lux_sensors_not_list")
+    # No domain: only the entity-id grammar is enforced.
+    validate_entity_ids(["light.kitchen", "person.ann"], key="unavailable_pick_entity")
+
+
+def test_validate_entity_ids_rejects_non_list() -> None:
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids("sensor.hall", "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "lux_sensors_not_list"
+
+
+@pytest.mark.parametrize("bad", ["sensor.", "sensor", "", "sensor.Bad Id", 7, None])
+def test_validate_entity_ids_rejects_malformed_ids(bad: object) -> None:
+    """A domain prefix alone (`sensor.`) or a space/uppercase in the object id is
+    not a valid entity id — the old `startswith` test let all of these through."""
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids([bad], "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "entity_id_invalid"
+
+
+def test_validate_entity_ids_rejects_wrong_domain() -> None:
+    with pytest.raises(AmbienceError) as exc:
+        validate_entity_ids(["person.ann"], "sensor", key="lux_sensors_not_list")
+    assert exc.value.translation_key == "entity_id_wrong_domain"
+    assert exc.value.translation_placeholders == {"entity_id": "person.ann", "domain": "sensor"}
+
+
+# --- materialise_defaults -----------------------------------------------------
+
+_DEFAULTS_TABLE = {
+    "quant": (RULE_OR, "any"),
+    "negate": (RULE_TRUTHY, False),
+    "occupied": (RULE_NOT_FALSE, True),
+}
+
+
+def test_materialise_defaults_applies_each_rule() -> None:
+    assert materialise_defaults({}, _DEFAULTS_TABLE) == {
+        "quant": "any",
+        "negate": False,
+        "occupied": True,
+    }
+    # Explicit nulls take the same defaults as absent keys...
+    assert materialise_defaults(
+        {"quant": None, "negate": None, "occupied": None}, _DEFAULTS_TABLE
+    ) == {"quant": "any", "negate": False, "occupied": True}
+    # ...except an explicit False for a NOT_FALSE key, which is a real value.
+    assert materialise_defaults({"occupied": False}, _DEFAULTS_TABLE)["occupied"] is False
+
+
+def test_materialise_defaults_keeps_stated_values_and_key_order() -> None:
+    pred = {"sensors": ["binary_sensor.a"], "negate": True, "quant": "all"}
+    out = materialise_defaults(pred, _DEFAULTS_TABLE)
+    assert out == {**pred, "occupied": True}
+    # Stated keys keep their position; filled ones follow in table order.
+    assert list(out) == ["sensors", "negate", "quant", "occupied"]
+
+
+def test_materialise_defaults_passes_non_dicts_through() -> None:
+    assert materialise_defaults(None, _DEFAULTS_TABLE) is None
+    assert materialise_defaults("nonsense", _DEFAULTS_TABLE) == "nonsense"
+
+
+def test_materialise_defaults_returns_the_same_object_when_nothing_changes() -> None:
+    """The common case after save: the stored predicate already states every
+    default, so the fill must not allocate a copy per read."""
+    pred = {"sensors": ["binary_sensor.a"], "quant": "any", "negate": False, "occupied": True}
+    assert materialise_defaults(pred, _DEFAULTS_TABLE) is pred
+
+
+def test_materialise_defaults_copies_when_a_value_is_not_the_canonical_type() -> None:
+    """A hand-edited `1` for a bool key is not `True`; the fast path must not
+    wave it through into the stored form."""
+    pred = {"quant": "any", "negate": 1, "occupied": True}
+    out = materialise_defaults(pred, _DEFAULTS_TABLE)
+    assert out is not pred
+    assert out["negate"] is True

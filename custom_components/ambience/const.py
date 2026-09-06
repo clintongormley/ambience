@@ -1,13 +1,18 @@
-"""Constants for the Ambience integration."""
+"""Constants for the Ambience integration.
+
+Leaf module: it imports nothing from this package, at runtime or under
+TYPE_CHECKING — not even behind a `if TYPE_CHECKING:` guard, which CodeQL counts
+as a real import edge. Nearly every other module imports const, so a package
+import here closes an import cycle: const → store → const directly, and the
+longer ones running through errors, scopes and the conditions.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
-    from .store import AmbienceStore
 
 DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
@@ -156,9 +161,7 @@ HISTORY_LIMIT = 30
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
 # MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in
-# store.py, their only consumer — keeping them out of const avoids a CodeQL
-# py/unsafe-cyclic-import false positive (const has a TYPE_CHECKING-only import of
-# store for get_store's annotation).
+# store.py, their only consumer.
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
@@ -207,9 +210,27 @@ DATA_CARD_RESOURCE_URL = "card_resource_url"
 DATA_FRONTEND_HASH = "frontend_hash"
 DATA_FRONTEND_VERSION = "frontend_version"
 
+# Top-level hass.data key (deliberately NOT inside hass.data[DOMAIN], which
+# unload pops) holding the shipped AI guide as ``(version, text)``. The markdown
+# is immutable for a given install, so it is read from disk once per process and
+# re-read only when the running version changes — an entry reload must not cost
+# another read of the large file.
+DATA_AI_GUIDE = "ambience_ai_guide"
 
-def get_store(hass: HomeAssistant) -> AmbienceStore | None:
+# Top-level hass.data key (deliberately NOT inside hass.data[DOMAIN], which
+# unload pops) marking that the panel's static path is registered. The aiohttp
+# resource it creates lives for the life of the HA process and cannot be
+# removed, so it must be registered exactly once however often the entry
+# reloads.
+DATA_STATIC_PATHS_REGISTERED = "ambience_static_paths_registered"
+
+
+def get_store(hass: HomeAssistant) -> Any:
     """The Ambience store for this hass, or None when the integration isn't set
     up yet. Tolerant lookup for read paths that may run before/around setup;
-    paths that require the store to exist still index ``hass.data`` directly."""
+    paths that require the store to exist still index ``hass.data`` directly.
+
+    Typed ``Any`` rather than ``AmbienceStore | None``: naming the class would
+    need an import of ``.store``, which this leaf module must not have.
+    """
     return hass.data.get(DOMAIN, {}).get(DATA_STORE)

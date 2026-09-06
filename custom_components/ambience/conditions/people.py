@@ -5,27 +5,51 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..errors import AmbienceError
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
+    RULE_OR,
+    RULE_TRUTHY,
     UNAVAILABLE,
+    NormalisesPredicate,
+    PredicateDefaults,
     dur_seconds,
     fmt_duration,
     for_comparator_symbol,
     for_contains,
     for_elapsed_satisfied,
+    materialise_defaults,
     tenure_held,
     tenure_within,
+    validate_entity_ids,
     validate_for,
     validate_for_mode,
 )
 
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
+
+
+# `who` is deliberately absent: a present-but-empty list means "specific mode,
+# nobody picked" and ``validate_predicate`` rejects it, so the all-persons
+# wildcard must keep the key off.
+_PREDICATE_DEFAULTS: PredicateDefaults = {
+    "quant": (RULE_OR, "any"),
+    "where": (RULE_OR, _HOME),
+    "negate": (RULE_TRUTHY, False),
+    "for_mode": (RULE_OR, "at_least"),
+}
+
+# Every read path funnels through here — ``_gate_key`` included, whose string
+# keys the engine's tenure clocks — so a predicate stored before the defaults
+# were materialised at save reads identically to one stored after.
+_norm = partial(materialise_defaults, defaults=_PREDICATE_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -59,7 +83,7 @@ class PeopleSnapshot:
     tenure: Mapping[str, datetime] | None = None
 
 
-class PeopleCondition:
+class PeopleCondition(NormalisesPredicate):
     """Match on who is (not) at home / in a named zone.
 
     Predicate (scoped quantifier):
@@ -82,6 +106,7 @@ class PeopleCondition:
     input = "people_predicate"
     # Between state (950) and day (900): a moderately specific world-fact.
     priority = 925
+    _DEFAULTS = _PREDICATE_DEFAULTS
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
@@ -131,12 +156,13 @@ class PeopleCondition:
             return True
         if not isinstance(predicate, dict):
             return False
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        seconds = dur_seconds(predicate.get("for"))
-        mode = predicate.get("for_mode")
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        quant = pred["quant"]
+        where = pred["where"]
+        negate = pred["negate"]
+        seconds = dur_seconds(pred.get("for"))
+        mode = pred["for_mode"]
 
         if seconds > 0 and snapshot.tenure is not None:
             # Engine-tracked predicate tenure: evaluate the instant test
@@ -145,7 +171,7 @@ class PeopleCondition:
             if not self._quantified(who, quant, where, negate, 0.0, snapshot):
                 return False
             gate = tenure_within if mode == "less_than" else tenure_held
-            return gate(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+            return gate(snapshot.tenure, self._gate_key(pred), snapshot.now, seconds)
         return self._quantified(who, quant, where, negate, seconds, snapshot, mode)
 
     def _quantified(
@@ -162,6 +188,13 @@ class PeopleCondition:
         tenure (the legacy/fallback clock). `seconds=0` yields the instant test.
         `mode` ("at_least" default / "less_than") selects the `for` comparator."""
         person_ids = list(who) if who else list(snapshot.persons)
+        if not person_ids:
+            # No persons to test: the location test is unobservable, so every
+            # quantifier is False. `nobody` is deliberately NOT vacuously true
+            # here — a "nobody home" scene must not fire on a Home Assistant
+            # that tracks no persons at all, where there is no evidence either
+            # way.
+            return False
 
         def holds(pid: str, want_at: bool) -> bool:
             cur = snapshot.persons.get(pid)
@@ -182,7 +215,7 @@ class PeopleCondition:
             )
 
         if quant == "everyone":
-            return bool(person_ids) and all(holds(p, True) for p in person_ids)
+            return all(holds(p, True) for p in person_ids)
         if quant == "nobody":
             return all(holds(p, False) for p in person_ids)
         # "any" (default)
@@ -194,21 +227,18 @@ class PeopleCondition:
 
         Same quantifier / location / negate / who-set anywhere in the config →
         same key → shared tenure clock."""
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = int(bool(predicate.get("negate")))
-        who = predicate.get("who") or []
+        pred = _norm(predicate)
+        who = pred.get("who") or []
         who_part = "|".join(sorted(who)) if who else "*"
-        return f"{quant}:{where}:{negate}:{who_part}"
+        return f"{pred['quant']}:{pred['where']}:{int(pred['negate'])}:{who_part}"
 
     def _gate_label(self, predicate: dict) -> str:
         """Human-readable instant description, for a multi-person DURATION trace
         cause (e.g. "nobody home", "anyone not in Work")."""
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
+        pred = _norm(predicate)
+        where = pred["where"]
         place = "home" if where == _HOME else f"in {where}"
-        return f"{self._quant_word(quant)} {'not ' if negate else ''}{place}"
+        return f"{self._quant_word(pred['quant'])} {'not ' if pred['negate'] else ''}{place}"
 
     def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
@@ -221,15 +251,13 @@ class PeopleCondition:
         seconds = dur_seconds(predicate.get("for"))
         if seconds <= 0:
             return {}
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        instant = self._quantified(who, quant, where, negate, 0.0, snapshot)
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        instant = self._quantified(who, pred["quant"], pred["where"], pred["negate"], 0.0, snapshot)
         person_ids = list(who) if who else list(snapshot.persons)
         changes = [cur[1] for pid in person_ids if (cur := snapshot.persons.get(pid)) is not None]
         anchor = max(changes) if changes else snapshot.now
-        return {self._gate_key(predicate): (instant, anchor)}
+        return {self._gate_key(pred): (instant, anchor)}
 
     # --- trigger dependencies -------------------------------------------
 
@@ -238,8 +266,14 @@ class PeopleCondition:
             return EMPTY
         who = predicate.get("who") or []
         # Empty/absent `who` means "all persons": enumerate the current person.*
-        # entities the same way snapshot() does.
+        # entities the same way snapshot() does. That enumeration is a point-in-time
+        # answer, so a wildcard also depends on the `person` domain's MEMBERSHIP —
+        # the engine watches it and rebuilds when a person is added or removed,
+        # which re-enumerates this spec. Without it a person created after startup
+        # is neither watched nor counted, and "nobody home" stays true while they
+        # are home.
         persons = [p for p in who if isinstance(p, str) and p] if who else self._all_person_ids()
+        domains = frozenset() if who else frozenset({"person"})
         seconds = dur_seconds(predicate.get("for"))
         gates = (
             frozenset(
@@ -255,7 +289,7 @@ class PeopleCondition:
             if seconds > 0
             else frozenset()
         )
-        return TriggerSpec(entities=frozenset(persons), duration_gates=gates)
+        return TriggerSpec(entities=frozenset(persons), domains=domains, duration_gates=gates)
 
     def _all_person_ids(self) -> list[str]:
         hass = self._hass
@@ -349,12 +383,13 @@ class PeopleCondition:
             return self._describe_snapshot(snapshot)
         if not isinstance(predicate, dict):
             return None
-        who = predicate.get("who") or []
-        quant = predicate.get("quant") or "any"
-        where = predicate.get("where") or _HOME
-        negate = bool(predicate.get("negate"))
-        seconds = dur_seconds(predicate.get("for"))
-        mode = predicate.get("for_mode")
+        pred = _norm(predicate)
+        who = pred.get("who") or []
+        quant = pred["quant"]
+        where = pred["where"]
+        negate = pred["negate"]
+        seconds = dur_seconds(pred.get("for"))
+        mode = pred["for_mode"]
         # Empty `who` means "all persons" (a real constraint, unlike occupancy's
         # empty `sensors` wildcard), so enumerate the snapshot's persons.
         person_ids = list(who) if who else list(snapshot.persons)
@@ -400,7 +435,7 @@ class PeopleCondition:
             rel = for_comparator_symbol(mode)
             prefix += f" for {rel}{fmt_duration(seconds)}"
         if tenure_mode:
-            since = snapshot.tenure.get(self._gate_key(predicate))
+            since = snapshot.tenure.get(self._gate_key(pred))
             prefix += (
                 f" (held {fmt_duration((snapshot.now - since).total_seconds())})"
                 if since
@@ -441,32 +476,24 @@ class PeopleCondition:
         if predicate is None:
             return
         if not isinstance(predicate, dict):
-            raise ValueError("people predicate must be a dict")
+            raise AmbienceError("people_predicate_not_object")
         who = predicate.get("who")
         if who is not None:
-            if not isinstance(who, list):
-                raise ValueError("`who` must be a list of person entity_ids")
-            if not who:
+            if isinstance(who, list) and not who:
                 # Present-but-empty = "specific mode, nobody picked" (incomplete).
                 # Omit `who` entirely to mean all tracked persons; this keeps the
                 # backend in step with the editor, which flags an empty selection.
-                raise ValueError(
-                    "`who` must list at least one person, or be omitted for all persons"
-                )
-            for p in who:
-                if not isinstance(p, str) or not p.startswith("person."):
-                    raise ValueError(f"`who` entries must be person.* entity_ids, got {p!r}")
+                raise AmbienceError("people_who_empty")
+            validate_entity_ids(who, "person", key="people_who_not_list")
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
-            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+            raise AmbienceError("quant_invalid", quants=list(_QUANTS), value=quant)
         where = predicate.get("where")
-        if where is not None and (
-            not isinstance(where, str) or (where != _HOME and not where.startswith("zone."))
-        ):
-            raise ValueError(f"`where` must be 'home' or a zone.* id, got {where!r}")
+        if where is not None and where != _HOME:
+            validate_entity_ids([where], "zone", key="people_where_invalid")
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
-            raise ValueError(f"`negate` must be a bool, got {negate!r}")
+            raise AmbienceError("negate_invalid", value=negate)
         validate_for(predicate.get("for"))
         validate_for_mode(predicate.get("for_mode"))
 
@@ -482,20 +509,21 @@ class PeopleCondition:
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
             return False
+        o, i = _norm(outer), _norm(inner)
         # Comparable only when the positive location AND the negate flag match:
         # a different `negate` is a different (disjoint) match-set.
-        if (outer.get("where") or _HOME) != (inner.get("where") or _HOME):
+        if o["where"] != i["where"]:
             return False
-        if bool(outer.get("negate")) != bool(inner.get("negate")):
+        if o["negate"] != i["negate"]:
             return False
         # The `for`/`for_mode` duration axis must permit inner ⊆ outer
         # (at_least: longer is stricter; less_than: shorter is stricter).
-        if not for_contains(outer, inner):
+        if not for_contains(o, i):
             return False
-        qo = outer.get("quant") or "any"
-        qi = inner.get("quant") or "any"
-        so = self._who_set(outer.get("who"))
-        si = self._who_set(inner.get("who"))
+        qo = o["quant"]
+        qi = i["quant"]
+        so = self._who_set(o.get("who"))
+        si = self._who_set(i.get("who"))
         if qo == "any" and qi == "any":
             return self._subset(si, so)
         if qo == "everyone" and qi == "everyone":

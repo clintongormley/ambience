@@ -49,6 +49,10 @@ class TriggerSpec:
     """What a predicate depends on, for auto re-evaluation.
 
     - ``entities``: entity_ids to watch via state-change events.
+    - ``domains``: whole domains whose membership the predicate depends on — a
+      wildcard predicate ("all persons") enumerates today's entities into
+      ``entities`` but that set goes stale, so the engine also watches these
+      domains for entities appearing/disappearing and rebuilds the index.
     - ``duration_gates``: the predicate's ``for:`` gates (see ``DurationGate``).
       The engine tracks each gate's instant-truth tenure and re-checks the
       predicate at ``since + seconds`` so a condition that only becomes true
@@ -65,6 +69,7 @@ class TriggerSpec:
     """
 
     entities: frozenset[str] = frozenset()
+    domains: frozenset[str] = frozenset()
     duration_gates: frozenset[DurationGate] = frozenset()
     clock_times: frozenset[tuple[int, int]] = frozenset()
     sun_events: frozenset[tuple[str, int]] = frozenset()
@@ -79,6 +84,7 @@ EMPTY = TriggerSpec()
 def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
     """Union all set fields and OR all boolean fields across ``specs``."""
     entities: set[str] = set()
+    domains: set[str] = set()
     duration_gates: set[DurationGate] = set()
     clock_times: set[tuple[int, int]] = set()
     sun_events: set[tuple[str, int]] = set()
@@ -87,6 +93,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
     opaque = False
     for spec in specs:
         entities |= spec.entities
+        domains |= spec.domains
         duration_gates |= spec.duration_gates
         clock_times |= spec.clock_times
         sun_events |= spec.sun_events
@@ -95,6 +102,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
         opaque = opaque or spec.opaque
     return TriggerSpec(
         entities=frozenset(entities),
+        domains=frozenset(domains),
         duration_gates=frozenset(duration_gates),
         clock_times=frozenset(clock_times),
         sun_events=frozenset(sun_events),

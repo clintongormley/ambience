@@ -19,8 +19,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .conditions._common import dur_seconds
-from .conditions.script import ScriptSnapshot
-from .conditions.template import TemplateSnapshot
+from .conditions._opaque import OpaquePrecomputedCondition
 from .conditions.weather import WEATHER_CONDITIONS
 from .const import DATA_CONDITIONS, DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
@@ -41,10 +40,19 @@ from .trace import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Conditions whose predicates evaluate live (call a real script / render a
-# template) and so cannot honour entity overrides. The simulator drives them
-# with explicit per-predicate verdicts instead of running them.
-_OPAQUE_CONDITIONS = ("script", "template")
+
+def _opaque_conditions(
+    conditions: dict[str, Any],
+) -> dict[str, OpaquePrecomputedCondition[Any]]:
+    """The registered conditions whose predicates evaluate live (call a real
+    script / render a template) and so cannot honour entity overrides. The
+    simulator drives them with explicit per-predicate verdicts instead of
+    running them; subclassing the opaque base is what declares that."""
+    return {
+        name: condition
+        for name, condition in conditions.items()
+        if isinstance(condition, OpaquePrecomputedCondition)
+    }
 
 
 @dataclass(frozen=True)
@@ -140,18 +148,6 @@ def _build_override_states(hass: HomeAssistant, world: SimulatedWorld) -> dict[s
     return overrides
 
 
-def _verdict_snapshot(condition_key: str, verdicts: dict[str, bool]) -> Any:
-    """Build an opaque condition's snapshot from forced verdicts.
-
-    Both script and template snapshots are a `results: dict[str, bool]` looked
-    up by `matches()`, so a verdict map is a complete snapshot."""
-    if condition_key == "script":
-        return ScriptSnapshot(results=dict(verdicts))
-    if condition_key == "template":
-        return TemplateSnapshot(results=dict(verdicts))
-    raise AmbienceError("no_verdict_snapshot", condition_key=condition_key)
-
-
 async def build_simulated_snapshots(
     hass: HomeAssistant,
     world: SimulatedWorld,
@@ -161,9 +157,9 @@ async def build_simulated_snapshots(
     """Snapshot every registered condition against the simulated world.
 
     Entity-reading conditions snapshot against the overlay (with injected `now`);
-    opaque conditions (script/template) are built from `world.verdicts` so no real
-    script runs and overrides are honoured. A live condition whose snapshot raises
-    degrades to None (same policy as `async_snapshot_all`).
+    opaque conditions are built from `world.verdicts` so no real script runs and
+    overrides are honoured. A live condition whose snapshot raises degrades to
+    None (same policy as `async_snapshot_all`).
 
     `referenced` (condition_key -> entity_ids the simulated scenes use, from
     `scope_triggers.referenced_entities`) narrows sensor-backed conditions to
@@ -175,7 +171,8 @@ async def build_simulated_snapshots(
         hass,
         _SimulatedStates(hass.states, _build_override_states(hass, world)),
     )
-    live = {name: m for name, m in conditions.items() if name not in _OPAQUE_CONDITIONS}
+    opaque = _opaque_conditions(conditions)
+    live = {name: m for name, m in conditions.items() if name not in opaque}
 
     def _entities(name: str) -> frozenset[str] | None:
         return None if referenced is None else referenced.get(name, frozenset())
@@ -191,9 +188,8 @@ async def build_simulated_snapshots(
             snapshots[name] = None
         else:
             snapshots[name] = result
-    for name in conditions:
-        if name in _OPAQUE_CONDITIONS:
-            snapshots[name] = _verdict_snapshot(name, world.verdicts.get(name, {}))
+    for name, condition in opaque.items():
+        snapshots[name] = condition.snapshot_from_results(world.verdicts.get(name, {}))
     return snapshots
 
 
@@ -379,54 +375,36 @@ def simulate_inputs_entities(
     ]
 
 
-def _verdict_identity(
-    condition: Any, condition_key: str, predicate: dict[str, Any], scene: dict[str, Any]
-) -> tuple[str, str | None, str]:
-    """(result_key, entity_id|None, label) for an opaque predicate's verdict knob.
-
-    The result key comes from the condition's own `result_key()` so the simulator
-    and `matches()` always agree on the identity."""
-    key = condition.result_key(predicate) if condition is not None else ""
-    if condition_key == "script":
-        script = predicate.get("script")
-        label = script if isinstance(script, str) else "script"
-        return key, (script if isinstance(script, str) else None), label
-    return key, None, (scene.get("name") or "Template")
-
-
 async def _verdict_knobs(
     hass: HomeAssistant, conditions: dict[str, Any], category_cfg: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """One true/false knob per opaque (script/template) predicate in the category,
-    defaulting to its live verdict (computed once per opaque condition)."""
+    """One true/false knob per opaque predicate in the category, defaulting to
+    its live verdict (computed once per opaque condition)."""
+    opaque = _opaque_conditions(conditions)
     live_snaps: dict[str, Any] = {}
-    for name in _OPAQUE_CONDITIONS:
-        condition = conditions.get(name)
-        if condition is not None:
-            try:
-                live_snaps[name] = await condition.snapshot(hass)
-            except Exception as exc:  # noqa: BLE001 — a failing live verdict defaults to False
-                _LOGGER.warning("ambience: live verdict snapshot for %r failed: %s", name, exc)
-                live_snaps[name] = None
+    for name, condition in opaque.items():
+        try:
+            live_snaps[name] = await condition.snapshot(hass)
+        except Exception as exc:  # noqa: BLE001 — a failing live verdict defaults to False
+            _LOGGER.warning("ambience: live verdict snapshot for %r failed: %s", name, exc)
+            live_snaps[name] = None
     knobs: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for scene in category_cfg["scenes"]:
         when = scene.get("when") or {}
-        for name in _OPAQUE_CONDITIONS:
+        for name, condition in opaque.items():
             predicate = when.get(name)
             if not isinstance(predicate, dict):
                 continue
-            condition = conditions.get(name)
-            key, entity_id, label = _verdict_identity(condition, name, predicate, scene)
+            # The result key comes from the condition's own `result_key()` so the
+            # simulator and `matches()` always agree on a predicate's identity.
+            key = condition.result_key(predicate)
+            entity_id, label = condition.verdict_label(predicate, scene)
             if (name, key) in seen:
                 continue
             seen.add((name, key))
             snap = live_snaps.get(name)
-            live_value = (
-                bool(condition.matches(predicate, snap))
-                if (condition and snap is not None)
-                else False
-            )
+            live_value = bool(condition.matches(predicate, snap)) if snap is not None else False
             knob: dict[str, Any] = {
                 "kind": "verdict",
                 "condition": name,
@@ -471,27 +449,10 @@ def sun_anchors(hass: HomeAssistant, date_str: str) -> dict[str, str | None]:
     # anchor_datetimes reads only now's local *date*; a tz-aware local noon
     # materialises the date unambiguously (no DST-fold edge at noon).
     now = parsed.replace(hour=12, tzinfo=dt_util.DEFAULT_TIME_ZONE)
-    resolved = anchor_datetimes(hass, now, allow_missing=True)
+    resolved = anchor_datetimes(hass, now)
     return {
         name: (resolved[name].isoformat() if name in resolved else None) for name in ANCHOR_NAMES
     }
-
-
-def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:
-    try:
-        return scope_display_name(hass, scope_kind, scope_id)
-    except Exception:  # noqa: BLE001 — test doubles may lack registries
-        return None
-
-
-def _safe_category_name(hass: HomeAssistant, category: str) -> str | None:
-    # category_names() already tolerates a missing store (returns {}); this guard
-    # only protects against a present-but-broken store, and keeps symmetry with
-    # _safe_scope_name.
-    try:
-        return category_names(hass).get(category)
-    except Exception:  # noqa: BLE001 — test doubles may lack a full store
-        return None
 
 
 def _simulate_outcome(
@@ -545,8 +506,8 @@ async def run_simulation(
     explanation = evaluate_explained(candidates, snapshots, conditions, describe=True)
 
     switch_state = _switch_state(hass, scope_kind, scope_id)
-    scope_name = _safe_scope_name(hass, scope_kind, scope_id)
-    category_name = _safe_category_name(hass, category)
+    scope_name = scope_display_name(hass, scope_kind, scope_id)
+    category_name = category_names(hass).get(category)
 
     winner = explanation.winner_index
     scene = candidates[winner] if winner is not None else None

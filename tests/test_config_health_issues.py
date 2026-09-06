@@ -9,7 +9,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 
-from custom_components.ambience.config_health_issues import reconcile_issues
+from custom_components.ambience.config_health_issues import (
+    reconcile_issues,
+    referenced_entity_ids,
+)
 from custom_components.ambience.const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 
 
@@ -203,6 +206,45 @@ async def test_reconcile_noops_when_domain_data_missing(hass, installed) -> None
     (e.g. during the unload race)."""
     hass.data.pop(DOMAIN, None)
     reconcile_issues(hass)  # must not raise
+
+
+async def test_referenced_entity_ids_collects_monitored_and_acted(hass, installed, area_id) -> None:
+    """The registry-filter set is every entity an enabled scene watches or acts on."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "live",
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.watched",
+                            "value": "on",
+                        }
+                    },
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.acted"]}],
+                },
+                {
+                    "name": "off",
+                    "enabled": False,
+                    "when": {},
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.disabled"]}],
+                },
+            ]
+        },
+    )
+    refs = referenced_entity_ids(hass)
+    assert "light.acted" in refs
+    assert "binary_sensor.watched" in refs
+    assert "light.disabled" not in refs  # a disabled scene can never win
+
+
+async def test_referenced_entity_ids_empty_when_domain_data_missing(hass, installed) -> None:
+    """Same unload race as reconcile_issues: no data, no references, no raise."""
+    hass.data.pop(DOMAIN, None)
+    assert referenced_entity_ids(hass) == frozenset()
 
 
 async def test_reconcile_caches_overlap_set(hass, installed, area_id) -> None:

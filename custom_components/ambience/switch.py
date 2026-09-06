@@ -30,6 +30,7 @@ from .const import (
 )
 from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
+from .scopes import iter_scope_kinds, scope_spec
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,12 +78,22 @@ def _get_scope_device(
     return lookup_device_by_identifier(dev_reg, _device_identifier(scope_kind, scope_id), entry_id)
 
 
-class _CancellableTimer:
-    """Wraps the unsubscribe callable from async_track_point_in_utc_time.
+def _parse_off_at(iso: str | None) -> datetime | None:
+    """A stored pause timestamp as a UTC-aware datetime, or None when absent or
+    unusable. Normalised to UTC so it can be compared and subtracted against
+    ``dt_util.utcnow()`` even if a naive timestamp ever reaches the store."""
+    if not iso:
+        return None
+    try:
+        return dt_util.as_utc(datetime.fromisoformat(iso))
+    except (ValueError, TypeError):
+        return None
 
-    Provides a `.cancel()` / `.cancelled()` interface so test code can
-    inspect timer state the same way it would with asyncio.TimerHandle.
-    """
+
+class _CancellableTimer:
+    """Wraps the unsubscribe callable from async_track_point_in_utc_time behind
+    the `.cancel()` / `.cancelled()` interface of an asyncio.TimerHandle, so a
+    cancel is idempotent and an already-cancelled timer is recognisable."""
 
     def __init__(self, unsub_fn: Any) -> None:
         self._unsub = unsub_fn
@@ -100,9 +111,23 @@ class _CancellableTimer:
 def switch_unique_id(scope_kind: str, scope_id: str | None) -> str:
     """Deterministic unique_id for a scope's switch entity. Shared with the
     websocket layer so it can look the entity up to enable/disable it."""
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return "ambience_switch_house"
     return f"ambience_switch_{scope_kind}_{scope_id}"
+
+
+def switch_registry_entry(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None
+) -> er.RegistryEntry | None:
+    """The entity-registry entry for a scope's switch, or None when the switch
+    was never registered. A switch the user disabled still HAS an entry — only
+    its live entity is gone — so callers distinguish the two by the entry's
+    `disabled_by`."""
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id(
+        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
+    )
+    return ent_reg.async_get(entity_id) if entity_id is not None else None
 
 
 def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
@@ -115,16 +140,18 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     """
     if unique_id == "ambience_switch_house":
         return ("house", None)
-    for scope_kind in ("area", "floor"):
-        prefix = f"ambience_switch_{scope_kind}_"
+    for spec in iter_scope_kinds():
+        if not spec.has_id:
+            continue
+        prefix = f"ambience_switch_{spec.kind}_"
         if unique_id.startswith(prefix):
-            return (scope_kind, unique_id[len(prefix) :])
+            return (spec.kind, unique_id[len(prefix) :])
     return None
 
 
 def _device_identifier(scope_kind: str, scope_id: str | None) -> tuple[str, str]:
     """The single device-registry identifier for a scope's device."""
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return (DOMAIN, "ambience")
     return (DOMAIN, f"{scope_kind}_{scope_id}")
 
@@ -134,14 +161,15 @@ def _device_identifiers(scope_kind: str, scope_id: str | None) -> set[tuple[str,
     return {_device_identifier(scope_kind, scope_id)}
 
 
+# A floor's entity_id carries an extra `_floor` segment so a floor and an area
+# with the same name don't collide on the slug.
+_ENTITY_ID_INFIX = {"floor": "_floor"}
+
+
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
-    if scope_kind == "house":
+    if not scope_spec(scope_kind).has_id:
         return "switch.house_ambience"
-    if scope_kind == "floor":
-        # Suffix with `_floor_ambience` so a floor and an area with the same
-        # name don't collide on the entity_id slug.
-        return f"switch.{slugify(display_name)}_floor_ambience"
-    return f"switch.{slugify(display_name)}_ambience"
+    return f"switch.{slugify(display_name)}{_ENTITY_ID_INFIX.get(scope_kind, '')}_ambience"
 
 
 def _remove_scope_device(
@@ -159,13 +187,11 @@ def make_scope_switch(
 ) -> AmbienceScopeSwitch:
     """Build a switch for a scope, resolving its display name from the registry.
     Used by the platform setup and the runtime create-on-enable path."""
-    if scope_kind == "house":
+    spec = scope_spec(scope_kind)
+    if spec.registry_lookup is None:
         return AmbienceScopeSwitch("house", None, "house")
-    if scope_kind == "floor":
-        floor = fr.async_get(hass).async_get_floor(scope_id)
-        return AmbienceScopeSwitch("floor", scope_id, floor.name if floor else str(scope_id))
-    area = ar.async_get(hass).async_get_area(scope_id)
-    return AmbienceScopeSwitch("area", scope_id, area.name if area else str(scope_id))
+    entry = spec.registry_lookup(hass, scope_id)
+    return AmbienceScopeSwitch(scope_kind, scope_id, entry.name if entry else str(scope_id))
 
 
 def _desired_switch_scopes(hass: HomeAssistant, store: Any) -> set[tuple[str, str | None]]:
@@ -325,16 +351,29 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     # ---- on/off ----
 
     async def async_turn_on(self, **_: Any) -> None:
+        # Read our own pause time before _apply_on clears it: a descendant
+        # paused *after* this scope was paused made a later, more specific
+        # choice, so it keeps its own timer instead of resuming with us.
+        paused_at = self._off_at()
         await self._apply_on()
         for sw in self._descendant_switches():
-            if not sw.is_on:
-                await sw._apply_on()
+            if sw.is_on:
+                continue
+            own = sw._off_at()
+            if paused_at is not None and own is not None and own > paused_at:
+                continue
+            await sw._apply_on()
 
     async def async_turn_off(self, **_: Any) -> None:
-        await self._apply_off()
+        # One pause decision, one timestamp: every switch this cascade pauses is
+        # stamped with the initiating switch's time. Re-reading the clock per
+        # descendant would make each of them microseconds "newer" than us, and
+        # async_turn_on's skip would then strand the whole subtree off.
+        paused_at = dt_util.utcnow()
+        await self._apply_off(paused_at)
         for sw in self._descendant_switches():
             if sw.is_on:
-                await sw._apply_off()
+                await sw._apply_off(paused_at)
 
     async def _apply_on(self) -> None:
         """Turn this switch on locally (no cascade)."""
@@ -343,11 +382,18 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         await self._store().async_set_scope_switch_off_at(self._scope_kind, self._scope_id, None)
         self.async_write_ha_state()
 
-    async def _apply_off(self) -> None:
-        """Turn this switch off locally (no cascade)."""
+    async def _apply_off(self, off_at: datetime | None = None) -> None:
+        """Turn this switch off locally (no cascade).
+
+        *off_at* is the pause time to record; it defaults to now for a switch
+        pausing on its own. A cascade passes the ancestor's time so the whole
+        subtree shares one pause timestamp.
+        """
         self._attr_is_on = False
         await self._store().async_set_scope_switch_off_at(
-            self._scope_kind, self._scope_id, dt_util.utcnow().isoformat()
+            self._scope_kind,
+            self._scope_id,
+            (off_at if off_at is not None else dt_util.utcnow()).isoformat(),
         )
         self._schedule_auto_on(seconds=self._resolved_delay())
         self.async_write_ha_state()
@@ -364,6 +410,13 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     def _resolved_delay(self) -> int:
         return self._store().get_switch_defaults()["auto_on_delay_seconds"]
+
+    def _off_at(self) -> datetime | None:
+        """This switch's persisted pause time, or None when it is not paused or
+        the stored value is unusable."""
+        return _parse_off_at(
+            self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -453,13 +506,22 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return
         off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:
+            # Paused with no recorded pause time (HA stopped before the delayed
+            # save landed). Treat now as the pause time and arm the full delay,
+            # so the switch still resumes instead of staying off forever.
+            now = dt_util.utcnow()
+            self.hass.async_create_task(
+                self._store().async_set_scope_switch_off_at(
+                    self._scope_kind, self._scope_id, now.isoformat()
+                )
+            )
+            self._schedule_auto_on(seconds=delay)
             return
-        try:
-            off_at = datetime.fromisoformat(off_at_iso)
-            remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
-        except (ValueError, TypeError):
+        off_at = _parse_off_at(off_at_iso)
+        if off_at is None:
             _LOGGER.warning("ambience switch: invalid off_at %r — ignoring", off_at_iso)
             return
+        remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
         if remaining <= 0:
             if turn_on_if_expired:
                 self.hass.async_create_task(self.async_turn_on())

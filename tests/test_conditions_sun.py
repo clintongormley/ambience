@@ -11,6 +11,7 @@ from custom_components.ambience.conditions.sun import (
     _in_arc,
     _sector_label,
 )
+from custom_components.ambience.errors import AmbienceError
 
 
 def _snap(elevation: float | None = 0.0, azimuth: float | None = 180.0) -> SunSnapshot:
@@ -183,31 +184,33 @@ def test_validate_accepts_well_formed() -> None:
 
 
 @pytest.mark.parametrize(
-    "predicate",
+    "predicate,key",
     [
-        42,
-        "nope",
-        {},  # empty — must have elevation or azimuth
-        {"elevation": {"min": -100}},  # below -90
-        {"elevation": {"max": 100}},  # above 90
-        {"elevation": {"min": 30, "max": 10}},  # min > max
-        {"elevation": {"min": "hot"}},  # non-numeric
-        {"elevation": {}},  # neither bound
-        {"elevation": "high"},  # elevation not a dict (covers line 137)
-        {"azimuth": {}},  # neither sectors nor ranges
-        {"azimuth": "south"},  # azimuth not a dict (covers line 155)
-        {"azimuth": {"sectors": ["X"]}},  # bad label
-        {"azimuth": {"sectors": "S"}},  # not a list
-        {"azimuth": {"ranges": "bad"}},  # ranges not a list (covers line 163)
-        {"azimuth": {"ranges": [{"from": 0, "to": 360}]}},  # 360 out of [0, 360)
-        {"azimuth": {"ranges": [{"from": -1, "to": 90}]}},  # negative
-        {"azimuth": {"ranges": [{"from": 0}]}},  # missing to
-        {"azimuth": {"ranges": ["not-a-dict"]}},  # range item not a dict (covers line 169)
+        (42, "sun_predicate_not_object"),
+        ("nope", "sun_predicate_not_object"),
+        ({}, "sun_needs_axis"),  # empty — must have elevation or azimuth
+        ({"elevation": {"min": -100}}, "sun_elevation_out_of_range"),  # below -90
+        ({"elevation": {"max": 100}}, "sun_elevation_out_of_range"),  # above 90
+        ({"elevation": {"min": 30, "max": 10}}, "sun_elevation_min_above_max"),
+        ({"elevation": {"min": "hot"}}, "sun_elevation_not_number"),
+        ({"elevation": {}}, "sun_elevation_needs_bound"),  # neither bound
+        ({"elevation": "high"}, "sun_elevation_not_object"),
+        ({"azimuth": {}}, "sun_azimuth_needs_sector_or_range"),
+        ({"azimuth": "south"}, "sun_azimuth_not_object"),
+        ({"azimuth": {"sectors": ["X"]}}, "sun_azimuth_unknown_sector"),  # bad label
+        ({"azimuth": {"sectors": "S"}}, "sun_azimuth_sectors_not_list"),
+        ({"azimuth": {"ranges": "bad"}}, "sun_azimuth_ranges_not_list"),
+        # 360 is out of [0, 360)
+        ({"azimuth": {"ranges": [{"from": 0, "to": 360}]}}, "sun_azimuth_out_of_range"),
+        ({"azimuth": {"ranges": [{"from": -1, "to": 90}]}}, "sun_azimuth_out_of_range"),
+        ({"azimuth": {"ranges": [{"from": 0}]}}, "sun_azimuth_bound_not_number"),  # missing to
+        ({"azimuth": {"ranges": ["not-a-dict"]}}, "sun_azimuth_range_not_object"),
     ],
 )
-def test_validate_rejects(predicate) -> None:
-    with pytest.raises(ValueError):
+def test_validate_rejects(predicate, key) -> None:
+    with pytest.raises(AmbienceError) as exc:
         SunCondition().validate_predicate(predicate)
+    assert exc.value.translation_key == key
 
 
 # ── describe ─────────────────────────────────────────────────────────────────

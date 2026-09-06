@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
+from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import area_registry as ar
@@ -11,6 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -34,6 +36,12 @@ async def _setup(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> Non
 
 def _switch(hass: HomeAssistant, kind: str, sid: str | None) -> Any:
     return hass.data[DOMAIN][DATA_SWITCHES][(kind, sid)]
+
+
+def _due_times(track: Any) -> list[datetime]:
+    """The due times passed to the patched `async_track_point_in_utc_time` — the
+    auto-on timer's arming point, which the entity itself does not retain."""
+    return [call.args[2] for call in track.call_args_list]
 
 
 def _only_area_id(hass: HomeAssistant) -> str:
@@ -192,6 +200,32 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
     ent = _switch(hass, "house", None)
     assert ent.is_on is False
     assert ent._timer is not None
+
+
+async def test_restore_off_without_off_at_arms_full_delay(hass, mock_config_entry, fixed_utcnow):
+    """HA stopped before the delayed off_at save landed: the switch restores as
+    off with no persisted pause time and must still resume automatically."""
+    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
+    from custom_components.ambience.store import AmbienceStore
+
+    pre = AmbienceStore(hass)
+    await pre.async_load()
+    await pre.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 60})
+    # No off_at is persisted at all — the crash lost it.
+
+    with patch(
+        "custom_components.ambience.switch.async_track_point_in_utc_time",
+        wraps=async_track_point_in_utc_time,
+    ) as track:
+        await _setup(hass, mock_config_entry)
+    ent = _switch(hass, "house", None)
+    store = hass.data[DOMAIN][DATA_STORE]
+
+    assert ent.is_on is False
+    # "now" becomes the pause time, so the full 60s delay is armed from here.
+    assert ent._timer is not None
+    assert _due_times(track) == [fixed_utcnow["now"] + timedelta(seconds=60)]
+    assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
 
 
 async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry, fixed_utcnow):
@@ -362,11 +396,11 @@ async def test_schedule_auto_on_from_store_zero_delay_returns_early(
     assert ent._timer is None
 
 
-async def test_schedule_auto_on_from_store_no_off_at_returns_early(
+async def test_schedule_auto_on_from_store_no_off_at_arms_full_delay(
     hass, mock_config_entry, fixed_utcnow
 ):
-    """When the store has no off_at recorded, _schedule_auto_on_from_store must
-    return without scheduling a timer (line 247)."""
+    """A paused switch with no recorded off_at treats now as its pause time:
+    the full delay is armed and the pause time is persisted."""
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
@@ -375,8 +409,15 @@ async def test_schedule_auto_on_from_store_no_off_at_returns_early(
     # Store has no off_at for this scope (never been turned off).
     assert store.get_scope_switch_off_at("house", None) is None
 
-    ent._schedule_auto_on_from_store(turn_on_if_expired=True)
-    assert ent._timer is None
+    with patch(
+        "custom_components.ambience.switch.async_track_point_in_utc_time",
+        wraps=async_track_point_in_utc_time,
+    ) as track:
+        ent._schedule_auto_on_from_store(turn_on_if_expired=True)
+        await hass.async_block_till_done()
+    assert ent._timer is not None
+    assert _due_times(track) == [fixed_utcnow["now"] + timedelta(seconds=3600)]
+    assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
 
 
 async def test_schedule_auto_on_from_store_invalid_off_at_logs_warning(

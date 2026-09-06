@@ -13,37 +13,30 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.util import dt as dt_util
 
-from .conditions._common import UNAVAILABLE
+from .conditions._opaque import OpaquePrecomputedCondition
 from .const import (
     DATA_CONDITIONS,
-    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DOMAIN,
 )
+from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
-    _scope_enabled,
-    _switch_state,
-    apply_lock,
-    async_execute_plan,
-    async_resolve_with_snapshots,
+    async_resolve_and_apply_unit,
     attach_tenure,
     category_ids,
-    forget_last_applied,
     gather_unit_traces,
-    get_last_applied,
-    set_last_matched,
     snapshot_conditions,
 )
 from .trace import (
     CauseKind,
-    Outcome,
     TraceEvent,
     TriggerCause,
     UnitTrace,
@@ -89,6 +82,17 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # rebuild — lets sensor-backed conditions snapshot only what scenes use.
         self._referenced: dict[str, frozenset[str]] = {}
         self._index: TriggerIndex = build_index([])
+        # Per-predicate entity_ids from the specs derived at the last rebuild, so
+        # the always-on trace path links entities without re-running trigger_deps
+        # per predicate per fire (a wildcard people predicate would re-scan every
+        # person entity). Sorted for deterministic trace output.
+        self._pred_entities: dict[PredKey, tuple[str, ...]] = {}
+        # Every opaque predicate, from the last rebuild: `opaque` means the
+        # predicate's dependencies cannot be fully known, so no fire proves it
+        # unchanged and a narrowed snapshot has to carry all of them or they go
+        # stale until the next full refresh. Only the index decides this, so it
+        # is per-rebuild data, not per-fire.
+        self._opaque_ride_along: set[PredKey] = set()
         self._snapshots: dict[str, Any] = {}
         self._unsubs: list[Callable[[], None]] = []
         # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
@@ -144,7 +148,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
         self._referenced = referenced_entities(self._conditions(), self._scope_cfgs.values())
-        self._index = build_index(self._build_entries())
+        entries = self._build_entries()
+        self._pred_entities = {key: tuple(sorted(spec.entities)) for key, spec in entries}
+        self._index = build_index(entries)
+        self._opaque_ride_along = set(self._index.opaque)
         # Drop flip-state for predicates that no longer exist (scenes removed /
         # reordered), so it can't grow unbounded across config edits.
         live = self._index.all_predicates()
@@ -177,6 +184,14 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     continue
                 entries.append(((scope_kind, scope_id, scene_index, condition_key), spec))
         return entries
+
+    def _entity_ids_for(
+        self, scope_kind: str, scope_id: str | None, scene_index: int, condition_key: str
+    ) -> tuple[str, ...]:
+        """The entity_ids one predicate references, from the specs captured at the
+        last rebuild. Empty for a predicate with no watchable deps (wildcard,
+        unknown/opaque condition, or a spec with no entities)."""
+        return self._pred_entities.get((scope_kind, scope_id, scene_index, condition_key), ())
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""
@@ -273,7 +288,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     dirty.add((key[0], key[1], category))
         # Re-arm rechecks off the freshly-updated tenure so a gate that is true
         # but not yet matured will still fire at since+seconds with no further
-        # event. (Was previously driven by per-entity `last_*` heuristics.)
+        # event.
         if gated:
             self._schedule_for_rechecks(gated)
         return dirty
@@ -303,7 +318,40 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             elif gate_key not in tenure:
                 tenure[gate_key] = anchor if seed else now
 
-    async def _refresh_snapshots(self, condition_keys: set[str]) -> None:
+    def _fired_result_keys(self, fired: set[PredKey]) -> dict[str, frozenset[str]]:
+        """Per-condition snapshot hint: the result keys of the fired predicates
+        (plus the condition's opaque ones, whose deps are never fully known),
+        for the conditions that accept a hint. A condition is left out — falling
+        back to a full recompute — as soon as one of its predicates has no
+        derivable result key (a scene removed since the fire, or a malformed
+        predicate), since the missing key could otherwise go stale unnoticed."""
+        conditions = self._conditions()
+        hints: dict[str, set[str]] = {}
+        unhinted: set[str] = set()
+
+        def _add(key: PredKey, condition: Any) -> None:
+            result_key = condition.result_key(self._predicate_for(key))
+            if result_key:
+                hints.setdefault(key[3], set()).add(result_key)
+            else:
+                unhinted.add(key[3])
+
+        for key in fired:
+            condition = conditions.get(key[3])
+            if isinstance(condition, OpaquePrecomputedCondition):
+                _add(key, condition)
+        if not hints:
+            # No condition can be hinted, and the opaque ride-along only ever
+            # extends a condition already in `hints`.
+            return {}
+        for key in self._opaque_ride_along:
+            if key[3] in hints:
+                _add(key, conditions[key[3]])
+        return {k: frozenset(v) for k, v in hints.items() if k not in unhinted}
+
+    async def _refresh_snapshots(
+        self, condition_keys: set[str], result_keys: dict[str, frozenset[str]] | None = None
+    ) -> None:
         """Re-snapshot the given conditions into the cache, concurrently
         (None on failure) — one slow condition doesn't delay the rest. Each
         gate-capable snapshot is enriched with a live view of this engine's gate
@@ -311,12 +359,31 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         clock."""
         conditions = self._conditions()
         fresh = await snapshot_conditions(
-            self._hass, conditions, self._referenced, keys=condition_keys
+            self._hass, conditions, self._referenced, keys=condition_keys, result_keys=result_keys
         )
         self._snapshots.update(attach_tenure(conditions, self._tenure, fresh))
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))
+
+    def _condition_keys_for(self, scope_kind: str, scope_id: str | None) -> set[str]:
+        """The condition keys one scope's resolve will read.
+
+        Derived from the scope's scenes rather than from the index: the index
+        holds only predicates with something watchable, so a predicate whose
+        spec is EMPTY (nothing to subscribe to) is absent from it yet is still
+        evaluated — refreshing off the index would resolve such a scope against
+        a stale snapshot. A `None` predicate (wildcard) reads no snapshot, and a
+        disabled scene is skipped by the evaluation, so neither contributes.
+        """
+        cfg = self._scope_cfgs.get((scope_kind, scope_id)) or {}
+        return {
+            key
+            for scene in cfg.get("scenes", [])
+            if scene_enabled(scene)
+            for key, predicate in scene.get("when", {}).items()
+            if predicate is not None
+        }
 
     async def _resolve_and_apply(
         self,
@@ -330,141 +397,25 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         """Resolve a dirty (scope, category) unit and apply if the winner changed
         (or `force`). Skips when the scope is disabled or the switch is off.
         Returns a UnitTrace describing the outcome when tracing is active, else
-        None."""
-        active = tracing_active(self._hass)
-        if not _scope_enabled(self._hass, scope_kind, scope_id):
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    "on",
-                    Outcome.SKIPPED_SCOPE_DISABLED,
-                    None,
-                )
-            return None
-        switch_state = _switch_state(self._hass, scope_kind, scope_id)
-        if switch_state == "off":
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    switch_state,
-                    Outcome.SKIPPED_SWITCH_OFF,
-                    None,
-                )
-            return None
-        # Serialize resolve+apply per (scope, category): a burst of triggers on
-        # one unit arrives as separate tasks. Without this, while one task is
-        # suspended running its actions, another resolves and applies the same
-        # unit — re-firing the same scene. Holding the lock across the whole
-        # resolve+apply makes a waiting task proceed only once the first has
-        # recorded last_applied and finished, so it either debounces (same winner)
-        # or applies in order (new winner) instead of interleaving mid-apply.
-        async with apply_lock(self._hass, scope_kind, scope_id, category_id):
-            plan = await async_resolve_with_snapshots(
-                self._hass,
-                scope_kind,
-                scope_id,
-                self._snapshots,
-                category=category_id,
-                describe=False,
-                explain=active,
-            )
-            index = plan["matched_scene_index"]
-            explanation = plan.get("explanation")
-            # Drop-out (the triggering entity went unavailable/unknown, or was
-            # removed → cause.new is None): only an `unavailable`-guard winner may
-            # act on it. A non-guard fall-through winner (or a no-match) is
-            # suppressed so a sensor blip can't drive an unrelated scene — devices
-            # and last_applied are left untouched. The guard itself runs normally
-            # below (its actions, or its NO_OP block).
-            if (
-                cause is not None
-                and cause.kind == CauseKind.ENTITY
-                and (cause.new in UNAVAILABLE or cause.new is None)
-                and not self._winner_has_unavailable(scope_kind, scope_id, index)
-            ):
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.SKIPPED_UNAVAILABLE,
-                        explanation,
-                    )
-                return None
-            if index is None:
-                # A no-match is a transition away from the previous winner: drop
-                # the last-applied record so a later win of the same scene re-applies.
-                forget_last_applied(self._hass, scope_kind, scope_id, category_id)
-                set_last_matched(self._hass, scope_kind, scope_id, category_id, None)
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_MATCH,
-                        explanation,
-                    )
-                return None
-            # Record the current winner before any action runs (covers no-op /
-            # debounce / acted). The unavailable-drop-out above intentionally does
-            # not reach here, so a sensor blip leaves the dot untouched.
-            set_last_matched(self._hass, scope_kind, scope_id, category_id, index)
-            if not plan["actions"]:
-                # A pure blocker (winner with no actions): nothing to run, and it
-                # stays transparent to last-applied so it neither records itself nor
-                # clears a prior real winner.
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.NO_OP,
-                        explanation,
-                        winner_name=plan["scene_name"],
-                    )
-                return None
-            always = plan.get("apply") == "always"
-            if (
-                not force
-                and not always
-                and index == get_last_applied(self._hass, scope_kind, scope_id, category_id)
-            ):
-                # Same winner as last applied, with identical actions → suppress the
-                # redundant re-fire. A scene whose `apply` mode is "always" opts out
-                # of this debounce, re-asserting its actions on every re-evaluation.
-                if active:
-                    return UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category_id,
-                        switch_state,
-                        Outcome.DEBOUNCED,
-                        explanation,
-                        winner_name=plan["scene_name"],
-                    )
-                return None
-            await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
-        if active:
-            return UnitTrace(
-                scope_kind,
-                scope_id,
-                category_id,
-                switch_state,
-                Outcome.ACTED,
-                explanation,
-                winner_name=plan["scene_name"],
-                actions=self._hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(
-                    plan["actions"]
-                ),
-            )
-        return None
+        None.
+
+        Delegates to the shared ladder, supplying the engine's own snapshot cache
+        and the dependency analysis captured at the last rebuild — the store's
+        live config could have moved on since, and a trace must describe the
+        scenes this engine actually evaluated.
+        """
+        return await async_resolve_and_apply_unit(
+            self._hass,
+            scope_kind,
+            scope_id,
+            category_id,
+            self._snapshots,
+            force=force,
+            cause=cause,
+            active=tracing_active(self._hass),
+            entity_ids_for=partial(self._entity_ids_for, scope_kind, scope_id),
+            winner_is_guard=partial(self._winner_has_unavailable, scope_kind, scope_id),
+        )
 
     async def _apply_units(
         self,
@@ -495,7 +446,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         if not fired:
             return
         resolved_cause = cause or TriggerCause(kind=CauseKind.UNKNOWN)
-        await self._refresh_snapshots({key[3] for key in fired})
+        await self._refresh_snapshots(
+            {key[3] for key in fired}, result_keys=self._fired_result_keys(fired)
+        )
+        if not self._running:
+            # Torn down while the refresh was awaited: the rest of the pass would
+            # apply units and re-arm `for:` rechecks against a dead engine.
+            return
         traces = await self._apply_units(
             self._recompute(fired, self._snapshots), cause=resolved_cause
         )

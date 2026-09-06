@@ -7,14 +7,9 @@ feed the settings UI's <ha-form> rendering.
 `hass.services.async_services()` returns `Service` objects without field
 metadata; we use `async_get_all_descriptions` (which merges the runtime
 registry with `services.yaml` descriptions) when available. If the
-description loader fails (e.g. a stripped test environment with no
+description loader fails (e.g. a stripped environment with no
 integrations on disk), we fall back to a minimal view derived purely
 from the runtime registry — ids/empty-fields/no-target.
-
-Test fixtures that stub `hass.services.async_services()` with plain
-dicts containing "fields"/"description"/"target" keys are also
-supported: we read the dict directly without going through the
-description loader.
 """
 
 from __future__ import annotations
@@ -50,24 +45,6 @@ def _flatten_field_groups(fields: Any) -> dict[str, Any]:
     return out
 
 
-def _registry_is_dict_stubbed(registry: dict) -> bool:
-    """True iff every non-empty domain map's first entry is a plain dict.
-
-    Test fixtures stub `hass.services.async_services()` to return plain
-    dicts of dicts; real HA returns dicts of `Service` objects. An empty
-    registry is treated as real HA (no stubs to detect).
-    """
-    found_any = False
-    for domain_map in registry.values():
-        if not domain_map:
-            continue
-        found_any = True
-        sample = next(iter(domain_map.values()))
-        if not isinstance(sample, dict):
-            return False
-    return found_any
-
-
 async def _descriptions_with_status(
     hass: HomeAssistant,
 ) -> tuple[dict[str, dict[str, dict[str, Any]]], bool]:
@@ -78,22 +55,19 @@ async def _descriptions_with_status(
     spec is an empty dict (no fields, no target). Field-level validation
     must be skipped when degraded is True.
     """
-    registry = hass.services.async_services()
-    if _registry_is_dict_stubbed(registry):
-        # Test fixtures provide their own field/target data — not degraded.
-        return registry, False
     try:
         from homeassistant.helpers.service import async_get_all_descriptions
 
         return await async_get_all_descriptions(hass), False
     except Exception as exc:
-        # Stripped test envs (no integrations on disk) can break the loader;
+        # A stripped environment (no integrations on disk) can break the loader;
         # fall back to a runtime-registry view (no fields/target/description).
         _LOGGER.debug(
             "ambience: async_get_all_descriptions unavailable (%s); "
             "falling back to runtime-registry view",
             exc,
         )
+        registry = hass.services.async_services()
         return (
             {domain: {name: {} for name in names} for domain, names in registry.items()},
             True,
@@ -133,9 +107,20 @@ async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:
     return items
 
 
-async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, Any] | None:
-    """Return {fields, target} for one service, or None if unknown.
+def _catalog_name(name: Any) -> str | None:
+    """A catalog `name` value normalised to a label or None.
 
+    A service that documents no name is served as `""` by some HA cores and as
+    a missing key by others; both mean "no label", so callers see None either
+    way rather than having to know which core they are on.
+    """
+    return name if isinstance(name, str) and name.strip() else None
+
+
+async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, Any] | None:
+    """Return {name, fields, target} for one service, or None if unknown.
+
+    `name` is None whenever the catalog carries no label.
     Raises AmbienceError if `service_id` is not "domain.service".
     """
     if "." not in service_id:
@@ -146,7 +131,7 @@ async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, 
     if spec is None:
         return None
     return {
-        "name": spec.get("name") if isinstance(spec, dict) else None,
+        "name": _catalog_name(spec.get("name")) if isinstance(spec, dict) else None,
         "fields": _flatten_field_groups(spec.get("fields")) if isinstance(spec, dict) else {},
         "target": spec.get("target") if isinstance(spec, dict) else None,
     }

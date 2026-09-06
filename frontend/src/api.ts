@@ -82,6 +82,14 @@ export async function getArea(hass: HassConnection, areaId: string): Promise<Are
   return hass.callWS({ type: "ambience/area/get", area_id: areaId });
 }
 
+/** The persisted form of a scope config: scenes only. The scope-level `enabled`
+ *  flag is written solely by `ambience/set_scope_enabled`, so a scene save must
+ *  never carry it — a stale tab would otherwise revert a scope that was enabled
+ *  or disabled elsewhere. */
+function scenesOnly(config: ScopeConfig): ScopeConfig {
+  return { scenes: config.scenes ?? [] };
+}
+
 export async function saveArea(
   hass: HassConnection,
   areaId: string,
@@ -92,7 +100,7 @@ export async function saveArea(
   return hass.callWS({
     type: "ambience/area/save",
     area_id: areaId,
-    config,
+    config: scenesOnly(config),
     ...(change ? { change } : {}),
     ...(opts?.minimisePins ? { minimise_pins: true } : {}),
   });
@@ -116,7 +124,7 @@ export async function saveFloor(
   return hass.callWS({
     type: "ambience/floor/save",
     floor_id: floorId,
-    config,
+    config: scenesOnly(config),
     ...(change ? { change } : {}),
     ...(opts?.minimisePins ? { minimise_pins: true } : {}),
   });
@@ -134,7 +142,7 @@ export async function saveHouse(
 ): Promise<{ ok: true; config: ScopeConfig }> {
   return hass.callWS({
     type: "ambience/house/save",
-    config,
+    config: scenesOnly(config),
     ...(change ? { change } : {}),
     ...(opts?.minimisePins ? { minimise_pins: true } : {}),
   });
@@ -587,7 +595,7 @@ export async function validateScopeConfig(
   hass: HassConnection,
   config: ScopeConfig,
 ): Promise<void> {
-  await hass.callWS({ type: "ambience/validate", config });
+  await hass.callWS({ type: "ambience/validate", config: scenesOnly(config) });
 }
 
 /** Read a scope's current config, dispatching by scope kind. */

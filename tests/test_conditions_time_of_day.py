@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from astral import Observer
@@ -15,6 +17,7 @@ from custom_components.ambience.conditions.time_of_day import (
     TimeOfDayCondition,
     TimeOfDaySnapshot,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.periods import BUILTIN_PERIODS
 
 
@@ -97,9 +100,21 @@ async def test_snapshot_returns_today_anchors(hass: HomeAssistant) -> None:
         assert getattr(snap, field).tzinfo is not None
 
 
-async def test_snapshot_raises_when_sun_unavailable(hass: HomeAssistant) -> None:
-    with pytest.raises(RuntimeError, match="sun.sun"):
-        await _condition().snapshot(hass)
+async def test_snapshot_without_sun_integration_disables_only_sun_endpoints(
+    hass: HomeAssistant,
+) -> None:
+    """No `sun.sun` (the sun integration is absent): the snapshot still resolves,
+    clock endpoints keep working and only sun-anchored ones go unobservable."""
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=datetime(2026, 6, 20, 12, 0, tzinfo=UTC))
+    assert snap.sunrise is None
+    assert snap.dusk is None
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+    sun_pred = _range(_sun("sunrise"), _sun("sunset"))
+    assert cond.matches(sun_pred, snap) is False
+    reason = cond.unconfigured_reason(sun_pred, snap)
+    assert reason is not None
+    assert "sun integration" in reason
 
 
 async def test_snapshot_uses_anchor_for_now_local_date_not_next_event(
@@ -370,28 +385,33 @@ def test_validate_predicate_accepts_valid(pred: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "pred",
+    "pred,key",
     [
-        "old_string_format",
-        42,
-        None,
-        {},
-        {"period": 123},
-        {"from": _time(8, 0)},
-        _range({"kind": "time", "hh": 25, "mm": 0}, _time(10, 0)),
-        _range(_sun("zenith"), _sun("sunset")),
-        [],
-        [{"period": "evening"}, "garbage"],
+        ("old_string_format", "time_of_day_invalid"),
+        (42, "time_of_day_invalid"),
+        (None, "time_of_day_required"),
+        ({}, "time_of_day_invalid"),
+        ({"period": 123}, "time_of_day_period_not_string"),
+        ({"from": _time(8, 0)}, "time_of_day_invalid"),
+        (_range({"kind": "time", "hh": 25, "mm": 0}, _time(10, 0)), "period_invalid_hh"),
+        (_range(_sun("zenith"), _sun("sunset")), "period_invalid_anchor"),
+        ([], "time_of_day_list_empty"),
+        ([{"period": "evening"}, "garbage"], "time_of_day_invalid"),
         # clamp must be an object — runtime _apply_clamp guard (not the period-store
         # validator), reached because validate_predicate evaluates inline endpoints.
-        _range(
-            {"kind": "sun", "anchor": "sunrise", "offset_min": 0, "clamp": "nope"}, _sun("dusk")
+        (
+            _range(
+                {"kind": "sun", "anchor": "sunrise", "offset_min": 0, "clamp": "nope"},
+                _sun("dusk"),
+            ),
+            "period_clamp_not_object",
         ),
     ],
 )
-def test_validate_predicate_rejects_invalid(pred: Any) -> None:
-    with pytest.raises(ValueError):
+def test_validate_predicate_rejects_invalid(pred: Any, key: str) -> None:
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(pred)
+    assert exc.value.translation_key == key
 
 
 def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
@@ -400,10 +420,11 @@ def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
 
 def test_time_of_day_validate_predicate_still_rejects_malformed_endpoint() -> None:
     cond = TimeOfDayCondition(period_lookup=lambda: {})
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         cond.validate_predicate(
             {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
         )
+    assert exc.value.translation_key == "period_invalid_endpoint_kind"
 
 
 def test_validate_predicate_accepts_identical_endpoints() -> None:
@@ -415,8 +436,9 @@ def test_validate_predicate_accepts_identical_endpoints() -> None:
 def test_validate_predicate_rejects_bool_clock() -> None:
     """bool is an int subclass; `hh: true` must not validate as hour 1 (the
     trigger scheduler already rejects it, so it would never fire)."""
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range({"kind": "time", "hh": True, "mm": 0}, _time(10, 0)))
+    assert exc.value.translation_key == "period_invalid_hh"
 
 
 # ── describe ───────────────────────────────────────────────────────────────
@@ -670,20 +692,83 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     )
 
 
-# ── snapshot: anchor undefined at location/date (polar day/night) ───────────
+# ── snapshot: anchor undefined at location/date (polar day/night) ─────────
+
+_REYKJAVIK = (64.13, -21.9, 0)  # latitude, longitude, elevation
+
+# Midsummer noon in Iceland (Atlantic/Reykjavik is UTC year-round, so the local
+# date is the UTC date): above ~60.5°N civil dawn/dusk do not occur, while
+# sunrise/sunset/noon/midnight stay defined.
+_MIDSUMMER = datetime(2026, 6, 20, 12, 0, tzinfo=UTC)
 
 
-async def test_snapshot_raises_when_anchor_undefined(hass: HomeAssistant) -> None:
-    """snapshot() raises RuntimeError when an anchor is undefined at the
-    location/date (e.g. high-latitude midsummer where the sun never reaches the
-    dusk depression), so the condition resolves to None rather than crashing."""
-    hass.config.latitude = 80.0
-    hass.config.longitude = 0.0
-    hass.config.elevation = 0
+def _set_reykjavik(hass: HomeAssistant) -> Observer:
+    """Pin hass to Reykjavík (sun integration up) and return a matching Observer."""
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = _REYKJAVIK
     hass.states.async_set("sun.sun", "above_horizon", {})
-    now = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
-    with pytest.raises(RuntimeError, match="anchor undefined"):
-        await _condition().snapshot(hass, now=now)
+    return Observer(latitude=_REYKJAVIK[0], longitude=_REYKJAVIK[1], elevation=_REYKJAVIK[2])
+
+
+async def test_snapshot_keeps_defined_anchors_when_dusk_undefined(hass: HomeAssistant) -> None:
+    """A day with no civil dawn/dusk yields a partial snapshot, not no snapshot."""
+    obs = _set_reykjavik(hass)
+    snap = await _condition().snapshot(hass, now=_MIDSUMMER)
+    assert snap is not None
+    assert snap.dawn is None
+    assert snap.dusk is None
+    assert snap.sunrise == sunrise(obs, date=date(2026, 6, 20))
+    assert snap.noon is not None
+    assert snap.midnight is not None
+
+
+async def test_clock_range_matches_when_dusk_undefined(hass: HomeAssistant) -> None:
+    """A clock-only range is unaffected by the missing anchor."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+
+
+async def test_dusk_range_false_with_reason_naming_the_anchor(hass: HomeAssistant) -> None:
+    """A range referencing the missing anchor is false and says which anchor."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    pred = _range(_sun("dusk"), _time(8, 30))
+    assert cond.matches(pred, snap) is False
+    reason = cond.unconfigured_reason(pred, snap)
+    assert reason is not None
+    assert "dusk" in reason
+
+
+async def test_period_needing_missing_anchor_false_others_still_evaluate(
+    hass: HomeAssistant,
+) -> None:
+    """Only periods referencing the missing anchor go unobservable: 'evening'
+    (sunset→dusk) is false while 'daytime' (sunrise→sunset) still matches."""
+    _set_reykjavik(hass)
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=_MIDSUMMER)
+    assert cond.matches({"period": "evening"}, snap) is False
+    reason = cond.unconfigured_reason({"period": "evening"}, snap)
+    assert reason is not None
+    assert "dusk" in reason
+    assert cond.matches({"period": "daytime"}, snap) is True
+    assert cond.describe(snap) == "morning"
+
+
+async def test_polar_day_keeps_clock_ranges_working(hass: HomeAssistant) -> None:
+    """At 80°N on midsummer the sun neither rises nor sets: those anchors are
+    undefined, noon/midnight stay defined, and clock ranges keep working."""
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = 80.0, 0.0, 0
+    hass.states.async_set("sun.sun", "above_horizon", {})
+    cond = _condition()
+    snap = await cond.snapshot(hass, now=datetime(2026, 6, 21, 12, 0, tzinfo=UTC))
+    assert snap.sunrise is None
+    assert snap.sunset is None
+    assert snap.noon is not None
+    assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
+    assert cond.matches(_range(_sun("sunrise"), _sun("sunset")), snap) is False
 
 
 # ── _resolve_endpoint error paths (via validate_predicate; matches() is
@@ -691,42 +776,47 @@ async def test_snapshot_raises_when_anchor_undefined(hass: HomeAssistant) -> Non
 
 
 def test_resolve_endpoint_non_dict_raises() -> None:
-    """_resolve_endpoint raises ValueError when the endpoint is not a dict
-    (e.g. a bare string used as a from/to value)."""
-    with pytest.raises(ValueError, match="invalid endpoint"):
+    """_resolve_endpoint rejects an endpoint that is not a dict (e.g. a bare
+    string used as a from/to value)."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate({"from": "08:00", "to": _time(10, 0)})
+    assert exc.value.translation_key == "period_endpoint_not_object"
 
 
 def test_resolve_endpoint_invalid_mm_raises() -> None:
-    """_resolve_endpoint raises ValueError when mm is out of [0, 59] range."""
-    with pytest.raises(ValueError, match="invalid mm"):
+    """_resolve_endpoint rejects mm out of the [0, 59] range."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_mm"
 
 
 def test_resolve_endpoint_non_int_mm_raises() -> None:
-    """_resolve_endpoint raises ValueError when mm is not an int."""
-    with pytest.raises(ValueError, match="invalid mm"):
+    """_resolve_endpoint rejects a non-int mm."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "time", "hh": 8, "mm": "30"}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_mm"
 
 
 def test_resolve_endpoint_non_int_offset_raises() -> None:
-    """_resolve_endpoint raises ValueError when offset_min is not an int."""
-    with pytest.raises(ValueError, match="offset_min must be int"):
+    """_resolve_endpoint rejects a non-int offset_min."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "sun", "anchor": "sunrise", "offset_min": "30"}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_offset_not_int"
 
 
 def test_resolve_endpoint_unknown_kind_raises() -> None:
-    """_resolve_endpoint raises ValueError when kind is not 'time' or 'sun'."""
-    with pytest.raises(ValueError, match="invalid endpoint kind"):
+    """_resolve_endpoint rejects a kind that is neither 'time' nor 'sun'."""
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(
             {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": _time(10, 0)}
         )
+    assert exc.value.translation_key == "period_invalid_endpoint_kind"
 
 
 def test_matches_tolerates_malformed_endpoints() -> None:
@@ -841,8 +931,9 @@ def test_clamp_degenerate_inversion_never_matches() -> None:
 def test_validate_predicate_rejects_bool_offset() -> None:
     # bool is an int subclass — reject it so `True` can't become a 1-min offset.
     bad = {"kind": "sun", "anchor": "sunrise", "offset_min": True}
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_offset_not_int"
 
 
 def test_clamp_validation_rejects_bad_dir() -> None:
@@ -852,8 +943,9 @@ def test_clamp_validation_rejects_bad_dir() -> None:
         "offset_min": 0,
         "clamp": {"dir": "sideways", "hh": 8, "mm": 30},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_invalid_clamp_dir"
 
 
 def test_clamp_validation_rejects_bad_time() -> None:
@@ -863,8 +955,9 @@ def test_clamp_validation_rejects_bad_time() -> None:
         "offset_min": 0,
         "clamp": {"dir": "not_before", "hh": 25, "mm": 0},
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         _condition().validate_predicate(_range(bad, _sun("dusk")))
+    assert exc.value.translation_key == "period_invalid_clamp_time"
 
 
 def test_clamp_preserves_legitimate_overnight_wrap() -> None:
@@ -980,3 +1073,119 @@ def test_unconfigured_reason_ignores_non_string_period() -> None:
     cond = TimeOfDayCondition(period_lookup=lambda: {})
     # A corrupt non-string period must not yield a misleading "no longer exists" reason.
     assert cond.unconfigured_reason({"period": 42}, None) is None
+
+
+# ── clamped sun endpoints are timezone-independent when ordering/shadowing ────
+
+
+@contextmanager
+def _default_tz(name: str):
+    """Run the block with dt_util's default timezone set to `name`."""
+    original = dt_util.DEFAULT_TIME_ZONE
+    dt_util.set_default_time_zone(ZoneInfo(name))
+    try:
+        yield
+    finally:
+        dt_util.set_default_time_zone(original)
+
+
+_TIMEZONES = ["UTC", "America/Los_Angeles", "Australia/Sydney"]
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamped_intervals_are_timezone_independent(tz_name: str) -> None:
+    # Synthetic sunrise is 06:00; the not-before floor lifts the start to 07:00
+    # in every default timezone, so the interval is 420→540 minutes of day.
+    pred = _range(_sun_clamp("sunrise", "not_before", 7, 0), _time(9, 0))
+    with _default_tz(tz_name):
+        assert _condition()._intervals(pred) == [(420.0, 540.0)]
+        assert _condition().order_key(pred) == 420.0
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamped_range_does_not_contain_earlier_start(tz_name: str) -> None:
+    outer = _range(_sun_clamp("sunrise", "not_before", 7, 0), _time(9, 0))
+    inner = _range(_time(6, 30), _time(9, 0))
+    with _default_tz(tz_name):
+        assert _condition().contains(outer, inner) is False
+
+
+@pytest.mark.parametrize("tz_name", _TIMEZONES)
+def test_clamp_emptied_detection_is_timezone_independent(tz_name: str) -> None:
+    # Synthetic sunset is 18:00. Clamped not-before 21:00 with a 20:00 end, the
+    # pre-clamp range 18:00→20:00 ran forward, so the clamp emptied it and it
+    # contributes no interval; with a 06:00 end the range wrapped already, so the
+    # clamp keeps it as a genuine overnight wrap that splits at midnight.
+    empty = _range(_sun_clamp("sunset", "not_before", 21, 0), _time(20, 0))
+    wrap = _range(_sun_clamp("sunset", "not_before", 21, 0), _time(6, 0))
+    with _default_tz(tz_name):
+        assert _condition()._intervals(empty) == []
+        assert _condition()._intervals(wrap) == [(1260.0, 1440.0), (0.0, 360.0)]
+
+
+# ── absolute ranges across a DST switch ──────────────────────────────────────
+
+_BERLIN = "Europe/Berlin"
+# 2026-03-29 Europe/Berlin: 02:00 → 03:00, the 02:00–03:00 wall hour is skipped.
+# 2026-10-25 Europe/Berlin: 03:00 → 02:00, the 02:00–03:00 wall hour repeats.
+
+
+def _matches_at(pred: dict, moment: datetime) -> bool:
+    return _condition().matches(pred, _build_snapshot(moment))
+
+
+def test_spring_forward_range_inside_skipped_hour_keeps_its_length() -> None:
+    """{02:30 → 03:30} on the spring-forward day: 02:30 never strikes, so it
+    resolves to the instant the clock jumps to (03:00 local) and the range runs
+    03:00 → 03:30 local rather than collapsing to a zero-length window."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        # 03:15 local, inside the range.
+        assert _matches_at(pred, datetime(2026, 3, 29, 1, 15, tzinfo=UTC)) is True
+        # 01:45 local, before the range starts.
+        assert _matches_at(pred, datetime(2026, 3, 29, 0, 45, tzinfo=UTC)) is False
+        # 05:00 local, well after it ends.
+        assert _matches_at(pred, datetime(2026, 3, 29, 3, 0, tzinfo=UTC)) is False
+
+
+def test_spring_forward_range_spanning_the_gap_matches_both_sides() -> None:
+    """{01:30 → 03:30} spans the skipped hour: both the pre-jump and post-jump
+    wall times inside it match, and the range still ends at 03:30 local."""
+    pred = _range(_time(1, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 3, 29, 0, 45, tzinfo=UTC)) is True  # 01:45
+        assert _matches_at(pred, datetime(2026, 3, 29, 1, 15, tzinfo=UTC)) is True  # 03:15
+        assert _matches_at(pred, datetime(2026, 3, 29, 2, 0, tzinfo=UTC)) is False  # 04:00
+
+
+def test_ordinary_day_range_is_unchanged_by_dst_handling() -> None:
+    """The same range a week earlier, with no switch, keeps plain wall-clock
+    behaviour."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 3, 22, 2, 15, tzinfo=UTC)) is True  # 03:15
+        assert _matches_at(pred, datetime(2026, 3, 22, 1, 15, tzinfo=UTC)) is False  # 02:15
+        assert _matches_at(pred, datetime(2026, 3, 22, 4, 0, tzinfo=UTC)) is False  # 05:00
+
+
+def test_autumn_fold_range_matches_once_across_the_repeated_hour() -> None:
+    """{02:30 → 03:30} on the fold day: 02:30 strikes twice, and the range takes
+    the first occurrence, so it matches as one window covering both passes of
+    the repeated hour — and still ends at 03:30 local."""
+    pred = _range(_time(2, 30), _time(3, 30))
+    with _default_tz(_BERLIN):
+        assert _matches_at(pred, datetime(2026, 10, 25, 0, 15, tzinfo=UTC)) is False  # 02:15 CEST
+        assert _matches_at(pred, datetime(2026, 10, 25, 0, 45, tzinfo=UTC)) is True  # 02:45 CEST
+        assert _matches_at(pred, datetime(2026, 10, 25, 1, 45, tzinfo=UTC)) is True  # 02:45 CET
+        assert _matches_at(pred, datetime(2026, 10, 25, 2, 15, tzinfo=UTC)) is True  # 03:15 CET
+        assert _matches_at(pred, datetime(2026, 10, 25, 2, 45, tzinfo=UTC)) is False  # 03:45 CET
+
+
+def test_spring_forward_range_wholly_inside_skipped_hour_never_matches() -> None:
+    """A window the skipped hour swallows whole is empty for the day, not the
+    all-day range that two identical endpoints would mean."""
+    pred = _range(_time(2, 15), _time(2, 45))
+    with _default_tz(_BERLIN):
+        for step in range(96):
+            moment = datetime(2026, 3, 29, tzinfo=UTC) + timedelta(minutes=15 * step)
+            assert _matches_at(pred, moment) is False

@@ -8,6 +8,7 @@ the auto-trigger engine, and the dry-run / simulate paths.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import replace
@@ -98,7 +99,14 @@ def apply_lock(
     """The per-(scope, category) apply lock, shared by the trigger engine and
     the manual apply path so resolve+apply never interleaves across the two
     (each would otherwise read a stale last_applied mid-apply). Bounded by
-    scopes×categories; tiny and stable."""
+    scopes×categories; tiny and stable.
+
+    Not reentrant: a task holding it must never reach
+    `async_resolve_and_apply_unit` or `async_run_scene_actions` for the same
+    unit again. That holds because no Ambience service reaches the apply path
+    (they are all pass-throughs to other domains -
+    tests/test_builtin_registration.py pins the set) and every apply is entered
+    from its own websocket or engine task."""
     locks: dict[tuple[str, str | None, str], asyncio.Lock] = hass.data[DOMAIN].setdefault(
         DATA_APPLY_LOCKS, {}
     )
@@ -692,6 +700,9 @@ async def async_run_scene_actions(
     permanently disabled (`enabled` is False), raising ServiceValidationError.
     Returns {ran, scene_name} for UI feedback. An out-of-range `scene_index`
     raises ServiceValidationError.
+
+    It DOES serialise with an in-flight apply of the same scope/category, so
+    the two never interleave their action dispatch on the same unit.
     """
     if not _scope_enabled(hass, scope_kind, scope_id):
         raise service_validation_error("scope_disabled", scope_kind=scope_kind, scope_id=scope_id)
@@ -703,12 +714,24 @@ async def async_run_scene_actions(
     scene = scenes[scene_index]
     actions = scene.get("actions", [])
     scene_name = scene.get("name")
-    context = (
-        log_run_actions(hass, scope_kind, scope_id, scene_name, scene_index) if actions else None
+    category = scene.get("category")
+    # A live scene always carries a category (they are coerced at load); a
+    # category-less scene has no engine unit to collide with, so there is
+    # nothing to serialise against.
+    lock = (
+        apply_lock(hass, scope_kind, scope_id, category)
+        if isinstance(category, str)
+        else contextlib.nullcontext()
     )
-    await async_execute_actions(
-        hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
-    )
+    async with lock:
+        context = (
+            log_run_actions(hass, scope_kind, scope_id, scene_name, scene_index)
+            if actions
+            else None
+        )
+        await async_execute_actions(
+            hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
+        )
     return {"ran": len(actions), "scene_name": scene_name}
 
 

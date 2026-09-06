@@ -1743,6 +1743,41 @@ async def test_manual_apply_serialises_with_engine_apply_lock(hass: HomeAssistan
     await asyncio.wait_for(task, 1)  # bounded so a hung task fails, not hangs
 
 
+async def test_run_scene_actions_waits_for_an_in_flight_apply(hass: HomeAssistant) -> None:
+    """Manual run_actions takes the same per-(scope, category) lock, so its
+    actions never interleave with an in-flight apply of the same unit."""
+    import asyncio
+
+    from custom_components.ambience.service import apply_lock
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "r",
+                    "category": "lighting",
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
+
+    lock = apply_lock(hass, "area", "a", "lighting")
+    await lock.acquire()
+    task = asyncio.get_running_loop().create_task(async_run_scene_actions(hass, "area", "a", 0))
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert not task.done()
+    assert not calls  # blocked on the lock — nothing dispatched yet
+    lock.release()
+    assert await asyncio.wait_for(task, 1) == {"ran": 1, "scene_name": "r"}
+    assert len(calls) == 1
+
+
 async def test_execute_plan_emits_unit_applied_when_actions_dispatched(hass):
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 

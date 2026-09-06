@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -20,6 +21,7 @@ from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
     DATA_STORE,
+    DATA_SWITCHES_PENDING,
     DOMAIN,
 )
 
@@ -51,6 +53,23 @@ async def test_setup_and_unload_entry(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_setup_clears_a_stale_pending_switch_claim(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """hass.data[DOMAIN] outlives a setup that raised, so a pending-add claim
+    from the failed attempt must not survive into the next one — it would block
+    that scope's switch until the claim's TTL expired."""
+    # Claimed just now, so reconcile's TTL sweep would not clear it either.
+    hass.data[DOMAIN] = {DATA_SWITCHES_PENDING: {("house", None): time.monotonic()}}
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("switch.house_ambience") is not None
+    assert ("house", None) not in hass.data[DOMAIN][DATA_SWITCHES_PENDING]
 
 
 async def test_setup_seeds_registries_and_store(

@@ -248,9 +248,13 @@ def get_store(hass: HomeAssistant) -> Any:
 
 def get_switches(hass: HomeAssistant) -> dict[tuple[str, str | None], Any]:
     """The live scope-switch entities keyed by (scope_kind, scope_id); empty
-    before the switch platform is up and after unload. A read-only view: the
-    writers (the entity's add/remove hooks, reconcile) use setdefault on
-    hass.data directly so the dict they mutate is the stored one."""
+    before the switch platform is up and after unload.
+
+    Returns the stored dict when it exists and a throwaway `{}` otherwise, so
+    callers must treat the result as read-only — a write to the throwaway is
+    silently lost. The writers (the entity's add/remove hooks, reconcile) index
+    or setdefault on hass.data directly so the dict they mutate is the stored
+    one."""
     return hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
 
 

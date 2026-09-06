@@ -22,7 +22,10 @@ def test_get_switches_is_empty_before_setup_and_after_unload(hass) -> None:
 
 def test_get_switch_reads_the_live_entity_by_scope_key(hass) -> None:
     switch = SimpleNamespace(is_on=True)
-    hass.data[DOMAIN] = {DATA_SWITCHES: {("area", "a"): switch}}
+    stored = {("area", "a"): switch}
+    hass.data[DOMAIN] = {DATA_SWITCHES: stored}
+    # The stored dict itself, not a copy: a caller reading it sees later adds.
+    assert get_switches(hass) is stored
     assert get_switch(hass, "area", "a") is switch
     assert get_switch(hass, "area", "b") is None
     assert get_switch(hass, "house", None) is None

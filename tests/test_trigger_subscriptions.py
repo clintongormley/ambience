@@ -759,7 +759,9 @@ async def test_for_gate_retry_budget_resets_after_a_healthy_read(hass, monkeypat
         await engine.async_initial_sync()
         clock["offset"] += timedelta(seconds=61)
         cond.fail = True
-        for _ in range(_ts_mod._FOR_RETRY_LIMIT):
+        # The first fire is the gate's own (non-retry) recheck, so exhausting a
+        # budget of N retries takes N+1 fires.
+        for _ in range(_ts_mod._FOR_RETRY_LIMIT + 1):
             captured[-1][1](None)
             await hass.async_block_till_done()
         assert engine._for_retries[key] == _ts_mod._FOR_RETRY_LIMIT
@@ -770,6 +772,40 @@ async def test_for_gate_retry_budget_resets_after_a_healthy_read(hass, monkeypat
         cond.fail = False
         await engine.async_evaluate({key})
     assert key not in engine._for_retries
+    engine._teardown()
+
+
+async def test_for_gate_retry_budget_is_not_spent_by_rearming(hass, monkeypatch) -> None:
+    """The budget bounds retries that actually FIRE. Re-arming is idempotent —
+    every evaluation pass over a matured, unreadable gate cancels and replaces
+    the pending retry — so a burst of unrelated events must not exhaust the
+    budget without a single retry having run."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    clock = _movable_clock(hass, monkeypatch)
+    engine = _for_engine(hass, 60.0)
+    cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
+    key = ("area", "a", 0, "rad")
+
+    # A matured gate whose condition cannot be read: tenure past the window and
+    # the cached snapshot is None.
+    engine._tenure["rad"] = {"gate:switch.radiator": _ts_mod.dt_util.utcnow()}
+    clock["offset"] += timedelta(seconds=61)
+    engine._snapshots["rad"] = None
+    cond.fail = True
+
+    with _capture_call_later() as captured:
+        for _ in range(10):
+            engine._schedule_for_rechecks({key})
+        # Ten arming passes, no retry fired: the budget is untouched and the
+        # last-armed retry is still pending.
+        assert engine._for_retries.get(key, 0) == 0
+        assert [s for s, _ in captured] == [_ts_mod._FOR_RETRY_SECONDS] * 10
+        assert key in engine._for_handles
+
+        captured[-1][1](None)  # the surviving retry fires
+        await hass.async_block_till_done()
+    assert engine._for_retries[key] == 1
     engine._teardown()
 
 

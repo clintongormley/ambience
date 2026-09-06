@@ -62,6 +62,7 @@ from .const import (
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DATA_SWITCHES_PENDING,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
@@ -127,6 +128,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_SWITCHES] = {}
+    # hass.data[DOMAIN] survives a setup that raised after this point, so a
+    # pending-add claim left by the failed attempt would block that scope's
+    # switch until its TTL expired.
+    domain_data[DATA_SWITCHES_PENDING] = {}
     domain_data[DATA_LAST_APPLIED] = {}
     trace_buffer = BufferSink()
     domain_data[DATA_TRACE_BUFFER] = trace_buffer

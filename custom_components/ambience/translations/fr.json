@@ -69,7 +69,7 @@
     },
     "storage_unreadable": {
       "title": "Ambience : la configuration enregistrée n'a pas pu être lue",
-      "description": "Le fichier `{path}` existe mais n'est pas une configuration Ambience valide ; Ambience a donc démarré avec une configuration vide et a laissé le fichier intact. Restaurez-le depuis une sauvegarde, ou supprimez-le et redémarrez Home Assistant pour repartir de zéro. Enregistrer depuis le panneau Ambience remplace le fichier. Ce message disparaît automatiquement dès que le fichier se charge."
+      "description": "Le fichier `{path}` existe mais n'est pas une configuration Ambience valide ; Ambience a donc démarré avec une configuration vide et a laissé le fichier intact. Restaurez-le depuis une sauvegarde, ou supprimez-le et redémarrez Home Assistant pour repartir de zéro. Enregistrer depuis le panneau Ambience remplace le fichier. Ce message disparaît automatiquement dès que Home Assistant redémarre et que le fichier se charge correctement."
     }
   },
   "exceptions": {

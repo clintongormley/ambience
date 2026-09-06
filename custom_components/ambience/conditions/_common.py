@@ -421,6 +421,10 @@ class Reason:
     key: str
     placeholders: Mapping[str, str] = field(default_factory=dict)
 
+    # `placeholders` is an arbitrary Mapping, so the generated hash would raise
+    # on the usual dict. Unhashable by declaration rather than by accident.
+    __hash__ = None  # type: ignore[assignment]
+
     def render(self) -> str:
         return REASON_EN[self.key].format(**self.placeholders)
 

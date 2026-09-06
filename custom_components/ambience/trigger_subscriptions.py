@@ -54,7 +54,8 @@ _HAS_TIME_INTERVAL = timedelta(seconds=60)
 # ever wake that predicate again.
 _FOR_RETRY_SECONDS = 60.0
 # A condition still unreadable after this many retries is a configuration
-# problem (each failed snapshot logs a warning); stop polling it.
+# problem (each failed snapshot logs a warning); stop polling it. The budget
+# bounds retries that FIRE per gate; re-arming does not spend it.
 _FOR_RETRY_LIMIT = 10
 
 
@@ -329,17 +330,20 @@ class TriggerSubscriptionsMixin:
                 since = tenure.get(gate.key)
                 if since is None:
                     continue  # instant test not currently true → no pending flip
+                retry = False
                 delay = gate.seconds - (now - since).total_seconds()
                 if delay <= 0:
                     if readable:
                         continue  # already matured; this evaluation covered it
-                    attempts = self._for_retries.get(key, 0)
-                    if attempts >= _FOR_RETRY_LIMIT:
+                    # Read the budget, never spend it here: this pass cancels and
+                    # replaces any pending retry, so a burst of unrelated events
+                    # would otherwise exhaust it with no retry ever firing.
+                    if self._for_retries.get(key, 0) >= _FOR_RETRY_LIMIT:
                         continue
-                    self._for_retries[key] = attempts + 1
                     delay = _FOR_RETRY_SECONDS  # matured but unobservable — try again
+                    retry = True
                 handles[(gate.key, gate.seconds)] = async_call_later(
-                    self._hass, delay, self._make_for_recheck(key, gate)
+                    self._hass, delay, self._make_for_recheck(key, gate, retry=retry)
                 )
             if handles:
                 self._for_handles[key] = handles
@@ -357,11 +361,16 @@ class TriggerSubscriptionsMixin:
             key for key in self._index.durations if (key[0], key[1]) == (scope_kind, scope_id)
         )
 
-    def _make_for_recheck(self, key: PredKey, gate: DurationGate) -> Callable[[Any], None]:
+    def _make_for_recheck(
+        self, key: PredKey, gate: DurationGate, *, retry: bool = False
+    ) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
             if not self._running:
                 return  # fired after teardown — don't evaluate
+            if retry:
+                # Spend the budget here, where a retry actually runs.
+                self._for_retries[key] = self._for_retries.get(key, 0) + 1
             # Drop only this timer's handle; sibling gate rechecks for the same
             # predicate stay tracked and cancellable.
             handles = self._for_handles.get(key)

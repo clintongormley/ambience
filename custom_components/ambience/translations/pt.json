@@ -69,7 +69,7 @@
     },
     "storage_unreadable": {
       "title": "Ambience: não foi possível ler a configuração guardada",
-      "description": "O ficheiro `{path}` existe mas não é uma configuração válida do Ambience, por isso o Ambience arrancou com uma configuração vazia e deixou o ficheiro intacto. Restaure-o a partir de uma cópia de segurança, ou apague-o e reinicie o Home Assistant para começar do zero. Guardar a partir do painel do Ambience substitui o ficheiro. Esta mensagem desaparece automaticamente quando o ficheiro carregar."
+      "description": "O ficheiro `{path}` existe mas não é uma configuração válida do Ambience, por isso o Ambience arrancou com uma configuração vazia e deixou o ficheiro intacto. Restaure-o a partir de uma cópia de segurança, ou apague-o e reinicie o Home Assistant para começar do zero. Guardar a partir do painel do Ambience substitui o ficheiro. Esta mensagem desaparece automaticamente quando o Home Assistant reiniciar e o ficheiro carregar corretamente."
     }
   },
   "exceptions": {

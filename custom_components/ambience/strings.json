@@ -69,7 +69,7 @@
     },
     "storage_unreadable": {
       "title": "Ambience: the saved configuration could not be read",
-      "description": "The file `{path}` exists but is not a valid Ambience configuration, so Ambience started with an empty configuration and has left the file untouched. Restore it from a backup, or delete it and restart Home Assistant to start fresh. Saving from the Ambience panel replaces the file. This message clears automatically once the file loads."
+      "description": "The file `{path}` exists but is not a valid Ambience configuration, so Ambience started with an empty configuration and has left the file untouched. Restore it from a backup, or delete it and restart Home Assistant to start fresh. Saving from the Ambience panel replaces the file. This message clears automatically once Home Assistant restarts and the file loads cleanly."
     }
   },
   "exceptions": {

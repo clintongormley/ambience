@@ -390,3 +390,18 @@ def compare_numeric(actual: float, op: str, threshold: float) -> bool:
     if op == ">=":
         return actual >= threshold
     return False
+
+
+def valid_hour(hh: Any) -> bool:
+    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
+    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
+
+
+def valid_minute(mm: Any) -> bool:
+    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
+    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
+
+
+def valid_clock(hh: Any, mm: Any) -> bool:
+    """True if hh/mm together are an in-range clock time."""
+    return valid_hour(hh) and valid_minute(mm)

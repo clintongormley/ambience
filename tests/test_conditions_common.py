@@ -26,6 +26,9 @@ from custom_components.ambience.conditions._common import (
     merge_intervals,
     tenure_held,
     tenure_within,
+    valid_clock,
+    valid_hour,
+    valid_minute,
     validate_entity_ids,
     validate_for,
     validate_for_mode,
@@ -319,3 +322,13 @@ def test_compare_numeric_covers_the_four_operators_and_rejects_others() -> None:
     assert compare_numeric(5.0, ">=", 5.0)
     assert not compare_numeric(5.0, "==", 5.0)
     assert not compare_numeric(5.0, "is", 5.0)
+
+
+def test_valid_clock_helpers_reject_bool_floats_and_out_of_range() -> None:
+    assert valid_hour(0) and valid_hour(23)
+    assert not valid_hour(24) and not valid_hour(-1) and not valid_hour(True)
+    assert not valid_hour(1.0)
+    assert valid_minute(0) and valid_minute(59)
+    assert not valid_minute(60) and not valid_minute(False) and not valid_minute("5")
+    assert valid_clock(9, 30)
+    assert not valid_clock(9, 60) and not valid_clock(24, 0)

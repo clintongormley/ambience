@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from ..errors import AmbienceError
 from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
-from ._common import merge_intervals
+from ._common import merge_intervals, valid_clock, valid_hour, valid_minute
 
 ANCHOR_ATTR = {
     "sunrise": "next_rising",
@@ -202,10 +202,10 @@ class TimeOfDayCondition:
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
-            # Field by field, not `_valid_clock`: each carries its own key.
-            if not _valid_hour(hh):
+            # Field by field, not `valid_clock`: each carries its own key.
+            if not valid_hour(hh):
                 raise AmbienceError("period_invalid_hh", value=hh)
-            if not _valid_minute(mm):
+            if not valid_minute(mm):
                 raise AmbienceError("period_invalid_mm", value=mm)
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
@@ -245,7 +245,7 @@ class TimeOfDayCondition:
         if direction not in ("not_before", "not_after"):
             raise AmbienceError("period_invalid_clamp_dir", value=direction)
         hh, mm = clamp.get("hh"), clamp.get("mm")
-        if not _valid_clock(hh, mm):
+        if not valid_clock(hh, mm):
             raise AmbienceError("period_invalid_clamp_time", hh=hh, mm=mm)
         clamp_dt = _resolve_wall_clock(dt_util.as_local(anchor_dt), hh, mm)
         if direction == "not_before":
@@ -385,17 +385,9 @@ class TimeOfDayCondition:
         kind = endpoint.get("kind")
         if kind == "time":
             hh, mm = endpoint.get("hh"), endpoint.get("mm")
-            # Mirror _resolve_endpoint's bounds (and reject bool, which is an
-            # int subclass) so an unvalidated predicate can't seed an
-            # unschedulable clock-time.
-            if (
-                isinstance(hh, int)
-                and not isinstance(hh, bool)
-                and 0 <= hh <= 23
-                and isinstance(mm, int)
-                and not isinstance(mm, bool)
-                and 0 <= mm <= 59
-            ):
+            # Same bounds as _resolve_endpoint so an unvalidated predicate
+            # can't seed an unschedulable clock-time.
+            if valid_clock(hh, mm):
                 clock_times.add((hh, mm))
         elif kind == "sun":
             anchor = endpoint.get("anchor")
@@ -403,23 +395,8 @@ class TimeOfDayCondition:
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
             clamp = endpoint.get("clamp")
-            if isinstance(clamp, dict) and _valid_clock(clamp.get("hh"), clamp.get("mm")):
+            if isinstance(clamp, dict) and valid_clock(clamp.get("hh"), clamp.get("mm")):
                 clock_times.add((clamp["hh"], clamp["mm"]))
-
-
-def _valid_hour(hh: Any) -> bool:
-    """True if `hh` is an in-range clock hour (rejecting bool, an int subclass)."""
-    return isinstance(hh, int) and not isinstance(hh, bool) and 0 <= hh <= 23
-
-
-def _valid_minute(mm: Any) -> bool:
-    """True if `mm` is an in-range clock minute (rejecting bool, an int subclass)."""
-    return isinstance(mm, int) and not isinstance(mm, bool) and 0 <= mm <= 59
-
-
-def _valid_clock(hh: Any, mm: Any) -> bool:
-    """True if hh/mm together are an in-range clock time."""
-    return _valid_hour(hh) and _valid_minute(mm)
 
 
 def _strip_clamp(ep: Any) -> Any:

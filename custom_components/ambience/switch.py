@@ -357,23 +357,38 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
                 self.hass, SIGNAL_SWITCH_CONFIG_UPDATED, self._handle_config_updated
             )
         )
-        self._sync_device_name()
-        self._assign_area_device()
-        self._link_via_device()
-        last = await self.async_get_last_state()
-        if last is not None and last.state == "off":
-            self._attr_is_on = False
-            self._schedule_auto_on_from_store(turn_on_if_expired=True)
-        async_apply_switch_exposure(self.hass, self.entity_id)
-        # The engine snapshots which switch entities to watch at subscribe;
-        # a switch that appears later (scope re-enabled, area created) must
-        # make it re-subscribe or its off->on transitions go unseen. Absent
-        # during the platform's initial adds: the engine is built afterwards
-        # and subscribes once, seeing every switch.
-        engine = self.hass.data[DOMAIN].get(DATA_ENGINE)
-        if engine is not None:
-            engine.note_config_changed(self.scope_key)
-            await engine.async_request_refresh()
+        # Core registration and the dispatcher connect above are unconditional.
+        # Everything below is enhancement (cosmetic device naming/linking, the
+        # off-state restore, exposure, engine re-subscribe): a failure here must
+        # not propagate. HA swallows a raising async_added_to_hass WITHOUT
+        # add_to_platform_abort, leaving the entity registered but with no state
+        # written — stranded until a full reload. Catching keeps the switch added
+        # and functional (defaults on); the connected listener lets a later
+        # SIGNAL_SWITCH_CONFIG_UPDATED / reconcile re-run the cosmetic steps.
+        try:
+            self._sync_device_name()
+            self._assign_area_device()
+            self._link_via_device()
+            last = await self.async_get_last_state()
+            if last is not None and last.state == "off":
+                self._attr_is_on = False
+                self._schedule_auto_on_from_store(turn_on_if_expired=True)
+            async_apply_switch_exposure(self.hass, self.entity_id)
+            # The engine snapshots which switch entities to watch at subscribe;
+            # a switch that appears later (scope re-enabled, area created) must
+            # make it re-subscribe or its off->on transitions go unseen. Absent
+            # during the platform's initial adds: the engine is built afterwards
+            # and subscribes once, seeing every switch.
+            engine = self.hass.data[DOMAIN].get(DATA_ENGINE)
+            if engine is not None:
+                engine.note_config_changed(self.scope_key)
+                await engine.async_request_refresh()
+        except Exception:  # noqa: BLE001 - keep the entity added; enhancement self-heals
+            _LOGGER.exception(
+                "ambience switch %s: enhancement step failed during add; entity "
+                "stays added and will self-heal on the next config update",
+                self.entity_id,
+            )
 
     @callback
     def add_to_platform_abort(self) -> None:

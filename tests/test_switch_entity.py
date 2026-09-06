@@ -686,3 +686,31 @@ async def test_config_update_to_zero_delay_cancels_armed_timer(
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
     assert ent._timer is None
+
+
+# --- resilient add: an enhancement step failure must not strand the entity ----
+
+
+async def test_enhancement_failure_does_not_strand_switch(hass, mock_config_entry):
+    """If a cosmetic enhancement step (here _sync_device_name) raises during
+    async_added_to_hass, the entity must still finish adding: core registration
+    stands, it lands in DATA_SWITCHES, its state is written, and it is on. The
+    failed step self-heals on the next SIGNAL_SWITCH_CONFIG_UPDATED."""
+    from custom_components.ambience.switch import AmbienceScopeSwitch
+
+    boom = iter([RuntimeError("boom")])
+
+    def _raise_once(self: AmbienceScopeSwitch) -> None:
+        exc = next(boom, None)
+        if exc is not None:
+            raise exc
+
+    with patch.object(AmbienceScopeSwitch, "_sync_device_name", _raise_once):
+        await _setup(hass, mock_config_entry)
+
+    # Core registration survived: entity is tracked and its state was written.
+    ent = _switch(hass, "house", None)
+    assert ent.is_on is True
+    state = hass.states.get("switch.house_ambience")
+    assert state is not None
+    assert state.state == "on"

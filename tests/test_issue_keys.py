@@ -12,20 +12,23 @@ from strings.json and a defined key nothing raises.
 import json
 from pathlib import Path
 
-from bin.check_exceptions_keys import defined_keys
+from bin.check_exceptions_keys import defined_keys, translation_key_literals
 from custom_components.ambience.config_health_issues import _NEW_KINDS
 from custom_components.ambience.const import STORAGE_UNREADABLE_ISSUE
 
 _STRINGS = Path("custom_components/ambience/strings.json")
-
-# The two `translation_key = "..."` literal branches in
-# `config_health_issues.reconcile_issues` (missing_entity / action_overlap
-# problem kinds). Mirror them here; _NEW_KINDS covers every other branch.
-_LITERAL_BRANCH_KEYS = {"missing_entity", "action_overlap"}
+_ISSUES_SRC = Path("custom_components/ambience/config_health_issues.py")
 
 
 def test_raisable_issue_keys_match_strings_json():
-    raisable = set(_NEW_KINDS) | _LITERAL_BRANCH_KEYS | {STORAGE_UNREADABLE_ISSUE}
+    # The literal-branch keys (currently missing_entity / action_overlap) come
+    # from AST-scanning the code's `translation_key = "..."` assignments, not a
+    # hard-coded mirror — so a typo'd literal becomes an undefined key here
+    # rather than passing silently. _NEW_KINDS covers the problem.kind branch;
+    # STORAGE_UNREADABLE_ISSUE is raised outside this module.
+    literal_branch_keys = translation_key_literals(_ISSUES_SRC.read_text())
+    assert literal_branch_keys, "no translation_key literals scanned from config_health_issues.py"
+    raisable = set(_NEW_KINDS) | literal_branch_keys | {STORAGE_UNREADABLE_ISSUE}
     defined = defined_keys(json.loads(_STRINGS.read_text()), "issues")
     missing = raisable - defined
     unused = defined - raisable

@@ -71,6 +71,39 @@ def scan(text: str) -> tuple[set[str], set[str]]:
     return exceptions, issues
 
 
+def translation_key_literals(text: str) -> set[str]:
+    """Every string literal ASSIGNED to a name ``translation_key`` in a .py source.
+
+    Catches the literal-branch Repairs keys that `scan` cannot see: code that
+    builds `translation_key = "..."` locally and then passes the *variable* to
+    `async_create_issue(translation_key=translation_key)`. Covers plain and
+    annotated assignments, and a walrus, to any target named `translation_key`.
+    Lets a test track the code's actual literals so a typo'd one is caught.
+    """
+    keys: set[str] = set()
+
+    def _is_target(target: ast.expr) -> bool:
+        return isinstance(target, ast.Name) and target.id == "translation_key"
+
+    for node in ast.walk(ast.parse(text)):
+        # A plain, annotated, or walrus assignment to `translation_key`.
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = node.targets
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            targets = [node.target]
+        else:
+            continue
+        # `node.value` is None only for a bare AnnAssign (`translation_key: str`).
+        value = node.value
+        if (
+            any(_is_target(t) for t in targets)
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+        ):
+            keys.add(value.value)
+    return keys
+
+
 def used_keys(text: str) -> set[str]:
     """Every exceptions key referenced via a carrier call in a .py source text."""
     return scan(text)[0]

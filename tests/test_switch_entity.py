@@ -20,6 +20,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ambience.const import (
+    DATA_ENGINE,
     DATA_STORE,
     DATA_SWITCHES,
     DOMAIN,
@@ -714,3 +715,44 @@ async def test_enhancement_failure_does_not_strand_switch(hass, mock_config_entr
     state = hass.states.get("switch.house_ambience")
     assert state is not None
     assert state.state == "on"
+
+
+async def test_enhancement_failure_still_resubscribes_engine(hass, mock_config_entry):
+    """A cosmetic enhancement step failing during a late add must NOT skip the
+    load-bearing engine re-subscribe. The engine snapshots which switches to
+    watch at subscribe; a switch added after the engine exists must make it
+    re-subscribe (note_config_changed + async_request_refresh) or its off->on
+    transitions go unseen. That step is separate from the cosmetic ones, so a
+    _sync_device_name failure must not strand the switch unwatched."""
+    from custom_components.ambience.switch import AmbienceScopeSwitch
+
+    await _setup(hass, mock_config_entry)
+
+    noted: list[Any] = []
+    refreshed: list[int] = []
+
+    class _FakeEngine:
+        def note_config_changed(self, scope: Any) -> None:
+            noted.append(scope)
+
+        async def async_request_refresh(self) -> None:
+            refreshed.append(1)
+
+    hass.data[DOMAIN][DATA_ENGINE] = _FakeEngine()
+
+    boom = iter([RuntimeError("boom")])
+
+    def _raise_once(self: AmbienceScopeSwitch) -> None:
+        exc = next(boom, None)
+        if exc is not None:
+            raise exc
+
+    with patch.object(AmbienceScopeSwitch, "_sync_device_name", _raise_once):
+        area = ar.async_get(hass).async_create("Late Room")
+        await hass.async_block_till_done()
+
+    # The late-added switch is tracked (not stranded) AND the engine was told to
+    # re-subscribe for it despite the cosmetic step raising.
+    assert ("area", area.id) in hass.data[DOMAIN][DATA_SWITCHES]
+    assert ("area", area.id) in noted
+    assert refreshed, "engine.async_request_refresh was not awaited after a late add"

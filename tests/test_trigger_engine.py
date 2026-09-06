@@ -3054,3 +3054,67 @@ async def test_async_evaluate_arms_nothing_when_torn_down_mid_refresh(hass) -> N
     assert call_later.call_count == 0
     assert engine._for_handles == {}
     assert apply_units.call_count == 0
+
+
+class _SequencedCondition:
+    """Yields the next value from a list per snapshot; the value ``"old"``
+    blocks on a gate so an earlier refresh can be made to land last."""
+
+    def __init__(self, values: list[str], gate: asyncio.Event) -> None:
+        self._values = iter(values)
+        self._gate = gate
+
+    async def snapshot(self, hass: Any, entities: Any = None) -> str:
+        value = next(self._values)
+        if value == "old":
+            await self._gate.wait()
+        return value
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return True
+
+    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+        return None
+
+
+def _sequenced_engine(hass, condition) -> AutoTriggerEngine:
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"x": condition},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_an_earlier_slow_refresh_does_not_overwrite_a_later_fast_one(hass) -> None:
+    """Refresh A starts first and blocks; refresh B starts later and completes
+    with a newer view. When A finally lands it must not roll the cache back."""
+    gate = asyncio.Event()
+    engine = _sequenced_engine(hass, _SequencedCondition(["old", "new"], gate))
+
+    first = hass.async_create_task(engine._refresh_snapshots({"x"}))
+    await asyncio.sleep(0)
+    await engine._refresh_snapshots({"x"})
+    assert engine._snapshots["x"] == "new"
+
+    gate.set()
+    await first
+    assert engine._snapshots["x"] == "new"
+
+
+async def test_rebuild_prunes_snapshot_ordering_for_dead_conditions(hass) -> None:
+    """A condition that is no longer registered must not keep an entry in the
+    snapshot ordering map, or it grows unbounded across config edits."""
+    engine = _sequenced_engine(hass, _SequencedCondition(["new"], asyncio.Event()))
+
+    await engine._refresh_snapshots({"x"})
+    assert "x" in engine._snapshot_written
+
+    del hass.data[DOMAIN][DATA_CONDITIONS]["x"]
+    engine.async_rebuild()
+
+    assert engine._snapshot_written == {}

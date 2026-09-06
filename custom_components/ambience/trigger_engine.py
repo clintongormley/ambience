@@ -9,6 +9,7 @@ top of these methods.
 
 from __future__ import annotations
 
+import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -94,6 +95,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # is per-rebuild data, not per-fire.
         self._opaque_ride_along: set[PredKey] = set()
         self._snapshots: dict[str, Any] = {}
+        # Snapshot refreshes overlap (one per fire, plus resyncs), and a slow
+        # condition can make an earlier refresh land after a later one. Each
+        # refresh takes a sequence number when it starts and records it per
+        # condition, so a stale read is dropped instead of rolling the cache
+        # back to the view it began with.
+        self._snapshot_seq = itertools.count()
+        self._snapshot_written: dict[str, int] = {}
         self._unsubs: list[Callable[[], None]] = []
         # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
         # separate from _unsubs because they re-arm on each fire — the slot is
@@ -150,7 +158,8 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._scope_cfgs = {
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
-        self._referenced = referenced_entities(self._conditions(), self._scope_cfgs.values())
+        conditions = self._conditions()
+        self._referenced = referenced_entities(conditions, self._scope_cfgs.values())
         entries = self._build_entries()
         self._pred_entities = {key: tuple(sorted(spec.entities)) for key, spec in entries}
         self._index = build_index(entries)
@@ -160,6 +169,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         live = self._index.all_predicates()
         self._predicate_state = {
             key: value for key, value in self._predicate_state.items() if key in live
+        }
+        # Likewise for the snapshot ordering marks of unregistered conditions.
+        self._snapshot_written = {
+            key: seq for key, seq in self._snapshot_written.items() if key in conditions
         }
         # Prune dead gate fingerprints from tenure, mutating the inner dicts IN
         # PLACE so any snapshot already holding a reference still sees the same
@@ -354,15 +367,23 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self, condition_keys: set[str], result_keys: dict[str, frozenset[str]] | None = None
     ) -> None:
         """Re-snapshot the given conditions into the cache, concurrently
-        (None on failure) — one slow condition doesn't delay the rest. Each
-        gate-capable snapshot is enriched with a live view of this engine's gate
-        tenure so `for:` clauses gate off predicate tenure, not the exact-state
-        clock."""
+        (None on failure) — one slow condition doesn't delay the rest, and a
+        refresh that started earlier never overwrites a condition a later one
+        already published. Each gate-capable snapshot is enriched with a live
+        view of this engine's gate tenure so `for:` clauses gate off predicate
+        tenure, not the exact-state clock."""
+        seq = next(self._snapshot_seq)  # taken at start: ordering is by when the read began
         conditions = self._conditions()
         fresh = await snapshot_conditions(
             self._hass, conditions, self._referenced, keys=condition_keys, result_keys=result_keys
         )
-        self._snapshots.update(attach_tenure(conditions, self._tenure, fresh))
+        for key, value in attach_tenure(conditions, self._tenure, fresh).items():
+            # A refresh that started later has already published a newer view
+            # of this condition; landing ours now would roll the cache back.
+            if self._snapshot_written.get(key, -1) > seq:
+                continue
+            self._snapshot_written[key] = seq
+            self._snapshots[key] = value
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))

@@ -40,6 +40,7 @@ from ._common import (
     kleene_any,
     kleene_not,
     materialise_defaults,
+    miss_cell,
     phrase,
     predicate_has_any,
     sensor_quant_contains,
@@ -271,7 +272,7 @@ class OccupancyCondition(NormalisesPredicate):
             name = snapshot.names.get(eid, eid)
             cur = snapshot.sensors.get(eid)
             if cur is None:
-                cells.append([ent(eid, name), text(": "), phrase("not_found"), text(" ✗")])
+                cells.append(miss_cell(eid, name, "not_found"))
                 continue
             state, changed = cur
             # In the legacy clock, show how long each sensor has held its state

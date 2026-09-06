@@ -41,6 +41,7 @@ from ._common import (
     kleene_any,
     kleene_not,
     materialise_defaults,
+    miss_cell,
     phrase,
     predicate_has_any,
     sensor_quant_contains,
@@ -220,11 +221,11 @@ class LuxCondition(NormalisesPredicate):
         for eid in sensors:
             name = snapshot.names.get(eid, eid)
             if eid not in snapshot.sensors:
-                cells.append([ent(eid, name), text(": "), phrase("not_found"), text(" ✗")])
+                cells.append(miss_cell(eid, name, "not_found"))
                 continue
             held = self._in_band(snapshot.sensors[eid], lo, hi)
             if held is None:
-                cells.append([ent(eid, name), text(": "), phrase("unavailable"), text(" ✗")])
+                cells.append(miss_cell(eid, name, "unavailable"))
                 continue
             val = snapshot.sensors[eid]
             cells.append([ent(eid, name), text(f": {_fmt_lux(val)} lx {'✓' if held else '✗'}")])

@@ -29,6 +29,7 @@ from ._common import (
     for_elapsed_satisfied,
     join_segs,
     materialise_defaults,
+    miss_cell,
     phrase,
     tenure_held,
     tenure_within,
@@ -244,10 +245,7 @@ class PeopleCondition(NormalisesPredicate):
         pred = _norm(predicate)
         where = pred["where"]
         place = "home" if where == _HOME else f"in {where}"
-        quant_word = {"any": "anyone", "everyone": "everyone", "nobody": "nobody"}.get(
-            pred["quant"], "anyone"
-        )
-        return f"{quant_word} {'not ' if pred['negate'] else ''}{place}"
+        return f"{self._quant_word(pred['quant'])} {'not ' if pred['negate'] else ''}{place}"
 
     def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
@@ -415,11 +413,11 @@ class PeopleCondition(NormalisesPredicate):
             name = snapshot.names.get(pid, pid)
             cur = snapshot.persons.get(pid)
             if cur is None:  # person referenced but has no state → does not exist
-                cells.append([ent(pid, name), text(": "), phrase("not_found"), text(" ✗")])
+                cells.append(miss_cell(pid, name, "not_found"))
                 continue
             at = self._loc_match(cur[0], snapshot.in_zones.get(pid), where, snapshot)
             if at is None:  # present but unavailable / unknown zone
-                cells.append([ent(pid, name), text(": "), phrase("unavailable"), text(" ✗")])
+                cells.append(miss_cell(pid, name, "unavailable"))
                 continue
             held = self._holds_at(
                 at,
@@ -471,12 +469,14 @@ class PeopleCondition(NormalisesPredicate):
         return [*prefix, text(": "), *join_segs(cells)]
 
     @staticmethod
+    def _quant_word(quant: str) -> str:
+        """The quantifier's English word, single-sourced for `_gate_label`'s plain
+        prose and `_quant_seg`'s `quant_<word>` phrase key."""
+        return {"any": "anyone", "everyone": "everyone", "nobody": "nobody"}.get(quant, "anyone")
+
+    @staticmethod
     def _quant_seg(quant: str) -> Seg:
-        return phrase(
-            {"any": "quant_anyone", "everyone": "quant_everyone", "nobody": "quant_nobody"}.get(
-                quant, "quant_anyone"
-            )
-        )
+        return phrase(f"quant_{PeopleCondition._quant_word(quant)}")
 
     @staticmethod
     def _where_segs(where: str, negate: bool, snapshot: PeopleSnapshot) -> Detail:

@@ -320,19 +320,6 @@ def sensor_quant_contains(
     return so <= si  # all over more sensors ⊆ all over fewer
 
 
-def wrap_quantified(parts: list[str], quant: Any, negate: bool) -> str:
-    """Join per-sensor ``describe`` cells and wrap them for a sensor-quantifier
-    condition: an ``all of:``/``any of:`` prefix when more than one sensor, then a
-    ``not(...)`` wrap when the predicate is negated. Callers append exactly one
-    ``part`` per sensor, so ``len(parts)`` is the sensor count."""
-    body = ", ".join(parts)
-    if len(parts) > 1:
-        body = f"{'all' if quant == 'all' else 'any'} of: {body}"
-    if negate:
-        body = f"not({body})"
-    return body
-
-
 def state_sources(hass: Any, entities: frozenset[str] | None, domain: str | None = None) -> Any:
     """The states a snapshot should read: just the referenced `entities` when
     the trigger engine supplies them, else a full (optionally domain-filtered)
@@ -478,6 +465,13 @@ def phrase(key: str, **ph: str) -> Seg:
     return Seg(k=key, p=ph)
 
 
+def miss_cell(entity_id: str, name: str, key: str) -> Detail:
+    """A per-entity describe cell for a sensor/person with no usable reading: its
+    linkable name, a reason phrase (``not_found``/``unavailable``) and the ✗
+    mark. Shared by the per-entity conditions (occupancy, lux, people)."""
+    return [ent(entity_id, name), text(": "), phrase(key), text(" ✗")]
+
+
 def _seg_text(s: Seg) -> str:
     return DETAIL_EN[s.k].format(**s.p) if s.k is not None else (s.t or "")
 
@@ -512,8 +506,9 @@ def join_segs(cells: list[Detail], sep: str = ", ") -> Detail:
 
 
 def wrap_quantified_segs(cells: list[Detail], quant: Any, negate: bool) -> Detail:
-    """Segment-aware `wrap_quantified`: an ``all of:``/``any of:`` phrase prefix
-    when more than one cell, then a ``not(...)`` wrap when negated."""
+    """Join per-cell ``describe`` segments for a sensor-quantifier condition: an
+    ``all of:``/``any of:`` phrase prefix when more than one cell, then a
+    ``not(...)`` wrap when negated."""
     body = join_segs(cells)
     if len(cells) > 1:
         body = [phrase("all_of" if quant == "all" else "any_of"), text(" "), *body]

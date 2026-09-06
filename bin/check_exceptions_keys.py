@@ -115,9 +115,14 @@ def main(argv: list[str] | None = None) -> int:
         for k in sorted(unused):
             print(f"  - {k}")
     if missing or missing_issues:
-        print("Exceptions key check FAILED", file=sys.stderr)
+        print("Exceptions/issues key check FAILED", file=sys.stderr)
         return 1
-    print(f"Exceptions key check OK ({len(used)} key(s))")
+    # Both counts, because the gate covers both sections: a bare total would not
+    # say which one a number came from.
+    print(
+        f"Exceptions/issues key check OK "
+        f"({len(used)} exceptions key(s), {len(issues)} issue key(s))"
+    )
     return 0
 
 

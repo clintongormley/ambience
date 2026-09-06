@@ -140,3 +140,32 @@ def test_non_literal_issue_key_is_not_reported():
     constant is invisible to the gate, by design, and must not be guessed at."""
     src = 'ir.async_create_issue(hass, DOMAIN, "x", translation_key=KEY)\n'
     assert issue_keys(src) == set()
+
+
+def test_failure_banner_names_both_sections(tmp_path, capsys):
+    """The gate checks `exceptions` and `issues`, so a run that fails only on an
+    issue key must not announce itself as an exceptions-only check."""
+    comp = tmp_path / "c"
+    comp.mkdir()
+    (comp / "strings.json").write_text('{"exceptions": {}, "issues": {}}')
+    (comp / "x.py").write_text('ir.async_create_issue(hass, DOMAIN, "x", translation_key="gone")\n')
+    assert main(["--component", str(comp)]) == 1
+    assert "Exceptions/issues key check FAILED" in capsys.readouterr().err
+
+
+def test_ok_banner_reports_both_counts(tmp_path, capsys):
+    """One bare key count can't say which section it came from — the OK banner
+    reports the exceptions and issue counts separately."""
+    comp = tmp_path / "c"
+    comp.mkdir()
+    (comp / "strings.json").write_text(
+        '{"exceptions": {"boom": {"message": "B"}}, "issues": {"iss": {"title": "I"}}}'
+    )
+    (comp / "x.py").write_text(
+        'ir.async_create_issue(hass, DOMAIN, "x", translation_key="iss")\n'
+        'raise AmbienceError("boom")\n'
+    )
+    assert main(["--component", str(comp)]) == 0
+    assert "Exceptions/issues key check OK (1 exceptions key(s), 1 issue key(s))" in (
+        capsys.readouterr().out
+    )

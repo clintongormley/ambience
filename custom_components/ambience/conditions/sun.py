@@ -10,7 +10,15 @@ from homeassistant.core import HomeAssistant
 
 from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, as_float, merge_intervals
+from ._common import (
+    UNAVAILABLE,
+    Detail,
+    as_float,
+    join_segs,
+    merge_intervals,
+    phrase,
+    text,
+)
 
 # 8-point compass sectors as 45°-wide (from, to) arcs; from > to wraps past 360.
 SECTORS: dict[str, tuple[float, float]] = {
@@ -115,16 +123,23 @@ class SunCondition:
                 return lo
         return float("-inf")
 
-    def describe(self, snapshot: SunSnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: SunSnapshot, predicate: Any = None) -> Detail | None:
         if snapshot.elevation is None and snapshot.azimuth is None:
             return None
-        parts: list[str] = []
+        cells: list[Detail] = []
         if snapshot.elevation is not None:
-            parts.append(f"{round(snapshot.elevation)}° elevation")
+            cells.append([phrase("sun_elevation", deg=str(round(snapshot.elevation)))])
         if snapshot.azimuth is not None:
-            label = _sector_label(snapshot.azimuth)
-            parts.append(f"{round(snapshot.azimuth)}° azimuth ({label})")
-        return "Sun " + ", ".join(parts)
+            cells.append(
+                [
+                    phrase(
+                        "sun_azimuth",
+                        deg=str(round(snapshot.azimuth)),
+                        sector=_sector_label(snapshot.azimuth),
+                    )
+                ]
+            )
+        return [phrase("sun_prefix"), text(" "), *join_segs(cells)]
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

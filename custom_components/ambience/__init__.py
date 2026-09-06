@@ -72,6 +72,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
     STORAGE_KEY,
+    STORAGE_UNREADABLE_ISSUE,
     get_store,
 )
 from .errors import async_preload_translations
@@ -103,11 +104,6 @@ _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 # Coalesce a burst of config-health triggers (a multi-scope save, a device
 # integration registering its entities) into one scan.
 _HEALTH_DEBOUNCE_SECONDS = 1.0
-
-# Repairs issue for an unreadable store payload; doubles as its `issues`
-# translation key. It carries no `kind:` prefix, so config_health_issues'
-# reconcile pass — which sweeps only prefixed ids — never deletes it.
-_STORAGE_UNREADABLE_ISSUE = "storage_unreadable"
 
 
 def _hash_bundle(bundle_path: Path) -> str:
@@ -145,14 +141,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            _STORAGE_UNREADABLE_ISSUE,
+            STORAGE_UNREADABLE_ISSUE,
             is_fixable=False,
             severity=ir.IssueSeverity.ERROR,
-            translation_key=_STORAGE_UNREADABLE_ISSUE,
+            translation_key=STORAGE_UNREADABLE_ISSUE,
             translation_placeholders={"path": f".storage/{STORAGE_KEY}"},
         )
     else:
-        ir.async_delete_issue(hass, DOMAIN, _STORAGE_UNREADABLE_ISSUE)
+        ir.async_delete_issue(hass, DOMAIN, STORAGE_UNREADABLE_ISSUE)
 
     # Reconcile against HA registries: drop stored configs whose registry
     # entry has gone away (e.g. while HA was down).

@@ -2,7 +2,14 @@
 
 from pathlib import Path
 
-from bin.check_ui_strings import bundle_keys, compare, used_keys, used_prefixes
+from bin.check_ui_strings import (
+    bundle_keys,
+    compare,
+    main,
+    scan_sources,
+    used_keys,
+    used_prefixes,
+)
 
 SAMPLE_BUNDLE = """
 export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, unknown> = {
@@ -49,12 +56,9 @@ def test_real_frontend_keys_are_all_bundled() -> None:
     """Every ui.* key a localize() call references must exist in i18n-data.ts —
     a missing key silently falls back to inline English and can never be
     translated."""
-    root = Path(__file__).resolve().parent.parent
-    bundle = bundle_keys((root / "frontend" / "src" / "i18n-data.ts").read_text())
-    used: set[str] = set()
-    for ts in (root / "frontend" / "src").rglob("*.ts"):
-        used |= used_keys(ts.read_text())
-    missing, _unused = compare(used, bundle)
+    src = Path(__file__).resolve().parents[1] / "frontend" / "src"
+    used, _prefixes = scan_sources(src)
+    missing, _unused = compare(used, bundle_keys((src / "i18n-data.ts").read_text()))
     assert not missing, f"ui keys used but not bundled in i18n-data.ts: {sorted(missing)}"
 
 
@@ -67,10 +71,20 @@ def test_used_prefixes_extracts_the_static_head_of_a_template_literal() -> None:
     assert used_prefixes(src) == {"ui.history_action_", "ui.history_"}
 
 
-def test_used_prefixes_ignores_a_bare_ui_head() -> None:
-    """A bare `ui.` head would match every bundled key, silently disabling the
-    unreferenced-key check — it must not count as a prefix claim."""
-    assert used_prefixes('localize(h, `ui.${x}`, "")') == set()
+def test_used_prefixes_captures_a_bare_ui_head() -> None:
+    """A bare `ui.` head is captured so `main` can reject it — dropping it here
+    would leave the key unchecked with no signal at all."""
+    assert used_prefixes('localize(h, `ui.${x}`, "")') == {"ui."}
+
+
+def test_main_rejects_a_bare_ui_head(tmp_path: Path) -> None:
+    """A prefix claiming every bundled key would silence the unreferenced-key
+    check, so it fails the run rather than being quietly tolerated."""
+    src = tmp_path / "frontend" / "src"
+    src.mkdir(parents=True)
+    (src / "i18n-data.ts").write_text(SAMPLE_BUNDLE)
+    (src / "panel.ts").write_text('localize(h, `ui.${x}`, "")')
+    assert main(["--root", str(tmp_path)]) == 1
 
 
 def test_compare_treats_a_prefix_claim_as_a_reference() -> None:
@@ -82,12 +96,8 @@ def test_compare_treats_a_prefix_claim_as_a_reference() -> None:
 
 def test_real_frontend_has_no_unreferenced_ui_keys() -> None:
     """Turns the script's warning into a repo invariant."""
-    src = Path(__file__).parents[1] / "frontend" / "src"
-    used, prefixes = set(), set()
-    for ts in src.rglob("*.ts"):
-        text = ts.read_text()
-        used |= used_keys(text)
-        prefixes |= used_prefixes(text)
+    src = Path(__file__).resolve().parents[1] / "frontend" / "src"
+    used, prefixes = scan_sources(src)
     bundled = bundle_keys((src / "i18n-data.ts").read_text())
     _missing, unused = compare(used, bundled, prefixes=prefixes)
     assert unused == set()

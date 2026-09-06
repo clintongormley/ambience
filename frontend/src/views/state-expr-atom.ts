@@ -7,7 +7,7 @@ import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateAttributeLabel, stateOpLabel, stateValueLabel } from "../i18n.js";
 import type { ForMode, StateAtom, StateForDuration } from "../types.js";
 import { type ForDurationValue, persistedForMode } from "./for-duration.js";
-import { type StateObj, statesMap } from "./hass-states.js";
+import { hasNumericState, type StateObj, statesMap } from "./hass-states.js";
 
 type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
 type ValueLabelMaps = { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> };
@@ -386,10 +386,7 @@ export class AmbienceStateExprAtom extends LitElement {
     if (atom.attribute) {
       return typeof entity.attributes?.[atom.attribute] === "number";
     }
-    const s = entity.state;
-    if (typeof s !== "string") return false;
-    if (s === "" || s === "unknown" || s === "unavailable") return false;
-    return Number.isFinite(Number(s));
+    return hasNumericState(entity);
   }
 
   _opSchema(): HaFormSchema[] {

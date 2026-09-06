@@ -7,10 +7,16 @@ import type { HaFormSchema } from "../ha-form.js";
 import { type HassLike, localize, luxLabel } from "../i18n.js";
 import type { LuxPredicate, LuxQuant, LuxRangeStoreView } from "../types.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
-import { type StateObj, statesMap } from "./hass-states.js";
+import { hasNumericState, type StateObj } from "./hass-states.js";
 import { effectiveDefIds } from "./named-def-config.js";
 
 const CUSTOM = "__custom__";
+
+/** Element-wise equality for two id lists (the selection changes by value, not
+ *  by identity — every edit rebuilds the predicate). */
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
 
 /**
  * Editor for a `lux` predicate: a numeric-sensor picker, a band selector
@@ -66,13 +72,10 @@ export function luxPredicateError(pred: unknown, hass?: HassConnection): string 
  * listed while it is offline, when its state alone would not qualify it.
  */
 export function isLuxCandidate(st: StateObj | undefined): boolean {
-  if (!st) return false;
-  const a = st.attributes ?? {};
-  if (a.device_class === "illuminance" || a.unit_of_measurement === "lx") return true;
-  if (a.state_class === "measurement") return true;
-  return (
-    typeof st.state === "string" && st.state.trim() !== "" && Number.isFinite(Number(st.state))
-  );
+  const a = st?.attributes;
+  if (a?.device_class === "illuminance" || a?.unit_of_measurement === "lx") return true;
+  if (a?.state_class === "measurement") return true;
+  return hasNumericState(st);
 }
 
 @customElement("ambience-lux-input")
@@ -191,6 +194,38 @@ export class AmbienceLuxInput extends LitElement {
 
   // --- schemas -------------------------------------------------------------
 
+  private _candidatesFor?: Record<string, StateObj>;
+  private _candidatesOf: string[] = [];
+  private _candidates: string[] = [];
+  private _candidatesFresh = false;
+
+  /** Candidate ids: every numeric-looking `sensor.*` plus the current selection.
+   *  Only the identity of `hass.states` and the selection can move this list, and
+   *  HA hands the panel a fresh `hass` on every state tick — so it is cached
+   *  against both rather than rescanning every entity on every render. */
+  private _candidateIds(): string[] {
+    const states = this.hass?.states;
+    const selection = this._sensors();
+    if (
+      this._candidatesFresh &&
+      this._candidatesFor === states &&
+      sameIds(this._candidatesOf, selection)
+    ) {
+      return this._candidates;
+    }
+    const ids = new Set(selection);
+    for (const id of Object.keys(states ?? {})) {
+      // Domain first: most of `hass.states` is not a sensor, and the state
+      // object is only worth inspecting for the ones that are.
+      if (id.startsWith("sensor.") && isLuxCandidate(states?.[id])) ids.add(id);
+    }
+    this._candidatesFor = states;
+    this._candidatesOf = [...selection];
+    this._candidates = [...ids].sort();
+    this._candidatesFresh = true;
+    return this._candidates;
+  }
+
   /** HA's entity selector has no "numeric" filter, so the candidate list is
    *  computed from `hass.states` and passed as `include_entities`. The current
    *  selection is always unioned in, so a configured sensor that is missing or
@@ -198,13 +233,9 @@ export class AmbienceLuxInput extends LitElement {
    *  the plain `sensor` selector is the fallback (an empty `include_entities`
    *  would offer nothing). */
   _sensorSchema(): HaFormSchema[] {
-    const states = statesMap(this.hass);
-    const ids = new Set(this._sensors());
-    for (const [id, st] of Object.entries(states)) {
-      if (id.startsWith("sensor.") && isLuxCandidate(st)) ids.add(id);
-    }
+    const ids = this._candidateIds();
     const entity: Record<string, unknown> = { domain: "sensor", multiple: true };
-    if (ids.size) entity.include_entities = [...ids].sort();
+    if (ids.length) entity.include_entities = ids;
     return [{ name: "sensors", selector: { entity } }];
   }
 

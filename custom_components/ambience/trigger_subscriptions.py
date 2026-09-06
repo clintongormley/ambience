@@ -12,7 +12,7 @@ build + flip detection + resolve/apply). The methods reference engine state
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.const import STATE_UNKNOWN
@@ -461,22 +461,43 @@ class TriggerSubscriptionsMixin:
             return retry_at, False
         return now + timedelta(seconds=60), False
 
+    def _arm_slot[K](
+        self,
+        slots: dict[K, Callable[[], None]],
+        key: K,
+        fire_at: datetime,
+        on_fire: Callable[[], None],
+    ) -> None:
+        """Hold a one-shot timer for `fire_at` in `slots[key]`, running `on_fire`
+        when it fires.
+
+        Never arm into a dead engine: a handle that survives teardown fires into
+        a no-op. Re-arming replaces the slot (cancelling whatever it held), so
+        fired handles never accumulate.
+        """
+
+        @callback
+        def _handler(_now: Any) -> None:
+            if not self._running:
+                return
+            on_fire()
+
+        old = slots.pop(key, None)
+        if old is not None:
+            old()
+        slots[key] = async_track_point_in_time(self._hass, _handler, fire_at)
+
     def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
         """Schedule the next sun wake-up, re-arming on every wake-up.
 
         Only a wake-up at the genuine `anchor+offset` instant re-evaluates; the
-        rollover fall-forwards just re-arm. The handle lives in
-        `_sun_unsubs[sun_event]`; re-arming cancels and replaces the slot so
-        fired (dead) handles never accumulate.
+        rollover fall-forwards just re-arm.
         """
         fire_at, is_fire = self._next_sun_slot(sun_event[0], sun_event[1])
         if fire_at is None:
             return
 
-        @callback
-        def _handler(_now: Any) -> None:
-            if not self._running:
-                return  # fired after teardown — don't re-arm into a dead engine
+        def _on_fire() -> None:
             preds = self._index.by_sun.get(sun_event) if is_fire else None
             if preds:
                 self._fire(
@@ -485,10 +506,7 @@ class TriggerSubscriptionsMixin:
                 )
             self._schedule_sun(sun_event)  # arm the next occurrence
 
-        old = self._sun_unsubs.pop(sun_event, None)
-        if old is not None:
-            old()
-        self._sun_unsubs[sun_event] = async_track_point_in_time(self._hass, _handler, fire_at)
+        self._arm_slot(self._sun_unsubs, sun_event, fire_at, _on_fire)
 
     def _schedule_clock(self, clock: tuple[int, int], preds: frozenset[PredKey]) -> None:
         """Arm the next wake-up for a wall-clock time, re-arming on every fire.
@@ -497,19 +515,12 @@ class TriggerSubscriptionsMixin:
         skips a clock time that falls in the spring-forward gap for the whole
         day, whereas matching resolves it to the jump instant
         (`next_wall_clock`), and HA fires a time inside the autumn fold twice.
-        The handle lives in `_clock_unsubs[clock]`; re-arming replaces the slot.
         """
         fire_at = next_wall_clock(dt_util.utcnow(), clock[0], clock[1])
         cause = TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}")
 
-        @callback
-        def _handler(_now: Any) -> None:
-            if not self._running:
-                return  # fired after teardown — don't re-arm into a dead engine
+        def _on_fire() -> None:
             self._fire(set(preds), cause)
             self._schedule_clock(clock, preds)
 
-        old = self._clock_unsubs.pop(clock, None)
-        if old is not None:
-            old()
-        self._clock_unsubs[clock] = async_track_point_in_time(self._hass, _handler, fire_at)
+        self._arm_slot(self._clock_unsubs, clock, fire_at, _on_fire)

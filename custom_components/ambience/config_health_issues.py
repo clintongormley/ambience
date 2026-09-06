@@ -14,7 +14,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .config_health import Problem, referenced_entities_by_scene, scan
-from .const import DATA_CONDITIONS, DATA_OVERLAP_SET, DATA_STORE, DOMAIN
+from .const import (
+    DATA_CONDITIONS,
+    DATA_OVERLAP_SET,
+    DATA_STORE,
+    DOMAIN,
+    STORAGE_UNREADABLE_ISSUE,
+)
 from .naming import category_names, scene_label, scope_display_name
 
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
@@ -37,6 +43,11 @@ _ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(
     f"{k}:"
     for k in sorted(_NEW_KINDS)  # sorted → deterministic regardless of frozenset order
 )
+
+# Issue ids raised under DOMAIN by other parts of the integration, which this
+# module must never delete. They happen not to match `_ISSUE_PREFIXES` today;
+# naming them makes that a decision rather than a coincidence.
+_FOREIGN_ISSUE_IDS = frozenset({STORAGE_UNREADABLE_ISSUE})
 
 
 def _issue_id(problem: Problem) -> str:
@@ -128,10 +139,12 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     cats = category_names(hass)  # category id -> friendly name
 
     registry = ir.async_get(hass)
-    existing = [
-        iid for (dom, iid) in registry.issues if dom == DOMAIN and iid.startswith(_ISSUE_PREFIXES)
-    ]
+    existing = [iid for (dom, iid) in registry.issues if dom == DOMAIN]
     for iid in existing:
+        # Not ours to clear: an id another part of the integration raises under
+        # DOMAIN, or one outside the kinds this scan can produce.
+        if iid in _FOREIGN_ISSUE_IDS or not iid.startswith(_ISSUE_PREFIXES):
+            continue
         if iid not in desired:
             ir.async_delete_issue(hass, DOMAIN, iid)
 

@@ -28,11 +28,26 @@ def _entry(hass, *, uid: str) -> MockConfigEntry:
 
 
 @pytest.fixture
-async def installed(hass, mock_config_entry):
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+async def capture_adds(hass, installed) -> list[list[Any]]:
+    """Replace the platform's add_entities with a recorder, so a reconcile's adds
+    are observable and never complete — the tests below all live in the window
+    between add_entities() and async_added_to_hass. Returns the recorded batches.
+
+    Anything that must really get a switch has to be created before this fixture
+    runs (see `spare_area`), since afterwards nothing is added for real.
+    """
+    added: list[list[Any]] = []
+    hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = added.append
+    return added
+
+
+@pytest.fixture
+async def spare_area(hass, installed) -> str:
+    """An extra area, with its switch genuinely added — created ahead of
+    `capture_adds` so the switch exists before the recorder takes over."""
+    area = ar.async_get(hass).async_create("Spare Room")
     await hass.async_block_till_done()
-    return mock_config_entry
+    return area.id
 
 
 async def test_house_and_enabled_area_get_switches_with_no_seed(hass: HomeAssistant) -> None:
@@ -102,12 +117,11 @@ async def test_reconcile_ignores_non_ambience_switch_entities(hass: HomeAssistan
 
 
 async def test_reconcile_does_not_re_add_a_switch_whose_add_is_still_in_flight(
-    hass: HomeAssistant, installed
+    hass: HomeAssistant, installed, capture_adds
 ) -> None:
     """Between add_entities() and async_added_to_hass the switch is not yet in
     DATA_SWITCHES; a second reconcile inside that window must not add it again."""
-    added: list[list[Any]] = []
-    hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = added.append  # records, never adds
+    added = capture_adds
     hass.data[DOMAIN][DATA_SWITCHES].pop(("house", None))  # simulate "not yet added"
 
     reconcile_scope_switches(hass, installed)
@@ -117,11 +131,12 @@ async def test_reconcile_does_not_re_add_a_switch_whose_add_is_still_in_flight(
     assert [e.scope_key for e in added[0]] == [("house", None)]
 
 
-async def test_an_aborted_add_releases_the_pending_claim(hass: HomeAssistant, installed) -> None:
+async def test_an_aborted_add_releases_the_pending_claim(
+    hass: HomeAssistant, installed, capture_adds
+) -> None:
     """HA can drop an entity before it is added; the pending claim must go with
     it so a later reconcile is free to try the scope again."""
-    added: list[list[Any]] = []
-    hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = added.append
+    added = capture_adds
     hass.data[DOMAIN][DATA_SWITCHES].pop(("house", None))
 
     reconcile_scope_switches(hass, installed)
@@ -134,12 +149,13 @@ async def test_an_aborted_add_releases_the_pending_claim(hass: HomeAssistant, in
     assert len(added) == 2  # free to try again
 
 
-async def test_a_stale_pending_claim_is_retried(hass: HomeAssistant, installed) -> None:
+async def test_a_stale_pending_claim_is_retried(
+    hass: HomeAssistant, installed, capture_adds
+) -> None:
     """HA can abandon an add without calling add_to_platform_abort — it swallows
     a per-entity add error, and drops whatever is left after an add timeout. A
     claim outliving its add must expire, or the scope is never created again."""
-    added: list[list[Any]] = []
-    hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = added.append
+    added = capture_adds
     hass.data[DOMAIN][DATA_SWITCHES].pop(("house", None))
 
     reconcile_scope_switches(hass, installed)
@@ -154,20 +170,16 @@ async def test_a_stale_pending_claim_is_retried(hass: HomeAssistant, installed) 
 
 
 async def test_a_claim_for_a_scope_no_longer_desired_is_dropped(
-    hass: HomeAssistant, installed
+    hass: HomeAssistant, installed, spare_area, capture_adds
 ) -> None:
     """A claim must not outlive the scope wanting a switch, or re-enabling that
     scope would find it still claimed and never create the switch."""
-    area = ar.async_get(hass).async_create("Spare Room")
-    await hass.async_block_till_done()
-    added: list[list[Any]] = []
-    hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = added.append
-    hass.data[DOMAIN][DATA_SWITCHES].pop(("area", area.id))
+    hass.data[DOMAIN][DATA_SWITCHES].pop(("area", spare_area))
 
     reconcile_scope_switches(hass, installed)
-    assert ("area", area.id) in hass.data[DOMAIN][DATA_SWITCHES_PENDING]
+    assert ("area", spare_area) in hass.data[DOMAIN][DATA_SWITCHES_PENDING]
 
-    await hass.data[DOMAIN][DATA_STORE].async_set_scope_enabled("area", area.id, False)
+    await hass.data[DOMAIN][DATA_STORE].async_set_scope_enabled("area", spare_area, False)
     reconcile_scope_switches(hass, installed)
 
-    assert ("area", area.id) not in hass.data[DOMAIN][DATA_SWITCHES_PENDING]
+    assert ("area", spare_area) not in hass.data[DOMAIN][DATA_SWITCHES_PENDING]

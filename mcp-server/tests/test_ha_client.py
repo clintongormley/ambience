@@ -6,7 +6,6 @@ from conftest import FakeTransport
 
 from ambience_mcp import ha_client
 from ambience_mcp.ha_client import (
-    MUTATING_COMMANDS,
     HAAuthError,
     HAClient,
     HACommandError,
@@ -592,7 +591,6 @@ def test_every_write_is_classified_as_mutating(command: str) -> None:
     """A lost reply to a write must never be re-sent: the write may already have
     been applied."""
     assert _mutates(command)
-    assert command in MUTATING_COMMANDS
 
 
 @pytest.mark.parametrize(

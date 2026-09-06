@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -628,17 +629,6 @@ def _for_engine(hass, seconds: float):
     return engine
 
 
-def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
-    """Set switch.radiator on, then pin dt_util.utcnow() `age` past the state's
-    real last_updated so the engine sees the switch as having been on that long.
-    (hass.states.get is read-only, so we move the clock rather than the state.)"""
-    import custom_components.ambience.trigger_subscriptions as _ts_mod
-
-    hass.states.async_set("switch.radiator", "on")
-    last_updated = hass.states.get("switch.radiator").last_updated
-    monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + age)
-
-
 def _movable_clock(hass, monkeypatch) -> dict[str, timedelta]:
     """Set switch.radiator on and pin dt_util.utcnow() to its last_updated plus
     a mutable offset the test can advance.
@@ -656,6 +646,29 @@ def _movable_clock(hass, monkeypatch) -> dict[str, timedelta]:
     clock = {"offset": timedelta(0)}
     monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + clock["offset"])
     return clock
+
+
+def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
+    """Set switch.radiator on with the clock pinned `age` past its last_updated,
+    so the engine sees the switch as having been on that long."""
+    _movable_clock(hass, monkeypatch)["offset"] = age
+
+
+@contextmanager
+def _capture_call_later():
+    """Patch async_call_later for the duration of the block, yielding the list of
+    `(seconds, callback)` it was asked to arm. The callbacks are the test's only
+    handle on a pending timer — nothing else fires them."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    captured: list[tuple[float, Any]] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        yield captured
 
 
 async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatch) -> None:
@@ -693,13 +706,8 @@ async def test_matured_for_gate_with_failed_snapshot_rearms_a_retry(hass, monkey
     clock = _movable_clock(hass, monkeypatch)
     engine = _for_engine(hass, 60.0)
     cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
-    captured: list[tuple[float, Any]] = []
 
-    def fake_call_later(_hass, seconds, cb):
-        captured.append((seconds, cb))
-        return MagicMock()
-
-    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+    with _capture_call_later() as captured:
         await engine.async_initial_sync()
         assert [s for s, _ in captured] == [60.0]
         clock["offset"] += timedelta(seconds=61)
@@ -723,13 +731,8 @@ async def test_for_gate_retries_stop_after_the_limit(hass, monkeypatch) -> None:
     clock = _movable_clock(hass, monkeypatch)
     engine = _for_engine(hass, 60.0)
     cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
-    captured: list[tuple[float, Any]] = []
 
-    def fake_call_later(_hass, seconds, cb):
-        captured.append((seconds, cb))
-        return MagicMock()
-
-    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+    with _capture_call_later() as captured:
         await engine.async_initial_sync()
         clock["offset"] += timedelta(seconds=61)
         cond.fail = True
@@ -751,13 +754,8 @@ async def test_for_gate_retry_budget_resets_after_a_healthy_read(hass, monkeypat
     engine = _for_engine(hass, 60.0)
     cond = hass.data[DOMAIN][DATA_CONDITIONS]["rad"]
     key = ("area", "a", 0, "rad")
-    captured: list[tuple[float, Any]] = []
 
-    def fake_call_later(_hass, seconds, cb):
-        captured.append((seconds, cb))
-        return MagicMock()
-
-    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+    with _capture_call_later() as captured:
         await engine.async_initial_sync()
         clock["offset"] += timedelta(seconds=61)
         cond.fail = True

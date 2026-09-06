@@ -3,7 +3,6 @@ exposed-action catalog validation."""
 
 from __future__ import annotations
 
-import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -17,14 +16,6 @@ _SERVICES = (
     "cover_safe_set_position",
     "cover_safe_set_tilt_position",
 )
-
-
-@pytest.fixture
-async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    return mock_config_entry
 
 
 async def test_services_registered_then_removed(

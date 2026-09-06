@@ -13,7 +13,12 @@ from custom_components.ambience.config_health_issues import (
     reconcile_issues,
     referenced_entity_ids,
 )
-from custom_components.ambience.const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
+from custom_components.ambience.const import (
+    DATA_OVERLAP_SET,
+    DATA_STORE,
+    DOMAIN,
+    STORAGE_UNREADABLE_ISSUE,
+)
 
 
 @pytest.fixture
@@ -408,3 +413,21 @@ async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed)
         "unexposed_action:fan.toggle",
     ):
         assert reg.async_get_issue(DOMAIN, iid) is not None, iid
+
+
+async def test_reconcile_leaves_another_module_s_issue_alone(
+    hass: HomeAssistant, installed
+) -> None:
+    """`__init__` owns the storage-unreadable issue; the config-health sweep must
+    not clear it just because it isn't one of the problems this scan found."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        STORAGE_UNREADABLE_ISSUE,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=STORAGE_UNREADABLE_ISSUE,
+        translation_placeholders={"path": ".storage/ambience"},
+    )
+    reconcile_issues(hass)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, STORAGE_UNREADABLE_ISSUE) is not None

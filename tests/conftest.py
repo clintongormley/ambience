@@ -18,6 +18,19 @@ from custom_components.ambience.const import DOMAIN
 
 
 @pytest.fixture
+async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
+    """The integration set up from `mock_config_entry` and settled.
+
+    Shared default; a module that needs a different setup (extra seeding, a
+    second entry) still declares its own `installed`, which shadows this one.
+    """
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    return mock_config_entry
+
+
+@pytest.fixture
 def builtin(hass: HomeAssistant) -> None:
     """Register Ambience built-in services (shared across builtin test modules)."""
     async_register_builtin_services(hass)

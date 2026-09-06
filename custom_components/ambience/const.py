@@ -18,6 +18,11 @@ DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
 
+# Repairs issue id for an unreadable store payload; doubles as its `issues`
+# translation key. Raised in `__init__`, and named in `config_health_issues` so
+# that module's delete-pass knowingly leaves it alone.
+STORAGE_UNREADABLE_ISSUE = "storage_unreadable"
+
 # Structure version of the AI bundle (see ai_bundle.py). Bump ONLY when the
 # bundle's shape changes incompatibly — the knowledge pack stamps this so the
 # skill can refuse a bundle it's too old to read. Independent of the release

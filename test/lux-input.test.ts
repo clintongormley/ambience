@@ -98,6 +98,25 @@ describe("ambience-lux-input", () => {
     el.remove();
   });
 
+  test("candidate list is cached per hass.states identity", async () => {
+    // HA replaces `hass` on every state tick; rescanning every entity per render
+    // is the thing being avoided, so a same-states call must reuse the list.
+    const el = await mount({ sensors: ["sensor.gone"], range: "dark" });
+    const states = { "sensor.lux": { state: "40", attributes: { device_class: "illuminance" } } };
+    el.hass = { ...el.hass, states } as never;
+    const first = el._sensorSchema()[0].selector.entity.include_entities;
+    expect(el._sensorSchema()[0].selector.entity.include_entities).toBe(first);
+
+    el.hass = {
+      ...el.hass,
+      states: { ...states, "sensor.b": { state: "7", attributes: {} } },
+    } as never;
+    const second = el._sensorSchema()[0].selector.entity.include_entities;
+    expect(second).not.toBe(first);
+    expect(second).toEqual(["sensor.b", "sensor.gone", "sensor.lux"]);
+    el.remove();
+  });
+
   test("sensor picker falls back to the plain sensor selector when nothing qualifies", async () => {
     const el = await mount({ sensors: [], range: "dark" });
     el.hass = { ...el.hass, states: {} } as never;

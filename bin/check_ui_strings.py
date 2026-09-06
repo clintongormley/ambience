@@ -11,10 +11,10 @@ Exits non-zero (listing the keys) when a used ui.* key is missing from the
 bundle. Bundle keys that no source file references are reported as warnings
 only; a key matching the static head of an interpolated template literal
 (e.g. `ui.history_action_${action}`) counts as referenced, so only truly
-dynamic keys with no static prefix are out of scope — a bare `ui.` head (no
-characters between the dot and `${`) does NOT count as a prefix claim, since
-it would match every bundled key and silence this check entirely. Stdlib-only,
-so CI needs no dependencies to run it.
+dynamic keys with no static prefix are out of scope. A bare `ui.` head (no
+characters between the dot and `${`) is a hard error: it would claim every
+bundled key and silence this check entirely. Stdlib-only, so CI needs no
+dependencies to run it.
 """
 
 from __future__ import annotations
@@ -31,11 +31,11 @@ from bin._i18n_bundle import parse_locales
 # is matched separately by _PREFIX_RE, since its full key isn't statically known.
 _USED_RE = re.compile(r'["`](ui\.[A-Za-z0-9_.]+)["`]')
 # The static head of an interpolated template literal: `ui.history_action_${...}`
-# claims every bundled key starting with "ui.history_action_". Requires at
-# least one character after "ui." (`+`, not `*`) — a bare `ui.${x}` head would
-# otherwise yield the prefix "ui.", which every bundled key starts with,
-# silently disabling the unreferenced-key check.
-_PREFIX_RE = re.compile(r"`(ui\.[A-Za-z0-9_.]+)\$\{")
+# claims every bundled key starting with "ui.history_action_". A bare `ui.${x}`
+# head is captured too (`*`, not `+`) so `main` can reject it: silently skipping
+# it would leave the key unchecked with no signal, while honouring it as a
+# prefix would claim every bundled key.
+_PREFIX_RE = re.compile(r"`(ui\.[A-Za-z0-9_.]*)\$\{")
 
 
 def bundle_keys(text: str) -> set[str]:
@@ -58,6 +58,18 @@ def used_prefixes(text: str) -> set[str]:
     return set(_PREFIX_RE.findall(text))
 
 
+def scan_sources(src: Path) -> tuple[set[str], set[str]]:
+    """Walk a frontend source tree once, returning (used ui.* keys, static
+    prefixes of interpolated ones)."""
+    used: set[str] = set()
+    prefixes: set[str] = set()
+    for ts_file in sorted(src.rglob("*.ts")):
+        text = ts_file.read_text()
+        used |= used_keys(text)
+        prefixes |= used_prefixes(text)
+    return used, prefixes
+
+
 def compare(
     used: set[str], bundled: set[str], prefixes: set[str] = frozenset()
 ) -> tuple[set[str], set[str]]:
@@ -78,12 +90,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     src = args.root / "frontend" / "src"
     bundled = bundle_keys((src / "i18n-data.ts").read_text())
-    used: set[str] = set()
-    prefixes: set[str] = set()
-    for ts_file in sorted(src.rglob("*.ts")):
-        text = ts_file.read_text()
-        used |= used_keys(text)
-        prefixes |= used_prefixes(text)
+    used, prefixes = scan_sources(src)
+    if "ui." in prefixes:
+        print("dynamic ui key with no static prefix — give it one (e.g. `ui.section_${x}`)")
+        return 1
     missing, unused = compare(used, bundled, prefixes=prefixes)
     if missing:
         print("ui keys used by localize() but missing from i18n-data.ts:")

@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from ..const import DATA_STORE, DOMAIN, get_store
 from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, as_float, compare_numeric, predicate_has_any
+from ._common import UNAVAILABLE, Reason, as_float, compare_numeric, predicate_has_any
 
 WEATHER_CONDITIONS = (
     "clear-night",
@@ -175,15 +175,15 @@ class WeatherCondition:
             return False
         return compare_numeric(snap.attributes[attr], t.get("op"), value)
 
-    def unconfigured_reason(self, predicate: Any, snapshot: WeatherSnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: WeatherSnapshot) -> Reason | None:
         if not weather_predicate_active(predicate):
             return None
         if not self._entity():
-            return "weather entity not configured"
+            return Reason("weather_entity_unconfigured")
         known = {g.get("id") for g in self._configured_groups()}
         for gid in predicate.get("groups") or []:
             if isinstance(gid, str) and gid not in known:
-                return f"weather group {gid!r} no longer exists"
+                return Reason("weather_group_missing", {"group": gid})
         return None
 
     def describe(self, snapshot: WeatherSnapshot, predicate: Any = None) -> str | None:

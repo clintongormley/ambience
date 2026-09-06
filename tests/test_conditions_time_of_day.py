@@ -13,6 +13,7 @@ from astral.sun import dusk, sunrise
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from custom_components.ambience.conditions._common import Reason
 from custom_components.ambience.conditions.time_of_day import (
     TimeOfDayCondition,
     TimeOfDaySnapshot,
@@ -113,9 +114,7 @@ async def test_snapshot_without_sun_integration_disables_only_sun_endpoints(
     assert cond.matches(_range(_time(8, 0), _time(17, 0)), snap) is True
     sun_pred = _range(_sun("sunrise"), _sun("sunset"))
     assert cond.matches(sun_pred, snap) is False
-    reason = cond.unconfigured_reason(sun_pred, snap)
-    assert reason is not None
-    assert "sun integration" in reason
+    assert cond.unconfigured_reason(sun_pred, snap) == Reason("sun_not_configured")
 
 
 async def test_snapshot_uses_anchor_for_now_local_date_not_next_event(
@@ -737,9 +736,9 @@ async def test_dusk_range_false_with_reason_naming_the_anchor(hass: HomeAssistan
     snap = await cond.snapshot(hass, now=_MIDSUMMER)
     pred = _range(_sun("dusk"), _time(8, 30))
     assert cond.matches(pred, snap) is False
-    reason = cond.unconfigured_reason(pred, snap)
-    assert reason is not None
-    assert "dusk" in reason
+    assert cond.unconfigured_reason(pred, snap) == Reason(
+        "sun_anchor_undefined", {"anchor": "dusk"}
+    )
 
 
 async def test_period_needing_missing_anchor_false_others_still_evaluate(
@@ -751,9 +750,9 @@ async def test_period_needing_missing_anchor_false_others_still_evaluate(
     cond = _condition()
     snap = await cond.snapshot(hass, now=_MIDSUMMER)
     assert cond.matches({"period": "evening"}, snap) is False
-    reason = cond.unconfigured_reason({"period": "evening"}, snap)
-    assert reason is not None
-    assert "dusk" in reason
+    assert cond.unconfigured_reason({"period": "evening"}, snap) == Reason(
+        "sun_anchor_undefined", {"anchor": "dusk"}
+    )
     assert cond.matches({"period": "daytime"}, snap) is True
     assert cond.describe(snap) == "morning"
 
@@ -1034,9 +1033,9 @@ def test_unconfigured_reason_dangling_period_returns_reason() -> None:
     """A period id that is no longer in the lookup → descriptive reason string."""
     m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
     snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
-    reason = m.unconfigured_reason({"period": "gone"}, snap)
-    assert reason is not None
-    assert "gone" in reason
+    assert m.unconfigured_reason({"period": "gone"}, snap) == Reason(
+        "period_missing", {"period": "gone"}
+    )
 
 
 def test_unconfigured_reason_known_period_returns_none() -> None:
@@ -1065,9 +1064,9 @@ def test_unconfigured_reason_list_with_dangling_period_returns_reason() -> None:
     """A list predicate containing a dangling period → reason for that period."""
     m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
     snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
-    reason = m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap)
-    assert reason is not None
-    assert "gone" in reason
+    assert m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap) == Reason(
+        "period_missing", {"period": "gone"}
+    )
 
 
 def test_unconfigured_reason_ignores_non_string_period() -> None:

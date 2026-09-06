@@ -409,6 +409,13 @@ export type TracePredicate = {
   // trace. Optional so a trace captured before this field existed (or an
   // ambient condition with no entities) renders as plain text.
   entity_ids?: string[];
+  // `detail` is always the backend's English. When it came from a condition's
+  // `unconfigured_reason` these carry the `trace_reason` bundle key and its
+  // placeholders so the panel can render the same sentence in the user's
+  // language; null/absent for a `describe()` detail (per-house prose) and for
+  // any trace captured before these fields existed.
+  detail_key?: string | null;
+  detail_placeholders?: Record<string, string> | null;
 };
 export type TraceSceneEval = {
   index: number;

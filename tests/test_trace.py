@@ -546,7 +546,14 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         "evaluated": True,
         "disabled": False,
         "predicates": [
-            {"condition_key": "tod", "passed": True, "detail": "evening", "entity_ids": []}
+            {
+                "condition_key": "tod",
+                "passed": True,
+                "detail": "evening",
+                "detail_key": None,
+                "detail_placeholders": None,
+                "entity_ids": [],
+            }
         ],
     }
 
@@ -573,6 +580,38 @@ def test_explanation_to_dict_includes_disabled():
     )
     result = _explanation_to_dict(explanation)
     assert result["scenes"][0]["disabled"] is True
+
+
+def test_explanation_to_dict_serialises_the_localisation_key_and_placeholders():
+    """A predicate whose detail came from a structured `Reason` carries the key
+    and placeholders alongside the rendered English, so the panel can localise
+    it; a plain `describe()` detail carries None for both."""
+    explanation = Explanation(
+        winner_index=None,
+        scenes=[
+            SceneEval(
+                0,
+                "evening",
+                [
+                    PredicateResult(
+                        "lux",
+                        False,
+                        "lux range gone no longer exists",
+                        detail_key="lux_range_missing",
+                        detail_placeholders={"range": "gone"},
+                    ),
+                    PredicateResult("tod", True, "evening"),
+                ],
+                False,
+                True,
+            )
+        ],
+    )
+    preds = _explanation_to_dict(explanation)["scenes"][0]["predicates"]
+    assert preds[0]["detail_key"] == "lux_range_missing"
+    assert preds[0]["detail_placeholders"] == {"range": "gone"}
+    assert preds[1]["detail_key"] is None
+    assert preds[1]["detail_placeholders"] is None
 
 
 def test_explanation_to_dict_serialises_predicate_entity_ids():

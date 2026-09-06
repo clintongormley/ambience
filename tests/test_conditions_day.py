@@ -9,6 +9,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from custom_components.ambience.conditions._common import Reason
 from custom_components.ambience.conditions.day import (
     DayCondition,
     DaySnapshot,
@@ -678,4 +679,6 @@ def test_day_matches_workday_no_sensor_is_false() -> None:
 def test_unconfigured_reason_tolerates_non_dict_slot(m_no_entities: DayCondition) -> None:
     # A corrupt non-dict slot must not crash; the workday slot still yields the reason.
     pred = {"include": ["garbage", {"kind": "workday"}]}
-    assert m_no_entities.unconfigured_reason(pred, None) == "workday sensor not configured"
+    assert m_no_entities.unconfigured_reason(pred, None) == Reason(
+        "day_workday_sensor_unconfigured"
+    )

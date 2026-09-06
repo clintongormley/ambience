@@ -270,7 +270,10 @@ def test_trace_records_unconfigured_reason() -> None:
     explanation = evaluate_explained(scenes, {"day": snap}, {"day": day}, describe=True)
     p0 = explanation.scenes[0].predicates[0]
     assert p0.passed is False
-    assert "workday sensor" in (p0.detail or "")
+    # English for the log/MCP reader; the key + placeholders for the panel to localise.
+    assert p0.detail == "workday sensor not configured"
+    assert p0.detail_key == "day_workday_sensor_unconfigured"
+    assert p0.detail_placeholders == {}
     assert explanation.winner_index == 1
 
 

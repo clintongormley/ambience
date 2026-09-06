@@ -18,6 +18,7 @@ import type {
   TraceAction,
   TraceCause,
   TraceOutcome,
+  TracePredicate,
   TraceSceneEval,
 } from "./types.js";
 import { entityName, type HassWithStates } from "./views/entity-row.js";
@@ -474,6 +475,18 @@ function isSkipped(outcome: TraceOutcome): boolean {
   );
 }
 
+// A predicate's detail in the reader's language. A structured
+// `unconfigured_reason` ships its `trace_reason` key and placeholders alongside
+// the backend's English render; everything else (a condition's `describe()`
+// prose) is already the only text there is. The result still goes through
+// `renderDetailWithLinks`, so a localized reason keeps its entity more-info
+// links and its `formatDetail` labelling.
+function predicateDetail(hass: HassLike | undefined, p: TracePredicate): string {
+  const detail = p.detail ?? "";
+  if (!p.detail_key) return detail;
+  return localize(hass, `trace_reason.${p.detail_key}`, detail, p.detail_placeholders ?? {});
+}
+
 function renderScene(
   r: TraceSceneEval,
   hass: HassLike | undefined,
@@ -495,7 +508,7 @@ function renderScene(
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, p.detail, periods, p.entity_ids)}]</span>`
+              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p), periods, p.entity_ids)}]</span>`
               : nothing
           }
         </div>`,

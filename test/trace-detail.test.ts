@@ -701,6 +701,61 @@ describe("trace-detail", () => {
     expect(host.querySelector(".pred")?.textContent).toContain("Zone Shower: on ✓");
   });
 
+  test("a keyed unconfigured reason renders in the user's language", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "lux",
+          passed: false,
+          detail: "lux range dusk no longer exists",
+          detail_key: "lux_range_missing",
+          detail_placeholders: { range: "dusk" },
+        },
+      ],
+      { language: "es" },
+    );
+    expect(host.querySelector(".pred")?.textContent).toContain("el rango de lux dusk ya no existe");
+  });
+
+  test("a keyed unconfigured reason falls back to the backend English", () => {
+    const host = sceneEvalHost([
+      {
+        condition_key: "lux",
+        passed: false,
+        detail: "lux range dusk no longer exists",
+        detail_key: "lux_range_missing",
+        detail_placeholders: { range: "dusk" },
+      },
+    ]);
+    expect(host.querySelector(".pred")?.textContent).toContain("lux range dusk no longer exists");
+  });
+
+  test("a localized reason still links the entity name it names", () => {
+    // Regression guard: the localized text must go through the link injector, or
+    // the friendly name baked into `lux_sensor_not_numeric` stops being clickable.
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "lux",
+          passed: false,
+          detail: "Hallway Lux (foo) does not report a number",
+          detail_key: "lux_sensor_not_numeric",
+          detail_placeholders: { name: "Hallway Lux", value: "foo" },
+          entity_ids: ["sensor.hallway_lux"],
+        },
+      ],
+      {
+        language: "es",
+        states: { "sensor.hallway_lux": { attributes: { friendly_name: "Hallway Lux" } } },
+      },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["Hallway Lux"]);
+    expect(host.querySelector(".pred")?.textContent).toContain("(foo) no informa un número");
+  });
+
   test("a predicate with no entity_ids renders the detail as plain text", () => {
     const host = sceneEvalHost([
       { condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" },

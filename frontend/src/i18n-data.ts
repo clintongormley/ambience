@@ -588,6 +588,21 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       or_not: "OR NOT",
       not: "NOT",
     },
+    // Why a predicate cannot currently match, keyed by the backend's `Reason`
+    // (conditions/_common.py REASON_EN, pinned equal to `en` by
+    // tests/test_trace_reasons.py). The backend also sends its English render
+    // as the fallback, so an older panel and every non-panel reader still see it.
+    trace_reason: {
+      day_workday_sensor_unconfigured: "workday sensor not configured",
+      day_workday_calendar_unconfigured: "workday calendar not configured",
+      lux_range_missing: "lux range {range} no longer exists",
+      lux_sensor_not_numeric: "{name} ({value}) does not report a number",
+      period_missing: "time-of-day period {period} no longer exists",
+      sun_not_configured: "the sun integration is not set up",
+      sun_anchor_undefined: "{anchor} is undefined at this location today",
+      weather_entity_unconfigured: "weather entity not configured",
+      weather_group_missing: "weather group {group} no longer exists",
+    },
   }, // end en
   es: {
     time_of_day_period: {
@@ -1178,6 +1193,17 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       and_not: "Y NO",
       or_not: "O NO",
       not: "NO",
+    },
+    trace_reason: {
+      day_workday_sensor_unconfigured: "sensor de día laborable no configurado",
+      day_workday_calendar_unconfigured: "calendario de días laborables no configurado",
+      lux_range_missing: "el rango de lux {range} ya no existe",
+      lux_sensor_not_numeric: "{name} ({value}) no informa un número",
+      period_missing: "el periodo del día {period} ya no existe",
+      sun_not_configured: "la integración sun no está configurada",
+      sun_anchor_undefined: "{anchor} no está definido hoy en esta ubicación",
+      weather_entity_unconfigured: "entidad meteorológica no configurada",
+      weather_group_missing: "el grupo meteorológico {group} ya no existe",
     },
   }, // end es
   pt: {
@@ -1770,6 +1796,17 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       and_not: "E NÃO",
       or_not: "OU NÃO",
       not: "NÃO",
+    },
+    trace_reason: {
+      day_workday_sensor_unconfigured: "sensor de dia útil não configurado",
+      day_workday_calendar_unconfigured: "calendário de dias úteis não configurado",
+      lux_range_missing: "o intervalo de lux {range} já não existe",
+      lux_sensor_not_numeric: "{name} ({value}) não reporta um número",
+      period_missing: "o período do dia {period} já não existe",
+      sun_not_configured: "a integração sun não está configurada",
+      sun_anchor_undefined: "{anchor} não está definido hoje nesta localização",
+      weather_entity_unconfigured: "entidade meteorológica não configurada",
+      weather_group_missing: "o grupo meteorológico {group} já não existe",
     },
   }, // end pt
   fr: {
@@ -2365,6 +2402,17 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       and_not: "ET NON",
       or_not: "OU NON",
       not: "NON",
+    },
+    trace_reason: {
+      day_workday_sensor_unconfigured: "capteur de jour ouvré non configuré",
+      day_workday_calendar_unconfigured: "calendrier des jours ouvrés non configuré",
+      lux_range_missing: "la plage de lux {range} n'existe plus",
+      lux_sensor_not_numeric: "{name} ({value}) ne rapporte pas un nombre",
+      period_missing: "la période de la journée {period} n'existe plus",
+      sun_not_configured: "l'intégration sun n'est pas configurée",
+      sun_anchor_undefined: "{anchor} n'est pas défini aujourd'hui à cet emplacement",
+      weather_entity_unconfigured: "entité météo non configurée",
+      weather_group_missing: "le groupe météo {group} n'existe plus",
     },
   }, // end fr
 };

@@ -40,6 +40,41 @@ def test_redact_predicate_blanks_detail_for_state_rule_on_person() -> None:
     assert redact_predicate(pred)["detail"] == REDACTED
 
 
+def test_redact_predicate_drops_the_localisation_hints_with_a_blanked_detail() -> None:
+    """A blanked detail must take its `detail_key`/`detail_placeholders` with it:
+    the placeholders carry the same friendly name the detail does, so a reader
+    that rendered the key would reconstitute the phrase just redacted."""
+    pred = {
+        "condition_key": "occupancy",
+        "detail": "Alice's Phone (foo) does not report a number",
+        "detail_key": "lux_sensor_not_numeric",
+        "detail_placeholders": {"name": "Alice's Phone", "value": "foo"},
+    }
+    out = redact_predicate(pred)
+    assert out["detail"] == REDACTED
+    assert "detail_key" not in out
+    assert "detail_placeholders" not in out
+
+
+def test_redact_predicate_drops_the_localisation_hints_even_when_detail_survives() -> None:
+    """The redacted view is the external one (MCP/diagnostics/AI bundle), which
+    reads the English `detail`; the panel-only hints are not part of that frozen
+    payload shape at all."""
+    pred = {
+        "condition_key": "lux",
+        "detail": "lux range gone no longer exists",
+        "detail_key": "lux_range_missing",
+        "detail_placeholders": {"range": "gone"},
+        "entity_ids": ["sensor.lux"],
+    }
+    out = redact_predicate(pred)
+    assert out["detail"] == "lux range gone no longer exists"
+    assert "detail_key" not in out
+    assert "detail_placeholders" not in out
+    # The input is never mutated.
+    assert pred["detail_key"] == "lux_range_missing"
+
+
 def test_redact_predicate_keeps_detail_for_non_presence_state() -> None:
     pred = {"condition_key": "state", "detail": "Hall light: on", "entity_ids": ["light.hall"]}
     out = redact_predicate(pred)

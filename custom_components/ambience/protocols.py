@@ -20,11 +20,12 @@ class Condition(Protocol):
         predicate (e.g. start-minute-of-day). Absent => the slot sorts last.
       - ``priority: int``: linearisation-slot order, lower first. Default 1000.
       - ``input: str``: scene-editor widget hint. Default "text".
-      - ``unconfigured_reason(predicate, snapshot) -> str | None``: a short human
-        reason this predicate cannot be evaluated because a dependency is
-        unconfigured (workday sensor/calendar, weather entity/group, deleted
-        period/lux range). The engine records it in the trace so a skipped scene
-        explains itself. Absent / None => evaluate normally.
+      - ``unconfigured_reason(predicate, snapshot) -> Reason | None``: a
+        translatable reason this predicate cannot be evaluated because a
+        dependency is unconfigured (workday sensor/calendar, weather
+        entity/group, deleted period/lux range). The engine records its English
+        render AND its key/placeholders in the trace, so a skipped scene explains
+        itself in the reader's language. Absent / None => evaluate normally.
       - ``normalize_predicate(predicate)``: return the predicate in its canonical
         stored form — flatten a redundant single-child or same-op nested group,
         materialise the defaults a reader would otherwise re-derive. Called once

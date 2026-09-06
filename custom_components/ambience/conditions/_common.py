@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
@@ -405,3 +406,35 @@ def valid_minute(mm: Any) -> bool:
 def valid_clock(hh: Any, mm: Any) -> bool:
     """True if hh/mm together are an in-range clock time."""
     return valid_hour(hh) and valid_minute(mm)
+
+
+@dataclass(frozen=True)
+class Reason:
+    """A translatable "why this predicate cannot match": a key into the panel's
+    `trace_reason` bundle plus its placeholders.
+
+    `render()` is the English the backend puts in the trace's `detail` for logs,
+    diagnostics and the MCP; the panel localises `key` itself and falls back to
+    that English. `tests/test_trace_reasons.py` keeps `REASON_EN` equal to the
+    bundle's `en` table so the two can never drift."""
+
+    key: str
+    placeholders: Mapping[str, str] = field(default_factory=dict)
+
+    def render(self) -> str:
+        return REASON_EN[self.key].format(**self.placeholders)
+
+
+# The English for every `Reason` key. Mirrored (and pinned) by the panel bundle's
+# `trace_reason` namespace in frontend/src/i18n-data.ts.
+REASON_EN: dict[str, str] = {
+    "day_workday_sensor_unconfigured": "workday sensor not configured",
+    "day_workday_calendar_unconfigured": "workday calendar not configured",
+    "lux_range_missing": "lux range {range} no longer exists",
+    "lux_sensor_not_numeric": "{name} ({value}) does not report a number",
+    "period_missing": "time-of-day period {period} no longer exists",
+    "sun_not_configured": "the sun integration is not set up",
+    "sun_anchor_undefined": "{anchor} is undefined at this location today",
+    "weather_entity_unconfigured": "weather entity not configured",
+    "weather_group_missing": "weather group {group} no longer exists",
+}

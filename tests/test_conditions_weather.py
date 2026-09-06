@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import Reason
 from custom_components.ambience.conditions.weather import (
     DEFAULT_WEATHER_GROUPS,
     WEATHER_CONDITIONS,
@@ -542,7 +543,7 @@ def test_unconfigured_reason_no_entity_returns_reason(hass: HomeAssistant) -> No
     _install_store_stub_groups(hass, entity=None, groups=[])
     m = WeatherCondition(hass=hass)
     reason = m.unconfigured_reason({"groups": ["sunny"]}, _snap())
-    assert reason == "weather entity not configured"
+    assert reason == Reason("weather_entity_unconfigured")
 
 
 def test_unconfigured_reason_unknown_group_returns_reason(hass: HomeAssistant) -> None:
@@ -554,8 +555,7 @@ def test_unconfigured_reason_unknown_group_returns_reason(hass: HomeAssistant) -
     )
     m = WeatherCondition(hass=hass)
     reason = m.unconfigured_reason({"groups": ["ghost"]}, _snap())
-    assert reason is not None
-    assert "ghost" in reason
+    assert reason == Reason("weather_group_missing", {"group": "ghost"})
 
 
 def test_unconfigured_reason_all_configured_returns_none(hass: HomeAssistant) -> None:

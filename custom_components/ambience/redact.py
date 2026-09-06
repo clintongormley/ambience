@@ -184,14 +184,28 @@ def redact_store(dump: Any) -> Any:
     return out
 
 
+# The panel-only half of a predicate's detail: a `trace_reason` key plus its
+# placeholders, which only the panel's bundle can render. Dropped from every
+# redacted predicate — a redacted trace is the EXTERNAL view (MCP, diagnostics,
+# AI bundle), and every external reader takes the English `detail`. Dropping
+# rather than nulling is load-bearing twice over: the placeholders repeat the
+# very names a blanked detail hid, and the MCP's `traces_list`/`dry_run` payload
+# shape is frozen per protocol (tests/test_protocol_shape.py), so a
+# panel-presentation field must not appear in it at all.
+_PANEL_DETAIL_KEYS = ("detail_key", "detail_placeholders")
+
+
 def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
-    """Blank a predicate's free-text detail and scrub presence-revealing
-    entity_ids (person./device_tracker.). Detail is blanked for conditions in
-    `_DETAIL_REDACTED_CONDITIONS` (people/template/unavailable/occupancy — each
-    renders presence or location by name or implication) AND for any predicate
-    that references a presence entity directly — e.g. a `state` rule on a
-    person renders the live location in its detail."""
+    """Blank a predicate's free-text detail, drop its panel-only localisation
+    hints, and scrub presence-revealing entity_ids (person./device_tracker.).
+    Detail is blanked for conditions in `_DETAIL_REDACTED_CONDITIONS`
+    (people/template/unavailable/occupancy — each renders presence or location
+    by name or implication) AND for any predicate that references a presence
+    entity directly — e.g. a `state` rule on a person renders the live location
+    in its detail."""
     out = predicate
+    if any(k in out for k in _PANEL_DETAIL_KEYS):
+        out = {k: v for k, v in out.items() if k not in _PANEL_DETAIL_KEYS}
     eids = out.get("entity_ids")
     presence = _has_presence(eids)
     if out.get("detail") and (out.get("condition_key") in _DETAIL_REDACTED_CONDITIONS or presence):

@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from ..errors import AmbienceError
 from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
-from ._common import merge_intervals, valid_clock, valid_hour, valid_minute
+from ._common import Reason, merge_intervals, valid_clock, valid_hour, valid_minute
 
 ANCHOR_ATTR = {
     "sunrise": "next_rising",
@@ -274,7 +274,7 @@ class TimeOfDayCondition:
                 continue  # dangling period ref is a config-health problem, not malformed
             self._match_one(item, synthetic)
 
-    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> Reason | None:
         known = set(self._period_lookup())
         items = predicate if isinstance(predicate, list) else [predicate]
         for item in items:
@@ -283,7 +283,7 @@ class TimeOfDayCondition:
                 and isinstance(item.get("period"), str)
                 and item["period"] not in known
             ):
-                return f"time-of-day period {item['period']!r} no longer exists"
+                return Reason("period_missing", {"period": item["period"]})
         if not isinstance(snapshot, TimeOfDaySnapshot):
             return None
         for item in items:
@@ -293,8 +293,8 @@ class TimeOfDayCondition:
                 anchor = endpoint.get("anchor")
                 if anchor in ANCHOR_ATTR and getattr(snapshot, anchor) is None:
                     if not snapshot.sun_configured:
-                        return "the sun integration is not set up"
-                    return f"{anchor} is undefined at this location today"
+                        return Reason("sun_not_configured")
+                    return Reason("sun_anchor_undefined", {"anchor": anchor})
         return None
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:

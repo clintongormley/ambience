@@ -32,6 +32,7 @@ from ._common import (
     UNAVAILABLE,
     NormalisesPredicate,
     PredicateDefaults,
+    Reason,
     as_float,
     as_float_state,
     kleene_all,
@@ -179,17 +180,20 @@ class LuxCondition(NormalisesPredicate):
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
-    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> str | None:
+    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> Reason | None:
         if not isinstance(predicate, dict):
             return None
         if "range" in predicate:
             rid = predicate["range"]
             if isinstance(rid, str) and rid not in self._range_lookup():
-                return f"lux range {rid!r} no longer exists"
+                return Reason("lux_range_missing", {"range": rid})
         for eid in predicate.get("sensors") or []:
             raw = snapshot.non_numeric.get(eid)
             if raw is not None:
-                return f"{snapshot.names.get(eid, eid)} ({raw!r}) does not report a number"
+                return Reason(
+                    "lux_sensor_not_numeric",
+                    {"name": snapshot.names.get(eid, eid), "value": str(raw)},
+                )
         return None
 
     def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:

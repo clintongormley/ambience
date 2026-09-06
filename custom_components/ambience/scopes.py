@@ -11,9 +11,9 @@ an empty config, the service layer raises a `ServiceValidationError`, the
 websocket layer asks the registry — so this module supplies the facts and the
 error constructors, not one policy.
 
-Leaf module by construction: it imports the HA registries and `.errors` only. A
-`.const` or `.store` import here would close an import cycle (const carries a
-TYPE_CHECKING import of store, and store imports this module).
+Near-leaf by construction: it imports the HA registries and `.errors` only. A
+`.store` import here would close an import cycle, since store imports this
+module for the same table.
 """
 
 from __future__ import annotations

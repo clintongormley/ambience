@@ -41,7 +41,7 @@ from ..websocket_helpers import (
     coerce_scene_categories,
     validate_scope_config,
 )
-from .common import _SCOPE_SELECTOR_SCHEMA, _parse_scope, _require_scope, send_ambience_error
+from .common import SCOPE_SELECTOR_SCHEMA, _parse_scope, _require_scope, send_ambience_error
 
 
 @websocket_api.require_admin
@@ -303,7 +303,7 @@ async def _ws_auto_triggers_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/dry_run",
-        **_SCOPE_SELECTOR_SCHEMA,
+        **SCOPE_SELECTOR_SCHEMA,
         # Default to redacted: there is no panel caller of this command (it does
         # not appear anywhere in frontend/src or the built bundle) — the only
         # live consumer is the MCP server, handing this plan to an external AI.
@@ -355,7 +355,7 @@ async def _ws_dry_run(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/apply",
-        **_SCOPE_SELECTOR_SCHEMA,
+        **SCOPE_SELECTOR_SCHEMA,
         vol.Optional("category_id"): str,
     }
 )
@@ -380,7 +380,7 @@ async def _ws_apply(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/scene/run_actions",
-        **_SCOPE_SELECTOR_SCHEMA,
+        **SCOPE_SELECTOR_SCHEMA,
         vol.Required("scene_index"): int,
     }
 )
@@ -425,7 +425,7 @@ async def _ws_switches_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/set_scope_enabled",
-        **_SCOPE_SELECTOR_SCHEMA,
+        **SCOPE_SELECTOR_SCHEMA,
         vol.Required("enabled"): bool,
     }
 )

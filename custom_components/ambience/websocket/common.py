@@ -97,9 +97,9 @@ def _house_must_be_true(v: Any) -> bool:
 
 # The scope selector shared by every command that targets one (scope, id):
 # exactly one of area_id / floor_id / house, parsed by `_parse_scope`. Spread
-# (`**_SCOPE_SELECTOR_SCHEMA`) into each command schema so the three keys stay in
-# lockstep across commands.
-_SCOPE_SELECTOR_SCHEMA = {
+# (`**SCOPE_SELECTOR_SCHEMA`) into each command schema so the three keys stay in
+# lockstep across commands. Public because it crosses a module boundary.
+SCOPE_SELECTOR_SCHEMA = {
     vol.Optional("area_id"): str,
     vol.Optional("floor_id"): str,
     vol.Optional("house"): _house_must_be_true,

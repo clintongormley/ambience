@@ -15,11 +15,7 @@ from pathlib import Path
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-# DOMAIN is imported lazily (inside the two functions below) rather than at module
-# level to avoid a CodeQL py/unsafe-cyclic-import: store.py imports AmbienceError
-# from here, this module would import const, and const has a TYPE_CHECKING import
-# of store (for get_store's return type) — a module-level errors->const edge closes
-# that cycle. A call-time import runs after all modules are loaded, so it doesn't.
+from .const import DOMAIN
 
 _EN_PATH = Path(__file__).parent / "translations" / "en.json"
 
@@ -59,8 +55,6 @@ def service_validation_error(
     where the error should stay a ``ServiceValidationError`` (HA logs these as
     user errors, not bugs); the websocket layer routes the same key + placeholders
     to the frontend via ``send_ambience_error``."""
-    from .const import DOMAIN
-
     return ServiceValidationError(
         translation_domain=DOMAIN,
         translation_key=translation_key,
@@ -72,8 +66,6 @@ class AmbienceError(HomeAssistantError):
     """A user-facing error keyed to strings.json `exceptions.<translation_key>`."""
 
     def __init__(self, translation_key: str, **placeholders: object) -> None:
-        from .const import DOMAIN
-
         super().__init__(
             translation_domain=DOMAIN,
             translation_key=translation_key,

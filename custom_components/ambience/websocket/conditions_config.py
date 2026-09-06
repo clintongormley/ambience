@@ -100,12 +100,11 @@ def _named_def_handlers(prefix: str, data_key: str) -> tuple[_WsHandler, _WsHand
     return _list, _save, _reset
 
 
-_ws_periods_list, _ws_periods_save, _ws_periods_reset = _named_def_handlers(
-    "time_of_day_periods", DATA_PERIODS
-)
-_ws_lux_ranges_list, _ws_lux_ranges_save, _ws_lux_ranges_reset = _named_def_handlers(
-    "lux_ranges", DATA_LUX_RANGES
-)
+# The two named-definition families, each (list, save, reset). Kept as tuples —
+# rather than unpacked into six module globals this module never reads again —
+# so `websocket/__init__.py` splats both into its registration table.
+PERIODS_HANDLERS = _named_def_handlers("time_of_day_periods", DATA_PERIODS)
+LUX_RANGES_HANDLERS = _named_def_handlers("lux_ranges", DATA_LUX_RANGES)
 
 
 @websocket_api.require_admin

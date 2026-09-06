@@ -21,11 +21,8 @@ from .const import (
 from .errors import AmbienceError
 from .scopes import iter_scope_kinds, scope_bucket, scope_spec
 
-# Switch / idle re-apply defaults. Defined here (store is their only consumer)
-# rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
-# positive: const has a TYPE_CHECKING-only import of store for get_store's
-# annotation, and CodeQL flags const-level constants imported by store as
-# "defined after the cyclic import".
+# Switch / idle re-apply defaults. Defined here rather than in const.py: store is
+# their only consumer.
 # auto_on_delay: how long a paused scope stays off before auto-resuming; 0 = never.
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
@@ -35,9 +32,8 @@ DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60
 
 # Voice-assistant exposure default: switches exposed to local Assist only.
-# Defined here (store owns the persisted map) rather than const.py to avoid the
-# CodeQL py/unsafe-cyclic-import false positive (see the note above). Keys must
-# stay aligned with const.KNOWN_ASSISTANTS / const.ASSISTANT_FIELDS — guarded by
+# Defined here because store owns the persisted map. Keys must stay aligned with
+# const.KNOWN_ASSISTANTS / const.ASSISTANT_FIELDS — guarded by
 # test_known_assistants_match_default_map_and_fields.
 DEFAULT_EXPOSED_ASSISTANTS = {
     "conversation": True,
@@ -45,8 +41,8 @@ DEFAULT_EXPOSED_ASSISTANTS = {
     "cloud.alexa": False,
 }
 
-# Built-in exposed actions seeded on first load. Defined here (not const.py)
-# to avoid the const<->store cyclic-import CodeQL false positive.
+# Built-in exposed actions seeded on first load. Defined here because store owns
+# the persisted list.
 DEFAULT_SEEDED_BUILTINS: list[dict[str, Any]] = [
     {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
     {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},

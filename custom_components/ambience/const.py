@@ -1,13 +1,18 @@
-"""Constants for the Ambience integration."""
+"""Constants for the Ambience integration.
+
+Leaf module: it imports nothing from this package, at runtime or under
+TYPE_CHECKING — not even behind a `if TYPE_CHECKING:` guard, which CodeQL counts
+as a real import edge. Nearly every other module imports const, so a package
+import here closes an import cycle: const → store → const directly, and the
+longer ones running through errors, scopes and the conditions.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
-    from .store import AmbienceStore
 
 DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
@@ -156,9 +161,7 @@ HISTORY_LIMIT = 30
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
 # MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in
-# store.py, their only consumer — keeping them out of const avoids a CodeQL
-# py/unsafe-cyclic-import false positive (const has a TYPE_CHECKING-only import of
-# store for get_store's annotation).
+# store.py, their only consumer.
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
@@ -222,8 +225,12 @@ DATA_AI_GUIDE = "ambience_ai_guide"
 DATA_STATIC_PATHS_REGISTERED = "ambience_static_paths_registered"
 
 
-def get_store(hass: HomeAssistant) -> AmbienceStore | None:
+def get_store(hass: HomeAssistant) -> Any:
     """The Ambience store for this hass, or None when the integration isn't set
     up yet. Tolerant lookup for read paths that may run before/around setup;
-    paths that require the store to exist still index ``hass.data`` directly."""
+    paths that require the store to exist still index ``hass.data`` directly.
+
+    Typed ``Any`` rather than ``AmbienceStore | None``: naming the class would
+    need an import of ``.store``, which this leaf module must not have.
+    """
     return hass.data.get(DOMAIN, {}).get(DATA_STORE)

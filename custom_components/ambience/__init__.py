@@ -404,8 +404,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Last: the commands read hass.data[DOMAIN], so none may be servable before
-    # every key (the engine included) is in place.
-    await preload_translations
+    # every key (the engine included) is in place, and the en.json pre-warm must
+    # have finished — the ws error renderer must never do that read on the loop.
+    # (`asyncio.gather` and not a bare `await preload_translations`: CodeQL reads
+    # a lone `await <name>` statement as having no effect.)
+    await asyncio.gather(preload_translations)
     async_register_commands(hass)
 
     return True

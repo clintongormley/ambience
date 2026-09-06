@@ -423,13 +423,16 @@ export type TracePredicate = {
   // `detail` is always the backend's English. When it came from a condition's
   // `unconfigured_reason` these carry the `trace_reason` bundle key and its
   // placeholders so the panel can render the same sentence in the user's
-  // language; null/absent for a `describe()` detail (per-house prose) and for
-  // any trace captured before these fields existed.
+  // language; null/absent for any `describe()` detail (which localizes via
+  // `detail_segments` instead) and for any trace captured before these fields
+  // existed.
   detail_key?: string | null;
   detail_placeholders?: Record<string, string> | null;
   // Structured, localizable detail: a list of segments the panel renders and
-  // links directly. Panel-only — stripped from the redacted external trace, so
-  // absent for MCP callers, old traces, and legacy str-only conditions.
+  // links directly, present when `describe()` returned segments. Panel-only —
+  // stripped from the redacted external trace, so absent for MCP callers, old
+  // traces, and legacy str-only conditions (time_of_day/weather), whose
+  // `detail` stays untranslated English.
   detail_segments?: TraceSeg[] | null;
 };
 export type TraceSceneEval = {

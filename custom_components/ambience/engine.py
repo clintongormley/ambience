@@ -42,13 +42,14 @@ class PredicateResult:
     `detail_key` / `detail_placeholders` are set only when `detail` came from a
     condition's `unconfigured_reason` (a `Reason`): `detail` holds its English
     render for logs, diagnostics and the MCP, while the pair lets the panel
-    localise the same sentence. None for a `describe()` detail, which is
-    per-house prose with no fixed translation.
+    localise the same sentence. None for any `describe()` detail — those localise
+    (or not) via `detail_segments` below, never through this pair.
 
     `detail_segments` is set only when `describe()` returned a `Detail` (a
-    segment list): the panel localises each segment (entity link / phrase key),
-    with `detail` its rendered English fallback. None for a `str`-returning
-    describe (time_of_day/weather/legacy) and for the `unconfigured_reason` path.
+    structured, translatable segment list): the panel localises each segment
+    (entity link / phrase key), with `detail` its rendered English fallback.
+    None for a legacy `str`-returning describe (time_of_day/weather), whose
+    `detail` is untranslated English, and for the `unconfigured_reason` path.
     """
 
     condition_key: str

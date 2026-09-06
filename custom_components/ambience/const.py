@@ -83,6 +83,11 @@ DATA_STORE = "store"
 
 # Switch entity
 DATA_SWITCHES = "switches"
+# {scope_key: monotonic claim time} for switches handed to add_entities but
+# not yet through async_added_to_hass, so the reconcile does not hand HA a
+# duplicate unique_id for a scope whose add is still in flight. Claims are
+# timestamped because HA can abandon an add silently; see switch.py.
+DATA_SWITCHES_PENDING = "switches_pending"
 DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 
 # Last-applied scene index: {(scope_kind, scope_id, category_id): scene_index}.

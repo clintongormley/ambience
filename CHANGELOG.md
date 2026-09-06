@@ -64,6 +64,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - A scene with a `for:` duration whose condition briefly could not be read at
     the moment its timer fired no longer stays silent until the next unrelated
     event; the check is retried a minute later.
+- Two quick switch-related saves during startup can no longer make Home
+    Assistant log a duplicate Ambience switch entity.
 
 ### Performance
 

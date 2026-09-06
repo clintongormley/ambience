@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.conditions._common import Reason
+from custom_components.ambience.conditions._common import Reason, ent, phrase, render_detail
 from custom_components.ambience.conditions.lux import LuxCondition, LuxSnapshot
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.lux_ranges import BUILTIN_LUX_RANGES
@@ -225,11 +225,13 @@ def test_describe_lists_readings() -> None:
         {"sensor.a": 320.0, "sensor.b": 8.0},
         names={"sensor.a": "Lounge", "sensor.b": "Hall"},
     )
-    assert _cond().describe(snap) == "Hall 8 lx, Lounge 320 lx"
+    assert render_detail(_cond().describe(snap)) == "Hall 8 lx, Lounge 320 lx"
 
 
 def test_describe_no_sensors() -> None:
-    assert _cond().describe(_snap()) == "no lux sensors"
+    out = _cond().describe(_snap())
+    assert out == [phrase("no_lux_sensors")]
+    assert render_detail(out) == "no lux sensors"
 
 
 def test_describe_predicate_scopes_to_referenced_sensor() -> None:
@@ -240,9 +242,13 @@ def test_describe_predicate_scopes_to_referenced_sensor() -> None:
         names={"sensor.a": "Lounge", "sensor.b": "Bed", "sensor.c": "Hall"},
     )
     pred = {"sensors": ["sensor.b"], "min": 0, "max": 10}
-    assert _cond().describe(snap, pred) == "want 0-10 lx; Bed: 320 lx ✗"
+    detail = _cond().describe(snap, pred)
+    # Shape: a linkable `ent` seg for the sensor and a `want_band` phrase.
+    assert phrase("want_band", band="0-10 lx") in detail
+    assert ent("sensor.b", "Bed") in detail
+    assert render_detail(detail) == "want 0-10 lx; Bed: 320 lx ✗"
     pred_ok = {"sensors": ["sensor.a"], "min": 0, "max": 10}
-    assert _cond().describe(snap, pred_ok) == "want 0-10 lx; Lounge: 5 lx ✓"
+    assert render_detail(_cond().describe(snap, pred_ok)) == "want 0-10 lx; Lounge: 5 lx ✓"
 
 
 def test_describe_predicate_quant_all_lists_each_in_order() -> None:
@@ -251,30 +257,40 @@ def test_describe_predicate_quant_all_lists_each_in_order() -> None:
         names={"sensor.a": "Lounge", "sensor.b": "Hall"},
     )
     pred = {"sensors": ["sensor.a", "sensor.b"], "min": 100, "quant": "all"}
-    assert _cond().describe(snap, pred) == "want ≥100 lx; all of: Lounge: 150 lx ✓, Hall: 50 lx ✗"
+    detail = _cond().describe(snap, pred)
+    # An `ent` seg per sensor, in predicate order.
+    assert ent("sensor.a", "Lounge") in detail
+    assert ent("sensor.b", "Hall") in detail
+    assert render_detail(detail) == "want ≥100 lx; all of: Lounge: 150 lx ✓, Hall: 50 lx ✗"
 
 
 def test_describe_predicate_max_only_band() -> None:
     snap = _snap({"sensor.a": 320.0}, names={"sensor.a": "Lounge"})
     pred = {"sensors": ["sensor.a"], "max": 500}
-    assert _cond().describe(snap, pred) == "want <500 lx; Lounge: 320 lx ✓"
+    assert render_detail(_cond().describe(snap, pred)) == "want <500 lx; Lounge: 320 lx ✓"
 
 
 def test_describe_predicate_missing_sensor_not_found() -> None:
     pred = {"sensors": ["sensor.gone"], "min": 0, "max": 10}
-    assert _cond().describe(_snap(), pred) == "want 0-10 lx; sensor.gone: not found ✗"
+    detail = _cond().describe(_snap(), pred)
+    assert phrase("not_found") in detail
+    assert render_detail(detail) == "want 0-10 lx; sensor.gone: not found ✗"
 
 
 def test_describe_predicate_unavailable_sensor_says_unavailable() -> None:
     # Sensor IS in the snapshot but its reading is non-finite (e.g. "unavailable").
     snap = _snap({"sensor.dim": None}, names={"sensor.dim": "Dim"})
     pred = {"sensors": ["sensor.dim"], "min": 0, "max": 10}
-    assert _cond().describe(snap, pred) == "want 0-10 lx; Dim: unavailable ✗"
+    detail = _cond().describe(snap, pred)
+    assert phrase("unavailable") in detail
+    assert render_detail(detail) == "want 0-10 lx; Dim: unavailable ✗"
 
 
 def test_describe_predicate_empty_sensors_is_wildcard() -> None:
     snap = _snap({"sensor.a": 5.0}, names={"sensor.a": "Lounge"})
-    assert _cond().describe(snap, {"sensors": []}) == "any sensor (no constraint)"
+    out = _cond().describe(snap, {"sensors": []})
+    assert out == [phrase("any_sensor")]
+    assert render_detail(out) == "any sensor (no constraint)"
 
 
 def test_validate_accepts_valid_and_none() -> None:
@@ -375,14 +391,16 @@ def test_describe_non_dict_predicate_is_none() -> None:
 def test_describe_predicate_unknown_range_reports_it() -> None:
     snap = _snap({"sensor.a": 5.0}, names={"sensor.a": "Lounge"})
     pred = {"sensors": ["sensor.a"], "range": "nope"}
-    assert _cond().describe(snap, pred) == "unknown lux range: 'nope'"
+    detail = _cond().describe(snap, pred)
+    assert detail == [phrase("unknown_range", range="'nope'")]
+    assert render_detail(detail) == "unknown lux range: 'nope'"
 
 
 def test_describe_predicate_unbounded_band_omits_want() -> None:
     # No min/max/range: the band is open at both ends (_fmt_band -> ""), so there
     # is nothing to state — describe shows just the reading.
     snap = _snap({"sensor.a": 320.0}, names={"sensor.a": "Lounge"})
-    assert _cond().describe(snap, {"sensors": ["sensor.a"]}) == "Lounge: 320 lx ✓"
+    assert render_detail(_cond().describe(snap, {"sensors": ["sensor.a"]})) == "Lounge: 320 lx ✓"
 
 
 def test_validate_non_dict_predicate_raises() -> None:
@@ -556,7 +574,9 @@ def test_contains_negated_predicate_never_nests() -> None:
 def test_describe_predicate_negate_wraps_in_not() -> None:
     snap = _snap({"sensor.a": 500.0}, names={"sensor.a": "Lounge"})
     pred = {"sensors": ["sensor.a"], "min": 0, "max": 10, "negate": True}
-    assert _cond().describe(snap, pred) == "want 0-10 lx; not(Lounge: 500 lx ✗)"
+    detail = _cond().describe(snap, pred)
+    assert phrase("negate") in detail
+    assert render_detail(detail) == "want 0-10 lx; not(Lounge: 500 lx ✗)"
 
 
 # --- normalize_predicate: save-time default materialisation -------------------

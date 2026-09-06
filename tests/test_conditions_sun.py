@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import phrase, render_detail
 from custom_components.ambience.conditions.sun import (
     SunCondition,
     SunSnapshot,
@@ -217,15 +218,15 @@ def test_validate_rejects(predicate, key) -> None:
 
 
 def test_describe_includes_elevation_azimuth_and_nearest_sector() -> None:
-    out = SunCondition().describe(_snap(elevation=23, azimuth=187))
-    assert out is not None
-    assert "23" in out
-    assert "187" in out
-    assert "S" in out  # 187° → South sector
+    segs = SunCondition().describe(_snap(elevation=23, azimuth=187))
+    assert segs is not None
+    assert segs[0] == phrase("sun_prefix")  # every render starts "Sun …"
+    out = render_detail(segs)
+    assert out == "Sun 23° elevation, 187° azimuth (S)"  # 187° → South sector
 
 
 def test_describe_nearest_sector_wraps_north() -> None:
-    assert "N" in SunCondition().describe(_snap(elevation=5, azimuth=359))
+    assert "N" in render_detail(SunCondition().describe(_snap(elevation=5, azimuth=359)))
 
 
 def test_describe_none_when_no_data() -> None:
@@ -234,17 +235,19 @@ def test_describe_none_when_no_data() -> None:
 
 def test_describe_elevation_only() -> None:
     """Only elevation present — azimuth branch is skipped (covers 115->117 miss)."""
-    out = SunCondition().describe(_snap(elevation=15, azimuth=None))
-    assert out is not None
-    assert "15" in out
+    segs = SunCondition().describe(_snap(elevation=15, azimuth=None))
+    assert segs is not None
+    out = render_detail(segs)
+    assert out == "Sun 15° elevation"
     assert "azimuth" not in out
 
 
 def test_describe_azimuth_only() -> None:
     """Only azimuth present — elevation branch is skipped (covers 117->120 miss)."""
-    out = SunCondition().describe(_snap(elevation=None, azimuth=90))
-    assert out is not None
-    assert "90" in out
+    segs = SunCondition().describe(_snap(elevation=None, azimuth=90))
+    assert segs is not None
+    out = render_detail(segs)
+    assert out == "Sun 90° azimuth (E)"
     assert "elevation" not in out
 
 

@@ -148,18 +148,31 @@ function _bundleLookup(hass: HassLike | undefined, key: string): string | undefi
   return undefined;
 }
 
+/** Resolve a fully-qualified `component.ambience.*` key to its localized value,
+ *  interpolating `ph` into the resolved template; undefined when neither
+ *  hass.localize nor the bundle defines the key. The shared body behind
+ *  {@link _resolve} and {@link localizeSeg} — the two differ only in what they
+ *  do on a miss (interpolate a fallback vs. return one verbatim). */
+function _resolveOptional(
+  hass: HassLike | undefined,
+  key: string,
+  ph?: Record<string, string>,
+): string | undefined {
+  const pairs = ph ? Object.entries(ph).flat() : [];
+  const localised = hass?.localize?.(key, ...pairs);
+  if (localised && localised !== key) return localised;
+  const bundled = _bundleLookup(hass, key);
+  if (bundled !== undefined) return _interp(bundled, ph);
+  return undefined;
+}
+
 function _resolve(
   hass: HassLike | undefined,
   key: string,
   fallback: string,
   ph?: Record<string, string>,
 ): string {
-  const pairs = ph ? Object.entries(ph).flat() : [];
-  const localised = hass?.localize?.(key, ...pairs);
-  if (localised && localised !== key) return localised;
-  const bundled = _bundleLookup(hass, key);
-  if (bundled !== undefined) return _interp(bundled, ph);
-  return _interp(fallback, ph);
+  return _resolveOptional(hass, key, ph) ?? _interp(fallback, ph);
 }
 
 /**
@@ -359,6 +372,22 @@ export function localize(
   placeholders?: Record<string, string>,
 ): string {
   return _resolve(hass, `component.ambience.${subKey}`, fallback, placeholders);
+}
+
+/** Localizer for a trace `detail` segment: like {@link localize}, but when the
+ *  bundle key is MISSING it returns `fallback` VERBATIM rather than
+ *  interpolating `placeholders` into it. A segment's fallback (`s.t`) is the
+ *  backend's already-rendered English, so interpolating the same placeholders a
+ *  second time would double any brace token the rendered value itself contains
+ *  (e.g. a zone literally named "Office {zone}"). Placeholders are interpolated
+ *  only into a resolved bundle template, never into the pre-rendered fallback. */
+export function localizeSeg(
+  hass: HassLike | undefined,
+  subKey: string,
+  fallback: string,
+  placeholders?: Record<string, string>,
+): string {
+  return _resolveOptional(hass, `component.ambience.${subKey}`, placeholders) ?? fallback;
 }
 
 const _WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];

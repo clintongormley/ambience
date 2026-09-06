@@ -5,6 +5,7 @@ import {
   exposedActionLabel,
   humanizeId,
   localize,
+  localizeSeg,
   periodLabel,
   stateValueLabel,
   weatherConditionLabel,
@@ -20,6 +21,7 @@ import type {
   TraceOutcome,
   TracePredicate,
   TraceSceneEval,
+  TraceSeg,
 } from "./types.js";
 import { entityName, type HassWithStates } from "./views/entity-row.js";
 
@@ -484,10 +486,26 @@ function predicateDetail(
   hass: HassLike | undefined,
   p: TracePredicate,
   periods: CustomPeriods,
-): string {
+): string | TemplateResult {
   const detail = p.detail ?? "";
-  if (!p.detail_key) return formatDetail(hass, p.condition_key, detail, periods);
-  return localize(hass, `trace_reason.${p.detail_key}`, detail, p.detail_placeholders ?? {});
+  if (p.detail_key)
+    return localize(hass, `trace_reason.${p.detail_key}`, detail, p.detail_placeholders ?? {});
+  if (p.detail_segments?.length) return renderSegments(hass, p.detail_segments);
+  return formatDetail(hass, p.condition_key, detail, periods);
+}
+
+// A structured detail's segments, each rendered to content: a phrase seg
+// localizes via the trace_detail bundle (English `t` the fallback); an entity
+// seg becomes a more-info link; a text seg renders verbatim. The links are
+// baked in here, so the caller uses this result directly rather than routing it
+// through renderDetailWithLinks (which link-injects the legacy string path).
+function renderSegments(hass: HassLike | undefined, segs: TraceSeg[]): TemplateResult {
+  const parts = segs.map((s) => {
+    if (s.k) return localizeSeg(hass, `trace_detail.${s.k}`, s.t ?? "", s.p ?? {});
+    if (s.e) return entityLink(hass, s.e, s.t ?? s.e);
+    return s.t ?? "";
+  });
+  return html`${parts}`;
 }
 
 function renderScene(
@@ -511,7 +529,16 @@ function renderScene(
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, predicateDetail(hass, p, periods), p.entity_ids)}]</span>`
+              ? html` <span class="dim">[${
+                  !p.detail_key && p.detail_segments?.length
+                    ? predicateDetail(hass, p, periods)
+                    : renderDetailWithLinks(
+                        hass,
+                        p.condition_key,
+                        predicateDetail(hass, p, periods) as string,
+                        p.entity_ids,
+                      )
+                }]</span>`
               : nothing
           }
         </div>`,

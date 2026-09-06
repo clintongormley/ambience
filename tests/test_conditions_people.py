@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import render_detail
 from custom_components.ambience.conditions.people import PeopleCondition, PeopleSnapshot
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.triggers import DurationGate
@@ -326,7 +327,7 @@ def test_describe_counts_scanner_home_empty_in_zones_as_home() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
         in_zones={"person.a": [], "person.b": []},
     )
-    assert m.describe(snap) == "1 of 2 home (Alice)"
+    assert render_detail(m.describe(snap)) == "1 of 2 home (Alice)"
 
 
 def test_describe_does_not_count_unavailable_person_as_home() -> None:
@@ -339,7 +340,7 @@ def test_describe_does_not_count_unavailable_person_as_home() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
         in_zones={"person.a": ["zone.home"], "person.b": ["zone.home"]},
     )
-    assert m.describe(snap) == "1 of 2 home (Bob)"
+    assert render_detail(m.describe(snap)) == "1 of 2 home (Bob)"
 
 
 def test_describe_counts_in_zones_overlap_as_home() -> None:
@@ -350,7 +351,7 @@ def test_describe_counts_in_zones_overlap_as_home() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
         in_zones={"person.a": ["zone.work", "zone.home"]},
     )
-    assert m.describe(snap) == "1 of 2 home (Alice)"
+    assert render_detail(m.describe(snap)) == "1 of 2 home (Alice)"
 
 
 def test_matches_unavailable_person_excluded() -> None:
@@ -501,18 +502,18 @@ def test_describe_summarises_home_count() -> None:
         {"person.a": _p("home"), "person.b": _p("not_home"), "person.c": _p("home")},
         names={"person.a": "Alice", "person.b": "Bob", "person.c": "Cara"},
     )
-    assert m.describe(snap) == "2 of 3 home (Alice, Cara)"
+    assert render_detail(m.describe(snap)) == "2 of 3 home (Alice, Cara)"
 
 
 def test_describe_none_home() -> None:
     m = PeopleCondition()
     snap = _snap({"person.a": _p("not_home")}, names={"person.a": "Alice"})
-    assert m.describe(snap) == "0 of 1 home"
+    assert render_detail(m.describe(snap)) == "0 of 1 home"
 
 
 def test_describe_empty() -> None:
-    assert PeopleCondition().describe(_snap()) == "no people tracked"
-    assert PeopleCondition().describe(_snap(), None) == "no people tracked"
+    assert render_detail(PeopleCondition().describe(_snap())) == "no people tracked"
+    assert render_detail(PeopleCondition().describe(_snap(), None)) == "no people tracked"
 
 
 def test_describe_predicate_lists_each_person_any_home() -> None:
@@ -521,7 +522,10 @@ def test_describe_predicate_lists_each_person_any_home() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
     )
     pred = {"who": ["person.a", "person.b"]}
-    assert PeopleCondition().describe(snap, pred) == "want anyone home: Alice: home ✓, Bob: away ✗"
+    assert (
+        render_detail(PeopleCondition().describe(snap, pred))
+        == "want anyone home: Alice: home ✓, Bob: away ✗"
+    )
 
 
 def test_describe_predicate_everyone() -> None:
@@ -531,7 +535,8 @@ def test_describe_predicate_everyone() -> None:
     )
     pred = {"who": ["person.a", "person.b"], "quant": "everyone"}
     assert (
-        PeopleCondition().describe(snap, pred) == "want everyone home: Alice: home ✓, Bob: away ✗"
+        render_detail(PeopleCondition().describe(snap, pred))
+        == "want everyone home: Alice: home ✓, Bob: away ✗"
     )
 
 
@@ -541,13 +546,19 @@ def test_describe_predicate_nobody_marks_away_as_match() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
     )
     pred = {"who": ["person.a", "person.b"], "quant": "nobody"}
-    assert PeopleCondition().describe(snap, pred) == "want nobody home: Alice: away ✓, Bob: away ✓"
+    assert (
+        render_detail(PeopleCondition().describe(snap, pred))
+        == "want nobody home: Alice: away ✓, Bob: away ✓"
+    )
 
 
 def test_describe_predicate_negate_not_home() -> None:
     snap = _snap({"person.a": _p("home")}, names={"person.a": "Alice"})
     pred = {"who": ["person.a"], "negate": True}
-    assert PeopleCondition().describe(snap, pred) == "want anyone not home: Alice: home ✗"
+    assert (
+        render_detail(PeopleCondition().describe(snap, pred))
+        == "want anyone not home: Alice: home ✗"
+    )
 
 
 def test_describe_predicate_zone_where() -> None:
@@ -558,13 +569,17 @@ def test_describe_predicate_zone_where() -> None:
         in_zones={"person.a": ["zone.work"]},
     )
     pred = {"who": ["person.a"], "where": "zone.work"}
-    assert PeopleCondition().describe(snap, pred) == "want anyone in Work: Alice: in Work ✓"
+    assert (
+        render_detail(PeopleCondition().describe(snap, pred))
+        == "want anyone in Work: Alice: in Work ✓"
+    )
 
 
 def test_describe_predicate_missing_person_not_found() -> None:
     pred = {"who": ["person.ghost"]}
     assert (
-        PeopleCondition().describe(_snap(), pred) == "want anyone home: person.ghost: not found ✗"
+        render_detail(PeopleCondition().describe(_snap(), pred))
+        == "want anyone home: person.ghost: not found ✗"
     )
 
 
@@ -577,13 +592,16 @@ def test_describe_predicate_present_but_unavailable_person() -> None:
         names={"person.alice": "Alice"},
     )
     pred = {"who": ["person.alice"]}
-    result = PeopleCondition().describe(snap, pred)
+    result = render_detail(PeopleCondition().describe(snap, pred))
     assert result == "want anyone home: Alice: unavailable ✗"
 
 
 def test_describe_predicate_empty_who_lists_all_persons() -> None:
     snap = _snap({"person.a": _p("home")}, names={"person.a": "Alice"})
-    assert PeopleCondition().describe(snap, {"who": []}) == "want anyone home: Alice: home ✓"
+    assert (
+        render_detail(PeopleCondition().describe(snap, {"who": []}))
+        == "want anyone home: Alice: home ✓"
+    )
 
 
 def test_describe_predicate_for_shows_elapsed_and_requirement() -> None:
@@ -596,9 +614,47 @@ def test_describe_predicate_for_shows_elapsed_and_requirement() -> None:
         names={"person.a": "Alice", "person.b": "Bob"},
     )
     pred = {"who": ["person.a", "person.b"], "quant": "everyone", "for": {"m": 20}}
-    assert PeopleCondition().describe(snap, pred) == (
+    assert render_detail(PeopleCondition().describe(snap, pred)) == (
         "want everyone home for ≥20m: Alice: home 25m ✓, Bob: home 5m ✗"
     )
+
+
+def test_describe_predicate_returns_segments_with_phrases_and_ent() -> None:
+    # Shape: the prefix carries `want` + a `quant_*` + a `where_*` phrase; each
+    # person is a linkable `ent` seg; a duration adds a `for_hold` phrase.
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {"person.a": ("home", now - timedelta(minutes=25))},
+        now=now,
+        names={"person.a": "Alice"},
+    )
+    pred = {"who": ["person.a"], "for": {"m": 20}}
+    segs = PeopleCondition().describe(snap, pred)
+    keys = [s.k for s in segs if s.k is not None]
+    assert "want" in keys
+    assert any(k.startswith("quant_") for k in keys)
+    assert any(k.startswith("where_") for k in keys)
+    assert "for_hold" in keys
+    ent_segs = [s for s in segs if s.e is not None]
+    assert [s.e for s in ent_segs] == ["person.a"]
+    assert ent_segs[0].t == "Alice"
+
+
+def test_describe_predicate_zone_label_is_placeholder_value() -> None:
+    # Zone labels are user strings, carried as the `{zone}` placeholder value of a
+    # `where_in`/`loc_in` phrase — never a phrase key.
+    snap = _snap(
+        {"person.a": _p("Work")},
+        names={"person.a": "Alice"},
+        zone_labels={"zone.work": "Work"},
+        in_zones={"person.a": ["zone.work"]},
+    )
+    pred = {"who": ["person.a"], "where": "zone.work"}
+    segs = PeopleCondition().describe(snap, pred)
+    where_seg = next(s for s in segs if s.k == "where_in")
+    assert where_seg.p == {"zone": "Work"}
+    loc_seg = next(s for s in segs if s.k == "loc_in")
+    assert loc_seg.p == {"zone": "Work"}
 
 
 # contains(outer, inner) -> True iff every state matching inner also matches outer
@@ -949,7 +1005,9 @@ def test_people_describe_tenure_mode_shows_held() -> None:
         in_zones={"person.bob": []},
         tenure={key: now - timedelta(minutes=40)},
     )
-    line = m.describe(snap, pred)
+    segs = m.describe(snap, pred)
+    assert any(s.k == "held" for s in segs)
+    line = render_detail(segs)
     assert "held 40m" in line and "✓" in line
 
 
@@ -965,7 +1023,9 @@ def test_people_describe_tenure_mode_not_held() -> None:
         in_zones={"person.bob": ["zone.home"]},
         tenure={},  # gate not currently held
     )
-    line = m.describe(snap, pred)
+    segs = m.describe(snap, pred)
+    assert any(s.k == "not_held" for s in segs)
+    line = render_detail(segs)
     assert "not held" in line and "✗" in line
 
 
@@ -1138,7 +1198,7 @@ def test_describe_renders_for_less_than() -> None:
         names={"person.a": "Alice"},
     )
     pred = {"who": ["person.a"], "for": {"m": 20}, "for_mode": "less_than"}
-    assert "for <20m" in PeopleCondition().describe(snap, pred)
+    assert "for <20m" in render_detail(PeopleCondition().describe(snap, pred))
 
 
 def test_describe_renders_for_at_least() -> None:
@@ -1149,7 +1209,7 @@ def test_describe_renders_for_at_least() -> None:
         names={"person.a": "Alice"},
     )
     pred = {"who": ["person.a"], "for": {"m": 20}, "for_mode": "at_least"}
-    assert "for ≥20m" in PeopleCondition().describe(snap, pred)
+    assert "for ≥20m" in render_detail(PeopleCondition().describe(snap, pred))
 
 
 def test_describe_less_than_per_person_mark_uses_mode_in_legacy_clock() -> None:
@@ -1164,7 +1224,7 @@ def test_describe_less_than_per_person_mark_uses_mode_in_legacy_clock() -> None:
         names={"person.a": "Alice"},
     )
     pred = {"who": ["person.a"], "for": {"m": 5}, "for_mode": "less_than"}
-    assert "Alice: home 2m ✓" in PeopleCondition().describe(snap, pred)
+    assert "Alice: home 2m ✓" in render_detail(PeopleCondition().describe(snap, pred))
 
 
 def test_subset_all_is_not_subset_of_explicit() -> None:
@@ -1180,7 +1240,7 @@ def test_describe_non_dict_predicate_is_none() -> None:
 def test_describe_no_people_tracked() -> None:
     # Empty `who` means "all persons"; with an empty snapshot there are none, so
     # describe reports that rather than an empty body.
-    assert PeopleCondition().describe(_snap(), {"who": []}) == "no people tracked"
+    assert render_detail(PeopleCondition().describe(_snap(), {"who": []})) == "no people tracked"
 
 
 def test_matches_no_persons_at_all_is_false_for_every_quantifier() -> None:

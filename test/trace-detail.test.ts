@@ -1420,3 +1420,164 @@ describe("review fixes", () => {
     expect(summary).not.toMatch(/^Applied/);
   });
 });
+
+describe("trace-detail segments", () => {
+  function sceneEvalHost(
+    predicates: TracePredicate[],
+    hass?: Record<string, unknown>,
+  ): HTMLElement {
+    return renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          scenes: [{ index: 0, name: "S", matched: true, evaluated: true, predicates }],
+        },
+      },
+      true,
+      hass,
+    );
+  }
+
+  test("a phrase segment localizes via the trace_detail bundle", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "people",
+          passed: true,
+          detail: "anyone home",
+          detail_segments: [
+            { k: "quant_anyone", t: "anyone" },
+            { t: " " },
+            { k: "where_home", t: "home" },
+          ],
+        },
+      ],
+      { language: "es" },
+    );
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("cualquiera");
+    expect(text).toContain("en casa");
+  });
+
+  test("a phrase segment falls back to its English render with no localization", () => {
+    const host = sceneEvalHost([
+      {
+        condition_key: "people",
+        passed: true,
+        detail: "anyone home",
+        detail_segments: [
+          { k: "quant_anyone", t: "anyone" },
+          { t: " " },
+          { k: "where_home", t: "home" },
+        ],
+      },
+    ]);
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("anyone");
+    expect(text).toContain("home");
+  });
+
+  test("an entity segment renders as an inline more-info link", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "Zone Shower on",
+          detail_segments: [{ e: "binary_sensor.zone_1", t: "Zone Shower" }, { t: " on" }],
+        },
+      ],
+      { states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Zone Shower" } } } },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["Zone Shower"]);
+    expect(host.querySelector(".pred")?.textContent).toContain("on");
+  });
+
+  test("clicking an entity segment link fires hass-more-info for that entity", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "Zone Shower on",
+          detail_segments: [{ e: "binary_sensor.zone_1", t: "Zone Shower" }],
+        },
+      ],
+      { states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Zone Shower" } } } },
+    );
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => {
+      detail = (e as CustomEvent).detail;
+    });
+    (host.querySelector(".pred .entity-link") as HTMLElement).click();
+    expect(detail).toEqual({ entityId: "binary_sensor.zone_1" });
+  });
+
+  test("a text segment renders verbatim", () => {
+    const host = sceneEvalHost([
+      {
+        condition_key: "people",
+        passed: true,
+        detail: "3 of 5 home",
+        detail_segments: [{ t: "3 of 5 home" }],
+      },
+    ]);
+    expect(host.querySelector(".pred")?.textContent).toContain("3 of 5 home");
+  });
+
+  test("detail_segments takes priority over the legacy detail string", () => {
+    const host = sceneEvalHost([
+      {
+        condition_key: "people",
+        passed: true,
+        detail: "LEGACY DETAIL",
+        detail_segments: [{ t: "SEGMENT DETAIL" }],
+      },
+    ]);
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("SEGMENT DETAIL");
+    expect(text).not.toContain("LEGACY DETAIL");
+  });
+
+  test("a missing phrase key renders its English fallback verbatim, not re-interpolated", () => {
+    // Regression: when the bundle key is absent, the fallback `t` is already the
+    // backend's rendered English, so the panel must NOT interpolate `p` into it
+    // again — a value that itself contains a brace token (a zone literally named
+    // "Office {zone}") would otherwise be doubled ("in Office Office {zone}").
+    const host = sceneEvalHost([
+      {
+        condition_key: "people",
+        passed: true,
+        detail: "in Office {zone}",
+        detail_segments: [
+          { k: "definitely_missing_key", t: "in Office {zone}", p: { zone: "Office {zone}" } },
+        ],
+      },
+    ]);
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("in Office {zone}");
+    expect(text).not.toContain("Office Office");
+  });
+
+  test("detail_key still wins over detail_segments", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "lux",
+          passed: false,
+          detail: "lux range dusk no longer exists",
+          detail_key: "lux_range_missing",
+          detail_placeholders: { range: "dusk" },
+          detail_segments: [{ t: "SHOULD NOT SHOW" }],
+        },
+      ],
+      { language: "es" },
+    );
+    const text = host.querySelector(".pred")?.textContent;
+    expect(text).toContain("el rango de lux dusk ya no existe");
+    expect(text).not.toContain("SHOULD NOT SHOW");
+  });
+});

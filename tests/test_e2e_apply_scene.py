@@ -352,3 +352,54 @@ async def test_apply_category_limits_to_one_category(
 
     assert len(light_calls) == 1
     assert len(cover_calls) == 0
+
+
+async def test_snapshots_described_summaries_are_english_strings_and_serialisable(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """Regression: `snapshots_described` values must be plain English strings, not
+    the translatable `Detail` segment lists a migrated condition's `describe(snap)`
+    now returns. Consumers (the no-match log, `redact_plan`, and the dry-run
+    websocket serialisation) treat these as strings; a `Seg` list breaks the WS
+    JSON serialisation and leaks the wrong shape. Drives the REAL summary path via
+    `async_resolve_only` and asserts the non-PII `sun` summary is a rendered
+    string while a presence condition stays redacted and the redacted plan is
+    JSON-serialisable."""
+    import json
+
+    from homeassistant.components.diagnostics import REDACTED
+
+    from custom_components.ambience.redact import redact_plan
+
+    # sun.sun with real angular attributes so the sun summary renders text.
+    now = datetime.now(UTC)
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {
+            "elevation": 23.0,
+            "azimuth": 187.0,
+            "next_rising": (now + timedelta(hours=1)).isoformat(),
+            "next_setting": (now + timedelta(hours=12)).isoformat(),
+            "next_dawn": (now + timedelta(minutes=30)).isoformat(),
+            "next_dusk": (now + timedelta(hours=13)).isoformat(),
+            "next_noon": (now + timedelta(hours=6)).isoformat(),
+            "next_midnight": (now + timedelta(hours=18)).isoformat(),
+        },
+    )
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area("lr", {"scenes": []})
+
+    result = await async_resolve_only(hass, "area", "lr")
+    described = result["snapshots_described"]
+
+    # The migrated `sun` summary must be rendered to English, not a Seg list.
+    assert isinstance(described["sun"], str)
+    assert described["sun"] == "Sun 23° elevation, 187° azimuth (S)"
+
+    # The redacted plan must serialise cleanly (a Seg list would break json.dumps),
+    # and the presence-revealing `occupancy` summary must be redacted.
+    redacted = redact_plan(result)
+    assert redacted["snapshots_described"]["occupancy"] == REDACTED
+    json.dumps(redacted)  # must not raise

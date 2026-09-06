@@ -30,20 +30,25 @@ from ._common import (
     RULE_OR,
     RULE_TRUTHY,
     UNAVAILABLE,
+    Detail,
     NormalisesPredicate,
     PredicateDefaults,
     Reason,
     as_float,
     as_float_state,
+    ent,
     kleene_all,
     kleene_any,
     kleene_not,
     materialise_defaults,
+    miss_cell,
+    phrase,
     predicate_has_any,
     sensor_quant_contains,
     state_sources,
+    text,
     validate_entity_ids,
-    wrap_quantified,
+    wrap_quantified_segs,
 )
 
 _QUANTS = ("any", "all")
@@ -196,7 +201,7 @@ class LuxCondition(NormalisesPredicate):
                 )
         return None
 
-    def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> Detail | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
         if predicate is None:
             return self._describe_snapshot(snapshot)
@@ -205,29 +210,29 @@ class LuxCondition(NormalisesPredicate):
         pred = _norm(predicate)
         sensors = pred.get("sensors") or []
         if not sensors:
-            return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
+            return [phrase("any_sensor")]  # wildcard — matches() is vacuously true
         try:
             lo, hi = self._resolve_range(pred)
         except AmbienceError:
-            return f"unknown lux range: {pred.get('range')!r}"
+            return [phrase("unknown_range", range=repr(pred.get("range")))]
         quant = pred["quant"]
         # Preserve the predicate's sensor order so the line maps to the config.
-        parts: list[str] = []
+        cells: list[Detail] = []
         for eid in sensors:
             name = snapshot.names.get(eid, eid)
             if eid not in snapshot.sensors:
-                parts.append(f"{name}: not found ✗")
+                cells.append(miss_cell(eid, name, "not_found"))
                 continue
             held = self._in_band(snapshot.sensors[eid], lo, hi)
             if held is None:
-                parts.append(f"{name}: unavailable ✗")
+                cells.append(miss_cell(eid, name, "unavailable"))
                 continue
             val = snapshot.sensors[eid]
-            parts.append(f"{name}: {_fmt_lux(val)} lx {'✓' if held else '✗'}")
-        body = wrap_quantified(parts, quant, pred["negate"])
+            cells.append([ent(eid, name), text(f": {_fmt_lux(val)} lx {'✓' if held else '✗'}")])
+        body = wrap_quantified_segs(cells, quant, pred["negate"])
         band = self._fmt_band(lo, hi)
         # A bare reading is meaningless without the target band, so state it once.
-        return f"want {band}; {body}" if band else body
+        return [phrase("want_band", band=band), text("; "), *body] if band else body
 
     @staticmethod
     def _fmt_band(lo: float | None, hi: float | None) -> str:
@@ -239,15 +244,15 @@ class LuxCondition(NormalisesPredicate):
             return f"<{_fmt_lux(hi)} lx"
         return ""
 
-    def _describe_snapshot(self, snapshot: LuxSnapshot) -> str | None:
+    def _describe_snapshot(self, snapshot: LuxSnapshot) -> Detail | None:
         if not snapshot.sensors:
-            return "no lux sensors"
+            return [phrase("no_lux_sensors")]
         readings = sorted(
             f"{snapshot.names.get(eid, eid)} {_fmt_lux(val)} lx"
             for eid, val in snapshot.sensors.items()
             if val is not None
         )
-        return ", ".join(readings) if readings else "no lux readings"
+        return [text(", ".join(readings))] if readings else [phrase("no_lux_readings")]
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

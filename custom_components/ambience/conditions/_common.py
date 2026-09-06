@@ -320,19 +320,6 @@ def sensor_quant_contains(
     return so <= si  # all over more sensors ⊆ all over fewer
 
 
-def wrap_quantified(parts: list[str], quant: Any, negate: bool) -> str:
-    """Join per-sensor ``describe`` cells and wrap them for a sensor-quantifier
-    condition: an ``all of:``/``any of:`` prefix when more than one sensor, then a
-    ``not(...)`` wrap when the predicate is negated. Callers append exactly one
-    ``part`` per sensor, so ``len(parts)`` is the sensor count."""
-    body = ", ".join(parts)
-    if len(parts) > 1:
-        body = f"{'all' if quant == 'all' else 'any'} of: {body}"
-    if negate:
-        body = f"not({body})"
-    return body
-
-
 def state_sources(hass: Any, entities: frozenset[str] | None, domain: str | None = None) -> Any:
     """The states a snapshot should read: just the referenced `entities` when
     the trigger engine supplies them, else a full (optionally domain-filtered)
@@ -443,4 +430,134 @@ REASON_EN: dict[str, str] = {
     "sun_anchor_undefined": "{anchor} is undefined at this location today",
     "weather_entity_unconfigured": "weather entity not configured",
     "weather_group_missing": "weather group {group} no longer exists",
+}
+
+
+@dataclass(frozen=True)
+class Seg:
+    """One segment of a translatable trace `detail`: literal text, an entity
+    (its friendly name plus `entity_id` so the panel can link it), or a phrase
+    (a `trace_detail` key plus placeholders the panel localises). Exactly one of
+    text/entity/phrase is populated per seg."""
+
+    t: str | None = None
+    e: str | None = None
+    k: str | None = None
+    p: Mapping[str, str] = field(default_factory=dict)
+
+    # `p` is an arbitrary Mapping, so the generated hash would raise on the usual
+    # dict. Unhashable by declaration rather than by accident.
+    __hash__ = None  # type: ignore[assignment]
+
+
+Detail = list[Seg]
+
+
+def text(s: str) -> Seg:
+    return Seg(t=s)
+
+
+def ent(entity_id: str, name: str) -> Seg:
+    return Seg(e=entity_id, t=name)
+
+
+def phrase(key: str, **ph: str) -> Seg:
+    return Seg(k=key, p=ph)
+
+
+def miss_cell(entity_id: str, name: str, key: str) -> Detail:
+    """A per-entity describe cell for a sensor/person with no usable reading: its
+    linkable name, a reason phrase (``not_found``/``unavailable``) and the ✗
+    mark. Shared by the per-entity conditions (occupancy, lux, people)."""
+    return [ent(entity_id, name), text(": "), phrase(key), text(" ✗")]
+
+
+def _seg_text(s: Seg) -> str:
+    return DETAIL_EN[s.k].format(**s.p) if s.k is not None else (s.t or "")
+
+
+def render_detail(segs: Detail) -> str:
+    return "".join(_seg_text(s) for s in segs)
+
+
+def detail_to_wire(segs: Detail) -> list[dict]:
+    """Serialise segments for the trace's `detail_segments`: every seg carries
+    `t` (its English), a phrase also carries `k`+`p`, an entity also carries `e`.
+    The panel localises a phrase by `k` and falls back to `t`, so a missing
+    bundle key still renders English for every reader."""
+    out: list[dict] = []
+    for s in segs:
+        if s.k is not None:
+            out.append({"k": s.k, "p": dict(s.p), "t": _seg_text(s)})
+        elif s.e is not None:
+            out.append({"e": s.e, "t": s.t or ""})
+        else:
+            out.append({"t": s.t or ""})
+    return out
+
+
+def join_segs(cells: list[Detail], sep: str = ", ") -> Detail:
+    out: Detail = []
+    for i, cell in enumerate(cells):
+        if i:
+            out.append(text(sep))
+        out.extend(cell)
+    return out
+
+
+def wrap_quantified_segs(cells: list[Detail], quant: Any, negate: bool) -> Detail:
+    """Join per-cell ``describe`` segments for a sensor-quantifier condition: an
+    ``all of:``/``any of:`` phrase prefix when more than one cell, then a
+    ``not(...)`` wrap when negated."""
+    body = join_segs(cells)
+    if len(cells) > 1:
+        body = [phrase("all_of" if quant == "all" else "any_of"), text(" "), *body]
+    if negate:
+        body = [phrase("negate"), text("("), *body, text(")")]
+    return body
+
+
+# The English for every `phrase` key. Mirrored (and pinned) by the panel bundle's
+# `trace_detail` namespace in frontend/src/i18n-data.ts.
+DETAIL_EN: dict[str, str] = {
+    "not_found": "not found",
+    "unavailable": "unavailable",
+    "all_of": "all of:",
+    "any_of": "any of:",
+    "negate": "not",
+    "any_sensor": "any sensor (no constraint)",
+    "for_hold": "for {rel}{dur}",
+    "held": "held {dur}",
+    "not_held": "not held",
+    "no_people_tracked": "no people tracked",
+    "summary_home": "{n} of {total} home ({names})",
+    "summary_home_zero": "0 of {total} home",
+    "want": "want",
+    "quant_anyone": "anyone",
+    "quant_everyone": "everyone",
+    "quant_nobody": "nobody",
+    "where_home": "home",
+    "where_not_home": "not home",
+    "where_in": "in {zone}",
+    "where_not_in": "not in {zone}",
+    "loc_home": "home",
+    "loc_away": "away",
+    "loc_in": "in {zone}",
+    "loc_not_in": "not in {zone}",
+    "no_occupancy_sensors": "no occupancy sensors",
+    "summary_active": "{n} of {total} active ({names})",
+    "summary_active_zero": "0 of {total} active",
+    "no_lux_sensors": "no lux sensors",
+    "no_lux_readings": "no lux readings",
+    "unknown_range": "unknown lux range: {range}",
+    "want_band": "want {band}",
+    "is": "is {values}",
+    "is_not": "is not {values}",
+    "no_entities": "no entities",
+    "unavailable_any": "any unavailable",
+    "summary_unavailable": "{n} of {total} unavailable ({names})",
+    "summary_unavailable_zero": "0 of {total} unavailable",
+    "sun_prefix": "Sun",
+    "sun_elevation": "{deg}° elevation",
+    "sun_azimuth": "{deg}° azimuth ({sector})",
 }

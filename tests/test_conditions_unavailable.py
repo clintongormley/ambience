@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.conditions._common import phrase, render_detail
 from custom_components.ambience.conditions.unavailable import (
     UnavailableCondition,
     UnavailableSnapshot,
@@ -137,35 +138,40 @@ def test_describe_marks_each_entity() -> None:
         {"binary_sensor.a": "on", "binary_sensor.b": "unavailable"},
         names={"binary_sensor.a": "A", "binary_sensor.b": "B"},
     )
-    out = UnavailableCondition().describe(
+    detail = UnavailableCondition().describe(
         snap, {"entities": ["binary_sensor.a", "binary_sensor.b"]}
     )
+    assert detail[0] == phrase("unavailable_any")
+    out = render_detail(detail)
     assert "A: on ✗" in out
     assert "B: unavailable ✓" in out
 
 
 def test_describe_marks_absent_entity_as_missing() -> None:
     snap = _snap({"binary_sensor.a": "on"}, names={"binary_sensor.a": "A"})
-    out = UnavailableCondition().describe(snap, {"entities": ["binary_sensor.a", "light.ghost"]})
+    out = render_detail(
+        UnavailableCondition().describe(snap, {"entities": ["binary_sensor.a", "light.ghost"]})
+    )
     assert "A: on ✗" in out
     assert "light.ghost: missing ✓" in out
 
 
 def test_describe_snapshot_summary() -> None:
     snap = _snap({"binary_sensor.a": "on", "binary_sensor.b": "unavailable"})
-    out = UnavailableCondition().describe(snap)
+    out = render_detail(UnavailableCondition().describe(snap))
     assert "1 of 2 unavailable" in out
 
 
 def test_describe_snapshot_all_available() -> None:
     snap = _snap({"binary_sensor.a": "on", "binary_sensor.b": "off"})
-    out = UnavailableCondition().describe(snap)
+    out = render_detail(UnavailableCondition().describe(snap))
     assert out == "0 of 2 unavailable"
 
 
 def test_describe_snapshot_empty() -> None:
     out = UnavailableCondition().describe(_snap())
-    assert out == "no entities"
+    assert out == [phrase("no_entities")]
+    assert render_detail(out) == "no entities"
 
 
 def test_describe_non_dict_predicate_is_none() -> None:
@@ -173,7 +179,9 @@ def test_describe_non_dict_predicate_is_none() -> None:
 
 
 def test_describe_empty_entities_predicate() -> None:
-    assert UnavailableCondition().describe(_snap(), {"entities": []}) == "no entities"
+    out = UnavailableCondition().describe(_snap(), {"entities": []})
+    assert out == [phrase("no_entities")]
+    assert render_detail(out) == "no entities"
 
 
 def test_validate_rejects_non_dict() -> None:

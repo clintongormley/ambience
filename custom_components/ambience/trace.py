@@ -223,6 +223,7 @@ def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | No
                         "detail": p.detail,
                         "detail_key": p.detail_key,
                         "detail_placeholders": p.detail_placeholders,
+                        "detail_segments": p.detail_segments,
                         "entity_ids": list(p.entity_ids),
                     }
                     for p in scene.predicates

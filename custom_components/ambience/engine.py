@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .conditions._common import detail_to_wire, render_detail
 from .protocols import Condition
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,8 +42,14 @@ class PredicateResult:
     `detail_key` / `detail_placeholders` are set only when `detail` came from a
     condition's `unconfigured_reason` (a `Reason`): `detail` holds its English
     render for logs, diagnostics and the MCP, while the pair lets the panel
-    localise the same sentence. None for a `describe()` detail, which is
-    per-house prose with no fixed translation.
+    localise the same sentence. None for any `describe()` detail — those localise
+    (or not) via `detail_segments` below, never through this pair.
+
+    `detail_segments` is set only when `describe()` returned a `Detail` (a
+    structured, translatable segment list): the panel localises each segment
+    (entity link / phrase key), with `detail` its rendered English fallback.
+    None for a legacy `str`-returning describe (time_of_day/weather), whose
+    `detail` is untranslated English, and for the `unconfigured_reason` path.
     """
 
     condition_key: str
@@ -51,6 +58,7 @@ class PredicateResult:
     entity_ids: tuple[str, ...] = ()
     detail_key: str | None = None
     detail_placeholders: dict[str, str] | None = None
+    detail_segments: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -190,7 +198,14 @@ def _describe_predicate(
     May raise (the caller guards)."""
     # Pass the predicate so the trace detail is scoped to the sensors/
     # persons THIS scene references, not the whole shared snapshot.
-    detail = condition.describe(snap, predicate) if describe else None
+    raw = condition.describe(snap, predicate) if describe else None
+    detail: str | None
+    detail_segments: list[dict] | None = None
+    if isinstance(raw, list):
+        detail = render_detail(raw)
+        detail_segments = detail_to_wire(raw)
+    else:
+        detail = raw  # str | None (time_of_day/weather/legacy)
     detail_key: str | None = None
     detail_placeholders: dict[str, str] | None = None
     if describe and not passed:
@@ -200,6 +215,9 @@ def _describe_predicate(
             detail = reason.render()
             detail_key = reason.key
             detail_placeholders = dict(reason.placeholders)
+            # The reason is authoritative: drop any segments a describe() emitted
+            # so the panel gets one localisation signal, not three conflicting.
+            detail_segments = None
     # The entity_ids the trace UI links to. Only a predicate that renders a
     # detail string can have its names linked, so skip the lookup when there's
     # nothing to link (`detail is not None` already implies tracing). A caller
@@ -215,7 +233,9 @@ def _describe_predicate(
     else:
         trigger_deps = getattr(condition, "trigger_deps", None)
         entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
-    return PredicateResult(key, passed, detail, entity_ids, detail_key, detail_placeholders)
+    return PredicateResult(
+        key, passed, detail, entity_ids, detail_key, detail_placeholders, detail_segments
+    )
 
 
 def resolve(

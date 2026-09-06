@@ -21,7 +21,16 @@ from homeassistant.util import dt as dt_util
 
 from ..errors import AmbienceError
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, predicate_has_any, state_sources, validate_entity_ids
+from ._common import (
+    UNAVAILABLE,
+    Detail,
+    join_segs,
+    phrase,
+    predicate_has_any,
+    state_sources,
+    text,
+    validate_entity_ids,
+)
 
 
 @dataclass(frozen=True)
@@ -89,25 +98,25 @@ class UnavailableCondition:
         # Empty (shouldn't occur post-validation): "any of none" is False.
         return any(self._is_unavailable(e, snapshot) for e in entities)
 
-    def describe(self, snapshot: UnavailableSnapshot, predicate: Any = None) -> str | None:
+    def describe(self, snapshot: UnavailableSnapshot, predicate: Any = None) -> Detail | None:
         if predicate is None:
             return self._describe_snapshot(snapshot)
         if not isinstance(predicate, dict):
             return None
         entities = predicate.get("entities") or []
         if not entities:
-            return "no entities"
-        parts: list[str] = []
+            return [phrase("no_entities")]
+        cells: list[Detail] = []
         for eid in entities:
             name = snapshot.names.get(eid, eid)
             state = snapshot.present.get(eid, "missing")
             mark = "✓" if self._is_unavailable(eid, snapshot) else "✗"
-            parts.append(f"{name}: {state} {mark}")
-        return f"any unavailable: {', '.join(parts)}"
+            cells.append([text(f"{name}: {state} {mark}")])
+        return [phrase("unavailable_any"), text(": "), *join_segs(cells)]
 
-    def _describe_snapshot(self, snapshot: UnavailableSnapshot) -> str | None:
+    def _describe_snapshot(self, snapshot: UnavailableSnapshot) -> Detail | None:
         if not snapshot.present:
-            return "no entities"
+            return [phrase("no_entities")]
         down = sorted(
             snapshot.names.get(eid, eid)
             for eid, state in snapshot.present.items()
@@ -115,8 +124,15 @@ class UnavailableCondition:
         )
         total = len(snapshot.present)
         if down:
-            return f"{len(down)} of {total} unavailable ({', '.join(down)})"
-        return f"0 of {total} unavailable"
+            return [
+                phrase(
+                    "summary_unavailable",
+                    n=str(len(down)),
+                    total=str(total),
+                    names=", ".join(down),
+                )
+            ]
+        return [phrase("summary_unavailable_zero", total=str(total))]
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

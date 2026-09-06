@@ -185,14 +185,15 @@ def redact_store(dump: Any) -> Any:
 
 
 # The panel-only half of a predicate's detail: a `trace_reason` key plus its
-# placeholders, which only the panel's bundle can render. Dropped from every
+# placeholders (unconfigured path) and the localisable `detail_segments`
+# (describe path), which only the panel's bundle can render. Dropped from every
 # redacted predicate — a redacted trace is the EXTERNAL view (MCP, diagnostics,
 # AI bundle), and every external reader takes the English `detail`. Dropping
-# rather than nulling is load-bearing twice over: the placeholders repeat the
-# very names a blanked detail hid, and the MCP's `traces_list`/`dry_run` payload
+# rather than nulling is load-bearing twice over: these fields repeat the very
+# names a blanked detail hid, and the MCP's `traces_list`/`dry_run` payload
 # shape is frozen per protocol (tests/test_protocol_shape.py), so a
 # panel-presentation field must not appear in it at all.
-_PANEL_DETAIL_KEYS = ("detail_key", "detail_placeholders")
+_PANEL_DETAIL_KEYS = ("detail_key", "detail_placeholders", "detail_segments")
 
 
 def redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:

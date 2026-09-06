@@ -249,11 +249,10 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
   let subject: string;
   if (!Array.isArray(pred.who)) {
     // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.
-    // A missing quant defaults to "everyone" (Everybody) to match the widget,
-    // so a bare `{}` reads as "Everybody is Home".
-    // Display-only, and only for a legacy predicate not yet re-saved (the save
-    // path materialises `quant`): the engine reads a missing `quant` as "any".
-    const quant = pred.quant ?? "everyone";
+    // A missing quant is `any` — that is how the engine evaluates it; the
+    // editor seeds an explicit `everyone` for a new condition, so this only
+    // affects legacy stored predicates.
+    const quant = pred.quant ?? "any";
     subject =
       quant === "nobody"
         ? localize(ctx.hass, "ui.people_mode_nobody", "Nobody")

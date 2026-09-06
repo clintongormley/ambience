@@ -144,8 +144,8 @@ describe("summarisePeople", () => {
     expect(summarisePeople({ quant: "nobody", where: "home" })).toBe("Nobody is at Home");
   });
 
-  test("empty predicate defaults to everybody at home", () => {
-    expect(summarisePeople({})).toBe("Everybody is at Home");
+  test("empty predicate reads as anybody at home, as the engine evaluates it", () => {
+    expect(summarisePeople({})).toBe("Anybody is at Home");
   });
 
   test("negate renders as 'is not at <Location>'", () => {

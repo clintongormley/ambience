@@ -490,10 +490,11 @@ describe("ambience-people-predicate-input — branch coverage", () => {
   });
 
   // -------------------------------------------------------------------------
-  // _setWhere() — line 220: `cur.quant ?? "everyone"` uses default when quant absent
+  // _setWhere() — a stored predicate with no `quant` key defaults to "any",
+  // matching how the engine evaluates a missing quant.
   // -------------------------------------------------------------------------
 
-  test("_setWhere() uses default quant 'everyone' when value has no quant key", async () => {
+  test("_setWhere() uses default quant 'any' when value has no quant key", async () => {
     el = await mount({ where: "home" } as PeoplePredicate); // no quant
     let emitted: PeoplePredicate | undefined;
     el.addEventListener("value-changed", (e: Event) => {
@@ -502,8 +503,13 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     const w = whereSelect(el);
     w.value = "zone.work";
     w.dispatchEvent(new Event("change"));
-    expect(emitted?.quant).toBe("everyone");
+    expect(emitted?.quant).toBe("any");
     expect(emitted?.where).toBe("zone.work");
+  });
+
+  test("_mode() with a stored predicate that has no quant shows Anybody", async () => {
+    el = await mount({ where: "home" } as PeoplePredicate);
+    expect(modeSelect(el).value).toBe("anybody");
   });
 
   // -------------------------------------------------------------------------
@@ -562,7 +568,7 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     const neg = negateSelect(el);
     neg.value = "true";
     neg.dispatchEvent(new Event("change"));
-    expect(emitted?.quant).toBe("everyone"); // ?? "everyone" fallback
+    expect(emitted?.quant).toBe("any"); // a stored value with no quant defaults to "any"
     expect(emitted?.where).toBe("home"); // ?? "home" fallback
     expect(emitted?.negate).toBe(true);
   });

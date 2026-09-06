@@ -130,15 +130,18 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return this.value != null && Array.isArray(this.value.who);
   }
 
+  /** The quant a value without one stands for: a not-yet-emitted (null) value
+   *  shows the editor's seed (Everybody); a stored predicate without `quant`
+   *  is evaluated by the engine as `any`, so it must read as Anybody. */
+  private _defaultQuant(): PeopleQuant {
+    return this.value == null ? "everyone" : "any";
+  }
+
   /** Display mode, derived purely from `value`. The PRESENCE of the `who` key
    *  selects base vs "X of:"; an empty array stays an "X of:" mode (it's just
    *  an unfinished selection). */
   private _mode(): Mode {
-    // An "X of:" mode (who key present) defaults a missing quant to "any";
-    // a base mode (no who key) defaults a missing quant to "everyone", so a
-    // fresh/`{}` value lands on Everybody rather than Anybody.
-    // Display-only, and only for a legacy predicate not yet re-saved (the save
-    // path materialises `quant`): the engine reads a missing `quant` as "any".
+    // An "X of:" mode (who key present) defaults a missing quant to "any".
     if (this._hasWhoKey()) {
       switch (this._cur().quant ?? "any") {
         case "any":
@@ -149,8 +152,9 @@ export class AmbiencePeoplePredicateInput extends LitElement {
           return "none";
       }
     }
-    // Base modes: everyone→Everybody, any→Anybody, nobody→Nobody.
-    switch (this._cur().quant ?? "everyone") {
+    // Base modes: everyone→Everybody, any→Anybody, nobody→Nobody. A missing
+    // quant follows `_defaultQuant()` (see there for the null-vs-stored rule).
+    switch (this._cur().quant ?? this._defaultQuant()) {
       case "nobody":
         return "nobody";
       case "any":
@@ -234,7 +238,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
 
   private _setWhere(where: string) {
     const cur = this._cur();
-    const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where };
+    const out: PeoplePredicate = { quant: cur.quant ?? this._defaultQuant(), where };
     if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     this._applyFor(out, cur.for, cur.for_mode);
@@ -243,7 +247,10 @@ export class AmbiencePeoplePredicateInput extends LitElement {
 
   private _setNegate(negate: boolean) {
     const cur = this._cur();
-    const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
+    const out: PeoplePredicate = {
+      quant: cur.quant ?? this._defaultQuant(),
+      where: cur.where ?? "home",
+    };
     if (negate) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     this._applyFor(out, cur.for, cur.for_mode);
@@ -267,7 +274,10 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _setFor(dur: { h: number; m: number; s: number; mode?: ForMode }) {
     const { mode, ...d } = dur;
     const cur = this._cur();
-    const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
+    const out: PeoplePredicate = {
+      quant: cur.quant ?? this._defaultQuant(),
+      where: cur.where ?? "home",
+    };
     if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     this._applyFor(out, d, mode ?? "at_least");

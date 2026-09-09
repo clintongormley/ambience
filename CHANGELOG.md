@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.3.0-rc.1] - 2026-09-09
+
 ### Changed
 
 - The trace panel's per-condition detail (the live reading beside each

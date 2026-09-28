@@ -70,6 +70,13 @@ function normalizeConfig(cfg: ScopeConfig): ScopeConfig {
     : { scenes: cfg.scenes ?? [] };
 }
 
+/** Every entity a scope's scenes act on. */
+function actedEntities(config: ScopeConfig | undefined): string[] {
+  return (config?.scenes ?? []).flatMap((s) =>
+    (s.actions ?? []).flatMap((a) => a.entity_ids ?? []),
+  );
+}
+
 /** Property decorator: assigning a new value (per Object.is) requests a host
  *  re-render — the store-field equivalent of Lit's `@state()`. */
 function tracked() {
@@ -146,8 +153,24 @@ export class ScopeStore implements ReactiveController {
   // "changed elsewhere — refresh" banner.
   @tracked() staleScopes: Scope[] = [];
   // Predicate (set by the host on subscribe) telling us a scope is mid-edit
-  // here, so an external change to it should be deferred, not auto-reloaded.
+  // here, so an external change to it should be deferred, not auto-reloaded,
+  // and re-reads of its overlap flags held back until the editor closes.
   private _isScopeLocked?: (scope: Scope) => boolean;
+  // Scopes whose overlap flags were not re-read because their editor was open,
+  // keyed by scopeKey. Re-read in editorClosed; not staleScopes, whose banner
+  // says "changed in another tab", which these were not.
+  private _heldBackSharers = new Map<string, Scope>();
+  // Per scopeKey: saves still waiting for the server, and re-reads to run once
+  // the last of them settles (a re-read answered before a save's own answer
+  // lands would be overwritten by it, and that answer can be older).
+  private _savesInFlight = new Map<string, number>();
+  private _rereadAfterSave = new Map<string, Scope>();
+  // Per scopeKey: bumped when a re-read or reload starts and when a save result
+  // or undo/redo result is applied. A read applies only if it is unchanged.
+  private _configGen = new Map<string, number>();
+  // Source of _configGen values; store-wide so a value is never reused, even
+  // after forgetScope drops a scope's entry.
+  private _genSeq = 0;
 
   // Registry-event unsubscribers, set once subscribe() resolves.
   private _unsubArea?: () => void;
@@ -211,7 +234,8 @@ export class ScopeStore implements ReactiveController {
    * `isScopeLocked(scope)` lets the host defer a cross-tab reload while that
    * scope is being edited here (the editor saves by index, so a live reload
    * mid-edit could hit the wrong scene); deferred scopes surface via
-   * {@link staleScopes}.
+   * {@link staleScopes}. It also holds back re-reads of that scope's overlap
+   * flags until the editor closes.
    */
   async subscribe(
     onRemove: (scope: Scope) => void,
@@ -399,10 +423,10 @@ export class ScopeStore implements ReactiveController {
   async refreshAreas(): Promise<void> {
     try {
       const areas = await listAreas(this._hass);
-      // Ambience configs only change when WE call saveArea — never via
-      // area_registry_updated events. Reuse existing config references and
-      // only fetch for newly-discovered areas, to keep Scene references
-      // stable across rename/add/remove events.
+      // An area_registry_updated event never changes an Ambience config, so
+      // reuse existing config references and only fetch for newly-discovered
+      // areas, to keep Scene references stable across rename/add/remove
+      // events.
       const previous = this.areaConfigs;
       const configs = new Map<string, ScopeConfig>();
       await Promise.all(
@@ -530,58 +554,179 @@ export class ScopeStore implements ReactiveController {
   }
 
   /**
-   * Apply `next` optimistically, persist, reconcile with the stored config.
-   * Not serialised per scope: overlapping saves could revert to a stale
-   * intermediate config on error. In practice the UI serialises mutations
-   * (one modal / one interaction at a time), so this is acceptable.
+   * Apply `next` optimistically, persist, reconcile with the stored config,
+   * then re-read the other scopes acting on the same entities so their
+   * "controlled by multiple groups" flags match (see {@link _refreshSharers}).
+   * Saves can overlap (the list actions don't await them), and the revert on
+   * error can still restore a stale intermediate config. Re-reads of a scope
+   * wait until its saves in flight settle.
    *
    * @returns `true` if the save succeeded, `false` if it errored (in which case
-   *   the optimistic update has been reverted and `error` set).
+   *   the optimistic update has been reverted and `error` set). The re-read of
+   *   other scopes never fails the save or sets `error`.
    */
   async mutate(scope: Scope, next: ScopeConfig, change?: ChangeDescriptor): Promise<boolean> {
+    const key = scopeKey(scope);
     const prev = this.getConfig(scope);
     this.setConfig(scope, next);
+    // This save's answer brings fresh flags, so a re-read held back for this
+    // scope is dropped now; it is put back if the save fails.
+    const heldBack = this._heldBackSharers.delete(key);
+    this._savesInFlight.set(key, (this._savesInFlight.get(key) ?? 0) + 1);
     this.error = "";
+    let saved: ScopeConfig | undefined;
     try {
       let result: { ok: true; config: ScopeConfig };
       if (scope.kind === "house") result = await saveHouse(this._hass, next, change);
       else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next, change);
       else result = await saveFloor(this._hass, scope.id, next, change);
+      this._bumpGen(key);
       this.setConfig(scope, normalizeConfig(result.config));
-      return true;
+      saved = result.config;
     } catch (e) {
       if (prev) this.setConfig(scope, prev);
+      if (heldBack) this._rereadAfterSave.set(key, scope);
       this.error = localizeWsError(this._hass, e);
+      // Not awaited: the caller needs the failure now, not after a re-read.
+      void this._saveSettled(scope);
       return false;
     }
+    // Awaited so `mutate` resolves only once the other scopes' overlap flags
+    // match the server; the editor stays open until then.
+    await Promise.all([this._saveSettled(scope), this._refreshSharers(scope, prev, saved)]);
+    return true;
+  }
+
+  /** Mark one save of `scope` as answered; once none are left, run any re-read
+   *  of it that was waiting for them. */
+  private async _saveSettled(scope: Scope): Promise<void> {
+    const key = scopeKey(scope);
+    const left = (this._savesInFlight.get(key) ?? 1) - 1;
+    if (left > 0) {
+      this._savesInFlight.set(key, left);
+      return;
+    }
+    this._savesInFlight.delete(key);
+    if (this._rereadAfterSave.delete(key)) await this._refreshSharer(scope);
+  }
+
+  private _bumpGen(key: string): number {
+    const gen = ++this._genSeq;
+    this._configGen.set(key, gen);
+    return gen;
   }
 
   /** Re-fetch just this scope's config and update the relevant store, so the
    *  header toggle reflects the persisted `enabled` value after a write. */
   async reloadScope(scope: Scope): Promise<void> {
+    const key = scopeKey(scope);
     try {
-      let cfg: ScopeConfig;
-      if (scope.kind === "house") cfg = normalizeConfig(await getHouse(this._hass));
-      else if (scope.kind === "area") cfg = normalizeConfig(await getArea(this._hass, scope.id));
-      else cfg = normalizeConfig(await getFloor(this._hass, scope.id));
+      const gen = this._bumpGen(key);
+      const cfg = await this._fetchScope(scope);
       if (!this._host.isConnected) return;
+      if (this._configGen.get(key) !== gen) return;
       this.setConfig(scope, cfg);
     } catch (e) {
       this.error = localizeWsError(this._hass, e);
     }
   }
 
+  private async _fetchScope(scope: Scope): Promise<ScopeConfig> {
+    if (scope.kind === "house") return normalizeConfig(await getHouse(this._hass));
+    if (scope.kind === "area") return normalizeConfig(await getArea(this._hass, scope.id));
+    return normalizeConfig(await getFloor(this._hass, scope.id));
+  }
+
   /** Apply an undo/redo result: write the restored config into the affected
-   *  scope's cache so the on-screen list reflects it immediately. */
-  private _applyHistoryResult(r: HistoryApplyResult): void {
+   *  scope's cache so the on-screen list reflects it immediately, then re-read
+   *  the other scopes acting on the same entities (see {@link _refreshSharers}). */
+  private async _applyHistoryResult(r: HistoryApplyResult): Promise<void> {
     if (!r.ok || !r.config || r.scope_kind === undefined) return;
-    this.setConfig(scopeFromParts(r.scope_kind, r.scope_id ?? null), normalizeConfig(r.config));
+    const scope = scopeFromParts(r.scope_kind, r.scope_id ?? null);
+    const before = this.getConfig(scope);
+    const key = scopeKey(scope);
+    this._bumpGen(key);
+    this.setConfig(scope, normalizeConfig(r.config));
+    this._heldBackSharers.delete(key);
+    await this._refreshSharers(scope, before, r.config);
+  }
+
+  /** The "controlled by multiple groups" flag is computed across every scope,
+   *  so a change to `changed` can flip it on any other scope that acts on one of
+   *  the same entities (those in `before` or `after`). Re-read each cached scope
+   *  that does, silently. When `before` is unknown the change may have removed
+   *  actions we never saw, so every other cached scope is re-read. A scope whose
+   *  editor is open is held back until {@link editorClosed}. Never throws. */
+  private async _refreshSharers(
+    changed: Scope,
+    before: ScopeConfig | undefined,
+    after: ScopeConfig | undefined,
+  ): Promise<void> {
+    const touched =
+      before === undefined ? null : new Set([...actedEntities(before), ...actedEntities(after)]);
+    if (touched?.size === 0) return;
+    const changedKey = scopeKey(changed);
+    const cached: [Scope, ScopeConfig][] = [
+      [{ kind: "house" }, this.house],
+      ...[...this.areaConfigs].map(([id, c]): [Scope, ScopeConfig] => [{ kind: "area", id }, c]),
+      ...[...this.floorConfigs].map(([id, c]): [Scope, ScopeConfig] => [{ kind: "floor", id }, c]),
+    ];
+    const sharers = cached
+      .filter(([scope]) => scopeKey(scope) !== changedKey)
+      .filter(([, config]) => !touched || actedEntities(config).some((eid) => touched.has(eid)))
+      .map(([scope]) => scope);
+    await Promise.all(sharers.map((scope) => this._refreshSharer(scope)));
+  }
+
+  /** Silently re-read one scope's config for its overlap flags.
+   *  - A save of the scope still waiting for the server (when the read starts
+   *    or when it lands) postpones the read until that save settles.
+   *  - The response is dropped if a later re-read of the scope has started, or
+   *    a save or undo/redo result for it was applied, while it was in flight.
+   *  - The editor lock is checked again when the response lands: the editor
+   *    saves by index, so a list replaced under an editor that opened mid-read
+   *    could save over the wrong scene.
+   *  Failures are swallowed like the other post-write refetches. */
+  private async _refreshSharer(scope: Scope): Promise<void> {
+    const key = scopeKey(scope);
+    try {
+      if (this._savesInFlight.has(key)) {
+        this._rereadAfterSave.set(key, scope);
+        return;
+      }
+      if (this._isScopeLocked?.(scope)) {
+        this._heldBackSharers.set(key, scope);
+        return;
+      }
+      const gen = this._bumpGen(key);
+      const cfg = await this._fetchScope(scope);
+      if (!this._host.isConnected) return;
+      if (this._savesInFlight.has(key)) {
+        this._rereadAfterSave.set(key, scope);
+        return;
+      }
+      if (this._configGen.get(key) !== gen) return;
+      if (this._isScopeLocked?.(scope)) {
+        this._heldBackSharers.set(key, scope);
+        return;
+      }
+      this.setConfig(scope, cfg);
+    } catch {
+      // Silent — best effort; the next save or reload re-reads it.
+    }
+  }
+
+  /** Re-read a scope changed elsewhere, then the scopes sharing its entities. */
+  private async _reloadChanged(scope: Scope): Promise<void> {
+    const before = this.getConfig(scope);
+    await this.reloadScope(scope);
+    await this._refreshSharers(scope, before, this.getConfig(scope));
   }
 
   async undo(): Promise<void> {
     this.error = "";
     try {
-      this._applyHistoryResult(await undoChange(this._hass));
+      await this._applyHistoryResult(await undoChange(this._hass));
     } catch (e) {
       this.error = localizeWsError(this._hass, e);
     }
@@ -590,7 +735,7 @@ export class ScopeStore implements ReactiveController {
   async redo(): Promise<void> {
     this.error = "";
     try {
-      this._applyHistoryResult(await redoChange(this._hass));
+      await this._applyHistoryResult(await redoChange(this._hass));
     } catch (e) {
       this.error = localizeWsError(this._hass, e);
     }
@@ -615,7 +760,7 @@ export class ScopeStore implements ReactiveController {
       return;
     }
     if (this._isScopeLocked?.(scope)) this._markStale(scope);
-    else void this.reloadScope(scope);
+    else void this._reloadChanged(scope);
   }
 
   /** Whether a scope is currently deferred ("changed elsewhere while editing"). */
@@ -637,11 +782,32 @@ export class ScopeStore implements ReactiveController {
     this.staleScopes = this.staleScopes.filter((s) => scopeKey(s) !== key);
   }
 
+  /** Drop everything held back for a scope removed from the registry: its
+   *  stale mark and any postponed re-read of its overlap flags. */
+  forgetScope(scope: Scope): void {
+    const key = scopeKey(scope);
+    this.clearStale(scope);
+    this._heldBackSharers.delete(key);
+    this._rereadAfterSave.delete(key);
+    this._configGen.delete(key);
+  }
+
   /** Load the external version of a scope that was deferred while edited here,
-   *  and drop it from the stale set. Called when the host closes the editor on a
-   *  stale scope, or the user picks "Load theirs" in the conflict dialog. */
+   *  drop it from the stale set, then re-read the other scopes acting on the
+   *  same entities (see {@link _refreshSharers}). Called via
+   *  {@link editorClosed}, which also covers "Load theirs" in the conflict
+   *  dialog (that choice closes the editor). */
   async refreshStaleScope(scope: Scope): Promise<void> {
     this.clearStale(scope);
-    await this.reloadScope(scope);
+    await this._reloadChanged(scope);
+  }
+
+  /** The host's editor has closed on, or moved away from, `scope`: load what
+   *  was held back while it was open — another tab's change to it, or a
+   *  re-read of its overlap flags. */
+  async editorClosed(scope: Scope): Promise<void> {
+    const heldBack = this._heldBackSharers.delete(scopeKey(scope));
+    if (this.isScopeStale(scope)) await this.refreshStaleScope(scope);
+    else if (heldBack) await this._refreshSharer(scope);
   }
 }

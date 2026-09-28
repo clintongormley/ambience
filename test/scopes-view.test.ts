@@ -3543,4 +3543,78 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
     expect(spy).toHaveBeenCalledWith(scope);
   });
+
+  test("cancelling the editor re-reads a scope whose overlap flags were held back while it was open", async () => {
+    const shared = (overlap: string[]) =>
+      ({
+        name: "Nighttime",
+        category: "c",
+        when: {},
+        actions: [{ service: "light.turn_on", entity_ids: ["light.x"], params: {} }],
+        overlap_entities: overlap,
+      }) as Scene;
+    el = await mount({
+      houseConfig: { scenes: [shared(["light.x"])] },
+      areaConfigs: { living_room: { scenes: [shared(["light.x"])] } },
+    });
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    await el.updateComplete;
+    vi.mocked(api.saveHouse).mockResolvedValue({ ok: true, config: { scenes: [] } });
+    vi.mocked(api.getArea).mockClear();
+    vi.mocked(api.getArea).mockResolvedValue({ scenes: [shared([])] });
+    await el._store.mutate({ kind: "house" }, { scenes: [] });
+    expect(api.getArea).not.toHaveBeenCalled();
+
+    el._cancelScene();
+    await el.updateComplete;
+
+    await vi.waitFor(() =>
+      expect(el._store.areaConfigs.get("living_room").scenes[0].overlap_entities).toEqual([]),
+    );
+    expect(el._store.error).toBe("");
+  });
+
+  test("moving a scene out of the house does not re-read the house while its delete is saving", async () => {
+    const nighttime = (overlap: string[]) =>
+      ({
+        name: "Nighttime",
+        category: "c",
+        when: {},
+        actions: [{ service: "light.turn_on", entity_ids: ["light.x"], params: {} }],
+        overlap_entities: overlap,
+      }) as Scene;
+    el = await mount({ houseConfig: { scenes: [nighttime([])] } });
+    const house = { kind: "house" };
+    const target = { kind: "area", id: "living_room" };
+    el._editing = { scope: house, index: 0, isNew: false };
+    await el.updateComplete;
+    vi.mocked(api.saveArea).mockResolvedValue({
+      ok: true,
+      config: { scenes: [nighttime(["light.x"])] },
+    });
+    let finishDelete!: (v: any) => void;
+    vi.mocked(api.saveHouse).mockReturnValue(new Promise((r) => (finishDelete = r)));
+    vi.mocked(api.getHouse).mockClear();
+
+    const saving = el._saveScene(
+      new CustomEvent("save-scene", { detail: { scene: nighttime([]), scope: target } }),
+    );
+    await vi.waitFor(() => expect(api.saveHouse).toHaveBeenCalled());
+    await el.updateComplete;
+    finishDelete({ ok: true, config: { scenes: [] } });
+    await saving;
+    await el.updateComplete;
+
+    expect(api.getHouse).not.toHaveBeenCalled();
+    expect(el._store.house.scenes).toEqual([]);
+  });
+
+  test("removing a scope makes the store forget everything held back for it", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    const spy = vi.spyOn(el._store, "forgetScope");
+    el._onScopeRemoved(scope);
+    expect(spy).toHaveBeenCalledWith(scope);
+  });
 });

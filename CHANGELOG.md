@@ -8,6 +8,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- Moving or deleting a scene, or changing the devices it controls, could leave a
+    "Controlled by multiple groups" warning on another area, floor or the house
+    until the page was reloaded, even though the overlap was gone. After a save,
+    undo, redo or a change made in another tab, the panel now also re-reads the
+    other scopes that control the same devices, so their warnings appear and
+    clear straight away.
+
 ## [1.3.0-rc.1] - 2026-09-09
 
 ### Changed

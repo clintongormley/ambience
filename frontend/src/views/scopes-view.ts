@@ -352,13 +352,15 @@ export class AmbienceScopesView extends LitElement {
     // The store owns the registry subscriptions (and tears them down in
     // hostDisconnected); it calls back here so the view can drop a removed
     // scope from its own expanded/editing state, and asks _scopeIsEditing
-    // whether to defer a cross-tab reload (editor open → banner, not reload).
+    // whether to defer a cross-tab reload (editor open → banner, not reload)
+    // and hold back re-reads of its overlap flags until the editor closes.
     await this._store.subscribe((scope) => this._onScopeRemoved(scope), this._scopeIsEditing);
   }
 
   /** True while this tab has the scene editor open on `scope` — the editor
    *  saves by stored index, so a live cross-tab reload then could splice into a
-   *  list that changed underneath it. The store defers such scopes to a banner. */
+   *  list that changed underneath it. The store defers such scopes to a banner
+   *  and holds back re-reads of their overlap flags until the editor closes. */
   private _scopeIsEditing = (scope: Scope): boolean =>
     this._editing !== null && scopeKey(this._editing.scope) === scopeKey(scope);
 
@@ -381,9 +383,9 @@ export class AmbienceScopesView extends LitElement {
     this._setCollapsedCategories(
       new Set([...this._collapsedCategories].filter((k) => !k.startsWith(prefix))),
     );
-    // Drop any "changed elsewhere" deferral for the gone scope so the editor
-    // close below doesn't try to reload a scope that no longer exists.
-    this._store.clearStale(scope);
+    // Drop anything the store held back for the gone scope so the editor close
+    // below doesn't try to reload a scope that no longer exists.
+    this._store.forgetScope(scope);
     if (this._editing && scopeKey(this._editing.scope) === key) {
       this._editing = null;
     }
@@ -396,16 +398,14 @@ export class AmbienceScopesView extends LitElement {
     if (changed.has("filterCategory") && changed.get("filterCategory") !== undefined) {
       this._onFilterCategoryChanged();
     }
-    // When the editor closes (or moves to a different scope), pick up any
-    // cross-tab change that was deferred to a banner while it was open.
+    // When the editor closes (or moves to a different scope), pick up anything
+    // the store held back for that scope while it was open.
     if (changed.has("_editing")) {
       const prev = changed.get("_editing") as EditingState | null | undefined;
       const movedAway =
         prev != null &&
         (this._editing === null || scopeKey(this._editing.scope) !== scopeKey(prev.scope));
-      if (movedAway && this._store.isScopeStale(prev.scope)) {
-        void this._store.refreshStaleScope(prev.scope);
-      }
+      if (movedAway) void this._store.editorClosed(prev.scope);
     }
   }
 

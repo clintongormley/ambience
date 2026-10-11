@@ -38,11 +38,11 @@ def _seed_services_catalog(hass: HomeAssistant) -> None:
                 "transition": {"selector": {"number": {"min": 0}}},
                 "effect": {"selector": {"text": {}}},
             },
-            "target": {"entity": [{"domain": "light"}]},
+            "target": {"entity": [{"domain": ["light"]}]},
         },
         ("light", "turn_off"): {
             "fields": {"transition": {"selector": {"number": {"min": 0}}}},
-            "target": {"entity": [{"domain": "light"}]},
+            "target": {"entity": [{"domain": ["light"]}]},
         },
         ("script", "foo"): {
             "fields": {

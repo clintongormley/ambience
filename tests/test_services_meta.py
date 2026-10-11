@@ -41,7 +41,7 @@ async def test_list_services_returns_flat_list_with_domain_name_and_description(
             "name": "Turn on",
             "description": "Turn the light on.",
             "fields": {"brightness_pct": {"selector": {"number": {"min": 0, "max": 100}}}},
-            "target": {"entity": [{"domain": "light"}]},
+            "target": {"entity": [{"domain": ["light"]}]},
         },
     )
     _register(
@@ -59,7 +59,7 @@ async def test_list_services_returns_flat_list_with_domain_name_and_description(
     assert items[0]["name"] == "Turn off"
     assert items[1]["description"] == "Turn the light on."
     assert items[1]["name"] == "Turn on"
-    assert items[1]["target"] == {"entity": [{"domain": "light"}]}
+    assert items[1]["target"] == {"entity": [{"domain": ["light"]}]}
 
 
 async def test_list_services_name_defaults_to_empty_when_absent(hass: HomeAssistant) -> None:
@@ -85,7 +85,7 @@ async def test_get_service_schema_returns_fields_and_target(hass: HomeAssistant)
                     "selector": {"number": {"min": 0}},
                 },
             },
-            "target": {"entity": [{"domain": "light"}]},
+            "target": {"entity": [{"domain": ["light"]}]},
         },
     )
 
@@ -94,7 +94,7 @@ async def test_get_service_schema_returns_fields_and_target(hass: HomeAssistant)
     assert schema is not None
     assert set(schema["fields"]) == {"brightness_pct", "transition"}
     assert schema["fields"]["brightness_pct"]["selector"] == {"number": {"min": 0, "max": 100}}
-    assert schema["target"] == {"entity": [{"domain": "light"}]}
+    assert schema["target"] == {"entity": [{"domain": ["light"]}]}
 
 
 async def test_get_service_schema_returns_none_for_unknown_service(hass: HomeAssistant) -> None:

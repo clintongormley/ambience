@@ -139,7 +139,7 @@ def test_real_shipped_locales_have_matching_placeholders():
     root = Path(__file__).resolve().parent.parent / "custom_components" / "ambience"
     source = json.loads((root / "strings.json").read_text())
     source_items = flatten_items(source)
-    for locale in ("es", "pt", "fr"):
+    for locale in ("es", "pt", "fr", "de"):
         target = json.loads((root / "translations" / f"{locale}.json").read_text())
         issues = placeholder_mismatches(source_items, flatten_items(target))
         assert not issues, f"{locale}.json placeholder drift from strings.json: {issues}"

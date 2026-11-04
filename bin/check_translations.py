@@ -3,7 +3,7 @@
 Usage: python -m bin.check_translations [--component PATH]
 Exits non-zero (and prints drift) if any translations/<locale>.json key set
 differs from strings.json, or if a translated string's `{token}` interpolation
-placeholders don't match strings.json. Shipped locales (en, es, pt, fr) must
+placeholders don't match strings.json. Shipped locales (en, es, pt, fr, de) must
 match keys exactly; other locales may omit keys (untranslated) but must not
 introduce unknown keys. Placeholder integrity is checked for every *shared* key
 of every locale — a renamed/dropped token breaks (or crashes) substitution at
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from bin._i18n_bundle import flatten_items, placeholder_tokens
 
-SHIPPED_LOCALES = ("en", "es", "pt", "fr")
+SHIPPED_LOCALES = ("en", "es", "pt", "fr", "de")
 
 
 def flatten_keys(obj: dict, prefix: str = "") -> set[str]:

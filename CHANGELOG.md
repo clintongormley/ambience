@@ -8,6 +8,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- German (`de`) translation of the Ambience panel, card and Home Assistant
+    messages. Ambience uses it when Home Assistant is set to German.
+
 ### Changed
 
 - The Marketplace replaces HACS from Home Assistant 2026.11, so you install and

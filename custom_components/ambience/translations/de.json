@@ -1,0 +1,279 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ambience einrichten",
+        "description": "Dadurch wird der Ambience-Integrationseintrag erstellt."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Es ist nur eine einzelne Instanz erlaubt."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ambience-Optionen",
+        "data": {
+          "show_sidebar_panel": "Ambience in der Seitenleiste anzeigen"
+        },
+        "data_description": {
+          "show_sidebar_panel": "Wenn ausgeschaltet, wird Ambience aus der Seitenleiste entfernt. Die Ambience-Karte kannst du trotzdem zu jedem Dashboard hinzufügen."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Ambience: Eine Szene verweist auf eine fehlende oder deaktivierte Entität",
+      "description": "Die Entität `{entity_id}` existiert nicht oder ist in Home Assistant deaktiviert, wird aber von diesen Ambience-Szenen im {scope} referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu; eine Aktion, die sie steuert, schlägt stillschweigend fehl. Korrigiere die Entitäts-ID im Ambience-Editor, aktiviere die Entität (bzw. ihr Gerät) oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald die Entität existiert und aktiviert ist."
+    },
+    "action_overlap": {
+      "title": "Ambience: Eine Entität wird von mehreren Gruppen gesteuert",
+      "description": "Die Entität `{entity_id}` wird von mehr als einer Ambience-Kategorie-/Geltungsbereichsgruppe gesteuert:\n{groups}\n\nJede Gruppe ist eine unabhängige Steuerschleife mit eigenem Zustand. Sie können sich daher um diese Entität streiten und veraltete oder wirkungslose Anwendungen erzeugen. Erwäge, die Entität in eine einzige Gruppe zu verschieben. Diese Meldung verschwindet automatisch, sobald die Überschneidung aufgelöst ist."
+    },
+    "missing_workday_sensor": {
+      "title": "Ambience: Szenen verwenden ein Arbeitstag-Element, aber kein Arbeitstag-Sensor ist konfiguriert",
+      "description": "Diese Ambience-Szenen verwenden ein `workday`- oder `holiday`-Tageselement, aber kein **Arbeitstag-Sensor** ist konfiguriert (Einstellungen → Ambience → Bedingungen → Tag), daher können sie nie zutreffen:\n{scenes}\n\nKonfiguriere einen Arbeitstag-Sensor oder entferne die Arbeitstag-/Feiertag-Elemente. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "missing_workday_calendar": {
+      "title": "Ambience: Szenen verwenden ein Arbeitstag-Kalender-Element, aber kein Kalender ist konfiguriert",
+      "description": "Diese Ambience-Szenen verwenden ein `first_workday`-/`last_workday`-Tageselement, aber kein **Arbeitstag-Kalender** ist konfiguriert (Einstellungen → Ambience → Bedingungen → Tag), daher können sie nie zutreffen:\n{scenes}\n\nKonfiguriere einen Arbeitstag-Kalender oder entferne diese Elemente. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "missing_weather_entity": {
+      "title": "Ambience: Szenen verwenden eine Wetterbedingung, aber keine Wetter-Entität ist konfiguriert",
+      "description": "Diese Ambience-Szenen verwenden eine Wetterbedingung, aber keine **Wetter-Entität** ist konfiguriert (Einstellungen → Ambience → Bedingungen → Wetter), daher können sie nie zutreffen:\n{scenes}\n\nKonfiguriere eine Wetter-Entität oder entferne die Wetterbedingungen. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "missing_weather_group": {
+      "title": "Ambience: Szenen verweisen auf eine gelöschte Wettergruppe",
+      "description": "Die Wettergruppe `{ref}` existiert nicht mehr, wird aber von diesen Ambience-Szenen referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu. Lege die Gruppe neu an oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "missing_period": {
+      "title": "Ambience: Szenen verweisen auf einen gelöschten Tageszeit-Zeitraum",
+      "description": "Der Tageszeit-Zeitraum `{ref}` existiert nicht mehr, wird aber von diesen Ambience-Szenen referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu. Lege den Zeitraum neu an oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "missing_lux_range": {
+      "title": "Ambience: Szenen verweisen auf einen gelöschten Lux-Bereich",
+      "description": "Der Lux-Bereich `{ref}` existiert nicht mehr, wird aber von diesen Ambience-Szenen referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu. Lege den Bereich neu an oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "unexposed_action": {
+      "title": "Ambience: Szenen verwenden eine Aktion, die nicht mehr freigegeben ist",
+      "description": "Die Aktion `{ref}` ist nicht mehr freigegeben (Einstellungen → Ambience → Aktionen), wird aber von diesen Ambience-Szenen verwendet:\n{scenes}\n\nDie Aktion wird beim Anwenden der Szene übersprungen. Gib die Aktion wieder frei oder entferne sie aus den Szenen. Diese Meldung verschwindet automatisch, sobald das Problem behoben ist."
+    },
+    "storage_unreadable": {
+      "title": "Ambience: Die gespeicherte Konfiguration konnte nicht gelesen werden",
+      "description": "Die Datei `{path}` existiert, ist aber keine gültige Ambience-Konfiguration. Ambience wurde daher mit einer leeren Konfiguration gestartet, und die Datei wurde unverändert gelassen. Stelle sie aus einem Backup wieder her oder lösche sie und starte Home Assistant neu, um neu zu beginnen. Speichern im Ambience-Panel ersetzt die Datei. Diese Meldung verschwindet automatisch, sobald Home Assistant neu gestartet wurde und die Datei fehlerfrei lädt."
+    }
+  },
+  "exceptions": {
+    "unexpected_error": { "message": "Ein unerwarteter Fehler ist aufgetreten. Details findest du in den Home-Assistant-Protokollen." },
+    "period_clamp_not_object": { "message": "Die Begrenzung muss ein Objekt sein." },
+    "period_invalid_clamp_dir": { "message": "Ungültige Begrenzungsrichtung: {value}" },
+    "period_invalid_clamp_hh": { "message": "Ungültige Begrenzungsstunde: {value}" },
+    "period_invalid_clamp_mm": { "message": "Ungültige Begrenzungsminute: {value}" },
+    "period_endpoint_not_object": { "message": "Der Endpunkt muss ein Objekt mit einem 'kind' sein." },
+    "period_invalid_hh": { "message": "Ungültige Stunde: {value}" },
+    "period_invalid_mm": { "message": "Ungültige Minute: {value}" },
+    "period_invalid_anchor": { "message": "Ungültiger Ankerpunkt: {value}" },
+    "period_offset_not_int": { "message": "offset_min muss eine ganze Zahl sein: {value}" },
+    "period_invalid_endpoint_kind": { "message": "Ungültige Endpunktart: {value}" },
+    "period_def_not_object": { "message": "Die Zeitraumdefinition muss ein Objekt sein." },
+    "period_def_missing_from_to": { "message": "Die Zeitraumdefinition benötigt 'from' und 'to'." },
+    "lux_not_integer": { "message": "{which} muss eine ganze Zahl sein: {value}" },
+    "lux_negative": { "message": "{which} muss >= 0 sein: {value}" },
+    "lux_def_not_object": { "message": "Die Lux-Bereichsdefinition muss ein Objekt sein." },
+    "lux_def_needs_min_or_max": { "message": "Der Lux-Bereich benötigt mindestens 'min' oder 'max'." },
+    "lux_min_not_below_max": { "message": "Lux-Bereich: 'min' muss < 'max' sein: {min} >= {max}" },
+    "named_def_custom_not_object": { "message": "custom muss ein Objekt sein." },
+    "named_def_hidden_not_list": { "message": "hidden muss eine Liste sein." },
+    "named_def_hidden_not_string": { "message": "Jede ausgeblendete {kind}-ID muss eine Zeichenkette sein." },
+    "named_def_invalid_id": { "message": "Ungültige {kind}-ID: {id}" },
+    "named_def_only_builtin_hideable": { "message": "Nur integrierte IDs können ausgeblendet werden: {id}" },
+    "unknown_scope_kind": { "message": "Unbekannte Art des Geltungsbereichs: {scope_kind}" },
+    "store_switch_name_empty": { "message": "Die Schalter-Standardwerte `name` müssen eine nicht leere Zeichenkette sein: {name}" },
+    "store_switch_auto_on_delay_invalid": { "message": "Die Schalter-Standardwerte `auto_on_delay_seconds` müssen eine ganze Zahl >= 0 sein: {delay}" },
+    "store_reapply_enabled_invalid": { "message": "Reapply `enabled` muss ein Bool sein: {enabled}" },
+    "store_reapply_interval_invalid": { "message": "Reapply `interval_seconds` muss eine ganze Zahl >= {min} sein: {interval}" },
+    "store_exposure_invalid": { "message": "Freigabe für {assistant} muss ein Bool sein: {value}" },
+    "store_unknown_assistants": { "message": "Unbekannte(r) Assistent(en): {assistants}" },
+    "last_category_required": { "message": "Mindestens eine Kategorie ist erforderlich." },
+    "categories_still_have_scenes": { "message": "Diese Kategorien enthalten noch Szenen: {categories}" },
+    "cannot_delete_last_category": { "message": "Die letzte Kategorie kann nicht gelöscht werden." },
+    "category_still_has_scenes": { "message": "Die Kategorie {category_id} enthält noch Szenen." },
+    "exposed_actions_not_list": { "message": "Freigegebene Aktionen müssen eine Liste sein." },
+    "exposed_entry_not_object": { "message": "Der Eintrag muss ein Objekt sein: {entry}" },
+    "exposed_invalid_service_id": { "message": "Ungültige Dienst-ID: {sid}" },
+    "exposed_duplicate_service_id": { "message": "Doppelte Dienst-ID: {sid}" },
+    "exposed_label_not_string": { "message": "{sid}: label muss eine Zeichenkette sein." },
+    "exposed_visible_fields_not_list": { "message": "{sid}: visible_fields muss eine Liste von Zeichenketten sein." },
+    "exposed_defaults_not_object": { "message": "{sid}: defaults muss ein Objekt mit Zeichenketten als Schlüsseln sein." },
+    "exposed_unknown_service": { "message": "Unbekannter Dienst: {sid}" },
+    "exposed_unknown_visible_field": { "message": "{sid}: unbekanntes Feld {field} in visible_fields." },
+    "exposed_unknown_default_field": { "message": "{sid}: unbekanntes Feld {field} in defaults." },
+    "scene_config_unknown_key": { "message": "Unbekannter Konfigurationsschlüssel auf oberster Ebene: {key}" },
+    "scene_config_not_object": { "message": "Die Konfiguration muss ein Objekt sein." },
+    "scene_scenes_not_list": { "message": "`scenes` muss eine Liste sein." },
+    "scene_not_object": { "message": "Szene {scene_idx}: muss ein Objekt sein." },
+    "scene_category_not_string": { "message": "Szene {scene_idx}: category muss eine Zeichenkette sein." },
+    "scene_description_not_string": { "message": "Szene {scene_idx}: description muss Text sein." },
+    "scene_dup_name": { "message": "Szene {scene_idx}: Eine Szene namens {name} existiert in dieser Kategorie bereits." },
+    "scene_when_not_object": { "message": "Szene {scene_idx}: `when` muss ein Objekt sein." },
+    "scene_unknown_condition": { "message": "Szene {scene_idx}: unbekannte Bedingung {key}" },
+    "scene_actions_not_list": { "message": "Szene {scene_idx}: `actions` muss eine Liste sein." },
+    "scene_action_not_object": { "message": "Szene {scene_idx}, Aktion {action_idx}: muss ein Objekt sein." },
+    "scene_action_service_invalid": { "message": "Szene {scene_idx}, Aktion {action_idx}: `service` fehlt oder ist fehlerhaft." },
+    "scene_action_entity_ids_not_list": { "message": "Szene {scene_idx}, Aktion {action_idx}: entity_ids muss eine Liste sein." },
+    "scene_action_entity_ids_not_strings": { "message": "Szene {scene_idx}, Aktion {action_idx}: entity_ids müssen nicht leere Zeichenketten sein." },
+    "scene_action_params_not_object": { "message": "Szene {scene_idx}, Aktion {action_idx}: params muss ein Objekt sein." },
+    "scene_apply_invalid": { "message": "Szene {scene_idx}: `apply` muss \"once\" oder \"always\" sein: {value}" },
+    "scene_priority_invalid": { "message": "Szene {scene_idx}: `priority` muss eine ganze Zahl sein: {value}" },
+    "scene_pinned_invalid": { "message": "Szene {scene_idx}: `pinned` muss true oder false sein: {value}" },
+    "weather_groups_not_list": { "message": "Gruppen müssen eine Liste sein." },
+    "weather_group_not_object": { "message": "Jede Gruppe muss ein Objekt sein." },
+    "weather_group_id_empty": { "message": "Die Gruppen-ID muss eine nicht leere Zeichenkette sein: {gid}" },
+    "weather_group_id_duplicate": { "message": "Doppelte Gruppen-ID: {gid}" },
+    "weather_group_label_empty": { "message": "Das Label der Gruppe {gid} muss eine nicht leere Zeichenkette sein." },
+    "weather_group_invalid_conditions": { "message": "Die Gruppe {gid} hat ungültige Bedingung(en)." },
+    "unknown_area": { "message": "Unbekannter Bereich: {scope_id}" },
+    "unknown_floor": { "message": "Unbekannte Etage: {scope_id}" },
+    "scope_disabled": { "message": "Der Geltungsbereich {scope_kind}/{scope_id} ist deaktiviert." },
+    "scene_index_out_of_range": { "message": "scene_index außerhalb des gültigen Wertebereichs: {scene_index}" },
+    "scope_selector_invalid": { "message": "{command} benötigt genau eines von area_id/floor_id/house, erhalten: {present}" },
+    "invalid_service_id_format": { "message": "Die Dienst-ID muss domain.service sein: {service_id}" },
+    "unknown_service": { "message": "Unbekannter Dienst: {service}" },
+    "category_id_empty": { "message": "Die Kategorie-ID muss eine nicht leere Zeichenkette sein." },
+    "duplicate_category_id": { "message": "Doppelte Kategorie-ID: {cid}" },
+    "category_name_empty": { "message": "Der Name der Kategorie {cid} muss eine nicht leere Zeichenkette sein." },
+    "duplicate_category_name": { "message": "Doppelter Kategoriename: {name}" },
+    "unparseable_now": { "message": "Zeitangabe 'now' nicht lesbar: {now}" },
+    "unparseable_date": { "message": "Datum nicht lesbar: {date}" },
+    "now_not_timezone_aware": { "message": "`now` muss zeitzonenbezogen sein: {now}" },
+    "for_not_object": { "message": "`for` muss ein h/m/s-Objekt oder null sein." },
+    "for_keys_invalid": { "message": "Die Schlüssel von `for` müssen h/m/s sein, erhalten: {keys}" },
+    "for_component_invalid": { "message": "`for.{key}` muss eine ganze Zahl >= 0 sein." },
+    "for_mode_invalid": { "message": "`for_mode` muss \"at_least\", \"less_than\" oder null sein." },
+    "entity_id_invalid": { "message": "Keine gültige Entitäts-ID: {entity_id}" },
+    "entity_id_wrong_domain": { "message": "{entity_id} muss eine {domain}-Entität sein." },
+    "quant_invalid": { "message": "`quant` muss einer von {quants} sein, erhalten: {value}" },
+    "negate_invalid": { "message": "`negate` muss ein Bool sein, erhalten: {value}" },
+    "unavailable_malformed": { "message": "Diese Bedingung „nicht verfügbar“ ist fehlerhaft." },
+    "unavailable_pick_entity": { "message": "Wähle mindestens eine Entität für diese Bedingung „nicht verfügbar“." },
+    "state_malformed": { "message": "Diese Zustandsbedingung ist fehlerhaft." },
+    "state_unknown_kind": { "message": "Unbekannte Art der Zustandsbedingung: {kind}" },
+    "state_group_empty": { "message": "Eine {kind}-Gruppe benötigt mindestens eine Bedingung." },
+    "state_not_empty": { "message": "Eine 'nicht'-Gruppe benötigt eine Bedingung zum Negieren." },
+    "state_pick_entity": { "message": "Wähle eine Entität für diese Zustandsbedingung." },
+    "state_compare_one_value": { "message": "Der Vergleich {kind} benötigt genau einen Wert." },
+    "state_compare_needs_number": { "message": "Gib eine Zahl für den Vergleich {kind} ein." },
+    "state_compare_not_number": { "message": "Der Vergleich {kind} benötigt eine Zahl, erhalten: {value}" },
+    "state_pick_state": { "message": "Wähle mindestens einen Zustand zum Abgleich." },
+    "state_states_invalid": { "message": "Jeder abzugleichende Zustand muss ein nicht leerer Wert sein." },
+    "state_attribute_blank": { "message": "Der Attributname darf nicht leer sein." },
+    "lux_predicate_not_object": { "message": "Das Lux-Prädikat muss ein Objekt sein." },
+    "lux_sensors_not_list": { "message": "`sensors` muss eine Liste von sensor.*-IDs sein." },
+    "lux_range_not_string": { "message": "`range` muss eine Zeichenkette sein, erhalten: {value}" },
+    "lux_range_and_bounds": { "message": "Gib entweder `range` oder `min`/`max` an, nicht beides." },
+    "lux_unknown_range": { "message": "Unbekannter Lux-Bereich: {range}" },
+    "occupancy_predicate_not_object": { "message": "Das Anwesenheits-Prädikat muss ein Objekt sein." },
+    "occupancy_sensors_not_list": { "message": "`sensors` muss eine Liste von binary_sensor.*-IDs sein." },
+    "occupancy_occupied_invalid": { "message": "`occupied` muss ein Bool sein, erhalten: {value}" },
+    "people_predicate_not_object": { "message": "Das Personen-Prädikat muss ein Objekt sein." },
+    "people_who_not_list": { "message": "`who` muss eine Liste von person-Entitäts-IDs sein." },
+    "people_who_empty": { "message": "`who` muss mindestens eine Person enthalten oder für alle Personen weggelassen werden." },
+    "people_where_invalid": { "message": "`where` muss 'home' oder eine zone.*-ID sein, erhalten: {value}" },
+    "script_predicate_not_object": { "message": "Das Skript-Prädikat muss ein Objekt oder null sein: {predicate}" },
+    "script_id_invalid": { "message": "`script` im Skript-Prädikat muss eine script.*-Entitäts-ID sein: {script}" },
+    "script_args_not_object": { "message": "`args` im Skript-Prädikat muss ein Objekt oder nicht vorhanden sein: {args}" },
+    "script_triggers_invalid": { "message": "`triggers` im Skript-Prädikat muss eine Liste von Entitäts-IDs sein." },
+    "template_predicate_not_object": { "message": "Das Template-Prädikat muss ein Objekt oder null sein: {predicate}" },
+    "template_empty": { "message": "`template` im Template-Prädikat muss eine nicht leere Zeichenkette sein: {template}" },
+    "template_invalid_jinja": { "message": "Das Template-Prädikat enthält ungültiges Jinja: {error}" },
+    "sun_predicate_not_object": { "message": "Das Sonnen-Prädikat muss ein Objekt oder null sein: {predicate}" },
+    "sun_needs_axis": { "message": "Das Sonnen-Prädikat muss elevation und/oder azimuth definieren." },
+    "sun_elevation_not_object": { "message": "Die Sonnenhöhe muss ein Objekt sein: {value}" },
+    "sun_elevation_needs_bound": { "message": "Die Sonnenhöhe benötigt min und/oder max." },
+    "sun_elevation_not_number": { "message": "Die Grenze der Sonnenhöhe muss eine Zahl sein: {value}" },
+    "sun_elevation_out_of_range": { "message": "Sonnenhöhe außerhalb des Wertebereichs [-90, 90]: {value}" },
+    "sun_elevation_min_above_max": { "message": "Sonnenhöhe: min > max: {min} > {max}" },
+    "sun_azimuth_not_object": { "message": "Der Sonnenazimut muss ein Objekt sein: {value}" },
+    "sun_azimuth_needs_sector_or_range": { "message": "Der Sonnenazimut benötigt Sektoren und/oder Bereiche." },
+    "sun_azimuth_sectors_not_list": { "message": "Die Sonnenazimut-Sektoren müssen eine Liste sein." },
+    "sun_azimuth_ranges_not_list": { "message": "Die Sonnenazimut-Bereiche müssen eine Liste sein." },
+    "sun_azimuth_unknown_sector": { "message": "Unbekannter Sonnenazimut-Sektor: {sector}" },
+    "sun_azimuth_range_not_object": { "message": "Der Sonnenazimut-Bereich muss ein Objekt sein: {value}" },
+    "sun_azimuth_bound_not_number": { "message": "Die Grenze {bound} des Sonnenazimut-Bereichs muss eine Zahl sein: {value}" },
+    "sun_azimuth_out_of_range": { "message": "Sonnenazimut {bound} außerhalb des Wertebereichs [0, 360): {value}" },
+    "weather_predicate_not_object": { "message": "Das Wetter-Prädikat muss ein Objekt oder null sein: {predicate}" },
+    "weather_thresholds_not_list": { "message": "Schwellenwerte müssen eine Liste sein." },
+    "weather_threshold_not_object": { "message": "Der Wetter-Schwellenwert muss ein Objekt sein: {value}" },
+    "weather_unknown_attribute": { "message": "Unbekanntes Wetterattribut: {attribute}" },
+    "weather_invalid_operator": { "message": "Ungültiger Schwellenwert-Operator: {op}" },
+    "weather_threshold_not_number": { "message": "Der Schwellenwert muss eine Zahl sein: {value}" },
+    "day_predicate_not_object": { "message": "Das Tag-Prädikat muss ein Objekt oder null sein: {predicate}" },
+    "day_list_not_list": { "message": "Das Tag-Prädikat `{key}` muss eine Liste sein." },
+    "day_item_malformed": { "message": "Jedes Tagselement muss ein Objekt mit einem `kind` sein: {item}" },
+    "day_unknown_kind": { "message": "Unbekannte Art des Tagselements: {kind}" },
+    "day_days_not_list": { "message": "Tagselement {label}: `days` muss eine nicht leere Liste sein." },
+    "day_days_out_of_range": { "message": "Tagselement {label}: ungültiger Tag {value}; erwartet wird eine ganze Zahl in [{min},{max}]" },
+    "day_invalid_month": { "message": "Tagselement: ungültiger Monat {month}" },
+    "day_invalid_day": { "message": "Tagselement: ungültiger Tag {day}" },
+    "day_spec_not_string": { "message": "`days` für day_of_month muss eine Zeichenketten-Angabe sein: {value}" },
+    "day_spec_empty": { "message": "`days` für day_of_month muss mindestens einen Tag enthalten." },
+    "day_range_invalid": { "message": "Ungültiger Tagesbereich: {token}" },
+    "day_range_out_of_bounds": { "message": "Tagesbereich außerhalb der Grenzen (1-31, lo<=hi): {token}" },
+    "day_number_invalid": { "message": "Ungültiger Tag: {token}" },
+    "day_number_out_of_bounds": { "message": "Tag außerhalb der Grenzen (1-31): {token}" },
+    "time_of_day_required": { "message": "Ein Tageszeit-Prädikat ist erforderlich." },
+    "time_of_day_list_empty": { "message": "Die Liste der Tageszeit-Prädikate darf nicht leer sein." },
+    "time_of_day_invalid": { "message": "Ungültiges Tageszeit-Prädikat: {predicate}" },
+    "time_of_day_period_not_string": { "message": "Die Zeitraum-ID muss eine Zeichenkette sein: {value}" },
+    "time_of_day_unknown_period": { "message": "Unbekannter Tageszeit-Zeitraum: {period}" },
+    "time_of_day_anchor_unavailable": { "message": "Sonnen-Ankerpunkt nicht verfügbar: {anchor}" },
+    "period_invalid_clamp_time": { "message": "Ungültige Begrenzungszeit: {hh}:{mm}" }
+  },
+  "services": {
+    "turn_on": {
+      "name": "Einschalten",
+      "description": "Schaltet die ausgewählten Entitäten ein und überspringt bereits eingeschaltete. Funktioniert mit allen ein-/ausschaltbaren Domänen."
+    },
+    "turn_off": {
+      "name": "Ausschalten",
+      "description": "Schaltet die ausgewählten Entitäten aus und überspringt bereits ausgeschaltete. Funktioniert mit allen ein-/ausschaltbaren Domänen."
+    },
+    "cover_safe_open": {
+      "name": "Abdeckung öffnen (sicher)",
+      "description": "Öffnet die ausgewählten Abdeckungen und überspringt bereits vollständig geöffnete (kein unnötiges Relais-Klicken)."
+    },
+    "cover_safe_close": {
+      "name": "Abdeckung schließen (sicher)",
+      "description": "Schließt die ausgewählten Abdeckungen und überspringt bereits vollständig geschlossene (kein unnötiges Relais-Klicken)."
+    },
+    "cover_safe_set_position": {
+      "name": "Abdeckungsposition setzen (sicher)",
+      "description": "Setzt die ausgewählten Abdeckungen auf eine Position und überspringt die, die bereits dort stehen.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Zielposition, 0 (geschlossen) bis 100 (offen)."
+        }
+      }
+    },
+    "cover_safe_set_tilt_position": {
+      "name": "Abdeckungsneigung setzen (sicher)",
+      "description": "Setzt die ausgewählten Abdeckungen auf eine Neigungsposition und überspringt die, die bereits so geneigt sind.",
+      "fields": {
+        "tilt_position": {
+          "name": "Neigungsposition",
+          "description": "Zielneigungsposition, 0 bis 100."
+        }
+      }
+    }
+  }
+}

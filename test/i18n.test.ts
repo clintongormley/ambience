@@ -170,7 +170,7 @@ describe("localize", () => {
     expect(localize({ language: "es" } as any, "ui.nonexistent_key_xyz", "X")).toBe("X");
   });
   test("falls back to en for an unknown language", () => {
-    expect(localize({ language: "de" } as any, "ui.cancel", "FALLBACK")).toBe("Cancel");
+    expect(localize({ language: "nl" } as any, "ui.cancel", "FALLBACK")).toBe("Cancel");
   });
   test("interpolates placeholders in the fallback string", () => {
     expect(
@@ -332,10 +332,10 @@ describe("weatherAttrUnit", () => {
 
 describe("getLanguageSupport", () => {
   it("the locales these tests treat as 'uncovered' are actually unshipped", () => {
-    // Several banner/support tests use "it"/"de" as stand-in uncovered languages.
+    // Several banner/support tests use "it"/"nl" as stand-in uncovered languages.
     // If Ambience ever ships one of them, those tests would silently exercise a
     // covered locale on a false premise — so fail loudly here at a single site.
-    for (const code of ["it", "de"]) {
+    for (const code of ["it", "nl"]) {
       expect(code in AMBIENCE_STRINGS_BY_LOCALE).toBe(false);
     }
   });

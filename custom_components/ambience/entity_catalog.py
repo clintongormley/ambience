@@ -33,6 +33,15 @@ def _entity_area_id(entry: er.RegistryEntry, dev_reg: dr.DeviceRegistry) -> str 
     return None
 
 
+def _entity_name(hass: HomeAssistant, entry: er.RegistryEntry) -> str | None:
+    """The name the user sees. From HA 2026.11 that puts the device in front of a
+    user-set name, which `entry.name` alone no longer does. HA 2025.2 has no such
+    function, so `getattr` keeps the registry fields as the fallback there."""
+    full_name = getattr(er, "async_get_full_entity_name", None)
+    name = full_name(hass, entry) if full_name is not None else None
+    return name or entry.name or entry.original_name
+
+
 def entity_rows(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Every registered entity with the facts an AI needs to author actions and
     state/occupancy/lux conditions: its area, domain, device_class and current
@@ -60,7 +69,7 @@ def entity_rows(hass: HomeAssistant) -> list[dict[str, Any]]:
         out.append(
             {
                 "entity_id": entry.entity_id,
-                "name": entry.name or entry.original_name,
+                "name": _entity_name(hass, entry),
                 "domain": entry.domain,
                 "device_class": entry.device_class or entry.original_device_class,
                 "area_id": _entity_area_id(entry, dev_reg),

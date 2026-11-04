@@ -14,6 +14,7 @@ Where things live in the repository.
 | `docs/`                                | This documentation site (mkdocs).               |
 | `ai/`                                  | The AI knowledge pack shipped to AI assistants. |
 | `bin/`                                 | Release, doc-generation and helper scripts.     |
+| `scripts/`                             | The script CI uses to install Home Assistant.   |
 | `.githooks/`                           | The shared `pre-push` gate.                     |
 
 ## Integration (`custom_components/ambience/`)

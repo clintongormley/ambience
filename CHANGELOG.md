@@ -11,7 +11,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Changed
 
 - The Marketplace replaces HACS from Home Assistant 2026.11, so you install and
-    update Ambience from **Settings > Marketplace** there. Nothing changes for
+    update Ambience from **Settings → Marketplace** there. Nothing changes for
     you on Home Assistant 2026.10 or older.
 
 ### Fixed

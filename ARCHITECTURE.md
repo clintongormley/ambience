@@ -118,8 +118,8 @@ The Ambience panel is a **Lit + TypeScript** single-page application.
 - Source: `frontend/src/`
 - Output: the compiled bundles in `custom_components/ambience/frontend/` —
     `ambience-frontend.js`, `ambience-panel.js`, and `ambience-card.js`
-- The compiled bundles are **checked into the repository**, so HACS
-    installations require no build step.
+- The compiled bundles are **checked into the repository**, so Marketplace and
+    HACS installations require no build step.
 
 To rebuild after frontend changes:
 

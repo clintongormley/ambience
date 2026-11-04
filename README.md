@@ -28,12 +28,16 @@ nothing else to install first.
 [Open Ambience in your Home Assistant](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration),
 or find it yourself:
 
-1. Go to **Settings > Marketplace**. The first time you open it, Home Assistant
+1. Go to **Settings → Marketplace**. The first time you open it, Home Assistant
     warns you that community projects are not reviewed by the Home Assistant
     project, and you need to accept that before you can install anything.
 1. Search for **Ambience** and open it.
-1. Select **Install**. The setup page normally opens when the installation
-    finishes. If it doesn't, restart Home Assistant.
+1. Select **Install**, check the version in the dialog, and select **Install**
+    again.
+
+Either way, the setup page normally opens when the installation finishes. If it
+doesn't, restart Home Assistant, then go to **Settings → Devices & Services →
+Add Integration** and search for *Ambience*.
 
 ### Home Assistant 2026.10 or older
 

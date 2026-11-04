@@ -42,7 +42,7 @@ Ambience**.
 
 The panel is a Lit + TypeScript single-page app in `frontend/src/`, compiled to
 the bundles in `custom_components/ambience/frontend/` (checked into the repo, so
-HACS installs need no build step). It talks to the backend exclusively over the
-WebSocket API in `custom_components/ambience/websocket/` — there are no REST
-endpoints. See [Code layout](code-layout.md) for the file map and
-[Contributing](contributing.md) for the build commands.
+Marketplace and HACS installs need no build step). It talks to the backend
+exclusively over the WebSocket API in `custom_components/ambience/websocket/` —
+there are no REST endpoints. See [Code layout](code-layout.md) for the file map
+and [Contributing](contributing.md) for the build commands.

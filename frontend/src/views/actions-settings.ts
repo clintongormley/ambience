@@ -25,7 +25,7 @@ import type { ExposedAction, ServiceField, ServiceInfo, ServiceSchema } from "..
 
 // The Fado Light Fader integration: its HA domain (present in
 // `hass.config.components` once set up) and the My-Home-Assistant deep link
-// that opens its repository in the user's HACS for one-click install.
+// that opens its repository in the user's Marketplace or HACS for one-click install.
 const FADO_DOMAIN = "fado";
 const FADO_HACS_URL =
   "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado";
@@ -646,7 +646,7 @@ export class AmbienceActionsSettings extends LitElement {
         data-test="fado-notice"
         icon="mdi:lightbulb-on-outline"
         hint
-        .ctaLabel=${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}
+        .ctaLabel=${localize(this.hass, "ui.fado_notice_cta", "Install Fado")}
         .ctaHref=${FADO_HACS_URL}
         .dismissLabel=${localize(this.hass, "ui.dismiss", "Dismiss")}
         @banner-dismiss=${() => this._dismissFadoNotice()}

@@ -225,7 +225,8 @@ class BaseProtocol:
             result["notice"] = (
                 "This Ambience does not support redacting dry_run results; presence "
                 "detail and security action params may appear unredacted. Update "
-                "Ambience (HACS) and restart Home Assistant to enable redaction."
+                "Ambience (Marketplace or HACS) and restart Home Assistant to enable "
+                "redaction."
             )
             return result
 

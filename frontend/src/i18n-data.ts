@@ -404,7 +404,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_title: "Recommended: install Fado Light Fader",
       fado_notice_body:
         "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.",
-      fado_notice_cta: "Install via HACS",
+      fado_notice_cta: "Install Fado",
       for_prefix: "for",
       name_duplicate: "A scene with this name already exists in this category.",
       no_exposed_actions: "Add services in Settings → Actions.",
@@ -1054,7 +1054,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_title: "Recomendado: instalar Fado Light Fader",
       fado_notice_body:
         "Fado añade atenuación suave de luces para brillo, color y temperatura de color, con restauración automática del brillo, autoconfiguración por interfaz y transiciones nativas. Es una integración HACS predeterminada de Home Assistant.",
-      fado_notice_cta: "Instalar con HACS",
+      fado_notice_cta: "Instalar Fado",
       for_prefix: "durante",
       name_duplicate: "Ya existe una escena con este nombre en esta categoría.",
       no_exposed_actions: "Añade servicios en Ajustes → Acciones.",
@@ -1695,7 +1695,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_title: "Recomendado: instalar o Fado Light Fader",
       fado_notice_body:
         "O Fado adiciona transições suaves de luz para brilho, cor e temperatura de cor — com restauro automático de brilho, autoconfiguração da interface, e transições nativas. É uma integração HACS predefinida do Home Assistant.",
-      fado_notice_cta: "Instalar via HACS",
+      fado_notice_cta: "Instalar Fado",
       for_prefix: "durante",
       name_duplicate: "Já existe uma cena com este nome nesta categoria.",
       no_exposed_actions: "Adicione serviços em Definições → Ações.",
@@ -2343,7 +2343,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       fado_notice_title: "Recommandé : installer Fado Light Fader",
       fado_notice_body:
         "Fado ajoute un fondu de lumière fluide pour la luminosité, la couleur et la température de couleur — avec restauration automatique de la luminosité, autoconfiguration de l'interface et transitions natives. C'est une intégration HACS par défaut de Home Assistant.",
-      fado_notice_cta: "Installer via HACS",
+      fado_notice_cta: "Installer Fado",
       for_prefix: "pendant",
       name_duplicate: "Une scène portant ce nom existe déjà dans cette catégorie.",
       no_exposed_actions: "Ajoutez des services dans Paramètres → Actions.",

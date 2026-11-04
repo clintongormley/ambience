@@ -403,7 +403,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       dismiss: "Dismiss",
       fado_notice_title: "Recommended: install Fado Light Fader",
       fado_notice_body:
-        "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.",
+        "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's in the Home Assistant Marketplace, and in HACS on older versions.",
       fado_notice_cta: "Install Fado",
       for_prefix: "for",
       name_duplicate: "A scene with this name already exists in this category.",
@@ -1053,7 +1053,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       dismiss: "Descartar",
       fado_notice_title: "Recomendado: instalar Fado Light Fader",
       fado_notice_body:
-        "Fado añade atenuación suave de luces para brillo, color y temperatura de color, con restauración automática del brillo, autoconfiguración por interfaz y transiciones nativas. Es una integración HACS predeterminada de Home Assistant.",
+        "Fado añade atenuación suave de luces para brillo, color y temperatura de color, con restauración automática del brillo, autoconfiguración por interfaz y transiciones nativas. Está en el Marketplace de Home Assistant y, en versiones anteriores, en HACS.",
       fado_notice_cta: "Instalar Fado",
       for_prefix: "durante",
       name_duplicate: "Ya existe una escena con este nombre en esta categoría.",
@@ -1694,7 +1694,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       dismiss: "Dispensar",
       fado_notice_title: "Recomendado: instalar o Fado Light Fader",
       fado_notice_body:
-        "O Fado adiciona transições suaves de luz para brilho, cor e temperatura de cor — com restauro automático de brilho, autoconfiguração da interface, e transições nativas. É uma integração HACS predefinida do Home Assistant.",
+        "O Fado adiciona transições suaves de luz para brilho, cor e temperatura de cor — com restauro automático de brilho, autoconfiguração da interface, e transições nativas. Está no Marketplace do Home Assistant e, em versões mais antigas, no HACS.",
       fado_notice_cta: "Instalar Fado",
       for_prefix: "durante",
       name_duplicate: "Já existe uma cena com este nome nesta categoria.",
@@ -2342,7 +2342,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       dismiss: "Ignorer",
       fado_notice_title: "Recommandé : installer Fado Light Fader",
       fado_notice_body:
-        "Fado ajoute un fondu de lumière fluide pour la luminosité, la couleur et la température de couleur — avec restauration automatique de la luminosité, autoconfiguration de l'interface et transitions natives. C'est une intégration HACS par défaut de Home Assistant.",
+        "Fado ajoute un fondu de lumière fluide pour la luminosité, la couleur et la température de couleur — avec restauration automatique de la luminosité, autoconfiguration de l'interface et transitions natives. Elle se trouve dans le Marketplace de Home Assistant et, sur les versions plus anciennes, dans HACS.",
       fado_notice_cta: "Installer Fado",
       for_prefix: "pendant",
       name_duplicate: "Une scène portant ce nom existe déjà dans cette catégorie.",

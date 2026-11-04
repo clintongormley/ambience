@@ -652,7 +652,7 @@ export class AmbienceActionsSettings extends LitElement {
         @banner-dismiss=${() => this._dismissFadoNotice()}
       >
         <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
-        <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
+        <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's in the Home Assistant Marketplace, and in HACS on older versions.")}</span>
       </ambience-banner>
     `;
   }

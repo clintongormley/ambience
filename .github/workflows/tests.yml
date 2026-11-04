@@ -16,9 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         # Per-channel Python. stable, beta and dev run on 3.14 (required by HA
-        # 2026.3+). scripts/ci_ha_install.py installs each one and fails the job
-        # if it ends up on the wrong HA version. A failing suite on beta or dev
-        # only warns: see the steps below.
+        # 2026.3+). scripts/ci_ha_install.py installs each one and fails if it
+        # ends up on the wrong HA version. A failing install or suite on beta or
+        # dev only warns: see the steps below.
         # A single-element python-version + the min include yields exactly four
         # jobs — test (3.14, stable), test (3.14, beta), test (3.14, dev), test
         # (3.13, min). The ruleset's required contexts are among these names.
@@ -41,6 +41,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        id: install
+        # An unreleased HA must not block a PR, even when it will not install. The
+        # later steps need the install, so they check this step's outcome.
+        continue-on-error: ${{ matrix.ha-version == 'beta' || matrix.ha-version == 'dev' }}
         run: |
           python -m pip install --upgrade pip
           if [ "${{ matrix.ha-version }}" = "min" ]; then
@@ -53,8 +57,13 @@ jobs:
           fi
           python -c "from homeassistant.const import __version__; print(__version__)"
 
+      - name: Warn when an unreleased Home Assistant cannot be installed
+        if: steps.install.outcome == 'failure'
+        run: echo "::warning::Could not install Home Assistant ${{ matrix.ha-version }}"
+
       - name: Run tests with coverage
         id: pytest
+        if: steps.install.outcome == 'success'
         # The coverage floor (fail_under) and branch=true are read from
         # [tool.coverage.*] in pyproject.toml, so this fails if coverage drops.
         # An unreleased HA must not block a PR. This sits on the step because
@@ -73,12 +82,15 @@ jobs:
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
-        if: always()
+        # Skips only an install failure that was tolerated: a failed stable or
+        # floor install still reaches this step, as it always has.
+        if: always() && !(steps.install.outcome == 'failure' && steps.install.conclusion == 'success')
         with:
           name: coverage-report-${{ matrix.python-version }}-${{ matrix.ha-version }}
           path: coverage.xml
 
       - name: Verify committed AI docs match generator output
+        if: steps.install.outcome == 'success'
         # The knowledge pack's code-derived sections must track the shipped
         # conditions/services; a stale commit would ship wrong authoring docs.
         # Uses the same Make target as the pre-push hook so the checked paths

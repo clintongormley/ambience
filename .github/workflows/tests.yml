@@ -17,8 +17,8 @@ jobs:
       matrix:
         # Per-channel Python. stable, beta and dev run on 3.14 (required by HA
         # 2026.3+). scripts/ci_ha_install.py installs each one and fails if it
-        # ends up on the wrong HA version. A failing install or suite on beta or
-        # dev only warns: see the steps below.
+        # ends up on the wrong HA version. A failing install, suite or AI docs
+        # check on beta or dev only warns: see the steps below.
         # A single-element python-version + the min include yields exactly four
         # jobs — test (3.14, stable), test (3.14, beta), test (3.14, dev), test
         # (3.13, min). The ruleset's required contexts are among these names.
@@ -90,19 +90,26 @@ jobs:
           path: coverage.xml
 
       - name: Verify committed AI docs match generator output
+        id: ai_docs
         if: steps.install.outcome == 'success'
         # The knowledge pack's code-derived sections must track the shipped
         # conditions/services; a stale commit would ship wrong authoring docs.
         # Uses the same Make target as the pre-push hook so the checked paths
         # (incl. the integration's shipped guide) can't drift between them.
         # The generator imports the integration, so an unreleased HA can break it:
-        # the stable job is the one that enforces this.
+        # the stable and min jobs are the ones that enforce this.
         continue-on-error: ${{ matrix.ha-version == 'beta' || matrix.ha-version == 'dev' }}
         run: |
           make ai-docs-check || {
-            echo "::error::AI knowledge pack is stale. Run 'make ai-docs' and commit the result."
+            if [ "${{ matrix.ha-version }}" != "beta" ] && [ "${{ matrix.ha-version }}" != "dev" ]; then
+              echo "::error::AI knowledge pack is stale. Run 'make ai-docs' and commit the result."
+            fi
             exit 1
           }
+
+      - name: Warn when an unreleased Home Assistant fails the AI docs check
+        if: steps.ai_docs.outcome == 'failure'
+        run: echo "::warning::AI docs check failed on Home Assistant ${{ matrix.ha-version }}"
 
   lint:
     runs-on: ubuntu-latest

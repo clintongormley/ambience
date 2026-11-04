@@ -19,17 +19,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Mirrors tests.yml's `test` job, but installs HA + the test harness UNPINNED
-  # so pip resolves the newest releases. Two flavours: the latest published HA,
-  # and HA `dev` straight from git (continue-on-error, matching how tests.yml
-  # treats its dev channel — a broken upstream warns without failing the run).
+  # Mirrors tests.yml's `test` job on the newest HA of each channel: the latest
+  # published release, the latest beta, and `dev` straight from git. Unlike
+  # tests.yml, a failure on any of them fails the run: this is the early warning.
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        ha-version: ["latest", "dev"]
-    continue-on-error: ${{ matrix.ha-version == 'dev' }}
+        ha-version: ["stable", "beta", "dev"]
     steps:
       - uses: actions/checkout@v6
 
@@ -41,13 +39,9 @@ jobs:
       - name: Install dependencies (latest upstream)
         run: |
           python -m pip install --upgrade pip
-          # Unpinned test harness so pip picks the newest releases each night.
-          python -m pip install --upgrade pytest pytest-asyncio pytest-cov
-          python -m pip install --upgrade homeassistant pytest-homeassistant-custom-component
-          if [ "${{ matrix.ha-version }}" = "dev" ]; then
-            # Bleeding-edge HA core from git, on top of the harness above.
-            python -m pip install --upgrade "git+https://github.com/home-assistant/core.git"
-          fi
+          python scripts/ci_ha_install.py "${{ matrix.ha-version }}" \
+            --extra pytest --extra pytest-asyncio --extra pytest-cov
+          python -c "from homeassistant.const import __version__; print(__version__)"
 
       - name: Run tests with coverage
         # Same command as tests.yml. Coverage floor (fail_under) and branch=true

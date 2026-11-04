@@ -15,7 +15,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
@@ -31,6 +30,7 @@ from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.trace import CauseKind, TraceEvent
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
 from custom_components.ambience.triggers import DurationGate, TriggerSpec
+from tests.ha_harness import async_fire_time_changed
 
 
 @dataclass(frozen=True)

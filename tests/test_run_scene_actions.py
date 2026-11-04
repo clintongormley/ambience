@@ -6,10 +6,10 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
 from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from custom_components.ambience.service import async_run_scene_actions, get_last_applied
+from tests.ha_harness import MockConfigEntry, async_mock_service
 
 
 async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> str:

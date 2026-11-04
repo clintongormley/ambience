@@ -8,11 +8,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-    async_mock_service,
-)
 
 from custom_components.ambience.const import (
     DATA_ENGINE,
@@ -22,6 +17,11 @@ from custom_components.ambience.const import (
     DOMAIN,
 )
 from custom_components.ambience.service import async_apply_scene, async_resolve_only
+from tests.ha_harness import (
+    MockConfigEntry,
+    async_fire_time_changed,
+    async_mock_service,
+)
 
 
 async def _make_area_scope(hass: HomeAssistant, name: str = "E2E Room") -> tuple[str, str]:

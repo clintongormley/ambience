@@ -4,9 +4,9 @@ exposed-action catalog validation."""
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DOMAIN
+from tests.ha_harness import MockConfigEntry
 
 _SERVICES = (
     "turn_on",

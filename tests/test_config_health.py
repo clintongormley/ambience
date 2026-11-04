@@ -8,7 +8,6 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.config_health import (
     _build_ref_context,
@@ -27,6 +26,7 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
+from tests.ha_harness import async_fire_time_changed
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:

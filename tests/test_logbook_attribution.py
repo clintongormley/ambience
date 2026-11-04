@@ -14,10 +14,6 @@ import pytest
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context, Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_mock_service,
-)
 
 from custom_components.ambience.const import (
     DATA_EXPOSED_ACTIONS,
@@ -27,6 +23,10 @@ from custom_components.ambience.const import (
     EVENT_AMBIENCE_ACTIVITY,
 )
 from custom_components.ambience.service_logbook import compose_apply_message
+from tests.ha_harness import (
+    MockConfigEntry,
+    async_mock_service,
+)
 
 
 async def _make_area_scope(hass: HomeAssistant, name: str) -> tuple[str, str]:

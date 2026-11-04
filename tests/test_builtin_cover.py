@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.builtin_services import (
     SERVICE_COVER_SAFE_CLOSE,
@@ -12,6 +11,7 @@ from custom_components.ambience.builtin_services import (
     SERVICE_COVER_SAFE_SET_TILT_POSITION,
 )
 from custom_components.ambience.const import DOMAIN
+from tests.ha_harness import async_mock_service
 
 
 def _set(hass: HomeAssistant, entity_id: str, state: str, **attrs: object) -> None:

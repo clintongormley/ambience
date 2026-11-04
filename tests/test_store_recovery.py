@@ -7,9 +7,9 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.ambience.store import AmbienceStore
+from tests.ha_harness import MockConfigEntry, async_fire_time_changed
 
 # Valid JSON, wrong shape: hits async_load's malformed branch.
 _BAD_PAYLOAD = {"version": 1, "areas": "not-a-dict"}

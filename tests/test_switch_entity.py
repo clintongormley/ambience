@@ -13,11 +13,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_point_in_utc_time
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-    mock_restore_cache,
-)
 
 from custom_components.ambience.const import (
     DATA_ENGINE,
@@ -27,6 +22,11 @@ from custom_components.ambience.const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from tests import get_scope_device
+from tests.ha_harness import (
+    MockConfigEntry,
+    async_fire_time_changed,
+    mock_restore_cache,
+)
 
 
 async def _setup(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:

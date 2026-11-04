@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
     DATA_STORE,
@@ -19,6 +18,7 @@ from custom_components.ambience.const import (
     DOMAIN,
 )
 from custom_components.ambience.switch import _PENDING_CLAIM_TTL, reconcile_scope_switches
+from tests.ha_harness import MockConfigEntry
 
 
 def _entry(hass, *, uid: str) -> MockConfigEntry:

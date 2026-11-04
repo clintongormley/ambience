@@ -6,7 +6,6 @@ import pytest
 from homeassistant.components.diagnostics import REDACTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.diagnostics import (
@@ -14,6 +13,7 @@ from custom_components.ambience.diagnostics import (
     async_get_device_diagnostics,
 )
 from custom_components.ambience.store import AmbienceStore
+from tests.ha_harness import MockConfigEntry
 
 
 @pytest.fixture

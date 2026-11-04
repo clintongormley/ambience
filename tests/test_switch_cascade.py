@@ -13,9 +13,9 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DATA_SWITCHES, DOMAIN
+from tests.ha_harness import MockConfigEntry
 
 
 async def _setup_hierarchy(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str, Any]:

@@ -11,10 +11,6 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import (
-    async_fire_time_changed,
-    async_mock_service,
-)
 
 from custom_components.ambience.const import (
     DATA_EXPOSED_ACTIONS,
@@ -26,6 +22,10 @@ from custom_components.ambience.const import (
 )
 from custom_components.ambience.trace import Outcome
 from tests import get_scope_device
+from tests.ha_harness import (
+    async_fire_time_changed,
+    async_mock_service,
+)
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ async def _ws_send(hass_ws_client, **payload: Any) -> dict:
 
 async def test_switch_defaults_list(hass, hass_ws_client):
     # Use a fresh entry (no pre-seeded store) to exercise the defaults.
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from tests.ha_harness import MockConfigEntry
 
     entry = MockConfigEntry(
         domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="ws_defaults"
@@ -187,7 +187,7 @@ async def test_set_scope_enabled_recreates_switch_on_reenable(hass, installed, h
 
 
 async def test_set_scope_enabled_persists_flag_on_fresh_entry(hass, hass_ws_client):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from tests.ha_harness import MockConfigEntry
 
     # A fresh entry (no pre-seeded store) starts with house enabled by default.
     entry = MockConfigEntry(

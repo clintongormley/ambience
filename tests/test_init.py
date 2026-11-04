@@ -14,7 +14,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components import ambience as ambience_init
 from custom_components.ambience.const import (
@@ -24,6 +23,7 @@ from custom_components.ambience.const import (
     DATA_SWITCHES_PENDING,
     DOMAIN,
 )
+from tests.ha_harness import MockConfigEntry
 
 MANIFEST_PATH = Path(__file__).parent.parent / "custom_components" / "ambience" / "manifest.json"
 
@@ -342,7 +342,8 @@ async def test_remove_not_resurrected_by_pending_delayed_save(
 
     from homeassistant.helpers.storage import Store
     from homeassistant.util import dt as dt_util
-    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from tests.ha_harness import async_fire_time_changed
 
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -679,7 +680,8 @@ async def _settle_health(hass: HomeAssistant) -> None:
     from datetime import timedelta
 
     from homeassistant.util import dt as dt_util
-    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from tests.ha_harness import async_fire_time_changed
 
     await hass.async_block_till_done()
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))

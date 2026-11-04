@@ -2496,8 +2496,8 @@ async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass
          the predicate is now FALSE (elapsed ≥ 5m → tenure_within false), and the
          winning scene is withdrawn (last-applied cleared).
 
-    The `freezer` fixture (pytest-freezer, pulled in by
-    pytest-homeassistant-custom-component) freezes the clock so the engine's
+    The `freezer` fixture (pytest-freezer, pulled in by the HA test harness)
+    freezes the clock so the engine's
     tenure `since`, the snapshot's `now`, and the armed recheck timer all advance
     together when we tick forward — exactly how real wall-clock time would pass
     between the state change and maturity."""

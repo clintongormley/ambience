@@ -859,7 +859,7 @@ async def test_unloading_during_the_startup_sync_stops_it(
         patch.object(AutoTriggerEngine, "_sync", recording_sync),
     ):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await reached_snapshot.wait()
+        await asyncio.wait_for(reached_snapshot.wait(), timeout=5)
         assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
         release_snapshot.set()
         await hass.async_block_till_done()

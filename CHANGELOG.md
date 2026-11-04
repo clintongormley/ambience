@@ -8,8 +8,21 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- The Marketplace replaces HACS from Home Assistant 2026.11, so you install and
+    update Ambience from **Settings > Marketplace** there. Nothing changes for
+    you on Home Assistant 2026.10 or older.
+
 ### Fixed
 
+- The panel now shows your theme's background and toolbar colour on Home
+    Assistant 2026.11 instead of painting over them.
+- On Home Assistant 2026.11 the AI export and the MCP server name an entity with
+    its device in front, such as "Kitchen plug Power usage". Without this, the
+    rename in that version left two devices' entities with the same name.
+- Reloading or removing Ambience while its startup sync was still running no
+    longer logs a `KeyError`.
 - Moving or deleting a scene, or changing the devices it controls, could leave a
     "Controlled by multiple groups" warning on another area, floor or the house
     until the page was reloaded, even though the overlap was gone. After a save,

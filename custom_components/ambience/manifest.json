@@ -5,6 +5,10 @@
     "frontend",
     "logbook"
   ],
+  "categories": [
+    "lighting",
+    "helpers"
+  ],
   "codeowners": [
     "@clintongormley"
   ],

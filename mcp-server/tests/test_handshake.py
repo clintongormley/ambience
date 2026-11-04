@@ -107,10 +107,10 @@ async def test_an_unknown_command_verdict_is_never_cached():
 
 
 async def test_a_backend_that_finishes_setting_up_heals_the_next_call_with_no_reconnect():
-    """Critical 1, the payoff. The README promises exactly this flow — "update it in
-    HACS and restart Home Assistant… the handshake re-runs and the server heals itself" —
-    and a user who OBEYS it lands inside HA's startup window, where a latched verdict
-    would tell them to do the very thing they just did, forever.
+    """Critical 1, the payoff. The README promises exactly this flow — "update it in the
+    Marketplace or HACS and restart Home Assistant… the handshake re-runs and the server
+    heals itself" — and a user who OBEYS it lands inside HA's startup window, where a latched
+    verdict would tell them to do the very thing they just did, forever.
 
     The heal must need no reconnect and no MCP-server restart: the same healthy socket,
     one more hello."""

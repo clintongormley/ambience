@@ -20,7 +20,7 @@ This guide was built for **Ambience 1.4.x** and understands **AI bundle format 1
 
 1. **Version.** Take the bundle's `ambience_version` (e.g. `1.4.2`), drop the patch, and compare its major.minor to **1.4** — compare each part as an **integer**, not as text (so e.g. `0.9` is *older* than `0.31`, since 9 < 31):
    - **newer than 1.4** → the user's Ambience is newer than this guide. **Stop. Do not author.** Update the knowledge pack (below), then retry.
-   - **older than 1.4** → the user's Ambience is older than this guide. Ask them to update Ambience (HACS) and re-download the bundle.
+   - **older than 1.4** → the user's Ambience is older than this guide. Ask them to update Ambience (Marketplace or HACS) and re-download the bundle.
    - **same `1.4`** → compatible, continue.
 2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater than **1**, also stop and update the plugin.
 

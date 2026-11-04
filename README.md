@@ -1,7 +1,7 @@
 # Ambience
 
 [![GitHub release](https://img.shields.io/github/v/release/clintongormley/ambience?include_prereleases)](https://github.com/clintongormley/ambience/releases)
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
+[![Marketplace and HACS](https://img.shields.io/badge/Marketplace%20and%20HACS-Default-41BDF5.svg)](#installation)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.2.0%2B-blue.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/github/license/clintongormley/ambience)](https://github.com/clintongormley/ambience/blob/main/LICENSE)
 
@@ -18,17 +18,27 @@ and applies the best-matching scene automatically.
 
 ## Installation
 
-Requires Home Assistant **2025.2.0** or newer, and [HACS](https://hacs.xyz/) for
-the recommended path.
+Requires Home Assistant **2025.2.0** or newer.
 
-### HACS (recommended)
+### Home Assistant 2026.11 or newer
 
-Ambience is available in HACS. Click the button below to open it directly in
-your Home Assistant, then click **Download**:
+Ambience is in the **Marketplace**, which comes with Home Assistant, so there is
+nothing else to install first.
 
-[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration)
+[Open Ambience in your Home Assistant](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration),
+or find it yourself:
 
-Or open **HACS** in the sidebar, search for **Ambience**, and click
+1. Go to **Settings > Marketplace**. The first time you open it, Home Assistant
+    warns you that community projects are not reviewed by the Home Assistant
+    project, and you need to accept that before you can install anything.
+1. Search for **Ambience** and open it.
+1. Select **Install**. The setup page normally opens when the installation
+    finishes. If it doesn't, restart Home Assistant.
+
+### Home Assistant 2026.10 or older
+
+Ambience is in **HACS**, and the same link above opens it there. To find it
+yourself, open **HACS** in the sidebar, search for **Ambience**, and click
 **Download**.
 
 Then:

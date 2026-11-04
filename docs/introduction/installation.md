@@ -1,21 +1,52 @@
 # Installation
 
-Ambience is available in **HACS** (the Home Assistant Community Store), which
-handles installs and updates for you.
+Ambience is in the community catalog that both the **Marketplace** and **HACS**
+read, and either one handles installs and updates for you. Which of the two you
+use depends on your version of Home Assistant.
 
 ## Prerequisites
 
 - Home Assistant 2025.2.0 or newer.
-- [HACS](https://hacs.xyz/) installed (recommended).
+- On Home Assistant 2026.10 or older, [HACS](https://hacs.xyz/) installed
+    (recommended).
 
-## Install via HACS (recommended)
+## Install on Home Assistant 2026.11 or newer
 
-### Quick add (My Home Assistant button)
+Home Assistant 2026.11 replaced HACS with the built-in **Marketplace**. It reads
+the same catalog, and it comes with Home Assistant, so there is nothing else to
+install first.
 
-[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration)
+### Quick add (My Home Assistant link)
 
-Click the button to open Ambience directly in HACS, click **Download**, then
-restart Home Assistant.
+[Open Ambience in your Home Assistant](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration).
+
+Confirm the dialog in your Home Assistant to open the Ambience page, then select
+**Install**.
+
+### From the Marketplace
+
+1. Go to **Settings > Marketplace**. The first time you open it, Home Assistant
+    warns you that everything in the Marketplace comes from the community and
+    is not reviewed by the Home Assistant project. You need to accept that
+    warning before you can install anything.
+1. Search for **Ambience** and open it.
+1. Select **Install**, check the version in the dialog, and select **Install**
+    again.
+
+The setup page for the integration normally opens when the installation
+finishes. If it doesn't, Home Assistant raises a repair asking you to restart.
+
+## Install on Home Assistant 2026.10 or older
+
+Older versions of Home Assistant don't have the Marketplace, so you install
+through [HACS](https://hacs.xyz/) (the Home Assistant Community Store).
+
+### Quick add (My Home Assistant link)
+
+[Open Ambience in your Home Assistant](https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ambience&category=integration).
+
+Confirm the dialog in your Home Assistant to open the Ambience page in HACS,
+click **Download**, then restart Home Assistant.
 
 ### Search in HACS
 
@@ -26,7 +57,7 @@ restart Home Assistant.
 
 ## Install manually
 
-If you can't use HACS:
+If you can't use the Marketplace or HACS:
 
 1. Download the latest release archive from the
     [Releases page](https://github.com/clintongormley/ambience/releases).

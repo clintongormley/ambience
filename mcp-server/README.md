@@ -130,9 +130,9 @@ which side to upgrade. It will never tell you to install an *older*
 follow.
 
 - *"Update Ambience"* — your Ambience is older than this server supports. Update
-    it in HACS and restart Home Assistant. That is all: the restart drops the
-    websocket, the handshake re-runs on the next tool call, and the server heals
-    itself — **you do not need to restart the MCP server**.
+    it in the Marketplace or HACS and restart Home Assistant. That is all: the
+    restart drops the websocket, the handshake re-runs on the next tool call,
+    and the server heals itself — **you do not need to restart the MCP server**.
 
     You may also see this message for a few seconds *while* Home Assistant is
     starting: Ambience answers the handshake only once it has finished setting
@@ -242,8 +242,8 @@ installed guide to keep in sync.
 `ambience_dry_run` is always redacted, the same way a trace already is:
 presence/location detail and security-action params (lock PINs, alarm codes)
 never come back in the result. Against an Ambience too old to redact, the result
-carries a visible `notice` instead of the raw values — update Ambience (HACS)
-and restart Home Assistant to get redaction there too.
+carries a visible `notice` instead of the raw values — update Ambience
+(Marketplace or HACS) and restart Home Assistant to get redaction there too.
 
 ## The write gate
 

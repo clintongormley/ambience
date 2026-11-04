@@ -2342,7 +2342,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       dismiss: "Ignorer",
       fado_notice_title: "Recommandé : installer Fado Light Fader",
       fado_notice_body:
-        "Fado ajoute un fondu de lumière fluide pour la luminosité, la couleur et la température de couleur — avec restauration automatique de la luminosité, autoconfiguration de l'interface et transitions natives. Elle se trouve dans le Marketplace de Home Assistant et, sur les versions plus anciennes, dans HACS.",
+        "Fado ajoute un fondu de lumière fluide pour la luminosité, la couleur et la température de couleur — avec restauration automatique de la luminosité, autoconfiguration de l'interface et transitions natives. Fado se trouve dans le Marketplace de Home Assistant et, sur les versions plus anciennes, dans HACS.",
       fado_notice_cta: "Installer Fado",
       for_prefix: "pendant",
       name_duplicate: "Une scène portant ce nom existe déjà dans cette catégorie.",

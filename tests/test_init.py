@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -23,6 +24,7 @@ from custom_components.ambience.const import (
     DATA_SWITCHES_PENDING,
     DOMAIN,
 )
+from custom_components.ambience.trigger_engine import AutoTriggerEngine
 from tests.ha_harness import MockConfigEntry
 
 MANIFEST_PATH = Path(__file__).parent.parent / "custom_components" / "ambience" / "manifest.json"
@@ -826,3 +828,40 @@ async def test_unreadable_storage_raises_a_repairs_issue_and_a_clean_load_clears
     await hass.async_block_till_done()
 
     assert ir.async_get(hass).async_get_issue(DOMAIN, "storage_unreadable") is None
+
+
+async def test_unloading_during_the_startup_sync_stops_it(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The startup sync runs in its own task, so a reload or removal can land
+    while it waits on a snapshot. It must stop then: carrying on would read the
+    domain data the unload has just removed."""
+    reached_snapshot = asyncio.Event()
+    release_snapshot = asyncio.Event()
+    outcomes: list[BaseException] = []
+    real_sync = AutoTriggerEngine._sync
+
+    async def held_refresh(*_args: object, **_kwargs: object) -> None:
+        reached_snapshot.set()
+        await release_snapshot.wait()
+
+    async def recording_sync(*args: object, **kwargs: object) -> None:
+        try:
+            await real_sync(*args, **kwargs)
+        except BaseException as err:
+            outcomes.append(err)
+            raise
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch.object(AutoTriggerEngine, "_refresh_snapshots", held_refresh),
+        patch.object(AutoTriggerEngine, "_sync", recording_sync),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await reached_snapshot.wait()
+        assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        release_snapshot.set()
+        await hass.async_block_till_done()
+
+    assert outcomes == []

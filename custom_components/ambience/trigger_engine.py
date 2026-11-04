@@ -568,6 +568,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         silently lost. They don't inherit `force` — only the requested units
         were explicitly edited/reloaded."""
         await self._refresh_all_snapshots()
+        if not self._running:
+            # Torn down while the refresh was awaited, as in `async_evaluate`.
+            return
         # Seed mode: a gate already instant-true at startup/reload has its tenure
         # seeded from the condition's anchor (e.g. last_changed), and _recompute
         # re-arms every gate's recheck off that tenure. So a duration rule whose

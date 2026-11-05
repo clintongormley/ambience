@@ -552,7 +552,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     occupancy_summary: {
       clear: "clear",
+      clear_all: "clear",
       detected: "detected",
+      detected_all: "detected",
     },
     unavailable_summary: {
       unavailable: "unavailable",
@@ -1239,7 +1241,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     occupancy_summary: {
       clear: "libre",
+      clear_all: "libres",
       detected: "detectado",
+      detected_all: "detectados",
     },
     unavailable_summary: {
       unavailable: "no disponible",
@@ -1923,7 +1927,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     occupancy_summary: {
       clear: "livre",
+      clear_all: "livres",
       detected: "detetado",
+      detected_all: "detetados",
     },
     unavailable_summary: {
       unavailable: "indisponível",
@@ -2610,7 +2616,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     occupancy_summary: {
       clear: "libre",
+      clear_all: "libres",
       detected: "détecté",
+      detected_all: "détectés",
     },
     unavailable_summary: {
       unavailable: "indisponible",
@@ -3298,7 +3306,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     },
     occupancy_summary: {
       clear: "frei",
+      clear_all: "frei",
       detected: "erkannt",
+      detected_all: "erkannt",
     },
     unavailable_summary: {
       unavailable: "nicht verfügbar",

@@ -486,16 +486,18 @@ function _quantifiedClause(
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
   const names = pred.sensors.map((id) => _entityDisplayName(ctx, id));
-  const verb =
-    pred.occupied === false
-      ? localize(ctx.hass, "occupancy_summary.clear", "clear")
-      : localize(ctx.hass, "occupancy_summary.detected", "detected");
+  const all = pred.quant === "all";
+  const plural = all && names.length > 1;
+  const clear = plural
+    ? localize(ctx.hass, "occupancy_summary.clear_all", "clear")
+    : localize(ctx.hass, "occupancy_summary.clear", "clear");
+  const detected = plural
+    ? localize(ctx.hass, "occupancy_summary.detected_all", "detected")
+    : localize(ctx.hass, "occupancy_summary.detected", "detected");
+  const word = pred.occupied === false ? clear : detected;
   // `negate` wraps the whole predicate; phrase it like the state condition's
   // inline negation ("Lounge is not clear for ≥20m"), not a flipped polarity.
-  const head = _quantifiedClause(ctx, names, verb, {
-    all: pred.quant === "all",
-    negate: pred.negate,
-  });
+  const head = _quantifiedClause(ctx, names, word, { all, negate: pred.negate });
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
   }

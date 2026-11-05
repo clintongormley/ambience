@@ -2269,6 +2269,52 @@ describe("sensor and people summaries are translated", () => {
     expect(several).toContain("sind frei");
   });
 
+  describe("occupancy words agree with a plural subject", () => {
+    const sensors = ["binary_sensor.a", "binary_sensor.b"];
+    const ids = sensors.join(", ");
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["fr", true, `Tous parmi (${ids}) sont détectés`],
+      ["fr", false, `Tous parmi (${ids}) sont libres`],
+      ["es", true, `Todos de (${ids}) están detectados`],
+      ["es", false, `Todos de (${ids}) están libres`],
+      ["pt", true, `Todos de (${ids}) estão detetados`],
+      ["pt", false, `Todos de (${ids}) estão livres`],
+      ["de", true, `Alle von (${ids}) sind erkannt`],
+      ["de", false, `Alle von (${ids}) sind frei`],
+      ["en", true, `All of (${ids}) are detected`],
+      ["en", false, `All of (${ids}) are clear`],
+    ])("all of several sensors in %s, occupied %s", (language, occupied, text) => {
+      const pred = { sensors, occupied, quant: "all" } as any;
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test("the plural word carries through to the duration clause", () => {
+      const pred = { sensors, occupied: false, quant: "all", for: { h: 0, m: 20, s: 0 } } as any;
+      expect(summariseOccupancy(pred, { hass: hass("fr") })).toBe(
+        `Tous parmi (${ids}) sont libres pendant ≥20m`,
+      );
+    });
+
+    test.each([
+      ["fr", true, "binary_sensor.a est détecté"],
+      ["fr", false, "binary_sensor.a est libre"],
+      ["es", true, "binary_sensor.a está detectado"],
+      ["pt", false, "binary_sensor.a está livre"],
+    ])("one sensor stays singular in %s, occupied %s", (language, occupied, text) => {
+      const pred = { sensors: ["binary_sensor.a"], occupied, quant: "all" } as any;
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test("any of several sensors stays singular", () => {
+      const pred = { sensors, occupied: false, quant: "any" } as any;
+      expect(summariseOccupancy(pred, { hass: hass("es") })).toBe(
+        `Cualquiera de (${ids}) está libre`,
+      );
+    });
+  });
+
   describe("negation is part of the verb", () => {
     const one = { sensors: ["binary_sensor.a"], occupied: true, negate: true } as any;
     const several = { sensors: ["binary_sensor.a", "binary_sensor.b"], negate: true } as any;
@@ -2286,7 +2332,7 @@ describe("sensor and people summaries are translated", () => {
     });
 
     test.each([
-      ["es", `Todos de (${ids}) no están detectado`],
+      ["es", `Todos de (${ids}) no están detectados`],
       ["de", `Alle von (${ids}) sind nicht erkannt`],
       ["en", `All of (${ids}) are not detected`],
     ])("all of several occupancy sensors in %s", (language, text) => {

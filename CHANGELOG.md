@@ -29,7 +29,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     now reads in your language too: in Spanish, "3 objetivos (light)" rather
     than "3 lights".
 - Repairs messages name the area, floor, house and category in Home Assistant's
-    system language, written as "**Kitchen** (area)".
+    system language, written as "**Kitchen** (area)". Changing that language
+    updates the messages already showing.
 - The panel now shows your theme's background and toolbar colour on Home
     Assistant 2026.11 instead of painting over them.
 - On Home Assistant 2026.11 the AI export and the MCP server name an entity with

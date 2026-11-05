@@ -14,6 +14,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.translation import async_get_cached_translations
 from homeassistant.setup import async_setup_component
 
 from custom_components import ambience as ambience_init
@@ -710,6 +712,51 @@ async def _install_with_referenced(
         }
     )
     await _settle_health(hass)
+
+
+async def test_language_change_rewrites_existing_repairs_issues(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A Repairs issue stores its inserted text, so a system-language change must
+    rebuild it. German is deliberately not loaded beforehand: the rewrite has to
+    load it itself rather than rely on HA's own listener running first."""
+    await _install_with_referenced(hass, mock_config_entry, ["light.ghost"])
+    issue_id = "missing_entity:house:house:light.ghost"
+    registry = ir.async_get(hass)
+    assert registry.issues[(DOMAIN, issue_id)].translation_placeholders == {
+        "entity_id": "light.ghost",
+        "scope": "**House**",
+        "scenes": '\n- "referenced" — uncategorised',
+    }
+    assert async_get_cached_translations(hass, "de", "selector", DOMAIN) == {}
+
+    await hass.config.async_update(language="de")
+    await hass.async_block_till_done()
+
+    assert registry.issues[(DOMAIN, issue_id)].translation_placeholders == {
+        "entity_id": "light.ghost",
+        "scope": "**Haus**",
+        "scenes": '\n- "referenced" — ohne Kategorie',
+    }
+
+
+@pytest.mark.parametrize(
+    "update",
+    [{"location_name": "Elsewhere"}, {"language": "en"}],
+    ids=["unrelated_setting", "same_language_resent"],
+)
+async def test_core_config_update_without_a_new_language_does_not_rescan(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    update: dict[str, str],
+) -> None:
+    await _install_with_referenced(hass, mock_config_entry, ["light.referenced"])
+
+    with patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy:
+        await hass.config.async_update(**update)
+        await _settle_health(hass)
+        assert spy.call_count == 0
 
 
 async def test_registry_event_for_unreferenced_entity_does_not_rescan(

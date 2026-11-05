@@ -2,8 +2,9 @@
 
 `reconcile_issues` scans every scope and creates one issue per problem (stable
 id so rescans dedupe), deleting issues whose problem no longer exists. Wired in
-`__init__` to run on setup, on config change, and on entity-registry updates, so
-issues auto-clear the moment a typo is fixed or a device returns.
+`__init__` to run on setup, on config change, on entity-registry updates, and on
+a system-language change, so issues auto-clear the moment a typo is fixed or a
+device returns, and their inserted text follows the language.
 """
 
 from __future__ import annotations
@@ -85,7 +86,8 @@ def _label(hass: HomeAssistant, key: str) -> str:
     """A word for a Repairs placeholder, in HA's system language.
 
     Placeholders are stored on the issue when it is created, so HA never
-    translates them for the person reading it. Labels are never built into a
+    translates them for the person reading it; a system-language change
+    rebuilds them through `reconcile_issues`. Labels are never built into a
     sentence: the surrounding phrasing avoids any grammatical agreement.
     """
     translations = async_get_cached_translations(hass, hass.config.language, "selector", DOMAIN)

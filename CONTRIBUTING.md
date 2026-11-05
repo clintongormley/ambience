@@ -27,9 +27,10 @@ the commits you are about to push and runs only what is relevant:
     - Markdown changed → `make lint-md` (`mdformat --check`; the AI knowledge
         pack and generated AI-authoring docs are excluded)
 1. **Cheap i18n gates:**
-    - `make i18n` — all five i18n checks: key parity, shipped-locale
-        completeness, exceptions-key validation, and no-hardcoded lints (Python +
-        TypeScript)
+    - `make i18n` — all the i18n checks: key parity (translations and the
+        frontend bundle), shipped-locale completeness, placeholder and
+        inline-fallback agreement, exceptions-key validation, and no-hardcoded
+        lints (Python + TypeScript)
 1. **Tests for the changed language + coverage gates:**
     - Python → `make coverage-py` (pytest + `fail_under` from `pyproject.toml`)
     - Frontend → `make coverage-js` (vitest + thresholds from `vitest.config.ts`)
@@ -228,11 +229,11 @@ wrap width and exclusions come from the repo automatically.
 
 - **Frontend bundle:** after any `frontend/src` change run `npm run build` and
     commit `custom_components/ambience/frontend/*.js`.
-- **Translations:** `strings.json` is the source of truth; `en` and `es` are
-    shipped locales and must stay complete (the i18n checks enforce parity,
-    shipped-locale completeness, that every exceptions key referenced in code
-    exists, and that no user-facing string is hardcoded). `es` is
-    machine-drafted pending native review.
+- **Translations:** `strings.json` is the source of truth; `en`, `es`, `pt`,
+    `fr` and `de` are shipped locales and must stay complete (the i18n checks
+    enforce parity, shipped-locale completeness, that every exceptions key
+    referenced in code exists, and that no user-facing string is hardcoded).
+    `es` is machine-drafted pending native review.
 
 ## Working on the MCP server
 

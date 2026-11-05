@@ -3,7 +3,7 @@ import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
-import { localize } from "../i18n.js";
+import { compassLabel, localize } from "../i18n.js";
 import type { SunAzimuth, SunElevation, SunPredicate, SunRange } from "../types.js";
 
 // 3×3 compass grid laid out as the sky looks from below — North at the top,
@@ -119,7 +119,11 @@ export class AmbienceSunPredicateInput extends LitElement {
         : html`<label>
             <input type="checkbox" .checked=${sectors.includes(s)}
               @change=${(e: Event) =>
-                this._toggleSector(sectors, s, (e.target as HTMLInputElement).checked)} />${s}
+                this._toggleSector(
+                  sectors,
+                  s,
+                  (e.target as HTMLInputElement).checked,
+                )} />${compassLabel(this.hass, s)}
           </label>`,
     )}</div>`;
   }

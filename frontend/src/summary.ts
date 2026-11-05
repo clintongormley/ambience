@@ -2,6 +2,7 @@ import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
 import {
   actionLabel,
   anchorLabel,
+  compassLabel,
   conditionLabel,
   exposedActionLabel,
   humanizeId,
@@ -224,6 +225,9 @@ function _whereLabel(where: string, ctx: ConditionContext): string {
  * Mode is keyed off the presence of the `who` key (matching the input widget):
  * absent → a base mode (everyone→Everybody, any→Anybody, nobody→Nobody);
  * present → an "X of:" mode chosen by `quant`.
+ * "Everybody" and "All of:" have their own connectors because other languages
+ * inflect the verb to match them, and not always the same way: French "Tout le
+ * monde" is singular while "Tous parmi :" is plural.
  */
 export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
@@ -247,18 +251,25 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
   }
 
   let subject: string;
+  let connector = pred.negate
+    ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
+    : localize(ctx.hass, "people_summary.is_at", "is at");
   if (!Array.isArray(pred.who)) {
     // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.
     // A missing quant is `any` — that is how the engine evaluates it; the
     // editor seeds an explicit `everyone` for a new condition, so this only
     // affects legacy stored predicates.
     const quant = pred.quant ?? "any";
-    subject =
-      quant === "nobody"
-        ? localize(ctx.hass, "ui.people_mode_nobody", "Nobody")
-        : quant === "any"
-          ? localize(ctx.hass, "ui.people_mode_anybody", "Anybody")
-          : localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
+    if (quant === "nobody") {
+      subject = localize(ctx.hass, "ui.people_mode_nobody", "Nobody");
+    } else if (quant === "any") {
+      subject = localize(ctx.hass, "ui.people_mode_anybody", "Anybody");
+    } else {
+      subject = localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
+      connector = pred.negate
+        ? localize(ctx.hass, "people_summary.everyone_not_at", "is not at")
+        : localize(ctx.hass, "people_summary.everyone_at", "is at");
+    }
   } else {
     // "X of:" mode — a missing quant defaults to "any" (Any of:).
     const quant = pred.quant ?? "any";
@@ -270,10 +281,12 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
           : localize(ctx.hass, "ui.people_mode_none", "None of:");
     const names = pred.who.map((id) => _domainEntityName(ctx, id)).join(", ");
     subject = `${label} (${names})`;
+    if (quant === "everyone") {
+      connector = pred.negate
+        ? localize(ctx.hass, "people_summary.all_of_not_at", "is not at")
+        : localize(ctx.hass, "people_summary.all_of_at", "is at");
+    }
   }
-  const connector = pred.negate
-    ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
-    : localize(ctx.hass, "people_summary.is_at", "is at");
   const head = `${subject} ${connector} ${_whereLabel(where, ctx)}`;
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
@@ -294,6 +307,13 @@ export function summariseDay(pred: DayPredicate, ctx: ConditionContext = {}): st
   return `${inc} (${except} ${exclude.map((it) => _fmtDayItem(it, ctx)).join(", ")})`;
 }
 
+function _fmtDate(hass: HassLike | undefined, month: number, day: number): string {
+  return localize(hass, "day_summary.date", "{month} {day}", {
+    month: monthLabel(hass, month),
+    day: String(day),
+  });
+}
+
 function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
   switch (item.kind) {
     case "weekday":
@@ -301,9 +321,9 @@ function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
     case "day_of_month":
       return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days}`;
     case "date":
-      return `${monthLabel(ctx.hass, item.month)} ${item.day}`;
+      return _fmtDate(ctx.hass, item.month, item.day);
     case "date_range":
-      return `${monthLabel(ctx.hass, item.from.month)} ${item.from.day} → ${monthLabel(ctx.hass, item.to.month)} ${item.to.day}`;
+      return `${_fmtDate(ctx.hass, item.from.month, item.from.day)} → ${_fmtDate(ctx.hass, item.to.month, item.to.day)}`;
     case "last_day":
       return localize(ctx.hass, "day_summary.last_day", "last day");
     case "workday":
@@ -411,7 +431,7 @@ export function summariseSun(pred: SunPredicate, ctx: ConditionContext = {}): st
   }
   const az = pred.azimuth;
   if (az) {
-    if (az.sectors?.length) parts.push(az.sectors.join("/"));
+    if (az.sectors?.length) parts.push(az.sectors.map((s) => compassLabel(ctx.hass, s)).join("/"));
     for (const r of az.ranges ?? []) parts.push(`${r.from}°–${r.to}°`);
   }
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
@@ -428,32 +448,33 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
 }
 
 /**
- * Build the "<quantifier> (names) <verb> [not ]<word>" head shared by the
- * sensor-backed condition summaries (lux/occupancy/unavailable). `ns` is the
- * localize namespace ("lux_summary"/"occupancy_summary"/"unavailable_summary");
+ * Build the "<quantifier> (names) <verb> <word>" head shared by the sensor-backed
+ * condition summaries (lux/occupancy/unavailable).
  * `word` is the trailing predicate word (a lux band, "detected"/"clear",
- * "unavailable"). One name reads "<name> is [not ]<word>"; several read
- * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. Negation
- * sits inline before the word, matching the state condition. Unavailable passes
- * neither flag (any-only, never negated).
+ * "unavailable"). One name reads "<name> is <word>"; several read
+ * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. A negated
+ * clause swaps in a whole negated verb, because where "not" goes depends on the
+ * language: "is not" but Spanish "no está". Unavailable passes neither flag
+ * (any-only, never negated).
  */
 function _quantifiedClause(
   ctx: ConditionContext,
-  ns: string,
   names: string[],
   word: string,
   opts: { all?: boolean; negate?: boolean } = {},
 ): string {
-  const not = opts.negate ? `${localize(ctx.hass, `${ns}.not`, "not")} ` : "";
-  if (names.length === 1) {
-    return `${names[0]} ${localize(ctx.hass, `${ns}.is`, "is")} ${not}${word}`;
-  }
+  const singularVerb = opts.negate
+    ? localize(ctx.hass, "condition_summary.is_not", "is not")
+    : localize(ctx.hass, "condition_summary.is", "is");
+  if (names.length === 1) return `${names[0]} ${singularVerb} ${word}`;
   const all = opts.all === true;
   const q = all
-    ? localize(ctx.hass, `${ns}.all_of`, "All of")
-    : localize(ctx.hass, `${ns}.any_of`, "Any of");
-  const verb = all ? localize(ctx.hass, `${ns}.are`, "are") : localize(ctx.hass, `${ns}.is`, "is");
-  return `${q} (${names.join(", ")}) ${verb} ${not}${word}`;
+    ? localize(ctx.hass, "condition_summary.all_of", "All of")
+    : localize(ctx.hass, "condition_summary.any_of", "Any of");
+  const pluralVerb = opts.negate
+    ? localize(ctx.hass, "condition_summary.are_not", "are not")
+    : localize(ctx.hass, "condition_summary.are", "are");
+  return `${q} (${names.join(", ")}) ${all ? pluralVerb : singularVerb} ${word}`;
 }
 
 /**
@@ -465,16 +486,18 @@ function _quantifiedClause(
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
   const names = pred.sensors.map((id) => _entityDisplayName(ctx, id));
-  const verb =
-    pred.occupied === false
-      ? localize(ctx.hass, "occupancy_summary.clear", "clear")
-      : localize(ctx.hass, "occupancy_summary.detected", "detected");
+  const all = pred.quant === "all";
+  const plural = all && names.length > 1;
+  const clear = plural
+    ? localize(ctx.hass, "occupancy_summary.clear_all", "clear")
+    : localize(ctx.hass, "occupancy_summary.clear", "clear");
+  const detected = plural
+    ? localize(ctx.hass, "occupancy_summary.detected_all", "detected")
+    : localize(ctx.hass, "occupancy_summary.detected", "detected");
+  const word = pred.occupied === false ? clear : detected;
   // `negate` wraps the whole predicate; phrase it like the state condition's
   // inline negation ("Lounge is not clear for ≥20m"), not a flipped polarity.
-  const head = _quantifiedClause(ctx, "occupancy_summary", names, verb, {
-    all: pred.quant === "all",
-    negate: pred.negate,
-  });
+  const head = _quantifiedClause(ctx, names, word, { all, negate: pred.negate });
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
   }
@@ -825,7 +848,7 @@ export function summariseUnavailable(
   // No quantifier/negate control on this condition: always "any of these is
   // down" (any-only, never negated), so pass neither flag.
   const word = localize(ctx.hass, "unavailable_summary.unavailable", "unavailable");
-  return _quantifiedClause(ctx, "unavailable_summary", names, word);
+  return _quantifiedClause(ctx, names, word);
 }
 
 /** Render an inline lux band: "<10 lx", "≥1000 lx", "50–300 lx". `empty` is the
@@ -856,7 +879,7 @@ export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): st
       : fmtLuxBand(pred.min, pred.max);
   // `negate` reads inline ("is not Dark" / "are not Dark"), mirroring the
   // state/occupancy summaries.
-  return _quantifiedClause(ctx, "lux_summary", names, band, {
+  return _quantifiedClause(ctx, names, band, {
     all: pred.quant === "all",
     negate: pred.negate,
   });
@@ -867,11 +890,12 @@ export function summariseState(pred: StatePredicate, ctx: ConditionContext = {})
   return _renderStateExpr(pred, ctx);
 }
 
-/** One atom clause: `<entity[.attr]> <verb> [NOT ]<value> [for ≥…|<…]`. When
- *  `negate` is set the NOT sits inline before the value ("a is NOT on"), which
- *  reads more naturally than a leading "NOT a is on" for a simple `is` clause. */
+/** One atom clause: `<entity[.attr]> <verb> <value> [for ≥…|<…]`. `negate` is
+ *  only set for a simple `is` clause, whose verb becomes the whole negated verb
+ *  ("a is NOT on"): that reads more naturally than a leading "NOT a is on", and
+ *  it is a single label because where the NOT goes depends on the language. */
 function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boolean): string {
-  const verb = stateOpLabel(ctx.hass, expr.kind);
+  const verb = stateOpLabel(ctx.hass, negate ? "is_negated" : expr.kind);
   // Use the entity's friendly_name when available (falls back to the
   // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
   const name = _entityDisplayName(ctx, expr.entity_id);
@@ -890,8 +914,7 @@ function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boole
   const lhs = expr.attribute
     ? `${name}.${stateAttributeLabel(ctx.hass, stateObj, expr.attribute)}`
     : name;
-  const not = negate ? `${stateOpLabel(ctx.hass, "not")} ` : "";
-  const head = `${lhs} ${verb} ${not}${rhs}`;
+  const head = `${lhs} ${verb} ${rhs}`;
   if (expr.for && _hasStateDuration(expr.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(expr.for_mode)}${_fmtStateDur(expr.for)}`;
   }
@@ -1003,31 +1026,37 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
 }
 
 /**
- * Pluralisation noun for the target count summary. Derived from the TARGET
- * entities' domain ("light" from "light.lounge"), not the service's domain —
- * an integration's service may act on another domain's entities (e.g.
- * `fado.fade_lights` targets `light.*`, so the noun is "light", not "fado").
- * Falls back to a generic noun when targets span multiple domains or carry no
- * domain prefix.
+ * The target count as a whole phrase ("3 lights", "3 objetivos (light)"), so
+ * each language sets its own word order and plural. The domain comes from the
+ * TARGET entities ("light" from "light.lounge"), not the service's domain — an
+ * integration's service may act on another domain's entities (e.g.
+ * `fado.fade_lights` targets `light.*`, so the count says "light", not "fado").
+ * Uses the generic "target" wording when targets span multiple domains or
+ * carry no domain prefix, and "(no targets)" when there are none.
  */
-function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
+function _targetCount(action: ActionSpec, ctx: ActionContext): string {
+  const total = action.entity_ids.length;
+  if (total === 0) return localize(ctx.hass, "ui.no_targets", "(no targets)");
   const domains = new Set<string>();
   for (const id of action.entity_ids) {
     const dot = id.indexOf(".");
     if (dot > 0) domains.add(id.slice(0, dot));
   }
-  if (domains.size === 1) return [...domains][0];
-  return localize(ctx.hass, "ui.target_noun", "target");
+  const n = String(total);
+  if (domains.size === 1) {
+    const domain = [...domains][0];
+    return total === 1
+      ? localize(ctx.hass, "ui.count_domain_target_one", "{n} {domain}", { n, domain })
+      : localize(ctx.hass, "ui.count_domain_target_other", "{n} {domain}s", { n, domain });
+  }
+  return total === 1
+    ? localize(ctx.hass, "ui.count_target_one", "{n} target", { n })
+    : localize(ctx.hass, "ui.count_target_other", "{n} targets", { n });
 }
 
 export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
-  const noun = _targetNoun(action, ctx);
-  const n = action.entity_ids.length;
-  let targets: string;
-  if (n === 0) targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
-  else if (n === 1) targets = `1 ${noun}`;
-  else targets = `${n} ${noun}s`;
+  const targets = _targetCount(action, ctx);
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(

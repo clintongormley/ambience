@@ -1016,7 +1016,7 @@ test("summariseState inlines NOT into a simple 'is' clause", () => {
   ).toBe("a is NOT on");
 });
 
-test("summariseState inlines NOT before the value, keeping the 'for' suffix", () => {
+test("summariseState negates the verb of a simple is clause, keeping the 'for' suffix", () => {
   expect(
     summariseState(
       {
@@ -2137,5 +2137,252 @@ describe("summary prose — area-prefixed entity names", () => {
         { hass: hassArea },
       ),
     ).toBe("Zone Shower is clear");
+  });
+});
+
+describe("wording that depends on the language", () => {
+  const de = { language: "de" } as any;
+  const action = (ids: string[]): ActionSpec => ({
+    service: "homeassistant.turn_on",
+    entity_ids: ids,
+    params: {},
+  });
+
+  test("a mixed-domain target count uses the language's own plural", () => {
+    expect(summariseAction(action(["light.a", "switch.b", "fan.c"]), { hass: de })).toContain(
+      "3 Ziele",
+    );
+    expect(summariseAction(action(["light.a", "switch.b"]), { hass: {} as any })).toContain(
+      "2 targets",
+    );
+  });
+
+  test("a single-domain target count stays in the language", () => {
+    expect(summariseAction(action(["light.a"]), { hass: de })).toContain("1 Ziel (light)");
+    expect(summariseAction(action(["light.a", "light.b"]), { hass: de })).toContain(
+      "2 Ziele (light)",
+    );
+    expect(summariseAction(action(["light.a"]), { hass: {} as any })).toContain("1 light");
+  });
+
+  test("dates follow the language's day and month order", () => {
+    const date = { include: [{ kind: "date", month: 12, day: 24 }], exclude: [] } as DayPredicate;
+    const range = {
+      include: [{ kind: "date_range", from: { month: 6, day: 1 }, to: { month: 8, day: 31 } }],
+      exclude: [],
+    } as DayPredicate;
+    expect(summariseDay(date, { hass: de })).toBe("24. Dezember");
+    expect(summariseDay(range, { hass: de })).toBe("1. Juni → 31. August");
+    expect(summariseDay(date, { hass: { language: "es" } as any })).toBe("24 de Diciembre");
+    expect(summariseDay(date, { hass: { language: "pt" } as any })).toBe("24 de Dezembro");
+    expect(summariseDay(date, { hass: { language: "fr" } as any })).toBe("24 Décembre");
+  });
+
+  test("compass sectors use the language's letters", () => {
+    const sun = { azimuth: { sectors: ["E", "SE", "W"] } } as any;
+    expect(summariseSun(sun, { hass: de })).toBe("O/SO/W");
+    expect(summariseSun(sun, { hass: { language: "es" } as any })).toBe("E/SE/O");
+    expect(summariseSun(sun)).toBe("E/SE/W");
+  });
+});
+
+describe("sensor and people summaries are translated", () => {
+  const de = { language: "de" } as any;
+
+  test("a person's location reads in the language", () => {
+    const home = { who: ["person.anna"], quant: "any" } as any;
+    expect(summarisePeople(home, { hass: de })).toContain("ist: zu Hause");
+    expect(summarisePeople({ ...home, negate: true }, { hass: de })).toContain(
+      "ist nicht: zu Hause",
+    );
+    expect(summarisePeople(home, { hass: { language: "fr" } as any })).toContain("est à la maison");
+  });
+
+  describe("a plural subject takes a plural verb", () => {
+    const everybody = { quant: "everyone", where: "home" } as any;
+    const allOf = { who: ["person.anna", "person.ben"], quant: "everyone", where: "home" } as any;
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["de", "Alle sind: zu Hause", "Alle sind nicht: zu Hause"],
+      ["es", "Todos están en casa", "Todos no están en casa"],
+      ["pt", "Todos estão em casa", "Todos não estão em casa"],
+      // "Tout le monde" is grammatically singular, unlike "Tous parmi :" below.
+      ["fr", "Tout le monde est à la maison", "Tout le monde est hors de la maison"],
+      ["en", "Everybody is at Home", "Everybody is not at Home"],
+    ])("everybody in %s", (language, positive, negative) => {
+      const ctx = { hass: hass(language) };
+      expect(summarisePeople(everybody, ctx)).toBe(positive);
+      expect(summarisePeople({ ...everybody, negate: true }, ctx)).toBe(negative);
+    });
+
+    test.each([
+      ["de", "Alle von: (Anna, Ben) sind: zu Hause", "Alle von: (Anna, Ben) sind nicht: zu Hause"],
+      ["es", "Todos: (Anna, Ben) están en casa", "Todos: (Anna, Ben) no están en casa"],
+      ["pt", "Todos de: (Anna, Ben) estão em casa", "Todos de: (Anna, Ben) não estão em casa"],
+      [
+        "fr",
+        "Tous parmi : (Anna, Ben) sont à la maison",
+        "Tous parmi : (Anna, Ben) sont hors de la maison",
+      ],
+      ["en", "All of: (Anna, Ben) is at Home", "All of: (Anna, Ben) is not at Home"],
+    ])("all of several people in %s", (language, positive, negative) => {
+      const ctx = { hass: hass(language) };
+      expect(summarisePeople(allOf, ctx)).toBe(positive);
+      expect(summarisePeople({ ...allOf, negate: true }, ctx)).toBe(negative);
+    });
+
+    test("a duration still follows the plural connector", () => {
+      const pred = { ...everybody, for: { h: 0, m: 20, s: 0 }, for_mode: "at_least" };
+      expect(summarisePeople(pred, { hass: hass("es") })).toBe("Todos están en casa durante ≥20m");
+      expect(summarisePeople(pred)).toBe("Everybody is at Home for ≥20m");
+    });
+
+    test("subjects that are grammatically singular keep the singular verb", () => {
+      const ctx = { hass: hass("de") };
+      const two = ["person.anna", "person.ben"];
+      expect(summarisePeople({ quant: "any", where: "home" }, ctx)).toBe(
+        "Irgendjemand ist: zu Hause",
+      );
+      expect(summarisePeople({ quant: "nobody", where: "home" }, ctx)).toBe(
+        "Niemand ist: zu Hause",
+      );
+      expect(summarisePeople({ who: two, quant: "any", where: "home" }, ctx)).toBe(
+        "Mindestens eine von: (Anna, Ben) ist: zu Hause",
+      );
+      expect(summarisePeople({ who: two, quant: "nobody", where: "home" }, ctx)).toBe(
+        "Keine von: (Anna, Ben) ist: zu Hause",
+      );
+      expect(summarisePeople({ ...allOf, who: ["person.anna"] }, ctx)).toBe("Anna ist: zu Hause");
+    });
+  });
+
+  test("occupancy reads in the language for one sensor and for several", () => {
+    const one = { sensors: ["binary_sensor.flur"], occupied: true } as any;
+    const two = { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: false, quant: "all" };
+    expect(summariseOccupancy(one, { hass: de })).toContain("ist erkannt");
+    expect(summariseOccupancy({ ...one, negate: true }, { hass: de })).toContain(
+      "ist nicht erkannt",
+    );
+    const several = summariseOccupancy(two as any, { hass: de });
+    expect(several).toContain("Alle von (");
+    expect(several).toContain("sind frei");
+  });
+
+  describe("occupancy words agree with a plural subject", () => {
+    const sensors = ["binary_sensor.a", "binary_sensor.b"];
+    const ids = sensors.join(", ");
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["fr", true, `Tous parmi (${ids}) sont détectés`],
+      ["fr", false, `Tous parmi (${ids}) sont libres`],
+      ["es", true, `Todos de (${ids}) están detectados`],
+      ["es", false, `Todos de (${ids}) están libres`],
+      ["pt", true, `Todos de (${ids}) estão detetados`],
+      ["pt", false, `Todos de (${ids}) estão livres`],
+      ["de", true, `Alle von (${ids}) sind erkannt`],
+      ["de", false, `Alle von (${ids}) sind frei`],
+      ["en", true, `All of (${ids}) are detected`],
+      ["en", false, `All of (${ids}) are clear`],
+    ])("all of several sensors in %s, occupied %s", (language, occupied, text) => {
+      const pred = { sensors, occupied, quant: "all" } as any;
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test("the plural word carries through to the duration clause", () => {
+      const pred = { sensors, occupied: false, quant: "all", for: { h: 0, m: 20, s: 0 } } as any;
+      expect(summariseOccupancy(pred, { hass: hass("fr") })).toBe(
+        `Tous parmi (${ids}) sont libres pendant ≥20m`,
+      );
+    });
+
+    test.each([
+      ["fr", true, "binary_sensor.a est détecté"],
+      ["fr", false, "binary_sensor.a est libre"],
+      ["es", true, "binary_sensor.a está detectado"],
+      ["pt", false, "binary_sensor.a está livre"],
+    ])("one sensor stays singular in %s, occupied %s", (language, occupied, text) => {
+      const pred = { sensors: ["binary_sensor.a"], occupied, quant: "all" } as any;
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test("any of several sensors stays singular", () => {
+      const pred = { sensors, occupied: false, quant: "any" } as any;
+      expect(summariseOccupancy(pred, { hass: hass("es") })).toBe(
+        `Cualquiera de (${ids}) está libre`,
+      );
+    });
+  });
+
+  describe("negation is part of the verb", () => {
+    const one = { sensors: ["binary_sensor.a"], occupied: true, negate: true } as any;
+    const several = { sensors: ["binary_sensor.a", "binary_sensor.b"], negate: true } as any;
+    const ids = "binary_sensor.a, binary_sensor.b";
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["es", "binary_sensor.a no está detectado"],
+      ["pt", "binary_sensor.a não está detetado"],
+      ["fr", "binary_sensor.a n'est pas détecté"],
+      ["de", "binary_sensor.a ist nicht erkannt"],
+      ["en", "binary_sensor.a is not detected"],
+    ])("one occupancy sensor in %s", (language, text) => {
+      expect(summariseOccupancy(one, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Todos de (${ids}) no están detectados`],
+      ["de", `Alle von (${ids}) sind nicht erkannt`],
+      ["en", `All of (${ids}) are not detected`],
+    ])("all of several occupancy sensors in %s", (language, text) => {
+      const pred = { ...several, occupied: true, quant: "all" };
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Cualquiera de (${ids}) no está detectado`],
+      ["de", `Mindestens eines von (${ids}) ist nicht erkannt`],
+      ["en", `Any of (${ids}) is not detected`],
+    ])("any of several occupancy sensors in %s", (language, text) => {
+      const pred = { ...several, occupied: true, quant: "any" };
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", "binary_sensor.a no está 50–300 lx"],
+      ["de", "binary_sensor.a ist nicht 50–300 lx"],
+      ["en", "binary_sensor.a is not 50–300 lx"],
+    ])("one lux sensor in %s", (language, text) => {
+      const pred = { sensors: ["binary_sensor.a"], min: 50, max: 300, negate: true };
+      expect(summariseCondition("lux", pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Todos de (${ids}) no están 50–300 lx`],
+      ["de", `Alle von (${ids}) sind nicht 50–300 lx`],
+      ["en", `All of (${ids}) are not 50–300 lx`],
+    ])("all of several lux sensors in %s", (language, text) => {
+      const pred = { ...several, min: 50, max: 300, quant: "all" };
+      expect(summariseCondition("lux", pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", "a NO es on"],
+      ["pt", "a NÃO é on"],
+      ["fr", "a n'est PAS on"],
+      ["de", "a ist NICHT on"],
+      ["en", "a is NOT on"],
+    ])("an inlined state negation in %s", (language, text) => {
+      const pred = { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } };
+      expect(summariseState(pred as StatePredicate, { hass: hass(language) })).toBe(text);
+    });
+  });
+
+  test("unavailable reads in the language", () => {
+    const pred = { entities: ["sensor.a", "sensor.b"] } as any;
+    const text = summariseUnavailable(pred, { hass: de });
+    expect(text).toContain("Mindestens eines von (");
+    expect(text).toContain("ist nicht verfügbar");
   });
 });

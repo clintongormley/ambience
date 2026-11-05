@@ -8,6 +8,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- **German (de) translation.** Ambience is now available in German — the config
+    flow, repair issues, service names, and the whole panel UI. It joins
+    English, Spanish, European Portuguese, and French.
+
 ### Changed
 
 - The Marketplace replaces HACS from Home Assistant 2026.11, so you install and
@@ -16,6 +22,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- Scene summaries and the sun condition now follow your language instead of
+    English: dates use the local day and month order, compass directions use
+    local letters, target counts use the local plural, and summaries of people,
+    occupancy, lux and unavailable conditions are translated. A target count now
+    reads in your language too: in Spanish, "3 objetivos (light)" rather than "3
+    lights".
+- Repairs messages name the area, floor, house and category in Home Assistant's
+    system language, written as "**Kitchen** (area)". Changing that language
+    updates the messages already showing.
 - The panel now shows your theme's background and toolbar colour on Home
     Assistant 2026.11 instead of painting over them.
 - On Home Assistant 2026.11 the AI export and the MCP server name an entity with

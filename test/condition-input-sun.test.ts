@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/sun-predicate-input";
 import type { SunPredicate } from "../frontend/src/types";
 
-async function mount(value: SunPredicate = null): Promise<any> {
+async function mount(value: SunPredicate = null, hass: object = {}): Promise<any> {
   const el: any = document.createElement("ambience-sun-predicate-input");
   el.value = value;
-  el.hass = {};
+  el.hass = hass;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -27,6 +27,20 @@ describe("ambience-sun-predicate-input", () => {
       n.textContent?.trim(),
     );
     expect(labels).toEqual(["NW", "N", "NE", "W", "E", "SW", "S", "SE"]);
+  });
+
+  test("labels the compass in the user's language but keeps the stored sector id", async () => {
+    el = await mount(null, { language: "de" });
+    const labels = Array.from(el.shadowRoot.querySelectorAll(".sectors label")).map((n: Element) =>
+      n.textContent?.trim(),
+    );
+    expect(labels).toEqual(["NW", "N", "NO", "W", "O", "SW", "S", "SO"]);
+    const boxes = el.shadowRoot.querySelectorAll(".sectors input");
+    const seen: any[] = [];
+    el.addEventListener("value-changed", (e: any) => seen.push(e.detail.value));
+    boxes[4].checked = true;
+    boxes[4].dispatchEvent(new Event("change"));
+    expect(seen.at(-1)).toEqual({ azimuth: { sectors: ["E"] } });
   });
 
   test("checked state reflects the current sectors regardless of grid order", async () => {

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.translation import async_load_integrations
 
+from custom_components.ambience import config_health_issues
 from custom_components.ambience.config_health_issues import (
+    _ENGLISH_LABELS,
     reconcile_issues,
     referenced_entity_ids,
 )
@@ -51,7 +57,7 @@ async def test_reconcile_creates_issue_for_missing_entity(hass, installed, area_
     assert issue.translation_key == "missing_entity"
     assert issue.translation_placeholders == {
         "entity_id": "light.ghost",
-        "scope": "**Living Room** area",
+        "scope": "**Living Room** (area)",
         "scenes": '\n- "ghost" — uncategorised',
     }
 
@@ -163,7 +169,7 @@ async def test_overlap_issue_message_lists_groups_as_bullets(hass, installed, ar
     assert issue.translation_placeholders["entity_id"] == "light.shared"
     groups = issue.translation_placeholders["groups"]
     assert "\n- **House** · uncategorised" in groups
-    assert "\n- **Living Room** area · uncategorised" in groups
+    assert "\n- **Living Room** (area) · uncategorised" in groups
 
 
 async def test_reconcile_leaves_foreign_domain_issues_untouched(hass, installed, area_id) -> None:
@@ -320,6 +326,76 @@ async def test_missing_entity_message_labels_a_nameless_scene_as_unnamed(
     assert scenes == '\n- "(unnamed)" — uncategorised'
 
 
+async def test_repair_labels_follow_the_system_language(hass, installed, area_id) -> None:
+    # Placeholders are baked when the issue is created, so nothing translates them
+    # later. Real translation files are loaded rather than mocked, so this also
+    # proves the labels are where the lookup expects them.
+    hass.config.language = "de"
+    await async_load_integrations(hass, {DOMAIN})
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "Abend",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    placeholders = [
+        issue.translation_placeholders
+        for (dom, iid), issue in issues.items()
+        if dom == DOMAIN and iid.startswith("missing_entity:")
+    ]
+    assert {
+        "entity_id": "light.ghost",
+        "scope": "**Living Room** (Bereich)",
+        "scenes": '\n- "(unbenannt)" — ohne Kategorie',
+    } in placeholders
+    assert {
+        "entity_id": "light.ghost",
+        "scope": "**Haus**",
+        "scenes": '\n- "Abend" — ohne Kategorie',
+    } in placeholders
+
+
+@pytest.mark.parametrize(
+    ("language", "sentence"),
+    [
+        ("en", "by these Ambience scenes — {scope}:\n{scenes}"),
+        ("es", "por estas escenas de Ambience — {scope}:\n{scenes}"),
+        ("pt", "por estas cenas do Ambience — {scope}:\n{scenes}"),
+        ("fr", "par ces scènes Ambience — {scope} :\n{scenes}"),
+        ("de", "von diesen Ambience-Szenen referenziert — {scope}:\n{scenes}"),
+    ],
+)
+def test_missing_entity_sentence_needs_no_agreement_with_its_scope(
+    language: str, sentence: str
+) -> None:
+    # {scope} is a bare label for the house and "label (kind)" elsewhere, so a
+    # preposition in front of it cannot agree with both: "in **Haus** referenziert".
+    path = Path(config_health_issues.__file__).parent / "translations" / f"{language}.json"
+    translations = json.loads(path.read_text(encoding="utf-8"))
+    assert sentence in translations["issues"]["missing_entity"]["description"]
+
+
 async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     a = ar.async_get(hass).async_create("Kitchen").id
@@ -421,3 +497,9 @@ async def test_reconcile_leaves_another_module_s_issue_alone(
     )
     reconcile_issues(hass)
     assert ir.async_get(hass).async_get_issue(DOMAIN, STORAGE_UNREADABLE_ISSUE) is not None
+
+
+def test_english_repair_labels_match_strings_json() -> None:
+    root = Path(config_health_issues.__file__).parent
+    strings = json.loads((root / "strings.json").read_text())
+    assert strings["selector"]["repair_label"]["options"] == _ENGLISH_LABELS

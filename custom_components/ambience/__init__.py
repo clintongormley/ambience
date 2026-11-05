@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components.frontend import (
     async_register_built_in_panel,
@@ -13,8 +15,9 @@ from homeassistant.components.frontend import (
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import EVENT_CORE_CONFIG_UPDATE, Platform
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -23,6 +26,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
@@ -411,9 +415,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _health_on_registry_updated(_event: Event) -> None:
         health_debouncer.async_schedule_call()
 
-    # Run once states have settled, then on every config change and whenever a
+    health_language = hass.config.language
+
+    @callback
+    def _health_language_filter(data: Mapping[str, Any]) -> bool:
+        # HA resends the language with other settings, so its presence alone
+        # says nothing; hass.config already holds the new value by now.
+        nonlocal health_language
+        language = data.get("language")
+        if language is None or language == health_language:
+            return False
+        health_language = language
+        return True
+
+    async def _health_on_language_changed(event: Event) -> None:
+        # HA's own listener loads this language too, but has not finished by the time this one runs.
+        language = event.data["language"]
+        try:
+            await async_get_translations(hass, language, "selector", {DOMAIN})
+        except HomeAssistantError as exc:
+            _LOGGER.warning("ambience: loading %r translations failed: %s", language, exc)
+        finally:
+            health_debouncer.async_schedule_call()
+
+    # Run once states have settled, then on every config change, whenever a
     # referenced entity's registry entry changes (a fixed typo / a returned
-    # device clears its issue).
+    # device clears its issue), and when the system language changes (an issue
+    # stores its inserted text, so it has to be rebuilt in the new language).
     entry.async_on_unload(async_at_started(hass, _health_on_started))
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _health_on_config_changed)
@@ -423,6 +451,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             er.EVENT_ENTITY_REGISTRY_UPDATED,
             _health_on_registry_updated,
             event_filter=_health_event_filter,
+        )
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            EVENT_CORE_CONFIG_UPDATE,
+            _health_on_language_changed,
+            event_filter=_health_language_filter,
         )
     )
 

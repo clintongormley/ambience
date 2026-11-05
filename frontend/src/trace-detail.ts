@@ -1,5 +1,6 @@
 import { css, html, nothing, type TemplateResult } from "lit";
 import {
+  compassLabel,
   conditionLabel,
   deriveActionLabel,
   exposedActionLabel,
@@ -501,7 +502,12 @@ function predicateDetail(
 // through renderDetailWithLinks (which link-injects the legacy string path).
 function renderSegments(hass: HassLike | undefined, segs: TraceSeg[]): TemplateResult {
   const parts = segs.map((s) => {
-    if (s.k) return localizeSeg(hass, `trace_detail.${s.k}`, s.t ?? "", s.p ?? {});
+    if (s.k) {
+      const placeholders = s.p?.sector
+        ? { ...s.p, sector: compassLabel(hass, s.p.sector) }
+        : (s.p ?? {});
+      return localizeSeg(hass, `trace_detail.${s.k}`, s.t ?? "", placeholders);
+    }
     if (s.e) return entityLink(hass, s.e, s.t ?? s.e);
     return s.t ?? "";
   });

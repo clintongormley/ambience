@@ -408,6 +408,11 @@ export function monthLabel(hass: HassLike | undefined, month: number): string {
   return _resolve(hass, `component.ambience.month.${month}`, String(month));
 }
 
+/** Display letters for a stored compass sector id such as "NE". */
+export function compassLabel(hass: HassLike | undefined, sector: string): string {
+  return _resolve(hass, `component.ambience.compass.${sector}`, sector);
+}
+
 export function weatherConditionLabel(hass: HassLike | undefined, cond: string): string {
   return _resolve(hass, `component.ambience.weather_condition.${cond}`, humanizeId(cond));
 }
@@ -502,7 +507,8 @@ export function localizeWsError(hass: HassLike | undefined, err: unknown): strin
 
 // --- state condition --------------------------------------------------------
 
-/** Label for a state-condition operator (`is`, `is_not`, `>=`, `and`, …).
+/** Label for a state-condition operator (`is`, `is_not`, `>=`, `and`, …) or the
+ *  display-only `is_negated` verb.
  *  The glyph map (≥/≤ etc.) lives in i18n-data.ts. */
 export function stateOpLabel(hass: HassLike | undefined, op: string): string {
   return _resolve(hass, `component.ambience.state_op.${op}`, op);

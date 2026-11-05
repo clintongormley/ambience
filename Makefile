@@ -36,7 +36,7 @@ format-md:      ## Apply markdown formatting (AI/generated docs excluded via .md
 translations:   ## strings.json <-> translations key parity
 	$(PYTHON) -m bin.check_translations
 
-ui-strings:     ## frontend ui.* localize keys <-> i18n-data.ts bundle parity
+ui-strings:     ## frontend ui.* and *_summary.* localize keys <-> i18n-data.ts bundle parity
 	$(PYTHON) -m bin.check_ui_strings
 
 i18n:           ## all i18n gates: key parity + shipped-locale completeness + no-hardcoded lints

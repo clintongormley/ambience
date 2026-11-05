@@ -75,11 +75,11 @@ describe("ambience-language-banner", () => {
     const el = await mount("it");
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
-    el.hass = { language: "de" };
+    el.hass = { language: "nl" };
     await el.updateComplete;
     await innerBanner(el)?.updateComplete;
     expect(innerBanner(el)).not.toBeNull();
-    expect(el.shadowRoot.textContent.toLowerCase()).toContain("deutsch");
+    expect(el.shadowRoot.textContent.toLowerCase()).toContain("nederlands");
   });
 
   it("STAYS dismissed for an earlier locale after dismissing another", async () => {
@@ -90,12 +90,12 @@ describe("ambience-language-banner", () => {
       .shadowRoot.querySelector('[data-test="banner-dismiss"]')
       .click();
     await it_.updateComplete;
-    const de = await mount("de");
-    de.shadowRoot
+    const nl = await mount("nl");
+    nl.shadowRoot
       .querySelector("ambience-banner")
       .shadowRoot.querySelector('[data-test="banner-dismiss"]')
       .click();
-    await de.updateComplete;
+    await nl.updateComplete;
     const itAgain = await mount("it");
     expect(itAgain.shadowRoot.querySelector("ambience-banner")).toBeNull();
   });
@@ -113,7 +113,7 @@ describe("ambience-language-banner", () => {
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();
     await el.updateComplete;
     // switch to a second uncovered locale and dismiss it too
-    el.hass = { language: "de" };
+    el.hass = { language: "nl" };
     await el.updateComplete;
     await innerBanner(el)?.updateComplete;
     innerBanner(el).shadowRoot.querySelector('[data-test="banner-dismiss"]').click();

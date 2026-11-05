@@ -2,8 +2,9 @@
 
 `reconcile_issues` scans every scope and creates one issue per problem (stable
 id so rescans dedupe), deleting issues whose problem no longer exists. Wired in
-`__init__` to run on setup, on config change, and on entity-registry updates, so
-issues auto-clear the moment a typo is fixed or a device returns.
+`__init__` to run on setup, on config change, on entity-registry updates, and on
+a system-language change, so issues auto-clear the moment a typo is fixed or a
+device returns, and their inserted text follows the language.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import re
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.translation import async_get_cached_translations
 
 from .config_health import Problem, referenced_entities_by_scene, scan
 from .const import (
@@ -49,6 +51,16 @@ _ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(
 # naming them makes that a decision rather than a coincidence.
 _FOREIGN_ISSUE_IDS = frozenset({STORAGE_UNREADABLE_ISSUE})
 
+# Used until HA has loaded the integration's translations.
+_ENGLISH_LABELS = {
+    "area": "area",
+    "category": "category",
+    "floor": "floor",
+    "house": "House",
+    "uncategorised": "uncategorised",
+    "unnamed": "(unnamed)",
+}
+
 
 def _issue_id(problem: Problem) -> str:
     # `:` separates the id fields. It can't appear in a scope id (slugified:
@@ -70,16 +82,34 @@ def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _label(hass: HomeAssistant, key: str) -> str:
+    """A word for a Repairs placeholder, in HA's system language.
+
+    Placeholders are stored on the issue when it is created, so HA never
+    translates them for the person reading it; a system-language change
+    rebuilds them through `reconcile_issues`. Labels are never built into a
+    sentence: the surrounding phrasing avoids any grammatical agreement.
+    """
+    translations = async_get_cached_translations(hass, hass.config.language, "selector", DOMAIN)
+    return translations.get(
+        f"component.{DOMAIN}.selector.repair_label.options.{key}", _ENGLISH_LABELS[key]
+    )
+
+
 def _scope_phrase(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
-    """Bold friendly scope label with its kind: '**House**', '**Kitchen** floor',
-    '**Living Room** area'."""
+    """Bold scope label with its kind: '**House**', '**Kitchen** (floor)',
+    '**Living Room** (area)'."""
+    if scope_kind == "house":
+        return f"**{_label(hass, 'house')}**"
     name = _clean(scope_display_name(hass, scope_kind, scope_id))
-    return f"**{name}**" if scope_kind == "house" else f"**{name}** {scope_kind}"
+    return f"**{name}** ({_label(hass, scope_kind)})"
 
 
-def _category_clause(category_name: str) -> str:
+def _category_clause(hass: HomeAssistant, category_name: str) -> str:
     """'category: Security' for a named category, else 'uncategorised'."""
-    return f"category: {_clean(category_name)}" if category_name else "uncategorised"
+    if category_name:
+        return f"{_label(hass, 'category')}: {_clean(category_name)}"
+    return _label(hass, "uncategorised")
 
 
 def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) -> str:
@@ -90,13 +120,14 @@ def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) 
             (
                 _scope_phrase(hass, loc.scope_kind, loc.scope_id),
                 cats.get(loc.category_id) or "",
-                scene_label(loc.scene_name),
+                scene_label(loc.scene_name, unnamed=_label(hass, "unnamed")),
             )
             for loc in problem.locations
         }
     )
     return "".join(
-        f'\n- {phrase} · "{_clean(name)}" — {_category_clause(cat)}' for phrase, cat, name in rows
+        f'\n- {phrase} · "{_clean(name)}" — {_category_clause(hass, cat)}'
+        for phrase, cat, name in rows
     )
 
 
@@ -133,7 +164,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     problems = scan(hass, store.all_scope_configs())
     # Refresh the overlap-set cache the frontend flag reads (see
     # config_health.scene_annotations) from this same scan — no extra work, and it
-    # keeps the flag on the same config-change/registry cadence as the Repairs issue.
+    # keeps the flag on the same cadence as the Repairs issue.
     domain_data[DATA_OVERLAP_SET] = frozenset(p.ref for p in problems if p.kind == "action_overlap")
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
     cats = category_names(hass)  # category id -> friendly name
@@ -157,12 +188,16 @@ def reconcile_issues(hass: HomeAssistant) -> None:
             scope = _scope_phrase(hass, loc0.scope_kind, loc0.scope_id)
             bullets = sorted(
                 {
-                    (scene_label(loc.scene_name), cats.get(loc.category_id) or "")
+                    (
+                        scene_label(loc.scene_name, unnamed=_label(hass, "unnamed")),
+                        cats.get(loc.category_id) or "",
+                    )
                     for loc in problem.locations
                 }
             )
             scenes = "".join(
-                f'\n- "{_clean(name)}" — {_category_clause(category)}' for name, category in bullets
+                f'\n- "{_clean(name)}" — {_category_clause(hass, category)}'
+                for name, category in bullets
             )
             translation_key = "missing_entity"
             placeholders = {"entity_id": problem.ref, "scope": scope, "scenes": scenes}
@@ -177,7 +212,8 @@ def reconcile_issues(hass: HomeAssistant) -> None:
                 }
             )
             groups = "".join(
-                f"\n- {phrase} · {_category_clause(category)}" for phrase, category in group_bullets
+                f"\n- {phrase} · {_category_clause(hass, category)}"
+                for phrase, category in group_bullets
             )
             translation_key = "action_overlap"
             placeholders = {"entity_id": problem.ref, "groups": groups}

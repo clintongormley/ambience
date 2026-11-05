@@ -33,7 +33,7 @@
   "issues": {
     "missing_entity": {
       "title": "Ambience: uma cena refere uma entidade em falta ou desativada",
-      "description": "A entidade `{entity_id}` não existe ou está desativada no Home Assistant, mas é referida por estas cenas do Ambience no {scope}:\n{scenes}\n\nUma condição que a refira nunca corresponderá; uma ação que a vise falhará silenciosamente. Corrija o id da entidade no editor do Ambience, ative a entidade (ou o respetivo dispositivo), ou remova a referência. Esta mensagem desaparece automaticamente assim que a entidade existir e estiver ativada."
+      "description": "A entidade `{entity_id}` não existe ou está desativada no Home Assistant, mas é referida por estas cenas do Ambience — {scope}:\n{scenes}\n\nUma condição que a refira nunca corresponderá; uma ação que a vise falhará silenciosamente. Corrija o id da entidade no editor do Ambience, ative a entidade (ou o respetivo dispositivo), ou remova a referência. Esta mensagem desaparece automaticamente assim que a entidade existir e estiver ativada."
     },
     "action_overlap": {
       "title": "Ambience: uma entidade é controlada por vários grupos",
@@ -273,6 +273,18 @@
           "name": "Posição de inclinação",
           "description": "Posição de inclinação-alvo, 0 a 100."
         }
+      }
+    }
+  },
+  "selector": {
+    "repair_label": {
+      "options": {
+        "area": "área",
+        "category": "categoria",
+        "floor": "piso",
+        "house": "Casa",
+        "uncategorised": "sem categoria",
+        "unnamed": "(sem nome)"
       }
     }
   }

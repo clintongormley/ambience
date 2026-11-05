@@ -8,6 +8,31 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-05
+
+This release adds German, gets Ambience ready for Home Assistant 2026.11, and
+makes scenes more reliable. The highlights cover what 1.3.0 adds over 1.2.0,
+including the changes first made in 1.3.0-rc.1; the sections after them, and the
+1.3.0-rc.1 entry in `CHANGELOG.md`, have the details.
+
+### Highlights
+
+- **Trace details in your language.** The trace panel's per-condition detail,
+    and its explanation of why a condition cannot currently match, are now
+    translated.
+- **More reliable scenes.** Turning a scope's Ambience switch back on re-reads
+    every condition first and no longer runs the winning scene's actions twice,
+    and a malformed condition in one scene no longer stops the others in its
+    category from being evaluated.
+- **Times you can trust.** Time ranges that cross the daylight-saving switch now
+    match as configured, and time-of-day conditions keep working at high
+    latitudes on days when dawn or dusk does not occur.
+- **Safer storage.** A damaged Ambience storage file is left in place instead of
+    being overwritten on startup, and a Repairs issue explains how to recover.
+- **Less work for Home Assistant.** Ambience no longer rescans its configuration
+    for every entity registry change, and template and script conditions are
+    re-evaluated only for the predicates a change touches.
+
 ### Added
 
 - **German (de) translation.** Ambience is now available in German — the config

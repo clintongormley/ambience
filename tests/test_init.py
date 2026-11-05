@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
@@ -739,13 +740,35 @@ async def test_language_change_rewrites_existing_repairs_issues(
     assert async_get_cached_translations(hass, "de", "selector", DOMAIN) == {}
 
     await hass.config.async_update(language="de")
-    await hass.async_block_till_done()
+    await _settle_health(hass)
 
     assert registry.issues[(DOMAIN, issue_id)].translation_placeholders == {
         "entity_id": "light.ghost",
         "scope": "**Haus**",
         "scenes": '\n- "referenced" — ohne Kategorie',
     }
+
+
+async def test_failed_translation_load_still_rebuilds_repairs_issues(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Losing the new language's text must not also stop issues being rebuilt."""
+    await _install_with_referenced(hass, mock_config_entry, ["light.ghost"])
+
+    with (
+        patch(
+            "custom_components.ambience.async_get_translations",
+            side_effect=HomeAssistantError("translations unavailable"),
+        ) as load,
+        patch("custom_components.ambience.config_health_issues.scan", return_value=[]) as spy,
+    ):
+        await hass.config.async_update(language="de")
+        await _settle_health(hass)
+        load.assert_awaited_once()
+        assert spy.call_count == 1
+    assert "ambience: loading 'de' translations failed" in caplog.text
 
 
 @pytest.mark.parametrize(

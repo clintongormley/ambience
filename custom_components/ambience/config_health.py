@@ -307,8 +307,9 @@ def scene_annotations(
 
     The global overlap set is cached in hass.data[DATA_OVERLAP_SET] — refreshed by
     reconcile_issues on every config-change / entity-registry / language-change
-    event — so a per-scope WS get doesn't re-scan every scope. Pass `fresh_overlap=True` (the save path) to
-    recompute it now, so a save's response reflects the just-saved config."""
+    event — so a per-scope WS get doesn't re-scan every scope. Pass `fresh_overlap=True`
+    (the save path) to recompute it now, so a save's response reflects the just-saved
+    config."""
     domain = hass.data[DOMAIN]
     conditions = domain[DATA_CONDITIONS]
     if fresh_overlap or DATA_OVERLAP_SET not in domain:

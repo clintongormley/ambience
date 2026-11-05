@@ -17,6 +17,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_CORE_CONFIG_UPDATE, Platform
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -428,9 +429,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     async def _health_on_language_changed(event: Event) -> None:
-        # HA's own listener loads this language too, but nothing runs it first.
-        await async_get_translations(hass, event.data["language"], "selector", {DOMAIN})
-        reconcile_issues(hass)
+        # HA's own listener loads this language too, but has not finished by the time this one runs.
+        language = event.data["language"]
+        try:
+            await async_get_translations(hass, language, "selector", {DOMAIN})
+        except HomeAssistantError as exc:
+            _LOGGER.warning("ambience: loading %r translations failed: %s", language, exc)
+        finally:
+            health_debouncer.async_schedule_call()
 
     # Run once states have settled, then on every config change, whenever a
     # referenced entity's registry entry changes (a fixed typo / a returned

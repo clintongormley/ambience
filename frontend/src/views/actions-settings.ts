@@ -25,7 +25,7 @@ import type { ExposedAction, ServiceField, ServiceInfo, ServiceSchema } from "..
 
 // The Fado Light Fader integration: its HA domain (present in
 // `hass.config.components` once set up) and the My-Home-Assistant deep link
-// that opens its repository in the user's HACS for one-click install.
+// that opens its repository in the user's Marketplace or HACS for one-click install.
 const FADO_DOMAIN = "fado";
 const FADO_HACS_URL =
   "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado";
@@ -646,13 +646,13 @@ export class AmbienceActionsSettings extends LitElement {
         data-test="fado-notice"
         icon="mdi:lightbulb-on-outline"
         hint
-        .ctaLabel=${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}
+        .ctaLabel=${localize(this.hass, "ui.fado_notice_cta", "Install Fado")}
         .ctaHref=${FADO_HACS_URL}
         .dismissLabel=${localize(this.hass, "ui.dismiss", "Dismiss")}
         @banner-dismiss=${() => this._dismissFadoNotice()}
       >
         <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
-        <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
+        <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's in the Home Assistant Marketplace, and in HACS on older versions.")}</span>
       </ambience-banner>
     `;
   }

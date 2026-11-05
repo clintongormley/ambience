@@ -29,7 +29,7 @@ export class AmbienceFrontend extends LitElement {
       /* Scroll container for the sticky header below. In the panel the outer
        host is 100vh; making this the scroller lets the header pin to the top. */
       overflow: auto;
-      background: var(--primary-background-color, #fafafa);
+      background: var(--ha-panel-background, var(--primary-background-color, #fafafa));
       color: var(--primary-text-color, #1d1d1d);
       font-family: var(--primary-font-family, system-ui, sans-serif);
     }
@@ -40,7 +40,7 @@ export class AmbienceFrontend extends LitElement {
       position: sticky;
       top: 0;
       z-index: 2;
-      background: var(--primary-background-color, #fafafa);
+      background: var(--ha-panel-toolbar-background, var(--primary-background-color, #fafafa));
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       /* Establish a containment context so the logo/icon swap can respond to
        the header's own width regardless of the surrounding panel/card. */

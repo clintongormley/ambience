@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
     CONF_SHOW_SIDEBAR_PANEL,
     DOMAIN,
 )
+from tests.ha_harness import MockConfigEntry
 
 
 async def test_options_flow_shows_form_and_saves(

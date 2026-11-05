@@ -7,8 +7,9 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.config_health import (
     _build_ref_context,
@@ -27,10 +28,32 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
+from tests.ha_harness import MockConfigEntry, async_fire_time_changed
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"scenes": scenes}
+
+
+async def _entity_of_disabled_device(hass: HomeAssistant, unique_id: str) -> er.RegistryEntry:
+    """An entity on a real device that was then disabled, which is how an entity
+    gets the DEVICE disabler in practice. Home Assistant 2026.11 clears that
+    disabler from an entity that has no device."""
+    config_entry = MockConfigEntry(domain="demo")
+    config_entry.add_to_hass(hass)
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id, identifiers={("demo", unique_id)}
+    )
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "binary_sensor", "demo", unique_id, config_entry=config_entry, device_id=device.id
+    )
+    device_registry.async_update_device(device.id, disabled_by=dr.DeviceEntryDisabler.USER)
+    await hass.async_block_till_done()
+    disabled = registry.async_get(entry.entity_id)
+    assert disabled.disabled_by is er.RegistryEntryDisabler.DEVICE
+    return disabled
 
 
 async def test_entity_exists_true_for_state(hass: HomeAssistant, installed) -> None:
@@ -82,18 +105,10 @@ async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installe
 
 
 async def test_scan_flags_disabled_condition_entity(hass: HomeAssistant, installed) -> None:
-    from homeassistant.helpers import entity_registry as er
-
     # The reported bug: a scene's occupancy condition targets an entity that is
     # in the registry but disabled (its device was disabled), so it has no state.
     # The scan must report it as missing — end-to-end, not just entity_exists.
-    registry = er.async_get(hass)
-    entry = registry.async_get_or_create(
-        "binary_sensor",
-        "demo",
-        "bathroom_presence",
-        disabled_by=er.RegistryEntryDisabler.DEVICE,
-    )
+    entry = await _entity_of_disabled_device(hass, "bathroom_presence")
     cfg = _cfg(
         [
             {
@@ -249,18 +264,10 @@ async def test_entity_exists_true_for_registry_only(hass: HomeAssistant, install
 
 
 async def test_disabled_entity_does_not_exist(hass: HomeAssistant, installed) -> None:
-    from homeassistant.helpers import entity_registry as er
-
-    registry = er.async_get(hass)
     # A disabled device's entity stays in the registry (disabled_by set) but is
     # removed from the state machine. It can never satisfy a scene condition, so
     # it must be flagged as missing — not silently treated as existing.
-    entry = registry.async_get_or_create(
-        "binary_sensor",
-        "demo",
-        "disabled_uid",
-        disabled_by=er.RegistryEntryDisabler.DEVICE,
-    )
+    entry = await _entity_of_disabled_device(hass, "disabled_uid")
     assert hass.states.get(entry.entity_id) is None
     assert entry.disabled_by is not None
     assert entity_exists(hass, entry.entity_id) is False
@@ -374,16 +381,10 @@ async def test_scene_annotations_flags_missing(hass: HomeAssistant, installed) -
 
 
 async def test_scene_annotations_flags_disabled_entity(hass: HomeAssistant, installed) -> None:
-    from homeassistant.helpers import entity_registry as er
 
     # The frontend scene problem flag (driven by scene_annotations) must also list
     # a disabled-device entity as missing, matching the Repairs issue.
-    entry = er.async_get(hass).async_get_or_create(
-        "binary_sensor",
-        "demo",
-        "bathroom_presence",
-        disabled_by=er.RegistryEntryDisabler.DEVICE,
-    )
+    entry = await _entity_of_disabled_device(hass, "bathroom_presence")
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = {
         "scenes": [

@@ -36,6 +36,7 @@ import {
   listExposedActions,
   saveExposedActions,
 } from "../frontend/src/api.js";
+import { AMBIENCE_STRINGS_BY_LOCALE } from "../frontend/src/i18n-data";
 import { deriveActionLabel } from "../frontend/src/views/actions-settings";
 
 describe("deriveActionLabel", () => {
@@ -105,6 +106,17 @@ describe("ambience-actions-settings", () => {
       );
       expect(cta.getAttribute("target")).toBe("_blank");
       expect(cta.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(cta.textContent?.trim()).toBe("Install Fado");
+    });
+
+    test.each([
+      ["en", "Install Fado"],
+      ["es", "Instalar Fado"],
+      ["pt", "Instalar Fado"],
+      ["fr", "Installer Fado"],
+    ])("the %s install button names Fado, not an installer", (locale, label) => {
+      const strings = AMBIENCE_STRINGS_BY_LOCALE[locale].ui as Record<string, unknown>;
+      expect(strings.fado_notice_cta).toBe(label);
     });
 
     test("hidden when fado is loaded", async () => {

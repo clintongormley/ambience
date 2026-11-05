@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.builtin_services import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
 )
 from custom_components.ambience.const import DOMAIN
+from tests.ha_harness import async_mock_service
 
 
 async def _call(hass: HomeAssistant, service: str, entity_ids: list[str]) -> None:

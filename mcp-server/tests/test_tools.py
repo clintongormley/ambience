@@ -81,6 +81,7 @@ async def test_dry_run_falls_back_with_a_notice_when_the_backend_cannot_redact()
     result = await _v1(client).dry_run({"kind": "house"})
     assert result["matched_scene_index"] is None
     assert result["notice"].startswith("This Ambience does not support redacting")
+    assert "Update Ambience (Marketplace or HACS) and restart" in result["notice"]
     assert client.calls[-1] == {"type": "ambience/dry_run", "house": True}
 
 

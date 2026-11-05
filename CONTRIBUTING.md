@@ -64,16 +64,18 @@ Releases follow a **cut → soak → flip** flow:
     and push the `v<version>` tag. The release workflow publishes the release
     as a **prerelease** (never "latest") and rolls `main` forward to the next
     minor.
-1. **Soak.** The prerelease is installable by HACS users who opt into betas, so
-    you can check it live without affecting default installs.
+1. **Soak.** The prerelease is installable by Marketplace and HACS users who opt
+    into pre-releases, so you can check it live without affecting default
+    installs.
 1. **Flip.** When you're happy, promote the release to **latest** with:
     `gh release edit v<version> --prerelease=false --latest=true`. That single
     action advances the `stable` branch (the AI knowledge pack) and deploys the
     docs — which then reflect that release and show its version in the navbar.
-    Default HACS users get it at the same moment. **Use the `gh` CLI rather
-    than the GitHub web UI "Set as latest" checkbox** — the checkbox may not
-    emit the `released` event the `promote`/`docs` workflows trigger on, so the
-    flip could silently fail to advance `stable` or deploy the docs.
+    Default Marketplace and HACS users get it at the same moment. **Use the
+    `gh` CLI rather than the GitHub web UI "Set as latest" checkbox** — the
+    checkbox may not emit the `released` event the `promote`/`docs` workflows
+    trigger on, so the flip could silently fail to advance `stable` or deploy
+    the docs.
 
 A manual `workflow_dispatch` on the **docs** workflow can redeploy the docs for
 a chosen tag (or the current latest) if you ever need to reseed the site.
@@ -271,6 +273,6 @@ Python and TypeScript. If the pre-push hook passed, CI should too.
 A separate **nightly** workflow (`.github/workflows/nightly.yml`, daily +
 `workflow_dispatch`) re-runs the backend tests, frontend build/tests, and
 hassfest/HACS validation against the **latest** upstream dependencies (newest
-published Home Assistant plus HA `dev` from git, and npm deps resolved without
-the lockfile). It is intentionally kept out of PR/push CI so an upstream release
-breaking us is an early-warning signal rather than a blocked PR.
+published Home Assistant, newest beta, HA `dev` from git, and npm deps resolved
+without the lockfile). It is intentionally kept out of PR/push CI so an upstream
+release breaking us is an early-warning signal rather than a blocked PR.

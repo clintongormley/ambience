@@ -15,18 +15,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Per-channel Python. stable + dev run on 3.14 (required by HA 2026.3+),
-        # where pip resolves pytest-homeassistant-custom-component to its newest
-        # release, so stable tests the latest HA. On 3.13 phcc caps at an older
-        # HA (silently months behind), so stable/dev don't run there. dev adds
-        # --pre to auto-pick-up any phcc pre-release; phcc ships none today, so
-        # dev currently mirrors stable (continue-on-error, so a future breaking
-        # pre-release warns without blocking).
-        # A single-element python-version + the min include yields exactly three
-        # jobs — test (3.14, stable), test (3.14, dev), test (3.13, min) — whose
-        # names match the branch ruleset's required contexts.
+        # Per-channel Python. stable, beta and dev run on 3.14 (required by HA
+        # 2026.3+). scripts/ci_ha_install.py installs each one and fails if it
+        # ends up on the wrong HA version. A failing install, suite or AI docs
+        # check on beta or dev only warns: see the steps below.
+        # A single-element python-version + the min include yields exactly four
+        # jobs — test (3.14, stable), test (3.14, beta), test (3.14, dev), test
+        # (3.13, min). The ruleset's required contexts are among these names.
         python-version: ["3.14"]
-        ha-version: ["stable", "dev"]
+        ha-version: ["stable", "beta", "dev"]
         include:
           # Minimum supported HA: 2025.2.0, the first release to require Python
           # 3.13. Pinned to the exact pytest-homeassistant-custom-component
@@ -34,7 +31,6 @@ jobs:
           # works. Stays on 3.13 — HA 2025.2 predates Python 3.14 support.
           - python-version: "3.13"
             ha-version: "min"
-    continue-on-error: ${{ matrix.ha-version == 'dev' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -45,22 +41,34 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        id: install
+        # An unreleased HA must not block a PR, even when it will not install. The
+        # later steps need the install, so they check this step's outcome.
+        continue-on-error: ${{ matrix.ha-version == 'beta' || matrix.ha-version == 'dev' }}
         run: |
           python -m pip install --upgrade pip
-          if [ "${{ matrix.ha-version }}" = "dev" ]; then
-            python -m pip install pytest pytest-asyncio pytest-cov
-            python -m pip install --pre pytest-homeassistant-custom-component
-          elif [ "${{ matrix.ha-version }}" = "min" ]; then
+          if [ "${{ matrix.ha-version }}" = "min" ]; then
             # Pin to HA 2025.2.0, our declared minimum supported version.
             python -m pip install pytest pytest-asyncio pytest-cov
             python -m pip install "pytest-homeassistant-custom-component==0.13.210"
           else
-            python -m pip install pytest pytest-asyncio pytest-cov pytest-homeassistant-custom-component
+            python scripts/ci_ha_install.py "${{ matrix.ha-version }}" \
+              --extra pytest --extra pytest-asyncio --extra pytest-cov
           fi
+          python -c "from homeassistant.const import __version__; print(__version__)"
+
+      - name: Warn when an unreleased Home Assistant cannot be installed
+        if: steps.install.outcome == 'failure'
+        run: echo "::warning::Could not install Home Assistant ${{ matrix.ha-version }}"
 
       - name: Run tests with coverage
+        id: pytest
+        if: steps.install.outcome == 'success'
         # The coverage floor (fail_under) and branch=true are read from
         # [tool.coverage.*] in pyproject.toml, so this fails if coverage drops.
+        # An unreleased HA must not block a PR. This sits on the step because
+        # job-level continue-on-error still fails a required check.
+        continue-on-error: ${{ matrix.ha-version == 'beta' || matrix.ha-version == 'dev' }}
         run: |
           pytest tests/ \
             --cov=custom_components.ambience \
@@ -68,23 +76,40 @@ jobs:
             --cov-report=xml \
             -v
 
+      - name: Warn when an unreleased Home Assistant fails the suite
+        if: steps.pytest.outcome == 'failure'
+        run: echo "::warning::Pytest failed on Home Assistant ${{ matrix.ha-version }}"
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
-        if: always()
+        # Skips only an install failure that was tolerated: a failed stable or
+        # floor install still reaches this step, as it always has.
+        if: always() && !(steps.install.outcome == 'failure' && steps.install.conclusion == 'success')
         with:
           name: coverage-report-${{ matrix.python-version }}-${{ matrix.ha-version }}
           path: coverage.xml
 
       - name: Verify committed AI docs match generator output
+        id: ai_docs
+        if: steps.install.outcome == 'success'
         # The knowledge pack's code-derived sections must track the shipped
         # conditions/services; a stale commit would ship wrong authoring docs.
         # Uses the same Make target as the pre-push hook so the checked paths
         # (incl. the integration's shipped guide) can't drift between them.
+        # The generator imports the integration, so an unreleased HA can break it:
+        # the stable and min jobs are the ones that enforce this.
+        continue-on-error: ${{ matrix.ha-version == 'beta' || matrix.ha-version == 'dev' }}
         run: |
           make ai-docs-check || {
-            echo "::error::AI knowledge pack is stale. Run 'make ai-docs' and commit the result."
+            if [ "${{ matrix.ha-version }}" != "beta" ] && [ "${{ matrix.ha-version }}" != "dev" ]; then
+              echo "::error::AI knowledge pack is stale. Run 'make ai-docs' and commit the result."
+            fi
             exit 1
           }
+
+      - name: Warn when an unreleased Home Assistant fails the AI docs check
+        if: steps.ai_docs.outcome == 'failure'
+        run: echo "::warning::AI docs check failed on Home Assistant ${{ matrix.ha-version }}"
 
   lint:
     runs-on: ubuntu-latest

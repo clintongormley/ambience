@@ -9,7 +9,6 @@ from unittest.mock import patch
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
 from custom_components.ambience.const import (
@@ -40,6 +39,7 @@ from custom_components.ambience.service import (
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
+from tests.ha_harness import async_mock_service
 
 
 def test_category_ids_returns_scene_order_deduplicated():

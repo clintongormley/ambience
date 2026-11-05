@@ -92,7 +92,8 @@ async def test_entity_inherits_area_from_its_device(hass: HomeAssistant) -> None
     """An entity with no explicit area still reports the area of its device, so
     the AI can place a scene action against it without the user re-mapping."""
     from homeassistant.helpers import device_registry as dr
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from tests.ha_harness import MockConfigEntry
 
     store = AmbienceStore(hass)
     await store.async_load()

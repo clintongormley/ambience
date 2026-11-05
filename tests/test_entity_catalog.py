@@ -3,9 +3,14 @@ and search that keep the MCP context bounded."""
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from awesomeversion import AwesomeVersion
 from homeassistant.components.diagnostics import REDACTED
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.ambience.entity_catalog import (
@@ -14,6 +19,7 @@ from custom_components.ambience.entity_catalog import (
     entity_summary,
     find_entities,
 )
+from tests.ha_harness import MockConfigEntry
 
 
 async def test_entity_rows_carry_area_domain_and_state(hass: HomeAssistant) -> None:
@@ -29,6 +35,59 @@ async def test_entity_rows_carry_area_domain_and_state(hass: HomeAssistant) -> N
     assert lamp["domain"] == "light"
     assert lamp["area_id"] == area.id
     assert lamp["state"] == "on"
+
+
+def _renamed_entity_on_device(hass: HomeAssistant) -> er.RegistryEntry:
+    """An entity on a named device, with the user's own name set on it."""
+    config_entry = MockConfigEntry(domain="demo")
+    config_entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("demo", "plug")},
+        name="Kitchen plug",
+    )
+    ent_reg = er.async_get(hass)
+    entry = ent_reg.async_get_or_create(
+        "sensor",
+        "demo",
+        "plug_power",
+        config_entry=config_entry,
+        device_id=device.id,
+        has_entity_name=True,
+        original_name="Power",
+    )
+    return ent_reg.async_update_entity(entry.entity_id, name="Power usage")
+
+
+async def test_entity_rows_put_the_device_in_front_of_a_renamed_entity(
+    hass: HomeAssistant,
+) -> None:
+    entry = _renamed_entity_on_device(hass)
+
+    row = next(r for r in entity_rows(hass) if r["entity_id"] == entry.entity_id)
+
+    if AwesomeVersion(HA_VERSION) >= AwesomeVersion("2026.11.0.dev0"):
+        assert row["name"] == "Kitchen plug Power usage"
+    else:
+        assert row["name"] == "Power usage"
+
+
+async def test_entity_rows_fall_back_when_the_full_name_is_empty(hass: HomeAssistant) -> None:
+    entry = _renamed_entity_on_device(hass)
+
+    with patch.object(er, "async_get_full_entity_name", return_value="", create=True):
+        rows = entity_rows(hass)
+
+    assert next(r for r in rows if r["entity_id"] == entry.entity_id)["name"] == "Power usage"
+
+
+async def test_entity_rows_work_without_the_full_name_function(hass: HomeAssistant) -> None:
+    entry = _renamed_entity_on_device(hass)
+
+    with patch.object(er, "async_get_full_entity_name", None, create=True):
+        rows = entity_rows(hass)
+
+    assert next(r for r in rows if r["entity_id"] == entry.entity_id)["name"] == "Power usage"
 
 
 async def test_entity_rows_are_sorted_by_entity_id(hass: HomeAssistant) -> None:

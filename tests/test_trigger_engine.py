@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.conditions._common import tenure_held, tenure_within
 from custom_components.ambience.conditions._opaque import OpaquePrecomputedCondition
@@ -31,6 +30,7 @@ from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
 from custom_components.ambience.triggers import EMPTY, DurationGate, TriggerSpec
+from tests.ha_harness import async_fire_time_changed
 
 
 @dataclass(frozen=True)
@@ -2496,8 +2496,8 @@ async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass
          the predicate is now FALSE (elapsed ≥ 5m → tenure_within false), and the
          winning scene is withdrawn (last-applied cleared).
 
-    The `freezer` fixture (pytest-freezer, pulled in by
-    pytest-homeassistant-custom-component) freezes the clock so the engine's
+    The `freezer` fixture (pytest-freezer, pulled in by the HA test harness)
+    freezes the clock so the engine's
     tenure `since`, the snapshot's `now`, and the armed recheck timer all advance
     together when we tick forward — exactly how real wall-clock time would pass
     between the state change and maturity."""

@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience import builtin_services
 from custom_components.ambience.builtin_services import (
@@ -26,6 +25,7 @@ from custom_components.ambience.builtin_services import (
     _extract_entity_ids,
 )
 from custom_components.ambience.const import DOMAIN
+from tests.ha_harness import async_mock_service
 
 # (service, extra service-call data) for every built-in that extracts entity ids.
 _CASES = [

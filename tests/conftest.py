@@ -11,10 +11,10 @@ import pytest
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, UrlManager
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.builtin_services import async_register_builtin_services
 from custom_components.ambience.const import DOMAIN
+from tests.ha_harness import MockConfigEntry
 
 
 @pytest.fixture

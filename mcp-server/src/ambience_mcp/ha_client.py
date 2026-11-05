@@ -76,9 +76,10 @@ class ProtocolChangedError(HAError):
 def _update_ambience(reason: str) -> str:
     """The one remedy for an Ambience whose protocol/version this ambience-mcp
     cannot work with: mirrors `_upgrade_mcp` below — a `reason` prefix, then the
-    fixed remedy — just naming HACS + a restart as the mechanism instead of `uvx`.
+    fixed remedy — just naming Marketplace or HACS + a restart as the mechanism
+    instead of `uvx`.
     """
-    return f"{reason} Update Ambience (HACS) and restart Home Assistant."
+    return f"{reason} Update Ambience (Marketplace or HACS) and restart Home Assistant."
 
 
 _UPDATE_AMBIENCE = _update_ambience("Your Ambience is too old for this ambience-mcp.")

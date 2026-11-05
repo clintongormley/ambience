@@ -34,7 +34,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.ai_context import build_ai_context
 from custom_components.ambience.builtin_services import async_register_builtin_services
@@ -54,6 +53,7 @@ from custom_components.ambience.trace import (
     TriggerCause,
     UnitTrace,
 )
+from tests.ha_harness import MockConfigEntry
 
 GOLDEN = Path(__file__).parent / "fixtures" / "protocol_1_shapes.json"
 

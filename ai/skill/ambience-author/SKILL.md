@@ -65,7 +65,7 @@ was built for, the supported bundle format, and the exact update steps):
      Code you may **offer to run** `claude plugin marketplace update ambience` for
      them; either way the updated skill loads on the **next session**, so they
      restart and re-run.
-   - **bundle older** → ask them to update Ambience (HACS) and re-download.
+   - **bundle older** → ask them to update Ambience (Home Assistant Marketplace or HACS) and re-download.
    - **same `MAJOR.MINOR`** → continue.
 2. **Format backstop.** Also stop and update the plugin if the bundle's
    `ambience_ai_bundle` exceeds the supported format in that file.

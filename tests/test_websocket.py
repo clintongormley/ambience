@@ -9,7 +9,6 @@ from homeassistant.components.diagnostics import REDACTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
@@ -19,6 +18,7 @@ from custom_components.ambience.const import (
     DOMAIN,
 )
 from custom_components.ambience.triggers import TriggerSpec
+from tests.ha_harness import MockConfigEntry
 
 
 def _seed_services_catalog(hass: HomeAssistant) -> None:
@@ -1906,7 +1906,7 @@ async def test_categories_delete_blocked_last_returns_category_last(
 async def test_ws_apply_runs_even_when_switch_off(
     hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
 ) -> None:
-    from pytest_homeassistant_custom_component.common import async_mock_service
+    from tests.ha_harness import async_mock_service
 
     calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
@@ -1965,7 +1965,7 @@ async def test_ws_apply_rejects_non_admin(
 async def test_ws_run_scene_actions(
     hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
 ) -> None:
-    from pytest_homeassistant_custom_component.common import async_mock_service
+    from tests.ha_harness import async_mock_service
 
     calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
@@ -2275,7 +2275,7 @@ async def test_area_save_reapplies_scope(
     trigger."""
     from datetime import UTC, datetime, timedelta
 
-    from pytest_homeassistant_custom_component.common import (
+    from tests.ha_harness import (
         async_fire_time_changed,
         async_mock_service,
     )
@@ -2306,7 +2306,7 @@ async def test_house_save_reapplies_house_scope(
     """Saving the house scope re-evaluates it via the engine's debounced reload."""
     from datetime import UTC, datetime, timedelta
 
-    from pytest_homeassistant_custom_component.common import (
+    from tests.ha_harness import (
         async_fire_time_changed,
         async_mock_service,
     )
@@ -2688,7 +2688,7 @@ async def test_exposed_actions_save_reconciles_repairs_live(
     # the issue now exists without a reload.
     from datetime import UTC, datetime, timedelta
 
-    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+    from tests.ha_harness import async_fire_time_changed
 
     await hass.async_block_till_done()
     async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=5))

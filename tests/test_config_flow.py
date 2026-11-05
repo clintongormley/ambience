@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DOMAIN
+from tests.ha_harness import MockConfigEntry
 
 
 async def test_user_step_creates_entry(hass: HomeAssistant) -> None:

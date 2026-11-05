@@ -9,7 +9,7 @@ To use the **Weather** condition, it needs to know which Weather integration you
 prefer. If you don't already have a Weather integration set up, you can just use
 the built-in **Meteorologisk institutt**:
 
-- Click: **Settings > Devices & services > + Add integration**.
+- Click: **Settings → Devices & services → + Add integration**.
 - Search for and select **"Meteorologisk institutt"**.
 - You probably don't need to change any of the configuration, maybe
     **Elevation**.

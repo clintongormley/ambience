@@ -56,7 +56,7 @@ async def test_backend_behind_says_upgrade_ambience():
     # match="(?i)ambience" would also match the upgrade-ambience-mcp messages
     # (they say "ambience-mcp" too) — proving only that *some* IncompatibleError
     # was raised, not that it named the right side. Pin the actual text.
-    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(Marketplace or HACS\)"):
         await client.ready()
 
 
@@ -95,9 +95,9 @@ async def test_an_unknown_command_verdict_is_never_cached():
         connect, _cfg, supported_protocols=frozenset({1}), mcp_version="0.2.0rc3"
     )
 
-    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(Marketplace or HACS\)"):
         await client.command("ambience/ping")
-    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(Marketplace or HACS\)"):
         await client.command("ambience/ping")
 
     # The second call re-sent the hello on the SAME connection — no cached verdict, and
@@ -107,10 +107,10 @@ async def test_an_unknown_command_verdict_is_never_cached():
 
 
 async def test_a_backend_that_finishes_setting_up_heals_the_next_call_with_no_reconnect():
-    """Critical 1, the payoff. The README promises exactly this flow — "update it in
-    HACS and restart Home Assistant… the handshake re-runs and the server heals itself" —
-    and a user who OBEYS it lands inside HA's startup window, where a latched verdict
-    would tell them to do the very thing they just did, forever.
+    """Critical 1, the payoff. The README promises exactly this flow — "update it in the
+    Marketplace or HACS and restart Home Assistant… the handshake re-runs and the server
+    heals itself" — and a user who OBEYS it lands inside HA's startup window, where a latched
+    verdict would tell them to do the very thing they just did, forever.
 
     The heal must need no reconnect and no MCP-server restart: the same healthy socket,
     one more hello."""
@@ -157,7 +157,7 @@ async def test_a_genuinely_old_backend_still_says_update_ambience_on_every_call(
     client, fake = _reconnecting(HACommandError("unknown_command", "nope"))
 
     for _ in range(3):
-        with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+        with pytest.raises(IncompatibleError, match=r"Update Ambience \(Marketplace or HACS\)"):
             await client.command("ambience/ping")
 
     # Every call re-asked (and never sent the tool command to the backend).
@@ -749,7 +749,7 @@ async def test_bool_protocol_is_not_treated_as_valid():
     Without the `not isinstance(protocol, bool)` guard this would pass."""
     client, _ = _reconnecting({"protocol": True}, supported=frozenset({1}))
 
-    with pytest.raises(IncompatibleError, match=r"Update Ambience \(HACS\)"):
+    with pytest.raises(IncompatibleError, match=r"Update Ambience \(Marketplace or HACS\)"):
         await client.ready()
 
 
@@ -936,7 +936,7 @@ async def test_a_concurrent_call_during_a_re_derive_never_sees_a_half_set_state(
 
 
 async def test_an_incompatible_verdict_heals_after_the_prescribed_upgrade():
-    """'Update Ambience (HACS) and restart Home Assistant' must actually work:
+    """'Update Ambience (Marketplace or HACS) and restart Home Assistant' must actually work:
     after the restart kills the socket, the next calls reconnect and
     re-handshake instead of serving the stale verdict forever."""
     old = _ScriptedHello([{"protocol": 99}, HAConnectionError("socket died")])

@@ -1,9 +1,8 @@
 """ChangeHistory is wired into hass.data on setup and gone after unload."""
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.ambience.const import DATA_HISTORY, DOMAIN
 from custom_components.ambience.history import ChangeHistory
+from tests.ha_harness import MockConfigEntry
 
 
 async def test_history_present_after_setup_and_cleared_on_unload(

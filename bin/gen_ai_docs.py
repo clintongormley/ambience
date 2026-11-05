@@ -218,7 +218,8 @@ def render_compatibility(bundle_format: int, version_minor: str) -> str:
         f"   - **newer than {version_minor}** → the user's Ambience is newer than this guide. "
         "**Stop. Do not author.** Update the knowledge pack (below), then retry.",
         f"   - **older than {version_minor}** → the user's Ambience is older than this guide. "
-        "Ask them to update Ambience (HACS) and re-download the bundle.",
+        "Ask them to update Ambience (Home Assistant Marketplace or HACS) and re-download the "
+        "bundle.",
         f"   - **same `{version_minor}`** → compatible, continue.",
         "2. **Format (structural backstop).** If the bundle's `ambience_ai_bundle` is greater "
         f"than **{bundle_format}**, also stop and update the plugin.",

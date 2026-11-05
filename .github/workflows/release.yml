@@ -1,7 +1,7 @@
 name: Release
 
-# Publishes a GitHub Release when a v* tag is pushed (HACS reads GitHub
-# releases), then opens and auto-merges a follow-up PR bumping main to the next
+# Publishes a GitHub Release when a v* tag is pushed (the Marketplace and HACS
+# read GitHub releases), then opens and auto-merges a follow-up PR bumping main to the next
 # minor so unreleased work no longer carries the just-released version.
 #
 # Release flow:

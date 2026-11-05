@@ -106,6 +106,19 @@ describe("<ambience-frontend>", () => {
     expect(breakpointPx).toBeGreaterThan(500);
   });
 
+  test("the host and sticky header follow the theme's panel colours", () => {
+    const cssText = (AmbienceFrontend.styles as CSSResult).cssText.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (selector: string) =>
+      cssText.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1];
+    expect(rule(":host")).toContain(
+      "background: var(--ha-panel-background, var(--primary-background-color, #fafafa));",
+    );
+    // The header stays opaque: scrolled content passes underneath it.
+    expect(rule("header")).toContain(
+      "background: var(--ha-panel-toolbar-background, var(--primary-background-color, #fafafa));",
+    );
+  });
+
   test("an ambience-filter-changed event sets the scopes-view filterCategory", async () => {
     const filter = el.shadowRoot!.querySelector("ambience-category-filter")!;
     filter.dispatchEvent(

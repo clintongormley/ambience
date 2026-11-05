@@ -48,7 +48,7 @@ you. We will do this for the **Turn light on** (`light.turn_on`) action:
 
     The
     [Fado Light Fader](https://github.com/clintongormley/ha-fado/#fado-custom-integration)
-    custom HACS integration solves this problem by providing smooth light fading for
+    custom integration solves this problem by providing smooth light fading for
     brightness, colors, and color temperatures, with automatic brightness
     restoration, autoconfiguration via a UI, and support for native transitions.
 

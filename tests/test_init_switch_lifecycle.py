@@ -10,10 +10,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.const import DATA_SWITCH_ADD_ENTITIES, DATA_SWITCHES, DOMAIN
 from tests import get_scope_device
+from tests.ha_harness import async_fire_time_changed
 
 
 async def test_house_switch_present_after_setup(hass, installed):

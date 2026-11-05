@@ -12,7 +12,7 @@
 # must invoke it from the repo root.
 #
 # Files bumped:
-#   - custom_components/ambience/manifest.json   (the HA/HACS version of record)
+#   - custom_components/ambience/manifest.json   (the HA, Marketplace and HACS version of record)
 #   - package.json                               (npm panel ships with the integration)
 #   - package-lock.json                          (root version: top-level + packages[""])
 #   - pyproject.toml                             ([project] version)

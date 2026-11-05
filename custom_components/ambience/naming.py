@@ -50,9 +50,9 @@ def scope_device_name(
     return f"{prefix} {default_name}"
 
 
-def scene_label(name: str | None, index: int | None = None) -> str:
+def scene_label(name: str | None, index: int | None = None, unnamed: str = "(unnamed)") -> str:
     """Display label for a scene: its name, else "scene N" (1-based) when the
-    index is known, else "(unnamed)".
+    index is known, else `unnamed`.
 
     Repairs and the logbook both name scenes through here, so an unnamed scene
     reads the same in both. The trace log is not a caller: it renders its own
@@ -61,7 +61,7 @@ def scene_label(name: str | None, index: int | None = None) -> str:
     """
     if name and name.strip():
         return name
-    return f"scene {index + 1}" if index is not None else "(unnamed)"
+    return f"scene {index + 1}" if index is not None else unnamed
 
 
 def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:

@@ -6,6 +6,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.translation import async_load_integrations
 
 from custom_components.ambience.config_health_issues import (
     reconcile_issues,
@@ -51,7 +52,7 @@ async def test_reconcile_creates_issue_for_missing_entity(hass, installed, area_
     assert issue.translation_key == "missing_entity"
     assert issue.translation_placeholders == {
         "entity_id": "light.ghost",
-        "scope": "**Living Room** area",
+        "scope": "**Living Room** (area)",
         "scenes": '\n- "ghost" — uncategorised',
     }
 
@@ -163,7 +164,7 @@ async def test_overlap_issue_message_lists_groups_as_bullets(hass, installed, ar
     assert issue.translation_placeholders["entity_id"] == "light.shared"
     groups = issue.translation_placeholders["groups"]
     assert "\n- **House** · uncategorised" in groups
-    assert "\n- **Living Room** area · uncategorised" in groups
+    assert "\n- **Living Room** (area) · uncategorised" in groups
 
 
 async def test_reconcile_leaves_foreign_domain_issues_untouched(hass, installed, area_id) -> None:
@@ -318,6 +319,56 @@ async def test_missing_entity_message_labels_a_nameless_scene_as_unnamed(
     iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
     scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
     assert scenes == '\n- "(unnamed)" — uncategorised'
+
+
+async def test_repair_labels_follow_the_system_language(hass, installed, area_id) -> None:
+    # Placeholders are baked when the issue is created, so nothing translates them
+    # later. Real translation files are loaded rather than mocked, so this also
+    # proves the labels are where the lookup expects them.
+    hass.config.language = "de"
+    await async_load_integrations(hass, {DOMAIN})
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "Abend",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    placeholders = [
+        issue.translation_placeholders
+        for (dom, iid), issue in issues.items()
+        if dom == DOMAIN and iid.startswith("missing_entity:")
+    ]
+    assert {
+        "entity_id": "light.ghost",
+        "scope": "**Living Room** (Bereich)",
+        "scenes": '\n- "(unbenannt)" — ohne Kategorie',
+    } in placeholders
+    assert {
+        "entity_id": "light.ghost",
+        "scope": "**Haus**",
+        "scenes": '\n- "Abend" — ohne Kategorie',
+    } in placeholders
 
 
 async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:

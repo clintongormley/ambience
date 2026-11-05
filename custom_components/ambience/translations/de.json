@@ -33,7 +33,7 @@
   "issues": {
     "missing_entity": {
       "title": "Ambience: Eine Szene verweist auf eine fehlende oder deaktivierte Entität",
-      "description": "Die Entität `{entity_id}` existiert nicht oder ist in Home Assistant deaktiviert, wird aber von diesen Ambience-Szenen im {scope} referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu; eine Aktion, die sie steuert, schlägt stillschweigend fehl. Korrigiere die Entitäts-ID im Ambience-Editor, aktiviere die Entität (bzw. ihr Gerät) oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald die Entität existiert und aktiviert ist."
+      "description": "Die Entität `{entity_id}` existiert nicht oder ist in Home Assistant deaktiviert, wird aber von diesen Ambience-Szenen in {scope} referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu; eine Aktion, die sie steuert, schlägt stillschweigend fehl. Korrigiere die Entitäts-ID im Ambience-Editor, aktiviere die Entität (bzw. ihr Gerät) oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald die Entität existiert und aktiviert ist."
     },
     "action_overlap": {
       "title": "Ambience: Eine Entität wird von mehreren Gruppen gesteuert",
@@ -168,7 +168,7 @@
     "state_malformed": { "message": "Diese Zustandsbedingung ist fehlerhaft." },
     "state_unknown_kind": { "message": "Unbekannte Art der Zustandsbedingung: {kind}" },
     "state_group_empty": { "message": "Eine {kind}-Gruppe benötigt mindestens eine Bedingung." },
-    "state_not_empty": { "message": "Eine 'nicht'-Gruppe benötigt eine Bedingung zum Negieren." },
+    "state_not_empty": { "message": "Eine 'not'-Gruppe benötigt eine Bedingung zum Negieren." },
     "state_pick_entity": { "message": "Wähle eine Entität für diese Zustandsbedingung." },
     "state_compare_one_value": { "message": "Der Vergleich {kind} benötigt genau einen Wert." },
     "state_compare_needs_number": { "message": "Gib eine Zahl für den Vergleich {kind} ein." },
@@ -273,6 +273,18 @@
           "name": "Neigungsposition",
           "description": "Zielneigungsposition, 0 bis 100."
         }
+      }
+    }
+  },
+  "selector": {
+    "repair_label": {
+      "options": {
+          "area": "Bereich",
+          "category": "Kategorie",
+          "floor": "Etage",
+          "house": "Haus",
+          "uncategorised": "ohne Kategorie",
+          "unnamed": "(unbenannt)"
       }
     }
   }

@@ -2269,6 +2269,70 @@ describe("sensor and people summaries are translated", () => {
     expect(several).toContain("sind frei");
   });
 
+  describe("negation is part of the verb", () => {
+    const one = { sensors: ["binary_sensor.a"], occupied: true, negate: true } as any;
+    const several = { sensors: ["binary_sensor.a", "binary_sensor.b"], negate: true } as any;
+    const ids = "binary_sensor.a, binary_sensor.b";
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["es", "binary_sensor.a no está detectado"],
+      ["pt", "binary_sensor.a não está detetado"],
+      ["fr", "binary_sensor.a n'est pas détecté"],
+      ["de", "binary_sensor.a ist nicht erkannt"],
+      ["en", "binary_sensor.a is not detected"],
+    ])("one occupancy sensor in %s", (language, text) => {
+      expect(summariseOccupancy(one, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Todos de (${ids}) no están detectado`],
+      ["de", `Alle von (${ids}) sind nicht erkannt`],
+      ["en", `All of (${ids}) are not detected`],
+    ])("all of several occupancy sensors in %s", (language, text) => {
+      const pred = { ...several, occupied: true, quant: "all" };
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Cualquiera de (${ids}) no está detectado`],
+      ["de", `Mindestens eines von (${ids}) ist nicht erkannt`],
+      ["en", `Any of (${ids}) is not detected`],
+    ])("any of several occupancy sensors in %s", (language, text) => {
+      const pred = { ...several, occupied: true, quant: "any" };
+      expect(summariseOccupancy(pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", "binary_sensor.a no está 50–300 lx"],
+      ["de", "binary_sensor.a ist nicht 50–300 lx"],
+      ["en", "binary_sensor.a is not 50–300 lx"],
+    ])("one lux sensor in %s", (language, text) => {
+      const pred = { sensors: ["binary_sensor.a"], min: 50, max: 300, negate: true };
+      expect(summariseCondition("lux", pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", `Todos de (${ids}) no están 50–300 lx`],
+      ["de", `Alle von (${ids}) sind nicht 50–300 lx`],
+      ["en", `All of (${ids}) are not 50–300 lx`],
+    ])("all of several lux sensors in %s", (language, text) => {
+      const pred = { ...several, min: 50, max: 300, quant: "all" };
+      expect(summariseCondition("lux", pred, { hass: hass(language) })).toBe(text);
+    });
+
+    test.each([
+      ["es", "a NO es on"],
+      ["pt", "a NÃO é on"],
+      ["fr", "a n'est PAS on"],
+      ["de", "a ist NICHT on"],
+      ["en", "a is NOT on"],
+    ])("an inlined state negation in %s", (language, text) => {
+      const pred = { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } };
+      expect(summariseState(pred as StatePredicate, { hass: hass(language) })).toBe(text);
+    });
+  });
+
   test("unavailable reads in the language", () => {
     const pred = { entities: ["sensor.a", "sensor.b"] } as any;
     const text = summariseUnavailable(pred, { hass: de });

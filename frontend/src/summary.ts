@@ -448,13 +448,14 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
 }
 
 /**
- * Build the "<quantifier> (names) <verb> [not ]<word>" head shared by the
- * sensor-backed condition summaries (lux/occupancy/unavailable).
+ * Build the "<quantifier> (names) <verb> <word>" head shared by the sensor-backed
+ * condition summaries (lux/occupancy/unavailable).
  * `word` is the trailing predicate word (a lux band, "detected"/"clear",
- * "unavailable"). One name reads "<name> is [not ]<word>"; several read
- * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. Negation
- * sits inline before the word, matching the state condition. Unavailable passes
- * neither flag (any-only, never negated).
+ * "unavailable"). One name reads "<name> is <word>"; several read
+ * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. A negated
+ * clause swaps in a whole negated verb, because where "not" goes depends on the
+ * language: "is not" but Spanish "no está". Unavailable passes neither flag
+ * (any-only, never negated).
  */
 function _quantifiedClause(
   ctx: ConditionContext,
@@ -462,18 +463,18 @@ function _quantifiedClause(
   word: string,
   opts: { all?: boolean; negate?: boolean } = {},
 ): string {
-  const not = opts.negate ? `${localize(ctx.hass, "condition_summary.not", "not")} ` : "";
-  if (names.length === 1) {
-    return `${names[0]} ${localize(ctx.hass, "condition_summary.is", "is")} ${not}${word}`;
-  }
+  const singularVerb = opts.negate
+    ? localize(ctx.hass, "condition_summary.is_not", "is not")
+    : localize(ctx.hass, "condition_summary.is", "is");
+  if (names.length === 1) return `${names[0]} ${singularVerb} ${word}`;
   const all = opts.all === true;
   const q = all
     ? localize(ctx.hass, "condition_summary.all_of", "All of")
     : localize(ctx.hass, "condition_summary.any_of", "Any of");
-  const verb = all
-    ? localize(ctx.hass, "condition_summary.are", "are")
-    : localize(ctx.hass, "condition_summary.is", "is");
-  return `${q} (${names.join(", ")}) ${verb} ${not}${word}`;
+  const pluralVerb = opts.negate
+    ? localize(ctx.hass, "condition_summary.are_not", "are not")
+    : localize(ctx.hass, "condition_summary.are", "are");
+  return `${q} (${names.join(", ")}) ${all ? pluralVerb : singularVerb} ${word}`;
 }
 
 /**
@@ -887,11 +888,12 @@ export function summariseState(pred: StatePredicate, ctx: ConditionContext = {})
   return _renderStateExpr(pred, ctx);
 }
 
-/** One atom clause: `<entity[.attr]> <verb> [NOT ]<value> [for ≥…|<…]`. When
- *  `negate` is set the NOT sits inline before the value ("a is NOT on"), which
- *  reads more naturally than a leading "NOT a is on" for a simple `is` clause. */
+/** One atom clause: `<entity[.attr]> <verb> <value> [for ≥…|<…]`. `negate` is
+ *  only set for a simple `is` clause, whose verb becomes the whole negated verb
+ *  ("a is NOT on"): that reads more naturally than a leading "NOT a is on", and
+ *  it is a single label because where the NOT goes depends on the language. */
 function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boolean): string {
-  const verb = stateOpLabel(ctx.hass, expr.kind);
+  const verb = stateOpLabel(ctx.hass, negate ? "is_negated" : expr.kind);
   // Use the entity's friendly_name when available (falls back to the
   // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
   const name = _entityDisplayName(ctx, expr.entity_id);
@@ -910,8 +912,7 @@ function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boole
   const lhs = expr.attribute
     ? `${name}.${stateAttributeLabel(ctx.hass, stateObj, expr.attribute)}`
     : name;
-  const not = negate ? `${stateOpLabel(ctx.hass, "not")} ` : "";
-  const head = `${lhs} ${verb} ${not}${rhs}`;
+  const head = `${lhs} ${verb} ${rhs}`;
   if (expr.for && _hasStateDuration(expr.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(expr.for_mode)}${_fmtStateDur(expr.for)}`;
   }

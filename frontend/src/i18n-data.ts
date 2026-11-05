@@ -560,7 +560,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     condition_summary: {
       is: "is",
       are: "are",
-      not: "not",
+      is_not: "is not",
+      are_not: "are not",
       any_of: "Any of",
       all_of: "All of",
     },
@@ -615,6 +616,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     state_op: {
       is: "is",
       is_not: "is not",
+      is_negated: "is NOT",
       ">": ">",
       ">=": "≥",
       "<": "<",
@@ -1245,7 +1247,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     condition_summary: {
       is: "está",
       are: "están",
-      not: "no",
+      is_not: "no está",
+      are_not: "no están",
       any_of: "Cualquiera de",
       all_of: "Todos de",
     },
@@ -1300,6 +1303,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     state_op: {
       is: "es",
       is_not: "no es",
+      is_negated: "NO es",
       ">": ">",
       ">=": "≥",
       "<": "<",
@@ -1927,7 +1931,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     condition_summary: {
       is: "está",
       are: "estão",
-      not: "não",
+      is_not: "não está",
+      are_not: "não estão",
       any_of: "Qualquer um de",
       all_of: "Todos de",
     },
@@ -1982,6 +1987,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     state_op: {
       is: "é",
       is_not: "não é",
+      is_negated: "NÃO é",
       ">": ">",
       ">=": "≥",
       "<": "<",
@@ -2612,7 +2618,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     condition_summary: {
       is: "est",
       are: "sont",
-      not: "non",
+      is_not: "n'est pas",
+      are_not: "ne sont pas",
       any_of: "L'un de",
       all_of: "Tous parmi",
     },
@@ -2667,6 +2674,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     state_op: {
       is: "est",
       is_not: "n'est pas",
+      is_negated: "n'est PAS",
       ">": ">",
       ">=": "≥",
       "<": "<",
@@ -3298,7 +3306,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     condition_summary: {
       is: "ist",
       are: "sind",
-      not: "nicht",
+      is_not: "ist nicht",
+      are_not: "sind nicht",
       any_of: "Mindestens eines von",
       all_of: "Alle von",
     },
@@ -3353,6 +3362,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
     state_op: {
       is: "ist",
       is_not: "ist nicht",
+      is_negated: "ist NICHT",
       ">": ">",
       ">=": "≥",
       "<": "<",

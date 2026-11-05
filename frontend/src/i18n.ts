@@ -408,6 +408,11 @@ export function monthLabel(hass: HassLike | undefined, month: number): string {
   return _resolve(hass, `component.ambience.month.${month}`, String(month));
 }
 
+/** Display letters for a stored compass sector id such as "NE". */
+export function compassLabel(hass: HassLike | undefined, sector: string): string {
+  return _resolve(hass, `component.ambience.compass.${sector}`, sector);
+}
+
 export function weatherConditionLabel(hass: HassLike | undefined, cond: string): string {
   return _resolve(hass, `component.ambience.weather_condition.${cond}`, humanizeId(cond));
 }

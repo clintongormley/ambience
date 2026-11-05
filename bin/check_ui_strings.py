@@ -1,4 +1,4 @@
-"""Validate the frontend's ui.* localize keys against the bundled i18n data.
+"""Validate the frontend's ui.* and *_summary.* localize keys against the bundled i18n data.
 
 The panel's custom strings can't live in strings.json (hassfest forbids custom
 top-level keys), so they are bundled in frontend/src/i18n-data.ts and every
@@ -26,10 +26,11 @@ from pathlib import Path
 
 from bin._i18n_bundle import parse_locales
 
-# A quoted or backtick ui.* literal with no interpolation, e.g. "ui.close" or
-# `ui.sun.elevation`. A template literal with an interpolated `${...}` segment
-# is matched separately by _PREFIX_RE, since its full key isn't statically known.
-_USED_RE = re.compile(r'["`](ui\.[A-Za-z0-9_.]+)["`]')
+# A quoted or backtick ui.* or *_summary.* literal with no interpolation, e.g.
+# "ui.close", `ui.sun.elevation` or "day_summary.any". A template literal with an
+# interpolated `${...}` segment is matched separately by _PREFIX_RE, since its
+# full key isn't statically known.
+_USED_RE = re.compile(r'["`]((?:ui|[a-z]+_summary)\.[A-Za-z0-9_.]+)["`]')
 # The static head of an interpolated template literal: `ui.history_action_${...}`
 # claims every bundled key starting with "ui.history_action_". A bare `ui.${x}`
 # head is captured too (`*`, not `+`) so `main` can reject it: silently skipping
@@ -39,17 +40,17 @@ _PREFIX_RE = re.compile(r"`(ui\.[A-Za-z0-9_.]*)\$\{")
 
 
 def bundle_keys(text: str) -> set[str]:
-    """The flattened `ui.*` key set of an i18n-data.ts source text (the `en`
+    """The flattened `ui.*` and `*_summary.*` key set of an i18n-data.ts source text (the `en`
     locale — all shipped locales share the same key set). Reads the bundle via the shared
     recursive-descent parser in `_i18n_bundle` rather than a second brace-walk."""
     locales = parse_locales(text)
     en = locales.get("en") or next(iter(locales.values()), {})
-    return {key for key in en if key.startswith("ui.")}
+    return {key for key in en if _USED_RE.fullmatch(f'"{key}"')}
 
 
 def used_keys(text: str) -> set[str]:
-    """Every quoted or backtick ui.* literal (no interpolation) in a TypeScript
-    source text."""
+    """Every quoted or backtick ui.* or *_summary.* literal (no interpolation) in a
+    TypeScript source text."""
     return set(_USED_RE.findall(text))
 
 

@@ -2139,3 +2139,81 @@ describe("summary prose — area-prefixed entity names", () => {
     ).toBe("Zone Shower is clear");
   });
 });
+
+describe("wording that depends on the language", () => {
+  const de = { language: "de" } as any;
+  const action = (ids: string[]): ActionSpec => ({
+    service: "homeassistant.turn_on",
+    entity_ids: ids,
+    params: {},
+  });
+
+  test("a mixed-domain target count uses the language's own plural", () => {
+    expect(summariseAction(action(["light.a", "switch.b", "fan.c"]), { hass: de })).toContain(
+      "3 Ziele",
+    );
+    expect(summariseAction(action(["light.a", "switch.b"]), { hass: {} as any })).toContain(
+      "2 targets",
+    );
+  });
+
+  test("a single-domain target count stays in the language", () => {
+    expect(summariseAction(action(["light.a"]), { hass: de })).toContain("1 Ziel (light)");
+    expect(summariseAction(action(["light.a", "light.b"]), { hass: de })).toContain(
+      "2 Ziele (light)",
+    );
+    expect(summariseAction(action(["light.a"]), { hass: {} as any })).toContain("1 light");
+  });
+
+  test("dates follow the language's day and month order", () => {
+    const date = { include: [{ kind: "date", month: 12, day: 24 }], exclude: [] } as DayPredicate;
+    const range = {
+      include: [{ kind: "date_range", from: { month: 6, day: 1 }, to: { month: 8, day: 31 } }],
+      exclude: [],
+    } as DayPredicate;
+    expect(summariseDay(date, { hass: de })).toBe("24. Dezember");
+    expect(summariseDay(range, { hass: de })).toBe("1. Juni → 31. August");
+    expect(summariseDay(date, { hass: { language: "es" } as any })).toBe("24 de Diciembre");
+    expect(summariseDay(date, { hass: { language: "pt" } as any })).toBe("24 de Dezembro");
+    expect(summariseDay(date, { hass: { language: "fr" } as any })).toBe("24 Décembre");
+  });
+
+  test("compass sectors use the language's letters", () => {
+    const sun = { azimuth: { sectors: ["E", "SE", "W"] } } as any;
+    expect(summariseSun(sun, { hass: de })).toBe("O/SO/W");
+    expect(summariseSun(sun, { hass: { language: "es" } as any })).toBe("E/SE/O");
+    expect(summariseSun(sun)).toBe("E/SE/W");
+  });
+});
+
+describe("sensor and people summaries are translated", () => {
+  const de = { language: "de" } as any;
+
+  test("a person's location reads in the language", () => {
+    const home = { who: ["person.anna"], quant: "any" } as any;
+    expect(summarisePeople(home, { hass: de })).toContain("ist: zu Hause");
+    expect(summarisePeople({ ...home, negate: true }, { hass: de })).toContain(
+      "ist nicht: zu Hause",
+    );
+    expect(summarisePeople(home, { hass: { language: "fr" } as any })).toContain("est à la maison");
+  });
+
+  test("occupancy reads in the language for one sensor and for several", () => {
+    const one = { sensors: ["binary_sensor.flur"], occupied: true } as any;
+    const two = { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: false, quant: "all" };
+    expect(summariseOccupancy(one, { hass: de })).toContain("ist erkannt");
+    expect(summariseOccupancy({ ...one, negate: true }, { hass: de })).toContain(
+      "ist nicht erkannt",
+    );
+    const several = summariseOccupancy(two as any, { hass: de });
+    expect(several).toContain("Alle von (");
+    expect(several).toContain("sind frei");
+  });
+
+  test("unavailable reads in the language", () => {
+    const pred = { entities: ["sensor.a", "sensor.b"] } as any;
+    const text = summariseUnavailable(pred, { hass: de });
+    expect(text).toContain("Mindestens eines von (");
+    expect(text).toContain("ist nicht verfügbar");
+  });
+});

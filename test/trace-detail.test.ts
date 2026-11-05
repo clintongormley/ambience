@@ -1459,6 +1459,23 @@ describe("trace-detail segments", () => {
     expect(text).toContain("en casa");
   });
 
+  test("a sun azimuth trace shows the compass sector in the user's language", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "sun",
+          passed: true,
+          detail: "90° azimuth (E)",
+          detail_segments: [
+            { k: "sun_azimuth", t: "90° azimuth (E)", p: { deg: "90", sector: "E" } },
+          ],
+        },
+      ],
+      { language: "de" },
+    );
+    expect(host.querySelector(".pred")?.textContent).toContain("90° Azimut (O)");
+  });
+
   test("a phrase segment falls back to its English render with no localization", () => {
     const host = sceneEvalHost([
       {

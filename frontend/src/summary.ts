@@ -2,6 +2,7 @@ import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
 import {
   actionLabel,
   anchorLabel,
+  compassLabel,
   conditionLabel,
   exposedActionLabel,
   humanizeId,
@@ -294,6 +295,13 @@ export function summariseDay(pred: DayPredicate, ctx: ConditionContext = {}): st
   return `${inc} (${except} ${exclude.map((it) => _fmtDayItem(it, ctx)).join(", ")})`;
 }
 
+function _fmtDate(hass: HassLike | undefined, month: number, day: number): string {
+  return localize(hass, "day_summary.date", "{month} {day}", {
+    month: monthLabel(hass, month),
+    day: String(day),
+  });
+}
+
 function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
   switch (item.kind) {
     case "weekday":
@@ -301,9 +309,9 @@ function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
     case "day_of_month":
       return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days}`;
     case "date":
-      return `${monthLabel(ctx.hass, item.month)} ${item.day}`;
+      return _fmtDate(ctx.hass, item.month, item.day);
     case "date_range":
-      return `${monthLabel(ctx.hass, item.from.month)} ${item.from.day} → ${monthLabel(ctx.hass, item.to.month)} ${item.to.day}`;
+      return `${_fmtDate(ctx.hass, item.from.month, item.from.day)} → ${_fmtDate(ctx.hass, item.to.month, item.to.day)}`;
     case "last_day":
       return localize(ctx.hass, "day_summary.last_day", "last day");
     case "workday":
@@ -411,7 +419,7 @@ export function summariseSun(pred: SunPredicate, ctx: ConditionContext = {}): st
   }
   const az = pred.azimuth;
   if (az) {
-    if (az.sectors?.length) parts.push(az.sectors.join("/"));
+    if (az.sectors?.length) parts.push(az.sectors.map((s) => compassLabel(ctx.hass, s)).join("/"));
     for (const r of az.ranges ?? []) parts.push(`${r.from}°–${r.to}°`);
   }
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
@@ -429,8 +437,7 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
 
 /**
  * Build the "<quantifier> (names) <verb> [not ]<word>" head shared by the
- * sensor-backed condition summaries (lux/occupancy/unavailable). `ns` is the
- * localize namespace ("lux_summary"/"occupancy_summary"/"unavailable_summary");
+ * sensor-backed condition summaries (lux/occupancy/unavailable).
  * `word` is the trailing predicate word (a lux band, "detected"/"clear",
  * "unavailable"). One name reads "<name> is [not ]<word>"; several read
  * "Any of (…) is …" / "All of (…) are …" with subject-verb agreement. Negation
@@ -439,20 +446,21 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
  */
 function _quantifiedClause(
   ctx: ConditionContext,
-  ns: string,
   names: string[],
   word: string,
   opts: { all?: boolean; negate?: boolean } = {},
 ): string {
-  const not = opts.negate ? `${localize(ctx.hass, `${ns}.not`, "not")} ` : "";
+  const not = opts.negate ? `${localize(ctx.hass, "condition_summary.not", "not")} ` : "";
   if (names.length === 1) {
-    return `${names[0]} ${localize(ctx.hass, `${ns}.is`, "is")} ${not}${word}`;
+    return `${names[0]} ${localize(ctx.hass, "condition_summary.is", "is")} ${not}${word}`;
   }
   const all = opts.all === true;
   const q = all
-    ? localize(ctx.hass, `${ns}.all_of`, "All of")
-    : localize(ctx.hass, `${ns}.any_of`, "Any of");
-  const verb = all ? localize(ctx.hass, `${ns}.are`, "are") : localize(ctx.hass, `${ns}.is`, "is");
+    ? localize(ctx.hass, "condition_summary.all_of", "All of")
+    : localize(ctx.hass, "condition_summary.any_of", "Any of");
+  const verb = all
+    ? localize(ctx.hass, "condition_summary.are", "are")
+    : localize(ctx.hass, "condition_summary.is", "is");
   return `${q} (${names.join(", ")}) ${verb} ${not}${word}`;
 }
 
@@ -471,7 +479,7 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
       : localize(ctx.hass, "occupancy_summary.detected", "detected");
   // `negate` wraps the whole predicate; phrase it like the state condition's
   // inline negation ("Lounge is not clear for ≥20m"), not a flipped polarity.
-  const head = _quantifiedClause(ctx, "occupancy_summary", names, verb, {
+  const head = _quantifiedClause(ctx, names, verb, {
     all: pred.quant === "all",
     negate: pred.negate,
   });
@@ -825,7 +833,7 @@ export function summariseUnavailable(
   // No quantifier/negate control on this condition: always "any of these is
   // down" (any-only, never negated), so pass neither flag.
   const word = localize(ctx.hass, "unavailable_summary.unavailable", "unavailable");
-  return _quantifiedClause(ctx, "unavailable_summary", names, word);
+  return _quantifiedClause(ctx, names, word);
 }
 
 /** Render an inline lux band: "<10 lx", "≥1000 lx", "50–300 lx". `empty` is the
@@ -856,7 +864,7 @@ export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): st
       : fmtLuxBand(pred.min, pred.max);
   // `negate` reads inline ("is not Dark" / "are not Dark"), mirroring the
   // state/occupancy summaries.
-  return _quantifiedClause(ctx, "lux_summary", names, band, {
+  return _quantifiedClause(ctx, names, band, {
     all: pred.quant === "all",
     negate: pred.negate,
   });
@@ -1010,24 +1018,29 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
  * Falls back to a generic noun when targets span multiple domains or carry no
  * domain prefix.
  */
-function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
+function _targetCount(action: ActionSpec, ctx: ActionContext): string {
+  const total = action.entity_ids.length;
+  if (total === 0) return localize(ctx.hass, "ui.no_targets", "(no targets)");
   const domains = new Set<string>();
   for (const id of action.entity_ids) {
     const dot = id.indexOf(".");
     if (dot > 0) domains.add(id.slice(0, dot));
   }
-  if (domains.size === 1) return [...domains][0];
-  return localize(ctx.hass, "ui.target_noun", "target");
+  const n = String(total);
+  if (domains.size === 1) {
+    const domain = [...domains][0];
+    return total === 1
+      ? localize(ctx.hass, "ui.count_domain_target_one", "{n} {domain}", { n, domain })
+      : localize(ctx.hass, "ui.count_domain_target_other", "{n} {domain}s", { n, domain });
+  }
+  return total === 1
+    ? localize(ctx.hass, "ui.count_target_one", "{n} target", { n })
+    : localize(ctx.hass, "ui.count_target_other", "{n} targets", { n });
 }
 
 export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
-  const noun = _targetNoun(action, ctx);
-  const n = action.entity_ids.length;
-  let targets: string;
-  if (n === 0) targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
-  else if (n === 1) targets = `1 ${noun}`;
-  else targets = `${n} ${noun}s`;
+  const targets = _targetCount(action, ctx);
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(

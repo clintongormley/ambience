@@ -46,6 +46,16 @@ def test_used_keys_extracts_quoted_ui_literals() -> None:
     assert used_keys(SAMPLE_SOURCE) == {"ui.close", "ui.sun.elevation", "ui.long_one"}
 
 
+def test_used_keys_covers_the_summary_namespaces() -> None:
+    assert used_keys('localize(hass, "people_summary.is_at", "is at")') == {"people_summary.is_at"}
+
+
+def test_bundle_keys_covers_the_summary_namespaces() -> None:
+    bundle = SAMPLE_BUNDLE.replace('weekday: { mon: "Mon" },', 'day_summary: { any: "any" },', 1)
+    assert "day_summary.any" in bundle_keys(bundle)
+    assert "weekday.mon" not in bundle_keys(SAMPLE_BUNDLE)
+
+
 def test_compare_reports_missing() -> None:
     missing, unused = compare({"ui.a", "ui.b"}, {"ui.b", "ui.c"})
     assert missing == {"ui.a"}

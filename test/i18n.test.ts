@@ -3,6 +3,7 @@ import {
   actionLabel,
   anchorLabel,
   categoryColorLabel,
+  compassLabel,
   conditionLabel,
   dayItemKindLabel,
   exposedActionLabel,
@@ -223,6 +224,15 @@ describe("categoryColorLabel", () => {
         k === "component.ambience.category_color.teal" ? "Sarcelle" : undefined,
     };
     expect(categoryColorLabel(hass, "teal", "Teal")).toBe("Sarcelle");
+  });
+});
+
+describe("compassLabel", () => {
+  test("uses the language's letters", () => {
+    expect(compassLabel({ language: "de" }, "NE")).toBe("NO");
+  });
+  test("falls back to the stored id for an unknown sector", () => {
+    expect(compassLabel(undefined, "XX")).toBe("XX");
   });
 });
 

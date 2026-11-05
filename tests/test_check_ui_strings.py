@@ -1,4 +1,4 @@
-"""bin/check_ui_strings — frontend ui.* localize keys vs the i18n-data bundle."""
+"""bin/check_ui_strings — frontend ui.* and *_summary.* localize keys vs the i18n-data bundle."""
 
 from pathlib import Path
 

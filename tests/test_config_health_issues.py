@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.translation import async_load_integrations
 
+from custom_components.ambience import config_health_issues
 from custom_components.ambience.config_health_issues import (
+    _ENGLISH_LABELS,
     reconcile_issues,
     referenced_entity_ids,
 )
@@ -472,3 +477,9 @@ async def test_reconcile_leaves_another_module_s_issue_alone(
     )
     reconcile_issues(hass)
     assert ir.async_get(hass).async_get_issue(DOMAIN, STORAGE_UNREADABLE_ISSUE) is not None
+
+
+def test_english_repair_labels_match_strings_json() -> None:
+    root = Path(config_health_issues.__file__).parent
+    strings = json.loads((root / "strings.json").read_text())
+    assert strings["selector"]["repair_label"]["options"] == _ENGLISH_LABELS

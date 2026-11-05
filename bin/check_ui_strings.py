@@ -2,13 +2,14 @@
 
 The panel's custom strings can't live in strings.json (hassfest forbids custom
 top-level keys), so they are bundled in frontend/src/i18n-data.ts and every
-`localize(hass, "ui.<key>", fallback)` call is expected to have a bundle entry.
+`localize(hass, "ui.<key>", fallback)` or
+`localize(hass, "day_summary.<key>", fallback)` call is expected to have a bundle entry.
 A key that exists only as an inline English fallback still renders, so this
 drift is invisible at runtime — but the string can never be translated.
 
 Usage: python -m bin.check_ui_strings [--root PATH]
-Exits non-zero (listing the keys) when a used ui.* key is missing from the
-bundle. Bundle keys that no source file references are reported as warnings
+Exits non-zero (listing the keys) when a used ui.* or *_summary.* key is missing
+from the bundle. Bundle keys that no source file references are reported as warnings
 only; a key matching the static head of an interpolated template literal
 (e.g. `ui.history_action_${action}`) counts as referenced, so only truly
 dynamic keys with no static prefix are out of scope. A bare `ui.` head (no
@@ -27,9 +28,10 @@ from pathlib import Path
 from bin._i18n_bundle import parse_locales
 
 # A quoted or backtick ui.* or *_summary.* literal with no interpolation, e.g.
-# "ui.close", `ui.sun.elevation` or "day_summary.any". A template literal with an
-# interpolated `${...}` segment is matched separately by _PREFIX_RE, since its
-# full key isn't statically known.
+# "ui.close", `ui.sun.elevation` or "day_summary.any". A ui.* template literal
+# with an interpolated `${...}` segment is matched separately by _PREFIX_RE,
+# since its full key isn't statically known. _PREFIX_RE does not cover
+# *_summary.*, so those keys must be written out in full.
 _USED_RE = re.compile(r'["`]((?:ui|[a-z]+_summary)\.[A-Za-z0-9_.]+)["`]')
 # The static head of an interpolated template literal: `ui.history_action_${...}`
 # claims every bundled key starting with "ui.history_action_". A bare `ui.${x}`
@@ -60,8 +62,8 @@ def used_prefixes(text: str) -> set[str]:
 
 
 def scan_sources(src: Path) -> tuple[set[str], set[str]]:
-    """Walk a frontend source tree once, returning (used ui.* keys, static
-    prefixes of interpolated ones)."""
+    """Walk a frontend source tree once, returning (used ui.* and *_summary.*
+    keys, static prefixes of interpolated ui.* ones)."""
     used: set[str] = set()
     prefixes: set[str] = set()
     for ts_file in sorted(src.rglob("*.ts")):
@@ -97,11 +99,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     missing, unused = compare(used, bundled, prefixes=prefixes)
     if missing:
-        print("ui keys used by localize() but missing from i18n-data.ts:")
+        print("keys used by localize() but missing from i18n-data.ts:")
         for key in sorted(missing):
             print(f"  - {key}")
     if unused:
-        print("warning: bundled ui keys no source file references:")
+        print("warning: bundled keys no source file references:")
         for key in sorted(unused):
             print(f"  - {key}")
     if missing:

@@ -54,8 +54,9 @@ def scene_label(name: str | None, index: int | None = None, unnamed: str = "(unn
     """Display label for a scene: its name, else "scene N" (1-based) when the
     index is known, else `unnamed`.
 
-    Repairs and the logbook both name scenes through here, so an unnamed scene
-    reads the same in both. The trace log is not a caller: it renders its own
+    Repairs and the logbook both name scenes through here: Repairs passes
+    `unnamed` in HA's system language, and the logbook always has an index, so
+    it reads "scene N". The trace log is not a caller: it renders its own
     "scene #N" form from the winner index. A blank or whitespace-only name
     counts as no name.
     """

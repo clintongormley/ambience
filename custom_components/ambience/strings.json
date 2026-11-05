@@ -279,12 +279,12 @@
   "selector": {
     "repair_label": {
       "options": {
-          "area": "area",
-          "category": "category",
-          "floor": "floor",
-          "house": "House",
-          "uncategorised": "uncategorised",
-          "unnamed": "(unnamed)"
+        "area": "area",
+        "category": "category",
+        "floor": "floor",
+        "house": "House",
+        "uncategorised": "uncategorised",
+        "unnamed": "(unnamed)"
       }
     }
   }

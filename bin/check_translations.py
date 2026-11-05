@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         if extra:
             failed = True
             print(f"ERROR {path.name}: unknown keys not in strings.json: {sorted(extra)}")
-        # Shipped locales (en, es) are generated/maintained and must be complete.
+        # Shipped locales are generated/maintained and must be complete.
         if path.stem in SHIPPED_LOCALES and missing:
             failed = True
             print(f"ERROR {path.name}: missing keys present in strings.json: {sorted(missing)}")

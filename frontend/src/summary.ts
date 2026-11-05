@@ -1011,12 +1011,13 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
 }
 
 /**
- * Pluralisation noun for the target count summary. Derived from the TARGET
- * entities' domain ("light" from "light.lounge"), not the service's domain —
- * an integration's service may act on another domain's entities (e.g.
- * `fado.fade_lights` targets `light.*`, so the noun is "light", not "fado").
- * Falls back to a generic noun when targets span multiple domains or carry no
- * domain prefix.
+ * The target count as a whole phrase ("3 lights", "3 objetivos (light)"), so
+ * each language sets its own word order and plural. The domain comes from the
+ * TARGET entities ("light" from "light.lounge"), not the service's domain — an
+ * integration's service may act on another domain's entities (e.g.
+ * `fado.fade_lights` targets `light.*`, so the count says "light", not "fado").
+ * Uses the generic "target" wording when targets span multiple domains or
+ * carry no domain prefix, and "(no targets)" when there are none.
  */
 function _targetCount(action: ActionSpec, ctx: ActionContext): string {
   const total = action.entity_ids.length;

@@ -1,4 +1,4 @@
-"""bin/check_i18n_placeholders — en/es placeholder-token parity in the bundle."""
+"""bin/check_i18n_placeholders — every locale's placeholder tokens match en in the bundle."""
 
 from __future__ import annotations
 

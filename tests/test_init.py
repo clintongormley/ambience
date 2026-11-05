@@ -15,7 +15,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.translation import async_get_cached_translations
+from homeassistant.helpers.translation import (
+    _async_get_translations_cache,
+    async_get_cached_translations,
+)
 from homeassistant.setup import async_setup_component
 
 from custom_components import ambience as ambience_init
@@ -729,6 +732,10 @@ async def test_language_change_rewrites_existing_repairs_issues(
         "scope": "**House**",
         "scenes": '\n- "referenced" — uncategorised',
     }
+    # The test harness shares one translation cache across every test in a run.
+    cache = _async_get_translations_cache(hass).cache_data
+    cache.loaded.pop("de", None)
+    cache.cache.pop("de", None)
     assert async_get_cached_translations(hass, "de", "selector", DOMAIN) == {}
 
     await hass.config.async_update(language="de")

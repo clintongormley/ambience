@@ -376,6 +376,26 @@ async def test_repair_labels_follow_the_system_language(hass, installed, area_id
     } in placeholders
 
 
+@pytest.mark.parametrize(
+    ("language", "sentence"),
+    [
+        ("en", "by these Ambience scenes — {scope}:\n{scenes}"),
+        ("es", "por estas escenas de Ambience — {scope}:\n{scenes}"),
+        ("pt", "por estas cenas do Ambience — {scope}:\n{scenes}"),
+        ("fr", "par ces scènes Ambience — {scope} :\n{scenes}"),
+        ("de", "von diesen Ambience-Szenen referenziert — {scope}:\n{scenes}"),
+    ],
+)
+def test_missing_entity_sentence_needs_no_agreement_with_its_scope(
+    language: str, sentence: str
+) -> None:
+    # {scope} is a bare label for the house and "label (kind)" elsewhere, so a
+    # preposition in front of it cannot agree with both: "in **Haus** referenziert".
+    path = Path(config_health_issues.__file__).parent / "translations" / f"{language}.json"
+    translations = json.loads(path.read_text(encoding="utf-8"))
+    assert sentence in translations["issues"]["missing_entity"]["description"]
+
+
 async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     a = ar.async_get(hass).async_create("Kitchen").id

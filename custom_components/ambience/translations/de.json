@@ -33,7 +33,7 @@
   "issues": {
     "missing_entity": {
       "title": "Ambience: Eine Szene verweist auf eine fehlende oder deaktivierte Entität",
-      "description": "Die Entität `{entity_id}` existiert nicht oder ist in Home Assistant deaktiviert, wird aber von diesen Ambience-Szenen in {scope} referenziert:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu; eine Aktion, die sie steuert, schlägt stillschweigend fehl. Korrigiere die Entitäts-ID im Ambience-Editor, aktiviere die Entität (bzw. ihr Gerät) oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald die Entität existiert und aktiviert ist."
+      "description": "Die Entität `{entity_id}` existiert nicht oder ist in Home Assistant deaktiviert, wird aber von diesen Ambience-Szenen referenziert — {scope}:\n{scenes}\n\nEine Bedingung, die darauf verweist, trifft nie zu; eine Aktion, die sie steuert, schlägt stillschweigend fehl. Korrigiere die Entitäts-ID im Ambience-Editor, aktiviere die Entität (bzw. ihr Gerät) oder entferne den Verweis. Diese Meldung verschwindet automatisch, sobald die Entität existiert und aktiviert ist."
     },
     "action_overlap": {
       "title": "Ambience: Eine Entität wird von mehreren Gruppen gesteuert",

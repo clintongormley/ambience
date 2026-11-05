@@ -33,7 +33,7 @@
   "issues": {
     "missing_entity": {
       "title": "Ambience : une scène fait référence à une entité manquante ou désactivée",
-      "description": "L'entité `{entity_id}` n'existe pas ou est désactivée dans Home Assistant, mais elle est référencée par ces scènes Ambience dans {scope} :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais ; une action la ciblant échouera silencieusement. Corrigez l'id de l'entité dans l'éditeur Ambience, activez l'entité (ou son appareil), ou supprimez la référence. Ce message disparaît automatiquement une fois que l'entité existe et est activée."
+      "description": "L'entité `{entity_id}` n'existe pas ou est désactivée dans Home Assistant, mais elle est référencée par ces scènes Ambience — {scope} :\n{scenes}\n\nUne condition qui y fait référence ne correspondra jamais ; une action la ciblant échouera silencieusement. Corrigez l'id de l'entité dans l'éditeur Ambience, activez l'entité (ou son appareil), ou supprimez la référence. Ce message disparaît automatiquement une fois que l'entité existe et est activée."
     },
     "action_overlap": {
       "title": "Ambience : une entité est contrôlée par plusieurs groupes",

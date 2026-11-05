@@ -225,6 +225,9 @@ function _whereLabel(where: string, ctx: ConditionContext): string {
  * Mode is keyed off the presence of the `who` key (matching the input widget):
  * absent → a base mode (everyone→Everybody, any→Anybody, nobody→Nobody);
  * present → an "X of:" mode chosen by `quant`.
+ * "Everybody" and "All of:" have their own connectors because other languages
+ * inflect the verb to match them, and not always the same way: French "Tout le
+ * monde" is singular while "Tous parmi :" is plural.
  */
 export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
@@ -248,18 +251,25 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
   }
 
   let subject: string;
+  let connector = pred.negate
+    ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
+    : localize(ctx.hass, "people_summary.is_at", "is at");
   if (!Array.isArray(pred.who)) {
     // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.
     // A missing quant is `any` — that is how the engine evaluates it; the
     // editor seeds an explicit `everyone` for a new condition, so this only
     // affects legacy stored predicates.
     const quant = pred.quant ?? "any";
-    subject =
-      quant === "nobody"
-        ? localize(ctx.hass, "ui.people_mode_nobody", "Nobody")
-        : quant === "any"
-          ? localize(ctx.hass, "ui.people_mode_anybody", "Anybody")
-          : localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
+    if (quant === "nobody") {
+      subject = localize(ctx.hass, "ui.people_mode_nobody", "Nobody");
+    } else if (quant === "any") {
+      subject = localize(ctx.hass, "ui.people_mode_anybody", "Anybody");
+    } else {
+      subject = localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
+      connector = pred.negate
+        ? localize(ctx.hass, "people_summary.everyone_not_at", "is not at")
+        : localize(ctx.hass, "people_summary.everyone_at", "is at");
+    }
   } else {
     // "X of:" mode — a missing quant defaults to "any" (Any of:).
     const quant = pred.quant ?? "any";
@@ -271,10 +281,12 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
           : localize(ctx.hass, "ui.people_mode_none", "None of:");
     const names = pred.who.map((id) => _domainEntityName(ctx, id)).join(", ");
     subject = `${label} (${names})`;
+    if (quant === "everyone") {
+      connector = pred.negate
+        ? localize(ctx.hass, "people_summary.all_of_not_at", "is not at")
+        : localize(ctx.hass, "people_summary.all_of_at", "is at");
+    }
   }
-  const connector = pred.negate
-    ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
-    : localize(ctx.hass, "people_summary.is_at", "is at");
   const head = `${subject} ${connector} ${_whereLabel(where, ctx)}`;
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;

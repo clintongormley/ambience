@@ -2198,6 +2198,65 @@ describe("sensor and people summaries are translated", () => {
     expect(summarisePeople(home, { hass: { language: "fr" } as any })).toContain("est à la maison");
   });
 
+  describe("a plural subject takes a plural verb", () => {
+    const everybody = { quant: "everyone", where: "home" } as any;
+    const allOf = { who: ["person.anna", "person.ben"], quant: "everyone", where: "home" } as any;
+    const hass = (language: string) => ({ language }) as any;
+
+    test.each([
+      ["de", "Alle sind: zu Hause", "Alle sind nicht: zu Hause"],
+      ["es", "Todos están en casa", "Todos no están en casa"],
+      ["pt", "Todos estão em casa", "Todos não estão em casa"],
+      // "Tout le monde" is grammatically singular, unlike "Tous parmi :" below.
+      ["fr", "Tout le monde est à la maison", "Tout le monde n'est pas à la maison"],
+      ["en", "Everybody is at Home", "Everybody is not at Home"],
+    ])("everybody in %s", (language, positive, negative) => {
+      const ctx = { hass: hass(language) };
+      expect(summarisePeople(everybody, ctx)).toBe(positive);
+      expect(summarisePeople({ ...everybody, negate: true }, ctx)).toBe(negative);
+    });
+
+    test.each([
+      ["de", "Alle von: (Anna, Ben) sind: zu Hause", "Alle von: (Anna, Ben) sind nicht: zu Hause"],
+      ["es", "Todos: (Anna, Ben) están en casa", "Todos: (Anna, Ben) no están en casa"],
+      ["pt", "Todos de: (Anna, Ben) estão em casa", "Todos de: (Anna, Ben) não estão em casa"],
+      [
+        "fr",
+        "Tous parmi : (Anna, Ben) sont à la maison",
+        "Tous parmi : (Anna, Ben) ne sont pas à la maison",
+      ],
+      ["en", "All of: (Anna, Ben) is at Home", "All of: (Anna, Ben) is not at Home"],
+    ])("all of several people in %s", (language, positive, negative) => {
+      const ctx = { hass: hass(language) };
+      expect(summarisePeople(allOf, ctx)).toBe(positive);
+      expect(summarisePeople({ ...allOf, negate: true }, ctx)).toBe(negative);
+    });
+
+    test("a duration still follows the plural connector", () => {
+      const pred = { ...everybody, for: { h: 0, m: 20, s: 0 }, for_mode: "at_least" };
+      expect(summarisePeople(pred, { hass: hass("es") })).toBe("Todos están en casa durante ≥20m");
+      expect(summarisePeople(pred)).toBe("Everybody is at Home for ≥20m");
+    });
+
+    test("subjects that are grammatically singular keep the singular verb", () => {
+      const ctx = { hass: hass("de") };
+      const two = ["person.anna", "person.ben"];
+      expect(summarisePeople({ quant: "any", where: "home" }, ctx)).toBe(
+        "Irgendjemand ist: zu Hause",
+      );
+      expect(summarisePeople({ quant: "nobody", where: "home" }, ctx)).toBe(
+        "Niemand ist: zu Hause",
+      );
+      expect(summarisePeople({ who: two, quant: "any", where: "home" }, ctx)).toBe(
+        "Mindestens eine von: (Anna, Ben) ist: zu Hause",
+      );
+      expect(summarisePeople({ who: two, quant: "nobody", where: "home" }, ctx)).toBe(
+        "Keine von: (Anna, Ben) ist: zu Hause",
+      );
+      expect(summarisePeople({ ...allOf, who: ["person.anna"] }, ctx)).toBe("Anna ist: zu Hause");
+    });
+  });
+
   test("occupancy reads in the language for one sensor and for several", () => {
     const one = { sensors: ["binary_sensor.flur"], occupied: true } as any;
     const two = { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: false, quant: "all" };

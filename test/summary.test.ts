@@ -1016,7 +1016,7 @@ test("summariseState inlines NOT into a simple 'is' clause", () => {
   ).toBe("a is NOT on");
 });
 
-test("summariseState inlines NOT before the value, keeping the 'for' suffix", () => {
+test("summariseState negates the verb of a simple is clause, keeping the 'for' suffix", () => {
   expect(
     summariseState(
       {
@@ -2208,7 +2208,7 @@ describe("sensor and people summaries are translated", () => {
       ["es", "Todos están en casa", "Todos no están en casa"],
       ["pt", "Todos estão em casa", "Todos não estão em casa"],
       // "Tout le monde" is grammatically singular, unlike "Tous parmi :" below.
-      ["fr", "Tout le monde est à la maison", "Tout le monde n'est pas à la maison"],
+      ["fr", "Tout le monde est à la maison", "Tout le monde est hors de la maison"],
       ["en", "Everybody is at Home", "Everybody is not at Home"],
     ])("everybody in %s", (language, positive, negative) => {
       const ctx = { hass: hass(language) };
@@ -2223,7 +2223,7 @@ describe("sensor and people summaries are translated", () => {
       [
         "fr",
         "Tous parmi : (Anna, Ben) sont à la maison",
-        "Tous parmi : (Anna, Ben) ne sont pas à la maison",
+        "Tous parmi : (Anna, Ben) sont hors de la maison",
       ],
       ["en", "All of: (Anna, Ben) is at Home", "All of: (Anna, Ben) is not at Home"],
     ])("all of several people in %s", (language, positive, negative) => {

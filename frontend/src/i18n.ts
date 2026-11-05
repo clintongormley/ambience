@@ -507,7 +507,8 @@ export function localizeWsError(hass: HassLike | undefined, err: unknown): strin
 
 // --- state condition --------------------------------------------------------
 
-/** Label for a state-condition operator (`is`, `is_not`, `>=`, `and`, …).
+/** Label for a state-condition operator (`is`, `is_not`, `>=`, `and`, …) or the
+ *  display-only `is_negated` verb.
  *  The glyph map (≥/≤ etc.) lives in i18n-data.ts. */
 export function stateOpLabel(hass: HassLike | undefined, op: string): string {
   return _resolve(hass, `component.ambience.state_op.${op}`, op);

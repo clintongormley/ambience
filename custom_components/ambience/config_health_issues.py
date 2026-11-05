@@ -164,7 +164,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     problems = scan(hass, store.all_scope_configs())
     # Refresh the overlap-set cache the frontend flag reads (see
     # config_health.scene_annotations) from this same scan — no extra work, and it
-    # keeps the flag on the same config-change/registry cadence as the Repairs issue.
+    # keeps the flag on the same cadence as the Repairs issue.
     domain_data[DATA_OVERLAP_SET] = frozenset(p.ref for p in problems if p.kind == "action_overlap")
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
     cats = category_names(hass)  # category id -> friendly name

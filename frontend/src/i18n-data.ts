@@ -2610,9 +2610,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       is_at: "est à",
       is_not_at: "n'est pas à",
       everyone_at: "est à",
-      everyone_not_at: "n'est pas à",
+      everyone_not_at: "est hors de",
       all_of_at: "sont à",
-      all_of_not_at: "ne sont pas à",
+      all_of_not_at: "sont hors de",
     },
     occupancy_summary: {
       clear: "libre",

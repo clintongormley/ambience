@@ -117,7 +117,8 @@ DATA_APPLY_LOCKS = "apply_locks"
 DATA_ENGINE = "engine"
 # Cached global action-overlap entity-id set (frozenset), so per-scope WS gets
 # don't each re-scan every scope. Refreshed by reconcile_issues (on the same
-# config-change / entity-registry signals that drive Repairs) and on save.
+# config-change / entity-registry / language-change signals that drive Repairs)
+# and on save.
 DATA_OVERLAP_SET = "overlap_set"
 # Registered trace sinks — objects with an `emit(event)` method (see trace.py).
 DATA_TRACE_SINKS = "trace_sinks"

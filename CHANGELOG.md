@@ -12,7 +12,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - **German (de) translation.** Ambience is now available in German — the config
     flow, repair issues, service names, and the whole panel UI. It joins
-    English, Spanish, European Portuguese, and French.
+    English, Spanish, European Portuguese, and French. Thanks to
+    [Markus Pöschl](https://github.com/Poeschl) for the translation
+    ([#269](https://github.com/clintongormley/ambience/pull/269)).
 
 ### Changed
 

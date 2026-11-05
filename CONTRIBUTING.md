@@ -228,11 +228,11 @@ wrap width and exclusions come from the repo automatically.
 
 - **Frontend bundle:** after any `frontend/src` change run `npm run build` and
     commit `custom_components/ambience/frontend/*.js`.
-- **Translations:** `strings.json` is the source of truth; `en` and `es` are
-    shipped locales and must stay complete (the i18n checks enforce parity,
-    shipped-locale completeness, that every exceptions key referenced in code
-    exists, and that no user-facing string is hardcoded). `es` is
-    machine-drafted pending native review.
+- **Translations:** `strings.json` is the source of truth; `en`, `es`, `pt`,
+    `fr` and `de` are shipped locales and must stay complete (the i18n checks
+    enforce parity, shipped-locale completeness, that every exceptions key
+    referenced in code exists, and that no user-facing string is hardcoded).
+    `es` is machine-drafted pending native review.
 
 ## Working on the MCP server
 

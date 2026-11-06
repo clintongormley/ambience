@@ -9,7 +9,7 @@ name: Publish MCP to PyPI
 # clintongormley/ambience, workflow `publish-mcp.yml`, environment `pypi`.
 #
 # Release flow:
-#   1. bump the version in mcp-server/pyproject.toml + src/ambience_mcp/__init__.py
+#   1. bump the version in mcp-server/pyproject.toml
 #   2. git tag mcp-v<version> && git push origin mcp-v<version>
 
 on:

@@ -627,10 +627,10 @@ async def test_global_force_still_reapplies_once_winner(hass) -> None:
 
 
 async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> None:
-    """The lock holds a second trigger off until the first apply's actions finish.
-    When the winner flips mid-apply, the two scenes' actions run in order rather
-    than interleaving — the guarantee that justifies holding the lock across the
-    action run. Fails if the lock is removed: the early last_applied write alone
+    """The lock holds a second trigger off until the first apply's actions finish
+    (for actions that finish within ACTION_WAIT_SECONDS, as ordinary device
+    commands do). When the winner flips mid-apply, the two scenes' actions run in
+    order rather than interleaving. Fails if the lock is removed: the early last_applied write alone
     prevents a duplicate same-scene fire but does NOT order overlapping applies.
     """
     events: list[str] = []
@@ -687,6 +687,65 @@ async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> N
     await asyncio.gather(task_a, task_b)
 
     assert events == ["start0", "end0", "start1", "end1"]
+
+
+async def test_new_winner_does_not_wait_for_a_long_running_action(hass) -> None:
+    """Scene 0 starts a long action (a 10-second Fado fade); the winner flips to
+    scene 1 two seconds in. Scene 1's action must start without waiting for the
+    fade to end - the lock is released after a short wait, not held for the fade.
+    """
+    events: list[str] = []
+    gate = asyncio.Event()
+
+    async def _turn_on(call) -> None:
+        marker = call.data["brightness"]
+        events.append(f"start{marker}")
+        if marker == 0:
+            await gate.wait()
+        events.append(f"end{marker}")
+
+    hass.services.async_register("light", "turn_on", _turn_on)
+    a0 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 0}}]
+    a1 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 1}}]
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"tod": "evening"}, "category": "g", "actions": a0},
+                    {"when": {"tod": "morning"}, "category": "g", "actions": a1},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_snapshots({"tod"})
+
+    task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+    for _ in range(100):
+        if "start0" in events:
+            break
+        await asyncio.sleep(0)
+    assert events == ["start0"], "scene 0's action never started"
+
+    tod.value = "morning"
+    await engine._refresh_snapshots({"tod"})
+    await asyncio.wait_for(engine._resolve_and_apply("area", "a", "g"), timeout=2)
+    assert events == ["start0", "start1", "end1"]
+
+    gate.set()
+    await task_a
+    await hass.async_block_till_done()
+    assert events == ["start0", "start1", "end1", "end0"]
 
 
 class RecordingCondition:

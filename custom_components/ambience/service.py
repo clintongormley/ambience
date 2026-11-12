@@ -52,6 +52,12 @@ from .trace import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Callers hold the unit's apply lock while dispatching. Long enough for an ordinary
+# device command to be acknowledged, so one scene's commands reach a device before
+# the next scene's; short enough that a long-running action (a Fado fade) does not
+# hold the lock - and so delay a newly matched scene - for its whole run.
+ACTION_WAIT_SECONDS = 0.5
+
 # Sentinel distinguishing "key absent" from a stored None in the live-state maps,
 # so the first set of a None value still dispatches.
 _UNSET: object = object()
@@ -497,12 +503,12 @@ async def async_resolve_and_apply_unit(
         return trace(Outcome.SKIPPED_SWITCH_OFF)
     # Serialize resolve+apply per (scope, category): a burst of triggers on
     # one unit arrives as separate tasks. Without this, while one task is
-    # suspended running its actions, another resolves and applies the same
-    # unit — re-firing the same scene. Holding the lock across the whole
-    # resolve+apply makes a waiting task proceed only once the first has
-    # recorded last_applied and finished, so it either debounces (same winner)
-    # or applies in order (new winner) instead of interleaving mid-apply. The
-    # manual path shares it, so the two never interleave dispatch on one unit.
+    # suspended dispatching its actions, another resolves and applies the same
+    # unit — re-firing the same scene. Holding the lock across resolve+dispatch
+    # makes a waiting task proceed only once the first has recorded last_applied
+    # and dispatched (see ACTION_WAIT_SECONDS), so it either debounces (same
+    # winner) or applies in order (new winner) instead of interleaving mid-apply.
+    # The manual path shares it, so the two never interleave dispatch on one unit.
     async with apply_lock(hass, scope_kind, scope_id, category_id):
         plan = await async_resolve_with_snapshots(
             hass,
@@ -654,15 +660,16 @@ async def async_execute_actions(
     scene_index: int | None = None,
     context: Context | None = None,
 ) -> None:
-    """Dispatch a list of action specs.
+    """Dispatch a list of action specs concurrently, waiting at most
+    ACTION_WAIT_SECONDS for them; any still running carry on in the background.
 
     Malformed / unexposed actions are logged and skipped; a raised action is
-    logged but does not abort the rest. Does NOT record last-applied — callers
-    that represent a full apply do that themselves. `scene_index` is used only
-    for log context.
+    logged (whenever it finishes) but does not abort the rest. Does NOT record
+    last-applied — callers that represent a full apply do that themselves.
+    `scene_index` is used only for log context.
     """
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
-    coros: list = []
+    tasks: list[asyncio.Task[Any]] = []
     for action_spec in actions:
         service_id = action_spec.get("service")
         if not service_id or "." not in service_id:
@@ -688,16 +695,29 @@ async def async_execute_actions(
         params = {**exposed.get("defaults", {}), **action_spec.get("params", {})}
         entity_ids = action_spec.get("entity_ids") or []
         target = {"entity_id": entity_ids} if entity_ids else None
-        coros.append(
-            hass.services.async_call(
-                domain, name, params, target=target, blocking=True, context=context
+        tasks.append(
+            hass.async_create_task(
+                hass.services.async_call(
+                    domain, name, params, target=target, blocking=True, context=context
+                ),
+                f"ambience action {service_id}",
             )
         )
 
-    results = await asyncio.gather(*coros, return_exceptions=True)
-    for result in results:
-        if isinstance(result, BaseException):
-            _LOGGER.warning("ambience: action raised: %s", result)
+    if not tasks:
+        return
+    done, pending = await asyncio.wait(tasks, timeout=ACTION_WAIT_SECONDS)
+    for task in done:
+        _log_action_result(task)
+    for task in pending:
+        task.add_done_callback(_log_action_result)
+
+
+def _log_action_result(task: asyncio.Task[Any]) -> None:
+    if task.cancelled():
+        _LOGGER.debug("ambience: action cancelled: %s", task.get_name())
+    elif (exc := task.exception()) is not None:
+        _LOGGER.warning("ambience: action raised: %s", exc)
 
 
 async def async_run_scene_actions(

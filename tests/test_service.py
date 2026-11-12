@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -1396,6 +1397,73 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
     assert calls[0]["brightness"] == 5
     # Re-apply must NOT change the dedup state.
     assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen", None): 2}
+
+
+def _install_slow_turn_on(hass, gate: asyncio.Event, events: list[str], *, fail: bool = False):
+    """Register a light.turn_on that runs until `gate` is set, like a Fado fade."""
+
+    async def _slow(_call) -> None:
+        events.append("start")
+        await gate.wait()
+        events.append("end")
+        if fail:
+            raise RuntimeError("late boom")
+
+    hass.services.async_register("light", "turn_on", _slow)
+    entry = {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([entry]))}
+
+
+_SLOW_ACTION = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+
+
+async def test_execute_actions_does_not_wait_for_a_long_running_action(hass):
+    """A long action (a Fado fade) must not hold the caller - and with it the
+    unit's apply lock - for its whole run: dispatch returns after a short wait
+    and the action carries on in the background."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events)
+
+    await asyncio.wait_for(async_execute_actions(hass, "area", "a", _SLOW_ACTION), timeout=2)
+    assert events == ["start"]
+
+    gate.set()
+    await hass.async_block_till_done()
+    assert events == ["start", "end"]
+
+
+async def test_execute_actions_logs_failure_after_the_wait(hass, caplog):
+    """An action that fails after dispatch stopped waiting is still logged."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events, fail=True)
+    caplog.set_level(logging.WARNING)
+
+    await asyncio.wait_for(async_execute_actions(hass, "area", "a", _SLOW_ACTION), timeout=2)
+    assert "late boom" not in caplog.text
+
+    gate.set()
+    await hass.async_block_till_done()
+    assert "ambience: action raised: late boom" in caplog.text
+
+
+async def test_execute_actions_logs_cancelled_action_at_debug(hass, caplog):
+    """A cancelled action (Home Assistant shutting down mid-fade) is not a fault:
+    it is logged at debug, not as a raised-action warning."""
+
+    async def _cancelled(_call) -> None:
+        raise asyncio.CancelledError
+
+    hass.services.async_register("light", "turn_on", _cancelled)
+    entry = {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([entry]))}
+    caplog.set_level(logging.DEBUG, logger="custom_components.ambience.service")
+
+    await async_execute_actions(hass, "area", "a", _SLOW_ACTION)
+
+    assert "ambience: action cancelled: ambience action light.turn_on" in caplog.text
+    assert "action raised" not in caplog.text
 
 
 # ---------------------------------------------------------------------------

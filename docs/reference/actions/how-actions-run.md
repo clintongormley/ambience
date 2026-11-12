@@ -23,22 +23,25 @@ arrives last wins, so give each entity one action per scene.
 Ambience waits up to half a second for the actions to finish, then moves on and
 lets any that are still running carry on in the background. Ordinary commands,
 like turning a light on or setting its brightness, finish well inside that half
-second. A long-running action, like a
-[Fado](https://github.com/clintongormley/ha-fado) fade that takes ten minutes,
-does not hold anything up.
+second. A long-running action, like a ten-second
+[Fado Light Fader](https://github.com/clintongormley/ha-fado) fade, does not
+hold anything up.
 
 That matters when conditions change while a scene is still being applied. Say
 the evening scene starts a ten-second fade down, and two seconds later someone
-walks in and the occupied scene wins. Ambience applies one scene per scope and
-category at a time, so the occupied scene waits for the evening scene's actions
-to be sent. It waits half a second at most, not for the fade to finish, and then
-starts its own fade from wherever the lights have got to. The half-second wait
-keeps ordinary commands in order: the evening scene's command reaches a light
-before the occupied scene's command does.
+walks in and the occupied scene wins. Ambience sends one scene's actions per
+scope and category at a time, so the occupied scene waits for the evening
+scene's actions to be sent. It waits half a second at most, not for the fade to
+finish, and then starts its own fade from wherever the lights have got to. The
+half-second wait keeps ordinary commands in order: the evening scene's command
+reaches a light before the occupied scene's command does. An action that takes
+longer than half a second, such as a script with a delay or a slow cloud device,
+is not kept in order: the next scene's actions can start while it is still
+running, and can finish first.
 
 One failing action does not stop the others. Ambience skips a malformed action,
-or one whose action is no longer exposed, with a warning in the log. If an
-action fails while running, even after Ambience has moved on, the log shows
+or one that is no longer exposed, with a warning in the log. If an action fails
+while running, even after Ambience has moved on, the log shows
 `ambience: action raised:` followed by the error.
 
 ______________________________________________________________________

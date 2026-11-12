@@ -104,9 +104,10 @@ DATA_LAST_APPLIED = "last_applied"
 # Distinct from DATA_LAST_APPLIED (debounce-internal, wiped on a no-match).
 DATA_LAST_MATCHED = "last_matched"
 
-# Sticky "what's physically set" per unit: the scene index whose actions last
-# executed. Never cleared on a no-match, so the panel can show a greyed dot for
-# a scene that is still applied even though conditions have moved on.
+# Sticky "what's physically set" per unit: the last winner an apply recorded,
+# just before sending its actions; a manual Run actions does not change it.
+# Never cleared on a no-match, so the panel can show a greyed dot for a scene
+# that is still applied even though conditions have moved on.
 DATA_LAST_APPLIED_SCENE = "last_applied_scene"
 
 # Per-(scope_kind, scope_id, category_id) asyncio.Lock registry, shared by the
@@ -136,9 +137,9 @@ SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 # (scope_kind, scope_id) tuple, or None for a global change (reapply all).
 SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
 
-# Dispatcher signal — fired after a unit's actions are dispatched (last-applied
-# recorded). Payload: the (scope_kind, scope_id, category_id) unit. Drives the
-# idle re-apply timer reset.
+# Dispatcher signal — fired when a unit's winner is recorded as last-applied,
+# just before its actions are dispatched. Payload: the (scope_kind, scope_id,
+# category_id) unit. Drives the idle re-apply timer reset.
 SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.

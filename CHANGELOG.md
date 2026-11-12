@@ -8,6 +8,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- A scene that wins while the previous scene's long action is still running,
+    such as a Fado fade, now applies straight away. It used to wait for the fade
+    to finish, so lights fading down would reach the bottom before fading back
+    up. Ambience now waits at most half a second for a scene's actions before
+    moving on, and any still running carry on in the background.
+
 ## [1.3.0] - 2026-11-05
 
 This release adds German, gets Ambience ready for Home Assistant 2026.11, and

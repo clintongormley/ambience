@@ -626,24 +626,23 @@ async def test_global_force_still_reapplies_once_winner(hass) -> None:
     assert calls == 2
 
 
-async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> None:
-    """The lock holds a second trigger off until the first apply's actions finish.
-    When the winner flips mid-apply, the two scenes' actions run in order rather
-    than interleaving — the guarantee that justifies holding the lock across the
-    action run. Fails if the lock is removed: the early last_applied write alone
-    prevents a duplicate same-scene fire but does NOT order overlapping applies.
-    """
-    events: list[str] = []
-    gate = asyncio.Event()
+async def _two_scene_engine_with_gated_action(
+    hass, events: list[str], gate: asyncio.Event
+) -> tuple[AutoTriggerEngine, CacheCondition]:
+    """One area 'a', category 'g': scene 0 wins on tod 'evening' and scene 1 on
+    'morning', each running light.turn_on with brightness = its index. The handler
+    records start/end per scene, and scene 0's waits for `gate` in between. The
+    snapshot is pre-populated with 'evening'; flip the returned condition's value
+    and refresh to change the winner."""
 
-    async def _ordered_turn_on(call) -> None:
+    async def _turn_on(call) -> None:
         marker = call.data["brightness"]
         events.append(f"start{marker}")
         if marker == 0:
-            await gate.wait()  # scene 0's action blocks, holding the unit lock
+            await gate.wait()  # holds the unit lock until released or _ACTION_WAIT_SECONDS elapses
         events.append(f"end{marker}")
 
-    hass.services.async_register("light", "turn_on", _ordered_turn_on)
+    hass.services.async_register("light", "turn_on", _turn_on)
     a0 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 0}}]
     a1 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 1}}]
     tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
@@ -668,25 +667,68 @@ async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> N
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
     await engine._refresh_snapshots({"tod"})  # evening -> scene 0 wins
+    return engine, tod
 
-    task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+
+async def _until_scene_0_started(events: list[str]) -> None:
     for _ in range(100):  # let A resolve scene 0 and reach its (blocking) action
         if "start0" in events:
             break
         await asyncio.sleep(0)
     assert events == ["start0"], "scene 0's action never started"  # fail fast, don't hang
 
-    tod.value = "morning"  # winner flips to scene 1 while A is still applying
-    await engine._refresh_snapshots({"tod"})
-    task_b = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
-    for _ in range(5):  # B makes no progress: it is queued on the unit lock
-        await asyncio.sleep(0)
-    assert events == ["start0"]
 
-    gate.set()  # let scene 0 finish; B may now proceed
-    await asyncio.gather(task_a, task_b)
+async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> None:
+    """The lock holds a second trigger off while the first apply is still inside
+    its _ACTION_WAIT_SECONDS wait. When the winner flips mid-apply, the two
+    scenes' actions run in order rather than interleaving. Fails if the lock is
+    removed: the early last_applied write alone prevents a duplicate same-scene
+    fire but does NOT order overlapping applies.
+    """
+    events: list[str] = []
+    gate = asyncio.Event()
+    engine, tod = await _two_scene_engine_with_gated_action(hass, events, gate)
+
+    task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+    task_b: asyncio.Task[None] | None = None
+    try:
+        await _until_scene_0_started(events)
+
+        tod.value = "morning"  # winner flips to scene 1 while A is still applying
+        await engine._refresh_snapshots({"tod"})
+        task_b = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+        for _ in range(5):  # B makes no progress: it is queued on the unit lock
+            await asyncio.sleep(0)
+        assert events == ["start0"]
+    finally:
+        gate.set()  # let scene 0 finish; B may now proceed
+        await asyncio.gather(task_a, *([task_b] if task_b else []))
 
     assert events == ["start0", "end0", "start1", "end1"]
+
+
+async def test_new_winner_does_not_wait_for_a_long_running_action(hass) -> None:
+    """Scene 0's action runs until released, as a Fado fade does; the winner flips
+    to scene 1 meanwhile. Scene 1's action must start without waiting for scene
+    0's to end.
+    """
+    events: list[str] = []
+    gate = asyncio.Event()
+    engine, tod = await _two_scene_engine_with_gated_action(hass, events, gate)
+
+    task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+    try:
+        await _until_scene_0_started(events)
+
+        tod.value = "morning"
+        await engine._refresh_snapshots({"tod"})
+        await asyncio.wait_for(engine._resolve_and_apply("area", "a", "g"), timeout=2)
+        assert events == ["start0", "start1", "end1"]
+    finally:
+        gate.set()
+        await task_a
+        await hass.async_block_till_done()
+    assert events == ["start0", "start1", "end1", "end0"]
 
 
 class RecordingCondition:

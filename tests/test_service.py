@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -1398,6 +1399,144 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
     assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen", None): 2}
 
 
+def _install_slow_turn_on(
+    hass,
+    gate: asyncio.Event,
+    events: list[str],
+    *,
+    fail: bool = False,
+    fail_on_cancel: bool = False,
+):
+    """Register a light.turn_on that runs until `gate` is set, like a Fado fade."""
+
+    async def _slow(_call) -> None:
+        events.append("start")
+        try:
+            await gate.wait()
+        except asyncio.CancelledError:
+            if fail_on_cancel:
+                raise RuntimeError("cleanup boom") from None
+            raise
+        events.append("end")
+        if fail:
+            raise RuntimeError("late boom")
+
+    hass.services.async_register("light", "turn_on", _slow)
+    _install(hass, exposed=[_exposed("light.turn_on")])
+
+
+_SLOW_ACTION = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+_SLOW_TASK_NAME = "ambience action light.turn_on (scene 3, scope=area/a)"
+
+
+async def _until_started(events: list[str]) -> None:
+    for _ in range(100):
+        if events:
+            return
+        await asyncio.sleep(0)
+    raise AssertionError("the action never started")
+
+
+async def test_execute_actions_does_not_wait_for_a_long_running_action(hass):
+    """A long action (a Fado fade) must not hold the caller - and with it the
+    unit's apply lock - for its whole run: dispatch returns after a short wait
+    and the action carries on in the background."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events)
+
+    try:
+        await asyncio.wait_for(async_execute_actions(hass, "area", "a", _SLOW_ACTION), timeout=2)
+        assert events == ["start"]
+    finally:
+        gate.set()
+        await hass.async_block_till_done()
+    assert events == ["start", "end"]
+
+
+async def test_execute_actions_logs_failure_after_the_wait(hass, caplog):
+    """An action that fails after dispatch stopped waiting is still logged, with
+    the scene and scope it belongs to, and its exception is retrieved."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events, fail=True)
+    caplog.set_level(logging.WARNING)
+
+    try:
+        await asyncio.wait_for(
+            async_execute_actions(hass, "area", "a", _SLOW_ACTION, scene_index=3), timeout=2
+        )
+        assert "late boom" not in caplog.text
+    finally:
+        gate.set()
+        await hass.async_block_till_done()
+    assert f"ambience: action raised: late boom [{_SLOW_TASK_NAME}]" in caplog.text
+
+
+async def test_cancelled_dispatch_cancels_its_running_actions(hass):
+    """Cancelling the dispatch while it waits cancels the actions it started and re-raises."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events)
+
+    dispatch = asyncio.create_task(
+        async_execute_actions(hass, "area", "a", _SLOW_ACTION, scene_index=3)
+    )
+    try:
+        await _until_started(events)
+        (action,) = [t for t in asyncio.all_tasks() if t.get_name() == _SLOW_TASK_NAME]
+        dispatch.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await dispatch
+        assert action.cancelled()
+    finally:
+        gate.set()
+        dispatch.cancel()
+        await hass.async_block_till_done()
+    assert events == ["start"]
+
+
+async def test_cancelled_dispatch_still_logs_an_action_that_fails_on_cancel(hass, caplog):
+    """An action whose own cleanup raises when the dispatch cancels it is logged
+    like any other failure, and its exception is retrieved rather than reported
+    by asyncio as "Task exception was never retrieved"."""
+    gate = asyncio.Event()
+    events: list[str] = []
+    _install_slow_turn_on(hass, gate, events, fail_on_cancel=True)
+    caplog.set_level(logging.WARNING)
+
+    dispatch = asyncio.create_task(
+        async_execute_actions(hass, "area", "a", _SLOW_ACTION, scene_index=3)
+    )
+    try:
+        await _until_started(events)
+        dispatch.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await dispatch
+    finally:
+        gate.set()
+        dispatch.cancel()
+        await hass.async_block_till_done()
+    assert f"ambience: action raised: cleanup boom [{_SLOW_TASK_NAME}]" in caplog.text
+
+
+async def test_execute_actions_logs_cancelled_action_at_debug(hass, caplog):
+    """A cancelled action (Home Assistant shutting down mid-fade) is not a fault:
+    it is logged at debug, not as a raised-action warning, before dispatch returns."""
+
+    async def _cancelled(_call) -> None:
+        raise asyncio.CancelledError
+
+    hass.services.async_register("light", "turn_on", _cancelled)
+    _install(hass, exposed=[_exposed("light.turn_on")])
+    caplog.set_level(logging.DEBUG, logger="custom_components.ambience.service")
+
+    await async_execute_actions(hass, "area", "a", _SLOW_ACTION, scene_index=3)
+
+    assert f"ambience: action cancelled: {_SLOW_TASK_NAME}" in caplog.text
+    assert "action raised" not in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # _scope_config — unknown scope kind (line 58)
 # ---------------------------------------------------------------------------
@@ -1753,7 +1892,7 @@ async def test_manual_apply_serialises_with_engine_apply_lock(hass: HomeAssistan
 
 async def test_run_scene_actions_waits_for_an_in_flight_apply(hass: HomeAssistant) -> None:
     """Manual run_actions takes the same per-(scope, category) lock, so its
-    actions never interleave with an in-flight apply of the same unit."""
+    actions are sent only after an in-flight apply of the same unit has sent its own."""
     import asyncio
 
     from custom_components.ambience.service import apply_lock

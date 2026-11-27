@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-27
+
 ### Fixed
 
 - A scene that wins while the previous scene's long action is still running,
@@ -15,6 +17,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
     to finish, so lights fading down would reach the bottom before fading back
     up. Ambience now waits at most half a second for a scene's actions before
     moving on, and any still running carry on in the background.
+- When a scene's action fails, the warning in the Home Assistant log now names
+    the action, the scene and the scope it came from. It used to give only the
+    error.
 
 ## [1.3.0] - 2026-11-05
 

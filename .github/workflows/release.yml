@@ -67,7 +67,7 @@ jobs:
           if [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ]; then
             {
               printf '%s\n' "$BODY"
-              PREV=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || true)
+              PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "v${VERSION}^" 2>/dev/null || true)
               if [ -n "$PREV" ]; then
                 printf '\n**Full Changelog**: https://github.com/%s/compare/%s...v%s\n' "$REPO" "$PREV" "$VERSION"
               fi
